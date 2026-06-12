@@ -1,0 +1,9 @@
+{
+  "components": [
+    {
+      "code": "ui/Card.kt#OfferCard",
+      "source": "stitch",
+      "ref": "stitch:design/abc123"
+    }
+  ]
+}

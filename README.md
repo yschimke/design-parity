@@ -49,7 +49,7 @@ interactive for setup, unattended in steady state. See
 | `@design-parity/diff` | issue #6 | Visual + semantic + token diff → `Verdict`. |
 | [`@design-parity/resolver`](./packages/resolver) | ✅ | Correspondence (code ↔ design): Code Connect → `design-map.json` → name convention. |
 | [`@design-parity/checks`](./packages/checks) | ✅ | a11y + i18n spec checks (the high-value findings). |
-| `@design-parity/baseline` | issue #11 | Detect maturity; bootstrap an opinionated baseline when there's no design system. |
+| [`@design-parity/baseline`](./packages/baseline) | ✅ | Detect maturity (3 rungs); materialize a concrete parity direction; bootstrap an opinionated committed baseline (tokens, starter `design-map.json`, check config) when there's no design system. Interactive CLI; never on the Action path. |
 | [`@design-parity/policy`](./packages/policy) | ✅ issue #12 | Committed `.design-parity.json` (schema, loader, validator CLI) + the deterministic `auto` → `design-led`/`code-led` direction resolver. |
 | `@design-parity/action` | issue #8 | GitHub Action / PR-comment surface. |
 
