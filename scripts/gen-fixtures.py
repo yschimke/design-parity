@@ -31,6 +31,8 @@ FIXTURES = [
     ("fixtures/claude-design/offer-card.light.png", 240, 160, (0xF5, 0xF5, 0xF7)),
     ("fixtures/candidate/button-primary.light.png", 160, 48, (0x64, 0x5A, 0xFF)),
     ("fixtures/candidate/button-primary.dark.png", 160, 48, (0x7A, 0x72, 0xF0)),
+    ("fixtures/bundle/offer-card/offer-card.light.png", 240, 160, (0xF5, 0xF5, 0xF7)),
+    ("fixtures/bundle/offer-card/offer-card.dark.png", 240, 160, (0x1A, 0x1A, 0x1A)),
 ]
 
 if __name__ == "__main__":

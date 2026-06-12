@@ -15,17 +15,17 @@ component.
 
 ## Architecture
 
-One `ReferenceAdapter` interface, three drivers, a source-agnostic diff engine:
+One `ReferenceAdapter` interface, four drivers, a source-agnostic diff engine:
 
 ```
 reference source ─┐
  figma (REST +    │   ┌──────────────┐      ┌───────────┐     ┌─────────┐
-  Code Connect)   ├─▶ │ DesignReference│ ──▶ │ diff engine│ ──▶ │ Verdict │
- stitch (SDK)     │   └──────────────┘      └───────────┘     └─────────┘
+  Code Connect)   │   │ DesignReference│ ──▶ │ diff engine│ ──▶ │ Verdict │
+ stitch (SDK)     ├─▶ └──────────────┘      └───────────┘     └─────────┘
  claude-design    │           ▲                   ▲
-  (HTML export)  ─┘           │                   │
-                      correspondence        CandidateRender
-                       resolver              (compose-preview)
+  (HTML export)   │           │                   │
+ bundle (PNGs +  ─┘    correspondence        CandidateRender
+  manifest)             resolver              (compose-preview)
 ```
 
 Correspondence is resolved by **Code Connect** where available (Figma), else by
@@ -46,6 +46,7 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 | [`@design-parity/adapter-figma`](./packages/adapters/figma) | ✅ #2 | Figma REST + Code Connect driver. |
 | [`@design-parity/adapter-stitch`](./packages/adapters/stitch) | ✅ #3 | Google Stitch SDK + manifest driver. |
 | [`@design-parity/adapter-claude-design`](./packages/adapters/claude-design) | ✅ #4 | Claude Design committed-HTML-export driver (no read API; rasterized headlessly, linked via `design-map.json`). |
+| [`@design-parity/adapter-bundle`](./packages/adapters/bundle) | ✅ #32 | Image-bundle driver: a committed directory or `.zip` of reference PNGs + a `manifest.json` (no design-tool API, no HTML export), linked via `design-map.json`. |
 | [`@design-parity/candidate`](./packages/candidate) | ✅ | `compose-preview` CLI wrapper → `CandidateRender`. |
 | [`@design-parity/diff`](./packages/diff) | ✅ #6 | Visual + semantic + token diff → `Verdict` (a11y + i18n first, then tokens, then pixels). |
 | [`@design-parity/resolver`](./packages/resolver) | ✅ | Correspondence (code ↔ design): Code Connect → `design-map.json` → name convention. |

@@ -9,7 +9,7 @@
  */
 
 /** A design source the bot knows how to resolve a reference from. */
-export type DesignSource = "figma" | "stitch" | "claude-design";
+export type DesignSource = "figma" | "stitch" | "claude-design" | "bundle";
 
 /**
  * How a code component was linked to its design reference.

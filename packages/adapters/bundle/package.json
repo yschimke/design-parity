@@ -1,0 +1,23 @@
+{
+  "name": "@design-parity/adapter-bundle",
+  "version": "0.0.0",
+  "description": "Image-bundle reference adapter: resolves a committed directory or .zip of reference PNGs plus a manifest.json (linked via design-map.json) and normalizes to a DesignReference. Covers any design tool with no read API or HTML export — just a dump of exported images.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@design-parity/core": "0.0.0",
+    "fflate": "^0.8.2"
+  }
+}

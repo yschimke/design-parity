@@ -25,13 +25,16 @@ const referenceFixtures = [
   "fixtures/figma/button-primary.reference.json",
   "fixtures/stitch/offer-card.reference.json",
   "fixtures/claude-design/offer-card.reference.json",
+  "fixtures/bundle/offer-card.reference.json",
 ];
 
 describe("DesignReference fixtures", () => {
   it.each(referenceFixtures)("%s is a well-formed reference", async (p) => {
     const ref = await readJson<DesignReference>(p);
     expect(ref.componentId).toMatch(/#/);
-    expect(["figma", "stitch", "claude-design"]).toContain(ref.source);
+    expect(["figma", "stitch", "claude-design", "bundle"]).toContain(
+      ref.source,
+    );
     expect(["code-connect", "manifest", "convention"]).toContain(
       ref.linkMethod,
     );
