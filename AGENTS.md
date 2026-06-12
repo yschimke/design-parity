@@ -28,6 +28,15 @@ GitHub Action that comments on PRs.
 - `fixtures/` — golden references and a candidate render. Code against these;
   don't require a live source or renderer in unit tests.
 
+## OSS core vs. hosting
+
+The free OSS core (adapters, diff, checks, resolver, candidate, CLI, Action)
+must run **standalone in the consumer's own CI with zero hosted dependency**.
+The hosted bot (issue #13 — managed renderers, stored baselines, dashboard) is
+an *additive deployment* that consumes these same packages, not a fork. Don't
+bake hosted assumptions (a central API, remote storage, a tenant id) into
+`packages/*`.
+
 ## Conventions
 
 - **Conventional commits** (`feat:`, `fix:`, `docs:`, `test:`, `chore:`) for
