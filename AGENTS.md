@@ -48,6 +48,13 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
 - New packages are `@design-parity/<name>`, ESM (`"type": "module"`),
   `NodeNext` module resolution, and join the workspace via `packages/*` or
   `packages/adapters/*`.
+- **Do not register packages in a root `tsconfig.json` `references` array** —
+  there is none. The root build iterates workspaces
+  (`npm run build --workspaces`), and each package's own `tsconfig.json`
+  references its deps (usually just `core`). This keeps new packages from all
+  editing one shared file and conflicting. Touch only your own
+  `packages/<name>/` files; `package-lock.json` updates from `npm install` are
+  expected and regenerate cleanly.
 
 ## Design facts (verified — do not re-derive)
 
