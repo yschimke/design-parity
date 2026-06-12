@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck & build
+        run: npm run build
+      - name: Validate design-map fixtures against schema
+        run: |
+          node packages/core/dist/cli/validate-design-map.js \
+            fixtures/design-map.json examples/design-map.json
+      - name: Test
+        run: npm test

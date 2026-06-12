@@ -1,0 +1,36 @@
+{
+  "componentId": "ui/Button.kt#PrimaryButton",
+  "source": "figma",
+  "linkMethod": "code-connect",
+  "ref": "figma:AbCdEf123456/1:42",
+  "referenceImages": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "compact",
+      "uri": "fixtures/figma/button-primary.light.png",
+      "width": 160,
+      "height": 48
+    },
+    {
+      "state": "default",
+      "theme": "dark",
+      "size": "compact",
+      "uri": "fixtures/figma/button-primary.dark.png",
+      "width": 160,
+      "height": 48
+    }
+  ],
+  "tokens": {
+    "spacing": { "padding": 16 },
+    "radius": { "corner": 8 },
+    "colors": {
+      "container.light": "#645AFF",
+      "container.dark": "#8A82FF",
+      "label": "#FFFFFF"
+    },
+    "typography": {
+      "label": { "fontFamily": "Roboto", "fontSize": 14, "fontWeight": 500, "lineHeight": 20 }
+    }
+  }
+}
