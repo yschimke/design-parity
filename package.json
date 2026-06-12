@@ -10,8 +10,8 @@
     "packages/adapters/*"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "typecheck": "tsc --build --dry --verbose && tsc --build",
+    "build": "npm run build --workspace @design-parity/core && npm run build --workspaces --if-present",
+    "typecheck": "npm run build",
     "test": "vitest run",
     "validate": "npm run build --workspace @design-parity/core && node packages/core/dist/cli/validate-design-map.js"
   },
