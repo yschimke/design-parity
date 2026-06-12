@@ -18,6 +18,7 @@ import {
   TOKENS_FILE,
 } from "./artifacts.js";
 import { defaultCheckConfig } from "./checks.js";
+import { cmpSuggestion } from "./cmp.js";
 import { detectMaturity } from "./detect.js";
 import type { MaturityResult } from "./detect.js";
 import { directionForRung } from "./direction.js";
@@ -45,6 +46,12 @@ export interface BootstrapPlan {
   /** Convention-discovered components to wire to a design source (rung 3). */
   review: DiscoveredComponent[];
   artifacts: PlannedArtifact[];
+  /**
+   * Non-blocking Compose Multiplatform promotion (Principle 6). Present only
+   * when the repo is *not* CMP-capable; `undefined` when it already is. Advisory
+   * surface text — never a gate, never an artifact.
+   */
+  cmpSuggestion?: string;
 }
 
 export interface PlanOptions {
@@ -110,7 +117,14 @@ export async function planBootstrap(
     await add(DESIGN_MAP_FILE, "starter design-map (empty scaffold)", designMap);
   }
 
-  return { repoRoot, maturity, direction, review, artifacts };
+  return {
+    repoRoot,
+    maturity,
+    direction,
+    review,
+    artifacts,
+    cmpSuggestion: cmpSuggestion(maturity.cmp),
+  };
 }
 
 export interface ApplyOptions {

@@ -9,12 +9,18 @@
  * calls, no network. It reports the evidence that drove the classification so
  * the bootstrap CLI can explain itself and a human can audit the verdict.
  */
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 
 import type { MaturityRung } from "@design-parity/core";
 
 import { TOKENS_FILE } from "./artifacts.js";
+import {
+  classifyBuildFile,
+  isCmpBuildFile,
+  summarizeCmp,
+} from "./cmp.js";
+import type { CmpCapability, CmpSignal } from "./cmp.js";
 
 /** One piece of evidence found during the scan. */
 export interface MaturitySignal {
@@ -36,6 +42,15 @@ export interface MaturityResult {
   hasTokens: boolean;
   /** Every signal found, in scan order. */
   signals: MaturitySignal[];
+  /**
+   * Whether the repo is Compose Multiplatform capable (Principle 6). Convenience
+   * mirror of {@link MaturityResult.cmp}.cmpCapable, hoisted onto the result for
+   * the common `if (result.cmpCapable)` check. Orthogonal to the maturity rung:
+   * a repo at any rung may or may not be CMP-capable.
+   */
+  cmpCapable: boolean;
+  /** The full CMP capability verdict + its evidence (drives prefer/promote). */
+  cmp: CmpCapability;
 }
 
 const RUNG_LABELS: Record<MaturityRung, string> = {
@@ -92,7 +107,8 @@ export async function detectMaturity(
   repoRoot: string,
 ): Promise<MaturityResult> {
   const signals: MaturitySignal[] = [];
-  await walk(repoRoot, repoRoot, 0, signals);
+  const buildFiles: string[] = [];
+  await walk(repoRoot, repoRoot, 0, signals, buildFiles);
 
   const hasCodeConnect = signals.some((s) => s.kind === "code-connect");
   const hasDesignMap = signals.some((s) => s.kind === "design-map");
@@ -104,6 +120,8 @@ export async function detectMaturity(
       ? "manifest"
       : "bootstrap";
 
+  const cmp = await detectCmp(repoRoot, buildFiles);
+
   return {
     rung,
     label: RUNG_LABELS[rung],
@@ -111,7 +129,32 @@ export async function detectMaturity(
     hasDesignMap,
     hasTokens,
     signals,
+    cmpCapable: cmp.cmpCapable,
+    cmp,
   };
+}
+
+/**
+ * Read each discovered build file and fold its CMP signals into a verdict. The
+ * directory walk only records build-file *paths* (cheap); content reads happen
+ * here, bounded to that small set. Unreadable files are skipped, never fatal —
+ * detection degrades to "no signal", matching the walk's tolerance.
+ */
+async function detectCmp(
+  repoRoot: string,
+  buildFiles: string[],
+): Promise<CmpCapability> {
+  const signals: CmpSignal[] = [];
+  for (const rel of buildFiles) {
+    let contents: string;
+    try {
+      contents = await readFile(join(repoRoot, rel), "utf8");
+    } catch {
+      continue; // unreadable build file: skip, don't fail the scan
+    }
+    signals.push(...classifyBuildFile(rel, contents));
+  }
+  return summarizeCmp(signals);
 }
 
 /**
@@ -126,6 +169,7 @@ async function walk(
   dir: string,
   depth: number,
   out: MaturitySignal[],
+  buildFiles: string[],
 ): Promise<void> {
   if (depth > MAX_DEPTH) return;
 
@@ -145,7 +189,7 @@ async function walk(
       if (TOKEN_DIRS.has(entry.name)) {
         out.push({ kind: "tokens", path: rel });
       }
-      await walk(repoRoot, full, depth + 1, out);
+      await walk(repoRoot, full, depth + 1, out, buildFiles);
       continue;
     }
 
@@ -158,6 +202,13 @@ async function walk(
       out.push({ kind: "design-map", path: rel });
     } else if (TOKEN_FILE_RE.test(name) && !BASELINE_ARTIFACTS.has(name)) {
       out.push({ kind: "tokens", path: rel });
+    }
+
+    // CMP detection is orthogonal to the rung: record build files for a
+    // content scan (see {@link detectCmp}). A file can be both a token source
+    // and a build file, so this is not part of the rung if/else chain.
+    if (isCmpBuildFile(name)) {
+      buildFiles.push(rel);
     }
   }
 }
