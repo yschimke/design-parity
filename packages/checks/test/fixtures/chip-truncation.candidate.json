@@ -1,0 +1,36 @@
+{
+  "componentId": "ui/Chip.kt#FilterChip",
+  "images": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "compact",
+      "uri": "fixtures/candidate/button-primary.light.png",
+      "width": 112,
+      "height": 48
+    }
+  ],
+  "semantics": {
+    "theme": "light",
+    "root": {
+      "role": "button",
+      "label": "Add to cart",
+      "bounds": { "x": 0, "y": 0, "width": 112, "height": 48 },
+      "tokens": {
+        "spacing": { "padding": 6 },
+        "radius": { "corner": 8 },
+        "colors": { "container": "#E8E7FF", "label": "#1A1A1A" }
+      },
+      "children": [
+        {
+          "role": "text",
+          "label": "Add to cart",
+          "bounds": { "x": 6, "y": 14, "width": 100, "height": 20 },
+          "tokens": {
+            "typography": { "label": { "fontFamily": "Roboto", "fontSize": 14, "fontWeight": 500, "lineHeight": 20 } }
+          }
+        }
+      ]
+    }
+  }
+}

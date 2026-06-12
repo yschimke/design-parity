@@ -163,8 +163,30 @@ export interface Correspondence {
 
 export type VerdictStatus = "pass" | "warn" | "fail";
 
-/** A single dimension a finding can be about. */
-export type FindingKind = "visual" | "semantic" | "token" | "contrast";
+/**
+ * A single dimension a finding can be about.
+ *
+ * - `visual`: perceptual pixel diff (candidate vs reference image).
+ * - `token`: a design-token value drift (spacing, radius, typography, …).
+ * - `semantic`: structural / accessibility-tree drift vs the reference.
+ * - `contrast`: a WCAG text/non-text contrast result (its own kind because it
+ *   is the headline a11y finding and carries a numeric ratio).
+ * - `a11y`: an accessibility defect with no reference counterpart — touch-target
+ *   size, missing role/label/content-description, focus/announcement gaps.
+ * - `i18n`: an internationalization risk — text expansion & truncation, RTL
+ *   mirroring, hardcoded locale-specific formatting, un-keyed strings.
+ *
+ * `contrast`, `a11y`, and `i18n` are the spec-backed findings the verdict leads
+ * with (docs/PRINCIPLES.md Principle 2); they are produced by
+ * `@design-parity/checks`.
+ */
+export type FindingKind =
+  | "visual"
+  | "semantic"
+  | "token"
+  | "contrast"
+  | "a11y"
+  | "i18n";
 
 export type Severity = "info" | "warn" | "error";
 
