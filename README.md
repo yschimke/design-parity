@@ -46,7 +46,7 @@ interactive for setup, unattended in steady state. See
 | [`@design-parity/adapter-stitch`](./packages/adapters/stitch) | ✅ #3 | Google Stitch SDK + manifest driver. |
 | `@design-parity/adapter-claude-design` | issue #4 | Claude Design committed-HTML-export driver. |
 | [`@design-parity/candidate`](./packages/candidate) | ✅ this PR | `compose-preview` CLI wrapper → `CandidateRender`. |
-| `@design-parity/diff` | issue #6 | Visual + semantic + token diff → `Verdict`. |
+| [`@design-parity/diff`](./packages/diff) | ✅ #6 | Visual + semantic + token diff → `Verdict` (a11y + i18n first, then tokens, then pixels). |
 | [`@design-parity/resolver`](./packages/resolver) | ✅ | Correspondence (code ↔ design): Code Connect → `design-map.json` → name convention. |
 | [`@design-parity/checks`](./packages/checks) | ✅ | a11y + i18n spec checks (the high-value findings). |
 | `@design-parity/baseline` | issue #11 | Detect maturity; bootstrap an opinionated baseline when there's no design system. |
