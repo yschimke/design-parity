@@ -1,0 +1,25 @@
+{
+  "componentId": "ui/Card.kt#OfferCard",
+  "tokens": {
+    "spacing": { "padding": 16 },
+    "radius": { "corner": 12 },
+    "colors": {
+      "container": "#F5F5F7",
+      "title": "#1A1A1A"
+    }
+  },
+  "images": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "600px",
+      "path": "offer-card.light.png"
+    },
+    {
+      "state": "default",
+      "theme": "dark",
+      "size": "600px",
+      "path": "offer-card.dark.png"
+    }
+  ]
+}

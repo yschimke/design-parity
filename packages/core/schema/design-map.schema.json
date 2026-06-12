@@ -26,11 +26,11 @@
         },
         "source": {
           "type": "string",
-          "enum": ["figma", "stitch", "claude-design"]
+          "enum": ["figma", "stitch", "claude-design", "bundle"]
         },
         "ref": {
           "type": "string",
-          "description": "Source-specific reference handle. Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export.",
+          "description": "Source-specific reference handle. Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export. Bundle: repo-relative path to a committed directory or '.zip' of reference PNGs plus a manifest.json.",
           "minLength": 1
         }
       }

@@ -28,6 +28,7 @@
     "@design-parity/candidate": "*",
     "@design-parity/adapter-figma": "*",
     "@design-parity/adapter-stitch": "*",
-    "@design-parity/adapter-claude-design": "*"
+    "@design-parity/adapter-claude-design": "*",
+    "@design-parity/adapter-bundle": "*"
   }
 }

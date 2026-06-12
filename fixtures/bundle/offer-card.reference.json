@@ -1,0 +1,32 @@
+{
+  "componentId": "ui/Card.kt#OfferCard",
+  "source": "bundle",
+  "linkMethod": "manifest",
+  "ref": "fixtures/bundle/offer-card",
+  "referenceImages": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "medium",
+      "uri": "fixtures/bundle/offer-card/offer-card.light.png",
+      "width": 240,
+      "height": 160
+    },
+    {
+      "state": "default",
+      "theme": "dark",
+      "size": "medium",
+      "uri": "fixtures/bundle/offer-card/offer-card.dark.png",
+      "width": 240,
+      "height": 160
+    }
+  ],
+  "tokens": {
+    "spacing": { "padding": 16 },
+    "radius": { "corner": 12 },
+    "colors": {
+      "container": "#F5F5F7",
+      "title": "#1A1A1A"
+    }
+  }
+}
