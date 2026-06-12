@@ -1,0 +1,22 @@
+{
+  "name": "@design-parity/candidate",
+  "version": "0.0.0",
+  "description": "Candidate renderer wrapper: shells out to the upstream compose-preview CLI and normalizes its output into a CandidateRender.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@design-parity/core": "0.0.0"
+  }
+}
