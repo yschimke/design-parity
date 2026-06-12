@@ -18,6 +18,15 @@ export type {
   ParityReport,
 } from "./orchestrate.js";
 
+export {
+  buildCandidateProvider,
+  loadPrecomputed,
+  precomputedSource,
+  providerFromSource,
+  resolveBundlePaths,
+} from "./candidate.js";
+export type { BuildProviderOptions } from "./candidate.js";
+
 export { resolveRunConfig } from "./config.js";
 export type { RunConfig } from "./config.js";
 

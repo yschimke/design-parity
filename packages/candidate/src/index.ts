@@ -1,10 +1,47 @@
 /**
  * `@design-parity/candidate` — the candidate side of parity.
  *
- * Shells out to the upstream `compose-preview` CLI (rendering is **not**
- * reimplemented here) and normalizes its output into a
- * {@link CandidateRender}. Depends only on `@design-parity/core`.
+ * The candidate render is obtained via a **pluggable strategy** — a
+ * {@link CandidateSource}. Phase 1 of issue #38 ships a static, pure-JS reader
+ * for compose-ai-tools preview bundles ({@link bundleCandidateSource}); the
+ * existing `compose-preview` CLI renderer is wrapped behind the same seam
+ * ({@link cliRenderSource}); and the local Compose-for-Web and daemon backends
+ * are defined but stubbed. Depends only on `@design-parity/core` (+ `fflate`).
  */
+
+// Pluggable candidate-source strategy.
+export type { CandidateSource } from "./source.js";
+export { firstAvailable } from "./source.js";
+
+export {
+  bundleCandidateSource,
+  cliRenderSource,
+  localComposeWebSource,
+  daemonSource,
+} from "./sources.js";
+export type {
+  BundleSourceOptions,
+  CliRenderOptions,
+  LocalComposeWebOptions,
+  DaemonSourceOptions,
+} from "./sources.js";
+
+// Static preview-bundle reader (Phase 1 of #38).
+export {
+  readPreviewBundle,
+  parsePreviewBundle,
+  bundleToCandidates,
+  previewToCandidate,
+  loadPreviewBundle,
+} from "./bundle.js";
+export type {
+  PreviewBundle,
+  BundleManifest,
+  PreviewsFile,
+  PreviewEntry,
+  PreviewCapture,
+} from "./bundle.js";
+
 export { renderCandidate, toCandidateRender } from "./candidate.js";
 export type {
   RenderCandidateOptions,
@@ -42,4 +79,6 @@ export {
   MissingComposePreviewError,
   NoPreviewsError,
   RenderError,
+  InvalidBundleError,
+  NotImplementedError,
 } from "./errors.js";

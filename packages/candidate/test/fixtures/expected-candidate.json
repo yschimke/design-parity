@@ -1,0 +1,67 @@
+{
+  "componentId": "ui.Button.PrimaryButton",
+  "images": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "compact",
+      "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAAAwCAIAAAAZy+Y5AAAAXklEQVR42u3RQQkAAAgEMHP6tn8FrSHHYA1W00swwYIRjGAEIxjBCBaMYAQjGMEIRrBgBCMYwQhGMIIRLBjBCEYwghGMYMEIRjCCEYxgBAtGMIIRjGAEIxjBghHMeweQtykN8MbxBQAAAABJRU5ErkJggg==",
+      "width": 160,
+      "height": 48
+    },
+    {
+      "state": "default",
+      "theme": "dark",
+      "size": "compact",
+      "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAAAwCAIAAAAZy+Y5AAAAXklEQVR42u3RQQkAAAgEMDP7NLURrCHHYA1W00swwYIRjGAEIxjBCBaMYAQjGMEIRrBgBCMYwQhGMIIRLBjBCEYwghGMYMEIRjCCEYxgBAtGMIIRjGAEIxjBghHMewewyMs6dvIthwAAAABJRU5ErkJggg==",
+      "width": 160,
+      "height": 48
+    }
+  ],
+  "semantics": {
+    "theme": "light",
+    "root": {
+      "role": "button",
+      "label": "Continue",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 160,
+        "height": 48
+      },
+      "tokens": {
+        "spacing": {
+          "padding": 16
+        },
+        "radius": {
+          "corner": 8
+        },
+        "colors": {
+          "label": "#FFFFFF",
+          "container.light": "#645AFF",
+          "container.dark": "#8A82FF"
+        },
+        "typography": {
+          "label": {
+            "fontFamily": "Roboto",
+            "fontSize": 14,
+            "fontWeight": 500,
+            "lineHeight": 20
+          }
+        }
+      },
+      "children": [
+        {
+          "role": "text",
+          "label": "Continue",
+          "bounds": {
+            "x": 16,
+            "y": 14,
+            "width": 128,
+            "height": 20
+          }
+        }
+      ]
+    }
+  }
+}

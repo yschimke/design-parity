@@ -61,3 +61,39 @@ export class RenderError extends CandidateError {
     this.code = detail.code;
   }
 }
+
+/**
+ * The input that was supposed to be a compose-ai-tools preview bundle could not
+ * be read as one — not a PNG+zip polyglot, missing `previews.json`, or a
+ * malformed manifest. Distinct from {@link NoPreviewsError} (a valid bundle
+ * that simply has no matching preview).
+ */
+export class InvalidBundleError extends CandidateError {
+  override name = "InvalidBundleError";
+  constructor(message: string, cause?: unknown) {
+    super(
+      `not a valid compose-ai-tools preview bundle: ${message}\n` +
+        `A preview bundle is a PNG+zip polyglot (cover PNG with the bundle zip\n` +
+        `appended) containing previews.json and previews/<id>.png. See\n` +
+        `docs/candidate-sources.md and https://github.com/yschimke/compose-ai-tools.`,
+      cause !== undefined ? { cause } : undefined,
+    );
+  }
+}
+
+/**
+ * A candidate source that is defined but not yet implemented (Phase 2+ of issue
+ * #38 — local Compose-for-Web and the compose-preview daemon). Thrown eagerly
+ * with a clear pointer so the seam is obvious and never silently no-ops.
+ */
+export class NotImplementedError extends CandidateError {
+  override name = "NotImplementedError";
+  constructor(what: string, detail?: string) {
+    super(
+      `${what} is not implemented yet.` +
+        (detail ? ` ${detail}` : "") +
+        ` See docs/candidate-sources.md for the four candidate-source strategies` +
+        ` and which phase ships each.`,
+    );
+  }
+}
