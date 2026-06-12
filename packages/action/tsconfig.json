@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../resolver" },
+    { "path": "../policy" },
+    { "path": "../diff" },
+    { "path": "../checks" },
+    { "path": "../candidate" },
+    { "path": "../adapters/figma" },
+    { "path": "../adapters/stitch" },
+    { "path": "../adapters/claude-design" }
+  ]
+}
