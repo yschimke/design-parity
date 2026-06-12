@@ -24,6 +24,9 @@ export type {
   Severity,
   Finding,
   Verdict,
+  ParityDirection,
+  ResolvedDirection,
+  ParityConfig,
 } from "./types.js";
 
 export type {

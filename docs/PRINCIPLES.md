@@ -65,3 +65,23 @@ Two modes over one core:
 
 Steady state must never depend on a live model or a human in the loop. If a
 check can't run unattended, it isn't done.
+
+## 5. Parity has a direction, and it's committed policy
+
+When design and code disagree, *someone* is canonical. That choice
+(`ParityConfig.direction`) is a committed setting, read deterministically — not
+guessed per run.
+
+- **`design-led`** — the design is the contract. A violation **blocks** the PR;
+  the fix is in code. Never push code back to the design.
+- **`code-led`** — the shipped code is reality. Violations are **advisory**, and
+  drift can be pushed back to the design tool (Code-to-Canvas, the fast-follow).
+- **`auto`** (default) — resolved from the maturity rung (Principle 3):
+  `design-led` when there's a design system with a machine link (Figma + Code
+  Connect), `code-led` otherwise. A freshly bootstrapped repo is code-led by
+  construction — its baseline was generated from code, so blocking against it
+  would be backwards.
+
+GitHub stays the verdict surface in every mode (it's the only one that works for
+all three sources and runs unattended); surfacing back into the design tool is a
+`code-led`, Figma-only stretch.

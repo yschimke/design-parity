@@ -186,3 +186,32 @@ export interface Verdict {
   /** Per-image perceptual diff score (0 = identical) keyed by image state. */
   visualScores?: Record<string, number>;
 }
+
+// ---------------------------------------------------------------------------
+// Parity direction — who is canonical when design and code disagree.
+// ---------------------------------------------------------------------------
+
+/**
+ * Which side is authoritative.
+ *
+ * - `design-led`: the design is the contract; a violation **blocks** the PR
+ *   and the fix is in code (never push code back to the design).
+ * - `code-led`: the shipped code is reality; violations are **advisory** and
+ *   drift can be pushed back to the design tool (see Code-to-Canvas).
+ * - `auto`: resolved from the repo's maturity rung — `design-led` when there's
+ *   a design system with a machine link, `code-led` otherwise.
+ */
+export type ParityDirection = "auto" | "design-led" | "code-led";
+
+/** `auto` always resolves to one of these before the diff runs. */
+export type ResolvedDirection = "design-led" | "code-led";
+
+/**
+ * Committed, per-repo parity policy. Read deterministically by the bot — never
+ * decided at run time (see docs/PRINCIPLES.md, Principle 1).
+ */
+export interface ParityConfig {
+  /** Defaults to `"auto"`. */
+  direction: ParityDirection;
+}
+
