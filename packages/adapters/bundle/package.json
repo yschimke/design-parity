@@ -19,5 +19,8 @@
   "dependencies": {
     "@design-parity/core": "0.0.0",
     "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@design-parity/diff": "0.0.0"
   }
 }

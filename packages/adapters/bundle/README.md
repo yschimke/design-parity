@@ -55,8 +55,10 @@ The `ref` in `design-map.json` is a repo-relative path to a committed
   resolver asked for, else `resolve` throws.
 
 A directory bundle's image `uri` is the repo-relative path to the PNG; a `.zip`
-bundle has no standalone file per entry, so its `uri` is traced as
-`<zip>!<path>`.
+bundle has no standalone file per entry, so its `uri` is the unzipped PNG bytes
+inlined as a `data:image/png;base64,…` URI. The diff engine and the HTML report
+both decode `data:` URIs, so a `.zip` bundle is fully diff-able and renderable
+end-to-end.
 
 ## Usage
 

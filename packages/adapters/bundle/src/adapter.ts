@@ -104,9 +104,13 @@ export class BundleAdapter implements ReferenceAdapter {
       const { width, height } = parsePngSize(bytes, variant.path);
 
       const imgPath = cleanPath(variant.path);
-      // A directory bundle exposes each PNG as a real repo file the diff engine
-      // can rasterize; a `.zip` does not, so trace it as '<zip>!<path>'.
-      const uri = isZip ? `${bundleUri}!${imgPath}` : `${bundleUri}/${imgPath}`;
+      // A directory bundle exposes each PNG as a real repo file, so its uri is
+      // the repo-relative path. A `.zip` has no standalone file per entry, so
+      // inline the unzipped bytes as a `data:` URI — the diff engine and HTML
+      // report both decode it, making zip bundles end-to-end diff-able.
+      const uri = isZip
+        ? `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`
+        : `${bundleUri}/${imgPath}`;
       const image: Image = {
         state: variant.state ?? "default",
         uri,
