@@ -1,0 +1,63 @@
+<!doctype html>
+<!--
+  Committed Claude Design HTML export for ui/Card.kt#OfferCard.
+
+  Claude Design is a research preview with no read API and no Figma export, so
+  the reference is committed as this HTML document and resolved via
+  design-map.json (the `claude-design` entry points here). The visible markup
+  below is the export; the application/design-parity+json script block at the
+  end is the machine-readable handoff manifest the adapter reads.
+
+  The handoff `src` is resolved relative to this file; ../../ reaches the repo
+  root so the offer-card reference image is shared with fixtures/.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Offer Card — Claude Design export</title>
+    <style>
+      .offer-card {
+        box-sizing: border-box;
+        width: 240px;
+        height: 160px;
+        padding: 16px;
+        border-radius: 12px;
+        background: #f5f5f7;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      .offer-card h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #1a1a1a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="offer-card">
+      <h2>Offer</h2>
+    </div>
+
+    <script type="application/design-parity+json">
+      {
+        "componentId": "ui/Card.kt#OfferCard",
+        "tokens": {
+          "spacing": { "padding": 16 },
+          "radius": { "corner": 12 },
+          "colors": {
+            "container": "#F5F5F7",
+            "title": "#1A1A1A"
+          }
+        },
+        "images": [
+          {
+            "state": "default",
+            "theme": "light",
+            "size": "medium",
+            "src": "../../fixtures/claude-design/offer-card.light.png"
+          }
+        ]
+      }
+    </script>
+  </body>
+</html>

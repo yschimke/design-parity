@@ -44,8 +44,8 @@ interactive for setup, unattended in steady state. See
 | [`@design-parity/core`](./packages/core) | ✅ this PR | Shared contracts (`DesignReference`, `CandidateRender`, `DesignTokens`, `SemanticTree`, `ReferenceAdapter`, `Verdict`) + the `design-map.json` schema, loader, and validator CLI. |
 | [`@design-parity/adapter-figma`](./packages/adapters/figma) | ✅ #2 | Figma REST + Code Connect driver. |
 | [`@design-parity/adapter-stitch`](./packages/adapters/stitch) | ✅ #3 | Google Stitch SDK + manifest driver. |
-| `@design-parity/adapter-claude-design` | issue #4 | Claude Design committed-HTML-export driver. |
-| [`@design-parity/candidate`](./packages/candidate) | ✅ this PR | `compose-preview` CLI wrapper → `CandidateRender`. |
+| [`@design-parity/adapter-claude-design`](./packages/adapters/claude-design) | ✅ #4 | Claude Design committed-HTML-export driver (no read API; rasterized headlessly, linked via `design-map.json`). |
+| [`@design-parity/candidate`](./packages/candidate) | ✅ | `compose-preview` CLI wrapper → `CandidateRender`. |
 | [`@design-parity/diff`](./packages/diff) | ✅ #6 | Visual + semantic + token diff → `Verdict` (a11y + i18n first, then tokens, then pixels). |
 | [`@design-parity/resolver`](./packages/resolver) | ✅ | Correspondence (code ↔ design): Code Connect → `design-map.json` → name convention. |
 | [`@design-parity/checks`](./packages/checks) | ✅ | a11y + i18n spec checks (the high-value findings). |
