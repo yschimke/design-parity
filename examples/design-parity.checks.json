@@ -1,0 +1,8 @@
+{
+  "$schema": "../packages/checks/schema/checks-config.schema.json",
+  "contrastLevel": "AA",
+  "minTouchTarget": 48,
+  "glyphAdvance": 0.55,
+  "themes": ["light", "dark"],
+  "flagHardcodedStrings": true
+}

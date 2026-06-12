@@ -7,16 +7,22 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./schema/checks-config.schema.json": "./schema/checks-config.schema.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "schema"
   ],
+  "bin": {
+    "design-parity-validate-checks": "./dist/cli/validate-checks.js"
+  },
   "scripts": {
     "build": "tsc --build",
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "*"
+    "@design-parity/core": "*",
+    "ajv": "^8.17.1"
   }
 }

@@ -27,6 +27,17 @@ export {
 export type { ChecksConfig, ResolvedConfig } from "./config.js";
 export { resolveConfig } from "./config.js";
 
+export type { ValidationResult } from "./load-config.js";
+export {
+  CHECKS_CONFIG_FILENAME,
+  defaultChecksConfig,
+  checksConfigSchema,
+  checksConfigSchemaPath,
+  validateChecksConfig,
+  loadChecksConfig,
+  loadChecksConfigOrDefault,
+} from "./load-config.js";
+
 export {
   contrastRatio,
   relativeLuminance,
