@@ -51,7 +51,7 @@ interactive for setup, unattended in steady state. See
 | [`@design-parity/checks`](./packages/checks) | ✅ | a11y + i18n spec checks (the high-value findings). |
 | [`@design-parity/baseline`](./packages/baseline) | ✅ | Detect maturity (3 rungs); materialize a concrete parity direction; bootstrap an opinionated committed baseline (tokens, starter `design-map.json`, check config) when there's no design system. Interactive CLI; never on the Action path. |
 | [`@design-parity/policy`](./packages/policy) | ✅ issue #12 | Committed `.design-parity.json` (schema, loader, validator CLI) + the deterministic `auto` → `design-led`/`code-led` direction resolver. |
-| `@design-parity/action` | issue #8 | GitHub Action / PR-comment surface. |
+| [`@design-parity/action`](./packages/action) | 🚧 #8 | Orchestrator + CLI landed (registry → resolve → diff → policy → report); GitHub Action surface next. |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so
 every package can be built and tested against stubs with no live source or
