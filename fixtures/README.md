@@ -10,7 +10,7 @@ repo-relative paths to the PNGs alongside them.
 | --- | --- | --- |
 | `figma/button-primary.reference.json` + `.light.png` / `.dark.png` | Figma (Code Connect) | Issue 2 (figma adapter), Issue 6 (diff) |
 | `stitch/offer-card.reference.json` + `.light.png` | Stitch (manifest) | Issue 3 (stitch adapter) |
-| `claude-design/offer-card.reference.json` + `.light.png` | Claude Design (manifest, HTML export) | Issue 4 (claude-design adapter) |
+| `claude-design/offer-card.reference.json` + `.light.png` (export: [`design/reference/offer-card.html`](../design/reference/offer-card.html)) | Claude Design (manifest, HTML export) | Issue 4 (claude-design adapter) |
 | `candidate/button-primary.candidate.json` + `.png`s | candidate render | Issue 5 (candidate), Issue 6 (diff) |
 | `design-map.json` | manifest | Issue 3/4/7 |
 
