@@ -32,6 +32,11 @@ Correspondence is resolved by **Code Connect** where available (Figma), else by
 an in-repo [`design-map.json`](./examples/design-map.json), else by name
 convention with a low-confidence flag.
 
+Four principles shape the design — generate committed scripts over runtime AI;
+lead with a11y + i18n; bootstrap a baseline for projects with no design system;
+interactive for setup, unattended in steady state. See
+[docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
+
 ## Packages
 
 | Package | Status | What it owns |
@@ -43,6 +48,8 @@ convention with a low-confidence flag.
 | `@design-parity/candidate` | issue #5 | `compose-preview` CLI wrapper → `CandidateRender`. |
 | `@design-parity/diff` | issue #6 | Visual + semantic + token diff → `Verdict`. |
 | `@design-parity/resolver` | issue #7 | Correspondence (code ↔ design). |
+| `@design-parity/checks` | issue #10 | a11y + i18n spec checks (the high-value findings). |
+| `@design-parity/baseline` | issue #11 | Detect maturity; bootstrap an opinionated baseline when there's no design system. |
 | `@design-parity/action` | issue #8 | GitHub Action / PR-comment surface. |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so

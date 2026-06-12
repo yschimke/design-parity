@@ -2,6 +2,13 @@
 
 Instructions for humans and AI agents working in this repo.
 
+> **Read [docs/PRINCIPLES.md](./docs/PRINCIPLES.md) first.** Four binding
+> constraints govern every package: (1) generate committed scripts/config, don't
+> put AI in the CI loop; (2) lead with a11y + i18n, not pixel-matching;
+> (3) meet projects at any maturity and bootstrap a baseline when there's no
+> design system; (4) interactive for setup, unattended (GitHub Action) in steady
+> state.
+
 ## What this repo is
 
 `design-parity` is a TypeScript/Node monorepo. The orchestration, adapters, and
