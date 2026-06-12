@@ -1,0 +1,27 @@
+{
+  "name": "@design-parity/core",
+  "version": "0.0.0",
+  "description": "Shared contracts for design-parity: DesignReference, CandidateRender, tokens, semantics, verdict, and the design-map schema.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./schema/design-map.schema.json": "./schema/design-map.schema.json"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "bin": {
+    "design-parity-validate-map": "./dist/cli/validate-design-map.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "componentId": "ui/Button.kt#PrimaryButton",
+  "images": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "compact",
+      "uri": "fixtures/candidate/button-primary.light.png",
+      "width": 160,
+      "height": 48
+    },
+    {
+      "state": "default",
+      "theme": "dark",
+      "size": "compact",
+      "uri": "fixtures/candidate/button-primary.dark.png",
+      "width": 160,
+      "height": 48
+    }
+  ],
+  "semantics": {
+    "theme": "light",
+    "root": {
+      "role": "button",
+      "label": "Continue",
+      "bounds": { "x": 0, "y": 0, "width": 160, "height": 48 },
+      "tokens": {
+        "spacing": { "padding": 12 },
+        "radius": { "corner": 8 },
+        "colors": { "container.light": "#645AFF", "container.dark": "#7A72F0", "label": "#FFFFFF" }
+      },
+      "children": [
+        {
+          "role": "text",
+          "label": "Continue",
+          "bounds": { "x": 12, "y": 14, "width": 136, "height": 20 },
+          "tokens": {
+            "typography": { "label": { "fontFamily": "Roboto", "fontSize": 14, "fontWeight": 500, "lineHeight": 20 } }
+          }
+        }
+      ]
+    }
+  }
+}

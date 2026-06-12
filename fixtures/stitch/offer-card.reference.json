@@ -1,0 +1,29 @@
+{
+  "componentId": "ui/Card.kt#OfferCard",
+  "source": "stitch",
+  "linkMethod": "manifest",
+  "ref": "stitch:design/abc123",
+  "referenceImages": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "medium",
+      "uri": "fixtures/stitch/offer-card.light.png",
+      "width": 240,
+      "height": 160
+    }
+  ],
+  "tokens": {
+    "spacing": { "padding": 16, "gap": 8 },
+    "radius": { "corner": 12 },
+    "colors": {
+      "container": "#F5F5F7",
+      "title": "#1A1A1A",
+      "body": "#5F6368"
+    },
+    "typography": {
+      "title": { "fontFamily": "Inter", "fontSize": 16, "fontWeight": 600, "lineHeight": 24 },
+      "body": { "fontFamily": "Inter", "fontSize": 13, "fontWeight": 400, "lineHeight": 18 }
+    }
+  }
+}

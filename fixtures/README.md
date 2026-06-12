@@ -1,0 +1,27 @@
+# Fixtures
+
+Golden fixtures so every downstream package can code against stubs without a
+live design source or renderer. Each `*.reference.json` is a normalized
+[`DesignReference`](../packages/core/src/types.ts); `*.candidate.json` is a
+[`CandidateRender`](../packages/core/src/types.ts). All `uri`s are
+repo-relative paths to the PNGs alongside them.
+
+| Path | Source | Used by |
+| --- | --- | --- |
+| `figma/button-primary.reference.json` + `.light.png` / `.dark.png` | Figma (Code Connect) | Issue 2 (figma adapter), Issue 6 (diff) |
+| `stitch/offer-card.reference.json` + `.light.png` | Stitch (manifest) | Issue 3 (stitch adapter) |
+| `claude-design/offer-card.reference.json` + `.light.png` | Claude Design (manifest, HTML export) | Issue 4 (claude-design adapter) |
+| `candidate/button-primary.candidate.json` + `.png`s | candidate render | Issue 5 (candidate), Issue 6 (diff) |
+| `design-map.json` | manifest | Issue 3/4/7 |
+
+## The diff story (Figma button vs candidate)
+
+The Figma reference and the candidate render are intentionally mismatched so
+the diff engine (Issue 6) has deterministic findings to assert:
+
+- **token**: candidate padding `12dp` vs spec `16dp`.
+- **contrast**: dark-theme container drifts (`#7A72F0` vs spec `#8A82FF`),
+  exercising the AA contrast check.
+- **visual**: the dark-theme PNGs differ; light-theme PNGs match.
+
+Regenerate the PNGs with `scripts/gen-fixtures.py` if the dimensions change.

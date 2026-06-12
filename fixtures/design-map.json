@@ -1,0 +1,20 @@
+{
+  "$schema": "../packages/core/schema/design-map.schema.json",
+  "components": [
+    {
+      "code": "ui/Button.kt#PrimaryButton",
+      "source": "figma",
+      "ref": "figma:AbCdEf123456/1:42"
+    },
+    {
+      "code": "ui/Card.kt#OfferCard",
+      "source": "stitch",
+      "ref": "stitch:design/abc123"
+    },
+    {
+      "code": "ui/Card.kt#OfferCardExport",
+      "source": "claude-design",
+      "ref": "design/reference/offer-card.html"
+    }
+  ]
+}

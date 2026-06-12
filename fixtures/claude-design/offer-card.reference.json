@@ -1,0 +1,24 @@
+{
+  "componentId": "ui/Card.kt#OfferCard",
+  "source": "claude-design",
+  "linkMethod": "manifest",
+  "ref": "design/reference/offer-card.html",
+  "referenceImages": [
+    {
+      "state": "default",
+      "theme": "light",
+      "size": "medium",
+      "uri": "fixtures/claude-design/offer-card.light.png",
+      "width": 240,
+      "height": 160
+    }
+  ],
+  "tokens": {
+    "spacing": { "padding": 16 },
+    "radius": { "corner": 12 },
+    "colors": {
+      "container": "#F5F5F7",
+      "title": "#1A1A1A"
+    }
+  }
+}

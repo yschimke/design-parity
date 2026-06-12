@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/design-map.schema.json",
+  "title": "design-map",
+  "description": "In-repo manifest linking code components to design references for sources without a machine link (Stitch, Claude Design) or as an override for Figma.",
+  "type": "object",
+  "required": ["components"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "components": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/component" }
+    }
+  },
+  "definitions": {
+    "component": {
+      "type": "object",
+      "required": ["code", "source", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Code handle, e.g. 'ui/Button.kt#PrimaryButton'.",
+          "pattern": "^.+#.+$"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["figma", "stitch", "claude-design"]
+        },
+        "ref": {
+          "type": "string",
+          "description": "Source-specific reference handle. Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export.",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
