@@ -24,5 +24,9 @@ jobs:
         run: |
           node packages/core/dist/cli/validate-design-map.js \
             fixtures/design-map.json examples/design-map.json
+      - name: Validate parity-config example against schema
+        run: |
+          node packages/policy/dist/cli/validate-config.js \
+            examples/design-parity.json
       - name: Test
         run: npm test

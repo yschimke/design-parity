@@ -26,6 +26,7 @@ export type {
   Verdict,
   ParityDirection,
   ResolvedDirection,
+  MaturityRung,
   ParityConfig,
 } from "./types.js";
 

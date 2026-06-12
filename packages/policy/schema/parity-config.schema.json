@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/parity-config.schema.json",
+  "title": "design-parity config",
+  "description": "Committed, per-repo parity policy (`.design-parity.json`), read deterministically by the bot. Setup materializes a concrete direction; `auto` is only the pre-setup default. See docs/PRINCIPLES.md, Principle 5.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "direction": {
+      "type": "string",
+      "enum": ["auto", "design-led", "code-led"],
+      "default": "auto",
+      "description": "Who is canonical when design and code disagree. 'design-led' blocks the PR on a violation (fix is in code); 'code-led' makes violations advisory and allows pushing drift back to the design tool; 'auto' is a transitional default that setup materializes — and the Action resolves as a late fallback — into a concrete direction from the repo's maturity rung."
+    }
+  }
+}

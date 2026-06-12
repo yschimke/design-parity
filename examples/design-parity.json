@@ -1,0 +1,4 @@
+{
+  "$schema": "../packages/policy/schema/parity-config.schema.json",
+  "direction": "code-led"
+}

@@ -211,6 +211,19 @@ export type ParityDirection = "auto" | "design-led" | "code-led";
 export type ResolvedDirection = "design-led" | "code-led";
 
 /**
+ * Where a repo sits on the maturity ladder (docs/PRINCIPLES.md, Principle 3).
+ * Detected by setup/bootstrap (issue #11); the only input `auto` direction
+ * resolution needs.
+ *
+ * - `machine-link`: design system with a machine-resolvable link
+ *   (Figma + Code Connect) — rung 1.
+ * - `manifest`: design system linked only via `design-map.json` — rung 2.
+ * - `bootstrap`: no design system; bootstrapped to an opinionated baseline —
+ *   rung 3.
+ */
+export type MaturityRung = "machine-link" | "manifest" | "bootstrap";
+
+/**
  * Committed, per-repo parity policy. Read deterministically by the bot — never
  * decided at run time (see docs/PRINCIPLES.md, Principle 1). Setup writes a
  * concrete {@link ResolvedDirection}; `auto` is only the pre-setup default.
