@@ -10,17 +10,18 @@
  * render, and prints the markdown report. Exits non-zero only when the parity
  * direction blocks (`design-led` + a failure).
  *
- * Candidate renders come from `--candidates <file>` (a precomputed
- * `CandidateRender[]`) so a run is reproducible offline; live `compose-preview`
- * rendering is the next increment.
+ * Candidate renders come from committed, offline inputs (reproducible — no live
+ * render at run time): `--candidates <file>` (a precomputed `CandidateRender[]`)
+ * and/or `--candidate-bundles <png|dir,...>` (compose-ai-tools preview-bundle
+ * polyglots, read statically by `@design-parity/candidate`; issue #38 Phase 1).
+ * When both are given, bundles win and the JSON is the fallback.
  */
 import { argv, cwd, env, exit, stdout } from "node:process";
-import { readFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 
-import type { CandidateRender } from "@design-parity/core";
 import { resolve as resolveCorrespondences } from "@design-parity/resolver";
 
+import { buildCandidateProvider } from "../candidate.js";
 import { resolveRunConfig } from "../config.js";
 import { createAdapterRegistry } from "../registry.js";
 import { orchestrate } from "../orchestrate.js";
@@ -30,11 +31,12 @@ interface Args {
   repoRoot: string;
   components: string[];
   candidatesPath?: string;
+  bundlePaths: string[];
   outDir?: string;
 }
 
 function parseArgs(args: string[]): Args {
-  const out: Args = { repoRoot: cwd(), components: [] };
+  const out: Args = { repoRoot: cwd(), components: [], bundlePaths: [] };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     const next = () => args[(i += 1)];
@@ -50,6 +52,9 @@ function parseArgs(args: string[]): Args {
       case "--candidates":
         out.candidatesPath = next();
         break;
+      case "--candidate-bundles":
+        out.bundlePaths.push(...(next() ?? "").split(",").filter(Boolean));
+        break;
       case "--out":
         out.outDir = next();
         break;
@@ -60,22 +65,12 @@ function parseArgs(args: string[]): Args {
   return out;
 }
 
-async function loadCandidates(
-  repoRoot: string,
-  path: string,
-): Promise<Map<string, CandidateRender>> {
-  const raw = JSON.parse(
-    await readFile(resolvePath(repoRoot, path), "utf8"),
-  ) as CandidateRender[] | { candidates: CandidateRender[] };
-  const list = Array.isArray(raw) ? raw : raw.candidates;
-  return new Map(list.map((c) => [c.componentId, c]));
-}
-
 async function main(): Promise<number> {
   const args = parseArgs(argv.slice(2));
   if (args.components.length === 0) {
     stdout.write(
-      "design-parity run --components <code#Member,...> [--repo .] [--candidates file.json] [--out dir]\n",
+      "design-parity run --components <code#Member,...> [--repo .] " +
+        "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir]\n",
     );
     return 2;
   }
@@ -83,16 +78,19 @@ async function main(): Promise<number> {
   const { designMap, direction, warnings } = await resolveRunConfig(args.repoRoot);
   const resolved = resolveCorrespondences(args.components, { designMap });
 
-  const candidates = args.candidatesPath
-    ? await loadCandidates(args.repoRoot, args.candidatesPath)
-    : undefined;
+  const candidateOpts: Parameters<typeof buildCandidateProvider>[0] = {
+    repoRoot: args.repoRoot,
+    bundlePaths: args.bundlePaths,
+  };
+  if (args.candidatesPath) candidateOpts.candidatesPath = args.candidatesPath;
+  const provider = await buildCandidateProvider(candidateOpts);
 
   const report = await orchestrate({
     repoRoot: args.repoRoot,
     env,
     registry: createAdapterRegistry(),
     correspondences: resolved.correspondences,
-    candidate: (id) => candidates?.get(id),
+    candidate: provider ?? (() => undefined),
     direction,
     ...(args.outDir ? { outDir: args.outDir } : {}),
   });
