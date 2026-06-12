@@ -32,6 +32,23 @@ gets a concrete parity direction in policy's committed `.design-parity.json` —
   name convention are surfaced as **low-confidence review items** to wire to a
   design source later.
 
+## Compose Multiplatform (Principle 6)
+
+`detectMaturity` also reports whether a repo is **Compose Multiplatform (CMP)
+capable** — `cmpCapable: boolean` plus an evidence trail (`cmp.signals`) from a
+bounded scan of Gradle build files (`build.gradle{,.kts}`, `settings.gradle*`,
+`libs.versions.toml`). This is **orthogonal to the maturity rung**: a repo at any
+rung may or may not be CMP-capable.
+
+When a repo is **not** CMP-capable, `cmpSuggestion()` returns a non-blocking
+advisory ("Compose Multiplatform would render candidates on the JVM/desktop with
+no emulator — consider it"), surfaced via `plan.cmpSuggestion` and the CLI.
+**Never a gate** — plain Jetpack Compose stays fully supported.
+
+The live CMP render path (preferring `compose-preview`'s desktop/JVM render in
+`@design-parity/candidate` when capable, plus a Compose-for-Web/wasm spike) is
+deferred — it needs the JVM/Compose toolchain. See [docs/cmp.md](./docs/cmp.md).
+
 ## CLI
 
 ```sh

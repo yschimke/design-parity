@@ -1,0 +1,10 @@
+[versions]
+compose = "1.7.0"
+kotlin = "2.1.0"
+
+[plugins]
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+
+[libraries]
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }

@@ -86,6 +86,16 @@ function printPlan(plan: BootstrapPlan): void {
   }
   console.log(`\nParity direction: ${plan.direction}`);
 
+  // Principle 6: prefer/promote Compose Multiplatform — advisory, never a gate.
+  if (maturity.cmpCapable) {
+    console.log("\nCompose Multiplatform: capable (candidates can render on the JVM/desktop — no emulator).");
+    for (const s of maturity.cmp.signals) {
+      console.log(`  • ${s.kind}: ${s.path} (${s.match})`);
+    }
+  } else if (plan.cmpSuggestion) {
+    console.log(`\nCompose Multiplatform suggestion:\n  ${plan.cmpSuggestion}`);
+  }
+
   console.log("\nArtifacts:");
   for (const a of plan.artifacts) {
     const tag = a.exists ? " (exists — will skip unless --force)" : "";

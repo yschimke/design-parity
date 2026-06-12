@@ -8,6 +8,18 @@
  */
 export { detectMaturity } from "./detect.js";
 export type { MaturitySignal, MaturityResult } from "./detect.js";
+
+export {
+  classifyBuildFile,
+  isCmpBuildFile,
+  summarizeCmp,
+  cmpSuggestion,
+} from "./cmp.js";
+export type {
+  CmpSignal,
+  CmpSignalKind,
+  CmpCapability,
+} from "./cmp.js";
 /** Re-exported for convenience; the canonical definition lives in `core`. */
 export type { MaturityRung } from "@design-parity/core";
 
