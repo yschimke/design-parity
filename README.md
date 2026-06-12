@@ -53,6 +53,7 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 | [`@design-parity/baseline`](./packages/baseline) | ✅ | Detect maturity (3 rungs); materialize a concrete parity direction; bootstrap an opinionated committed baseline (tokens, starter `design-map.json`, check config) when there's no design system. Interactive CLI; never on the Action path. |
 | [`@design-parity/policy`](./packages/policy) | ✅ issue #12 | Committed `.design-parity.json` (schema, loader, validator CLI) + the deterministic `auto` → `design-led`/`code-led` direction resolver. |
 | [`@design-parity/action`](./packages/action) | 🚧 #8 | Orchestrator + CLI landed (registry → resolve → diff → policy → report); GitHub Action surface next. |
+| [`@design-parity/report-html`](./packages/report-html) | ✅ #31 | Per-run self-contained HTML comparison page: reference \| candidate \| diff side by side with the verdict findings, inlined to one offline `.html` (data-URI PNGs + inline CSS/JS, no external assets). Deterministic; leaf consumer. |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so
 every package can be built and tested against stubs with no live source or
