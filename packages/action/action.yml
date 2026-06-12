@@ -1,0 +1,22 @@
+name: "Design parity"
+description: "Check that a UI pull request is at parity with its design reference and post a single verdict comment."
+author: "design-parity"
+
+inputs:
+  github_token:
+    description: "Token used to read the PR's changed files and post/update the verdict comment."
+    default: ${{ github.token }}
+  candidates:
+    description: "Repo-relative path to a CandidateRender[] JSON for the changed components (produced by a prior compose-preview step)."
+    required: false
+
+runs:
+  using: "node20"
+  main: "dist/cli/action.js"
+
+# Note: publishing this as a usable action requires the bundled `dist/` to be
+# committed (e.g. via `ncc` into a single file). That bundling step is a
+# follow-up; today the orchestrator + surface ship as the npm package and CLI.
+branding:
+  icon: "check-circle"
+  color: "purple"

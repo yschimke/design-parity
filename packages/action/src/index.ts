@@ -4,8 +4,7 @@
  * Wires the resolver, the `source → adapter` registry, the candidate renderer,
  * the diff engine (+ checks), and the parity-direction policy into a single
  * {@link orchestrate} pipeline, and renders the aggregate {@link ParityReport}
- * for the PR surface. The GitHub Action surface (read PR → post/update comment)
- * builds on this core.
+ * for the PR surface, which it also posts/updates as a single PR comment.
  */
 export { createAdapterRegistry } from "./registry.js";
 export type { AdapterRegistry, RegistryOptions } from "./registry.js";
@@ -23,3 +22,19 @@ export { resolveRunConfig } from "./config.js";
 export type { RunConfig } from "./config.js";
 
 export { renderReport, REPORT_MARKER } from "./report.js";
+
+// GitHub surface
+export { postReport } from "./github/surface.js";
+export type {
+  GitHubCommentClient,
+  IssueComment,
+  PostOutcome,
+} from "./github/surface.js";
+export { GitHubRest } from "./github/rest.js";
+export type { GitHubRestOptions, RepoRef, FetchLike } from "./github/rest.js";
+export {
+  componentsForChangedFiles,
+  filePathOf,
+} from "./github/changed-components.js";
+export { checkConclusion, exitCode } from "./github/conclusion.js";
+export type { CheckConclusion } from "./github/conclusion.js";

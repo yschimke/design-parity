@@ -30,14 +30,38 @@ resolver ──(Correspondence[])──┐
 - **`design-parity run`** CLI — a local run; candidate renders come from
   `--candidates <file>` for now (reproducible offline).
 
-## Next increments (issue #8)
+## GitHub Action
 
-- Live `compose-preview` rendering in the CLI candidate provider.
-- The GitHub Action surface: read the PR's changed components, post/update the
-  single comment, upload triptychs, skip non-UI PRs, set the check status from
-  `blocked`.
-- Consume the canonical `size` contract (#24) and the committed checks config
-  loader (#25) once they land.
+`action.yml` + `dist/cli/action.js` run a parity check on a PR: read the
+changed files, keep the `design-map.json` components whose file changed (a PR
+that touches none is treated as non-UI and skipped), run the pipeline, and
+**post/update a single verdict comment** (idempotent via the report marker). It
+exits non-zero only when the direction blocks (`design-led` + a failure).
+
+```yaml
+# .github/workflows/design-parity.yml
+on: pull_request
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ... a prior step renders candidates -> candidates.json ...
+      - uses: yschimke/design-parity/packages/action@main
+        with:
+          candidates: candidates.json   # CandidateRender[] for the changed components
+```
+
+The surface logic (`postReport`, `componentsForChangedFiles`, `checkConclusion`)
+is pure and unit-tested with a fake client; the entrypoint adds a dependency-free
+`fetch` GitHub client.
+
+## Still to come (issue #8)
+
+- Live `compose-preview` rendering in the candidate provider (today candidates
+  come from a precomputed `CandidateRender[]`).
+- Bundle + commit `dist/` so the action is directly consumable (e.g. via `ncc`).
+- Upload triptychs as artifacts; consume the checks-config loader (#25).
 
 ## Use
 
