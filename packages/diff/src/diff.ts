@@ -28,7 +28,14 @@ import { resolveConfig, type DiffConfig } from "./config.js";
 import { diffSemantics } from "./semantic.js";
 import { renderSummary } from "./summary.js";
 import { collectTokens, diffTokens } from "./tokens.js";
-import { diffImagePair, imageKey, type VisualResult } from "./visual.js";
+import {
+  diffImagePair,
+  imageKey,
+  looseKey,
+  pairKey,
+  sizeCompatible,
+  type VisualResult,
+} from "./visual.js";
 
 export interface DiffOptions {
   /** Repo root the image `uri`s resolve against. Defaults to `process.cwd()`. */
@@ -66,18 +73,51 @@ export interface DiffResult {
   triptychs: Triptych[];
 }
 
-/** Pair candidate images to reference images by `state/theme/size`. */
+interface PairingResult {
+  pairs: Array<{ reference: Image; candidate: Image }>;
+  /** Reference variants with no candidate to compare against. */
+  unmatched: Image[];
+}
+
+/**
+ * Pair candidate images to reference images. Exact `state/theme/normalized-size`
+ * first (so `"Compact"`/`"600dp"`/`"compact"` line up); then a size-tolerant
+ * fallback by `state/theme` when one side omits/uses an unknown size. Two
+ * *different known* sizes never pair. Reference variants left over are reported
+ * rather than silently dropped.
+ */
 function pairImages(
   reference: DesignReference,
   candidate: CandidateRender,
-): Array<{ reference: Image; candidate: Image }> {
-  const byKey = new Map(candidate.images.map((i) => [imageKey(i), i]));
-  const pairs: Array<{ reference: Image; candidate: Image }> = [];
-  for (const ref of reference.referenceImages) {
-    const cand = byKey.get(imageKey(ref));
-    if (cand) pairs.push({ reference: ref, candidate: cand });
+): PairingResult {
+  const exact = new Map<string, Image>();
+  for (const i of candidate.images) {
+    if (!exact.has(pairKey(i))) exact.set(pairKey(i), i);
   }
-  return pairs;
+
+  const used = new Set<Image>();
+  const pairs: PairingResult["pairs"] = [];
+  const unmatched: Image[] = [];
+
+  for (const ref of reference.referenceImages) {
+    let cand = exact.get(pairKey(ref));
+    if (cand && used.has(cand)) cand = undefined;
+    if (!cand) {
+      cand = candidate.images.find(
+        (c) =>
+          !used.has(c) &&
+          looseKey(c) === looseKey(ref) &&
+          sizeCompatible(ref, c),
+      );
+    }
+    if (cand) {
+      used.add(cand);
+      pairs.push({ reference: ref, candidate: cand });
+    } else {
+      unmatched.push(ref);
+    }
+  }
+  return { pairs, unmatched };
 }
 
 function statusFor(findings: Finding[]): VerdictStatus {
@@ -111,12 +151,27 @@ export async function diff(
   // 2. token compliance.
   const tokens = diffTokens(reference.tokens, candidateTokens, config);
 
-  // 3. semantics.
+  // 3. semantics (+ reference variants with no candidate counterpart).
   const semantic = diffSemantics(reference, candidate);
+  const { pairs, unmatched } = pairImages(reference, candidate);
+  const candidateThemes = new Set(
+    candidate.images.map((i) => i.theme).filter(Boolean),
+  );
+  for (const ref of unmatched) {
+    // A wholly-missing theme is already reported by diffSemantics; only flag
+    // finer gaps (a missing size/state within a theme the candidate renders).
+    if (ref.theme && !candidateThemes.has(ref.theme)) continue;
+    semantic.push({
+      kind: "semantic",
+      severity: "warn",
+      message: `reference variant '${imageKey(ref)}' has no candidate render to compare`,
+      detail: { variant: imageKey(ref) },
+    });
+  }
 
   // 4. visual diff (table stakes).
   const visuals: VisualResult[] = [];
-  for (const pair of pairImages(reference, candidate)) {
+  for (const pair of pairs) {
     visuals.push(
       await diffImagePair(repoRoot, pair.reference, pair.candidate, config),
     );

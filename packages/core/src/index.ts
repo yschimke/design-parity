@@ -43,3 +43,11 @@ export {
   loadDesignMap,
   findByCode,
 } from "./design-map.js";
+
+export type { CanonicalSize } from "./size.js";
+export {
+  CANONICAL_SIZES,
+  SIZE_BREAKPOINTS,
+  sizeForWidth,
+  normalizeSize,
+} from "./size.js";

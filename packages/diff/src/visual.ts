@@ -9,7 +9,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import type { Image } from "@design-parity/core";
+import { normalizeSize, type Image } from "@design-parity/core";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
@@ -36,9 +36,38 @@ export interface VisualResult {
   triptych: Buffer;
 }
 
-/** Stable key for pairing a reference image with its candidate counterpart. */
+/** Human-readable key (raw size) — also the {@link Verdict.visualScores} key. */
 export function imageKey(img: Image): string {
   return [img.state, img.theme, img.size].filter(Boolean).join("/");
+}
+
+/** The size token used for pairing: canonical when recognized, else the raw label. */
+function sizeToken(img: Image): string | undefined {
+  return normalizeSize(img.size) ?? img.size?.toLowerCase();
+}
+
+/**
+ * Pairing key with the size normalized, so `"Compact"` / `"compact"` / `"600dp"`
+ * all match. Differs from {@link imageKey} (which keeps the raw label for humans).
+ */
+export function pairKey(img: Image): string {
+  return [img.state, img.theme, sizeToken(img)].filter(Boolean).join("/");
+}
+
+/** Looser key ignoring size — used to pair when a side omits/uses an unknown size. */
+export function looseKey(img: Image): string {
+  return [img.state, img.theme].filter(Boolean).join("/");
+}
+
+/**
+ * Whether two images may pair despite different size labels: compatible when at
+ * least one side has no recognized size, or both canonicalize to the same one.
+ * Two *different* known sizes (compact vs expanded) are genuinely distinct.
+ */
+export function sizeCompatible(a: Image, b: Image): boolean {
+  const ca = normalizeSize(a.size);
+  const cb = normalizeSize(b.size);
+  return ca === undefined || cb === undefined || ca === cb;
 }
 
 async function readRaster(repoRoot: string, uri: string): Promise<Raster> {
