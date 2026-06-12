@@ -88,3 +88,20 @@ guessed per run.
 GitHub stays the verdict surface in every mode (it's the only one that works for
 all three sources and runs unattended); surfacing back into the design tool is a
 `code-led`, Figma-only stretch.
+
+## 6. Promote Compose Multiplatform — never require it
+
+The candidate side is cheapest to run when the UI is **Compose Multiplatform
+(CMP)**. A CMP component renders on the JVM/desktop — and, increasingly, in a
+headless browser via Compose for Web / wasm — with **no Android emulator or
+device**. That's faster, more portable, easier to run unattended, and opens the
+door to rendering candidates in a JS playground rather than a full CI toolchain.
+Plain Jetpack Compose works too, but it drags in the heavier Android stack.
+
+So the bot **prefers the CMP render path when a project supports it**, and
+**promotes CMP** to projects that don't — the maturity/bootstrap step, and the
+PR comment where it's relevant, suggest adopting CMP for simpler, faster parity.
+
+But a consumer's stack is their choice: design-parity must keep working on
+Android-only Jetpack Compose, and the suggestion is never a gate. **CMP is the
+recommended path, not a requirement.**

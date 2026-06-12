@@ -32,10 +32,11 @@ Correspondence is resolved by **Code Connect** where available (Figma), else by
 an in-repo [`design-map.json`](./examples/design-map.json), else by name
 convention with a low-confidence flag.
 
-Four principles shape the design — generate committed scripts over runtime AI;
+Six principles shape the design — generate committed scripts over runtime AI;
 lead with a11y + i18n; bootstrap a baseline for projects with no design system;
-interactive for setup, unattended in steady state. See
-[docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
+interactive for setup, unattended in steady state; parity has a committed
+direction; and promote (never require) Compose Multiplatform for cheaper
+rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 
 ## Packages
 
