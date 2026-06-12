@@ -28,5 +28,9 @@ jobs:
         run: |
           node packages/policy/dist/cli/validate-config.js \
             examples/design-parity.json
+      - name: Validate checks-config example against schema
+        run: |
+          node packages/checks/dist/cli/validate-checks.js \
+            examples/design-parity.checks.json
       - name: Test
         run: npm test

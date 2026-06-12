@@ -33,6 +33,32 @@ touch-target minimum, glyph-advance estimate, themes, hardcoded-string opt-in).
 Defaults live in [`src/thresholds.ts`](./src/thresholds.ts) and encode WCAG 2.2
 + Material 3 + standard pseudolocale guidance.
 
+A repo commits these knobs to **`design-parity.checks.json`** — the file
+`@design-parity/baseline` writes during bootstrap. It is read deterministically
+at run time so its tuned thresholds actually reach the engine (Principle 1):
+
+- `loadChecksConfig(path)` — read, parse, and schema-validate a config file;
+  throws a readable error if it is missing, not JSON, or schema-invalid.
+- `loadChecksConfigOrDefault(path)` — same, but a **missing** file resolves to
+  the committed defaults, so a repo in steady state with no setup still works. A
+  present-but-invalid file still throws.
+- `validateChecksConfig(value)` — validate an already-parsed object against the
+  draft-07 [schema](./schema/checks-config.schema.json).
+
+The config shape mirrors `ChecksConfig` exactly, so bootstrap output validates
+and loads without translation. See
+[`examples/design-parity.checks.json`](../../examples/design-parity.checks.json).
+
+### Validate CLI
+
+`design-parity-validate-checks [path ...]` validates one or more config files
+against the schema and exits non-zero on the first invalid one, so it can gate
+CI. Defaults to `design-parity.checks.json` in the cwd.
+
+```sh
+node packages/checks/dist/cli/validate-checks.js design-parity.checks.json
+```
+
 ## Finding kinds
 
 This package introduced the dedicated `a11y` and `i18n` `FindingKind`s in

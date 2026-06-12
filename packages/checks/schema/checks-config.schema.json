@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/checks-config.schema.json",
+  "title": "design-parity checks config",
+  "description": "Committed, per-repo a11y + i18n check configuration (`design-parity.checks.json`), read deterministically by the bot at run time. Bootstrap (`@design-parity/baseline`) materializes a starter file; omitted knobs fall back to committed defaults. See docs/PRINCIPLES.md, Principles 1 and 2.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "contrastLevel": {
+      "type": "string",
+      "enum": ["AA", "AAA"],
+      "default": "AA",
+      "description": "WCAG conformance level the contrast check fails below. 'AA' emits an error under AA and an info between AA and AAA; 'AAA' emits an error under AAA."
+    },
+    "minTouchTarget": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Minimum touch-target size in dp. Defaults to the committed threshold when omitted."
+    },
+    "glyphAdvance": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Average glyph advance as a fraction of font size, used for text-width estimation. Defaults to the committed threshold when omitted."
+    },
+    "themes": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["light", "dark"] },
+      "uniqueItems": true,
+      "description": "Themes to evaluate. Defaults to those the candidate exposes when omitted."
+    },
+    "flagHardcodedStrings": {
+      "type": "boolean",
+      "default": false,
+      "description": "Flag every user-facing literal as a possible un-keyed string. Off by default: a render alone can't prove a string came from a resource, so this is an opt-in lint, not a steady-state gate."
+    }
+  }
+}
