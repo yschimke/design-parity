@@ -70,8 +70,22 @@ export function sizeCompatible(a: Image, b: Image): boolean {
   return ca === undefined || cb === undefined || ca === cb;
 }
 
+/** Decode a `data:<mediatype>;base64,<payload>` URI to its raw bytes. */
+function decodeDataUri(uri: string): Buffer {
+  const comma = uri.indexOf(",");
+  const meta = comma === -1 ? "" : uri.slice("data:".length, comma);
+  if (!/;base64$/i.test(meta)) {
+    throw new Error(`visual: unsupported data: URI (expected base64): ${meta}`);
+  }
+  return Buffer.from(uri.slice(comma + 1), "base64");
+}
+
 async function readRaster(repoRoot: string, uri: string): Promise<Raster> {
-  const buf = await readFile(resolve(repoRoot, uri));
+  // A source may hand us the PNG inline as a `data:` URI (e.g. a `.zip` bundle,
+  // which has no standalone repo file); decode it rather than reading from disk.
+  const buf = uri.startsWith("data:")
+    ? decodeDataUri(uri)
+    : await readFile(resolve(repoRoot, uri));
   const png = PNG.sync.read(buf);
   return { width: png.width, height: png.height, data: png.data };
 }

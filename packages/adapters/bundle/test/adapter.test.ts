@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 
-import type { AdapterContext, DesignReference } from "@design-parity/core";
+import type {
+  AdapterContext,
+  CandidateRender,
+  DesignReference,
+} from "@design-parity/core";
+import { diff } from "@design-parity/diff";
 
 import {
   BundleAdapter,
@@ -200,10 +205,15 @@ describe("BundleAdapter.resolve (.zip)", () => {
       width: 240,
       height: 160,
     });
-    // A zip entry has no standalone repo file; the uri traces '<zip>!<path>'.
-    expect(ref.referenceImages[0]?.uri).toBe(
-      "fixtures/bundle/offer-card.zip!offer-card.light.png",
+    // A zip entry has no standalone repo file, so its bytes are inlined as a
+    // `data:image/png;base64,…` URI the diff engine and HTML report decode.
+    const uri = ref.referenceImages[0]?.uri ?? "";
+    expect(uri.startsWith("data:image/png;base64,")).toBe(true);
+    const inlined = Buffer.from(uri.slice("data:image/png;base64,".length), "base64");
+    const onDisk = await readFile(
+      resolve(repoRoot, "fixtures/bundle/offer-card/offer-card.light.png"),
     );
+    expect(inlined.equals(onDisk)).toBe(true);
     expect(ref.tokens?.spacing?.padding).toBe(16);
   });
 
@@ -226,5 +236,40 @@ describe("BundleAdapter.resolve (.zip)", () => {
     const ref = await new BundleAdapter().resolve("a#b", dir, ctx);
     expect(ref.referenceImages[0]).toMatchObject({ width: 240, height: 160 });
     expect(ref.referenceImages[0]?.uri.endsWith("/imgs/a.png")).toBe(true);
+  });
+});
+
+describe("zip bundle → diff (end-to-end)", () => {
+  it("resolves a .zip to data: URIs that @design-parity/diff can visually score", async () => {
+    const reference = await new BundleAdapter().resolve(
+      "ui/Card.kt#OfferCard",
+      "fixtures/bundle/offer-card.zip",
+      ctx,
+    );
+    // Every zip-sourced image is an inline data: URI — no standalone repo file.
+    for (const img of reference.referenceImages) {
+      expect(img.uri.startsWith("data:image/png;base64,")).toBe(true);
+    }
+
+    // A candidate that reuses the same reference bytes pairs and scores 0;
+    // this proves the whole zip → diff path works (the diff engine decodes the
+    // data: URIs instead of trying to readFile a '<zip>!<path>' trace).
+    const candidate: CandidateRender = {
+      componentId: "ui/Card.kt#OfferCard",
+      images: reference.referenceImages.map((img) => ({ ...img })),
+      semantics: {
+        theme: "light",
+        root: { role: "image", bounds: { x: 0, y: 0, width: 240, height: 160 } },
+      },
+    };
+
+    const { verdict, triptychs } = await diff(reference, candidate);
+    expect(verdict.visualScores?.["default/light/medium"]).toBe(0);
+    expect(verdict.visualScores?.["default/dark/medium"]).toBe(0);
+    // A real triptych PNG is produced per pair.
+    expect(triptychs).toHaveLength(2);
+    for (const t of triptychs) {
+      expect(t.png.subarray(0, 4).toString("hex")).toBe("89504e47");
+    }
   });
 });

@@ -114,6 +114,42 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).not.toMatch(/<script\s+src=/);
   });
 
+  it("passes a data:-URI image through inline without reading a file", async () => {
+    const dataUri = `data:image/png;base64,${ONE_PX_PNG.toString("base64")}`;
+    const reference: DesignReference = {
+      componentId: "ui/Card.kt#OfferCard",
+      source: "bundle",
+      linkMethod: "manifest",
+      referenceImages: [
+        { state: "default", theme: "light", uri: dataUri, width: 1, height: 1 },
+      ],
+    };
+    const candidate: CandidateRender = {
+      componentId: "ui/Card.kt#OfferCard",
+      images: [
+        { state: "default", theme: "light", uri: dataUri, width: 1, height: 1 },
+      ],
+      semantics: { root: { role: "image" } },
+    };
+    const verdict: Verdict = {
+      componentId: "ui/Card.kt#OfferCard",
+      status: "pass",
+      findings: [],
+      visualScores: { "default/light": 0 },
+    };
+
+    // A repoRoot that does not exist proves the data: URI is passed through and
+    // never resolved/read from disk.
+    const html = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      repoRoot: "/no/such/root",
+    });
+
+    expect(html).toContain(dataUri);
+  });
+
   it("is deterministic: two renders are byte-identical", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     const diffImages: DiffImage[] = [
