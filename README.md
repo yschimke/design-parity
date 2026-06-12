@@ -47,7 +47,7 @@ interactive for setup, unattended in steady state. See
 | `@design-parity/adapter-claude-design` | issue #4 | Claude Design committed-HTML-export driver. |
 | `@design-parity/candidate` | issue #5 | `compose-preview` CLI wrapper → `CandidateRender`. |
 | `@design-parity/diff` | issue #6 | Visual + semantic + token diff → `Verdict`. |
-| `@design-parity/resolver` | issue #7 | Correspondence (code ↔ design). |
+| [`@design-parity/resolver`](./packages/resolver) | ✅ | Correspondence (code ↔ design): Code Connect → `design-map.json` → name convention. |
 | [`@design-parity/checks`](./packages/checks) | ✅ | a11y + i18n spec checks (the high-value findings). |
 | `@design-parity/baseline` | issue #11 | Detect maturity; bootstrap an opinionated baseline when there's no design system. |
 | [`@design-parity/policy`](./packages/policy) | ✅ issue #12 | Committed `.design-parity.json` (schema, loader, validator CLI) + the deterministic `auto` → `design-led`/`code-led` direction resolver. |
