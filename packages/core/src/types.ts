@@ -198,20 +198,25 @@ export interface Verdict {
  *   and the fix is in code (never push code back to the design).
  * - `code-led`: the shipped code is reality; violations are **advisory** and
  *   drift can be pushed back to the design tool (see Code-to-Canvas).
- * - `auto`: resolved from the repo's maturity rung — `design-led` when there's
- *   a design system with a machine link, `code-led` otherwise.
+ * - `auto`: a transitional default. Setup/bootstrap detects the maturity rung
+ *   and **writes a concrete direction** into the committed config, so steady
+ *   state normally never sees `auto`. If a repo wires up the Action without
+ *   running setup, the resolver maps `auto` to a concrete value deterministically
+ *   (`design-led` with a machine link, else `code-led`) — same result, just
+ *   resolved late instead of materialized.
  */
 export type ParityDirection = "auto" | "design-led" | "code-led";
 
-/** `auto` always resolves to one of these before the diff runs. */
+/** What `auto` is materialized/resolved into. */
 export type ResolvedDirection = "design-led" | "code-led";
 
 /**
  * Committed, per-repo parity policy. Read deterministically by the bot — never
- * decided at run time (see docs/PRINCIPLES.md, Principle 1).
+ * decided at run time (see docs/PRINCIPLES.md, Principle 1). Setup writes a
+ * concrete {@link ResolvedDirection}; `auto` is only the pre-setup default.
  */
 export interface ParityConfig {
-  /** Defaults to `"auto"`. */
+  /** Defaults to `"auto"` until setup materializes a concrete direction. */
   direction: ParityDirection;
 }
 

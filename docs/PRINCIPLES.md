@@ -76,11 +76,14 @@ guessed per run.
   the fix is in code. Never push code back to the design.
 - **`code-led`** — the shipped code is reality. Violations are **advisory**, and
   drift can be pushed back to the design tool (Code-to-Canvas, the fast-follow).
-- **`auto`** (default) — resolved from the maturity rung (Principle 3):
-  `design-led` when there's a design system with a machine link (Figma + Code
-  Connect), `code-led` otherwise. A freshly bootstrapped repo is code-led by
-  construction — its baseline was generated from code, so blocking against it
-  would be backwards.
+- **`auto`** — a transitional default, not a steady-state mode. **Setup
+  materializes it**: bootstrap detects the maturity rung (Principle 3) and
+  writes a concrete `design-led`/`code-led` into the committed config, so a
+  configured repo never re-resolves direction at run time (Principle 1). It
+  resolves to `design-led` when there's a design system with a machine link
+  (Figma + Code Connect), `code-led` otherwise — a freshly bootstrapped repo is
+  code-led by construction. If the Action is wired up without setup, the
+  resolver still maps `auto` deterministically as a fallback.
 
 GitHub stays the verdict surface in every mode (it's the only one that works for
 all three sources and runs unattended); surfacing back into the design tool is a
