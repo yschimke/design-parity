@@ -36,6 +36,12 @@ export interface PreviewParams {
   fontScale?: number;
   /** Android `Configuration.UI_MODE_*` int, or a resolved theme string. */
   uiMode?: number | string;
+  /**
+   * Explicit theme hint (`"light"`/`"dark"`). The authoritative theme when a
+   * project themes via a `CompositionLocal` rather than `uiMode` (so `uiMode`
+   * is always `0`); a producer sets this per preview/capture. See issue #48.
+   */
+  theme?: Theme | string;
   locale?: string;
   /** Variant state, if the renderer surfaces one (default/pressed/disabled). */
   state?: string;
@@ -113,6 +119,42 @@ export function themeFromUiMode(
   if (night === UI_MODE_NIGHT_YES) return "dark";
   if (night === UI_MODE_NIGHT_NO) return "light";
   return undefined;
+}
+
+/**
+ * Derive a {@link Theme} from a preview id by its trailing token (issue #48).
+ *
+ * Many projects theme via a `CompositionLocal` (so `uiMode` is `0` and the theme
+ * is undiscoverable from params), but encode the variant in the preview name —
+ * e.g. `Tile_LightOn` (light) vs `Tile_LightOn_Dark` (dark). We look only at the
+ * **last** `[_\-. ()]`-separated token so a `dark`/`light`/`night` suffix is
+ * recognised while an embedded word (`LightOn`) is not — that substring ambiguity
+ * is exactly why a whole-string match would misfire here. Low confidence; an
+ * explicit {@link PreviewParams.theme} hint always wins.
+ */
+export function themeFromName(id: string | undefined): Theme | undefined {
+  if (!id) return undefined;
+  const tokens = id.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const last = tokens[tokens.length - 1];
+  if (last === "dark" || last === "night") return "dark";
+  if (last === "light") return "light";
+  return undefined;
+}
+
+/**
+ * The theme for a preview's rendered image, in precedence order (issue #48):
+ * an explicit {@link PreviewParams.theme} hint, then the Android `uiMode`, then
+ * the preview-id name convention. `undefined` when none applies.
+ */
+export function themeForPreview(
+  params: PreviewParams,
+  id?: string,
+): Theme | undefined {
+  return (
+    themeFromUiMode(params.theme) ??
+    themeFromUiMode(params.uiMode) ??
+    themeFromName(id)
+  );
 }
 
 /**
@@ -411,6 +453,6 @@ export class SpawnComposePreviewCli implements ComposePreviewCli {
     } catch {
       return undefined;
     }
-    return normalizeSemantics(parsed, themeFromUiMode(entry.params.uiMode));
+    return normalizeSemantics(parsed, themeForPreview(entry.params, entry.id));
   }
 }
