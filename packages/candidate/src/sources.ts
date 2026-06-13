@@ -179,36 +179,11 @@ export function localComposeWebSource(
 }
 
 // ---------------------------------------------------------------------------
-// 4. compose-preview daemon/session source — STUB (not implemented).
+// 4. compose-preview daemon/session source — implemented in ./daemon.ts.
 // ---------------------------------------------------------------------------
-
-/** Options for the (future) compose-preview daemon/session client. */
-export interface DaemonSourceOptions {
-  /** Base URL / socket of the running compose-preview daemon. */
-  endpoint?: string;
-  /** Session id to attach to, if reusing an interactive session. */
-  sessionId?: string;
-}
-
-/**
- * **STUB.** A {@link CandidateSource} backed by a long-lived compose-preview
- * **daemon / session API** (interactive re-render + `fetchData` for a11y /
- * semantics on demand). Best for fast iterative local use where a warm JVM
- * stays resident. Needs the session/data-product API, which is not available
- * yet (see issue #38, Phase 2 notes).
- *
- * @throws NotImplementedError on every lookup.
- */
-export function daemonSource(
-  _options: DaemonSourceOptions = {},
-): CandidateSource {
-  return {
-    kind: "daemon",
-    async getCandidate(): Promise<CandidateRender | undefined> {
-      throw new NotImplementedError(
-        "the compose-preview daemon/session candidate source",
-        "It will drive an interactive compose-preview daemon (re-render + fetchData) once the session API is published.",
-      );
-    },
-  };
-}
+//
+// The live compose-ai-tools daemon source (issue #43) ingests the renderer's
+// native a11y/i18n findings rather than re-deriving them, so it carries more
+// than the {@link CandidateSource} seam (it also exposes `nativeFindingsFor`).
+// It lives in its own module; see `daemonSource` / `DaemonCandidateSource` in
+// ./daemon.ts.

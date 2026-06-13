@@ -14,11 +14,17 @@ import type {
   Correspondence,
   DesignReference,
   DesignSource,
+  Finding,
   ResolvedDirection,
   Verdict,
   VerdictStatus,
 } from "@design-parity/core";
-import { diff, type DiffConfig, type Triptych } from "@design-parity/diff";
+import {
+  diff,
+  type ChecksProvider,
+  type DiffConfig,
+  type Triptych,
+} from "@design-parity/diff";
 import { directionPolicy } from "@design-parity/policy";
 
 import type { AdapterRegistry } from "./registry.js";
@@ -36,11 +42,28 @@ export interface OrchestrateOptions {
   /** The (code → source/ref) links the resolver produced for the changed components. */
   correspondences: Correspondence[];
   candidate: CandidateProvider;
+  /**
+   * Renderer-native a11y/i18n findings for a component (issue #43). When this
+   * returns findings, they **supersede** design-parity's own `@design-parity/checks`
+   * for that component — injected as the diff's `checks` provider (the parity
+   * token/visual/semantic diff still runs). Used by the daemon candidate source,
+   * which ingests the renderer's own `a11y/atf` / `text/strings` / … products.
+   * Returning `undefined` keeps the default checks.
+   */
+  nativeChecks?: (
+    componentId: string,
+    ctx: AdapterContext,
+  ) => Promise<Finding[] | undefined> | Finding[] | undefined;
   /** Concrete direction (already resolved from `.design-parity.json`). */
   direction: ResolvedDirection;
   /** Where triptych PNGs are written (optional). */
   outDir?: string;
   diffConfig?: Partial<DiffConfig>;
+}
+
+/** Wrap precomputed native findings as a {@link ChecksProvider} for the diff. */
+function nativeChecksProvider(findings: Finding[]): ChecksProvider {
+  return { run: () => findings };
 }
 
 export type ComponentStatus = "ok" | "skipped" | "error";
@@ -111,10 +134,14 @@ export async function orchestrate(
         continue;
       }
 
+      // Renderer-native findings (daemon path) supersede the default checks
+      // for this component (issue #43); the parity diff itself is unchanged.
+      const native = await options.nativeChecks?.(corr.code, ctx);
       const diffOptions = {
         repoRoot: options.repoRoot,
         ...(options.outDir ? { outDir: options.outDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
+        ...(native ? { checks: nativeChecksProvider(native) } : {}),
       };
       const { verdict, summary, triptychs } = await diff(
         reference,

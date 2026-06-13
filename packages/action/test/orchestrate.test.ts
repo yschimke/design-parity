@@ -124,6 +124,49 @@ describe("orchestrate (golden figma button vs candidate)", () => {
   });
 });
 
+describe("nativeChecks injection (daemon path, #43)", () => {
+  it("supersedes the default a11y/i18n checks with the renderer's findings", async () => {
+    const { reference, candidate } = await load();
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(adapterReturning(reference)),
+      correspondences: [corr],
+      candidate: () => candidate,
+      // The renderer supplies one distinctive native a11y finding for this component.
+      nativeChecks: (code) =>
+        code === corr.code
+          ? [{ kind: "a11y", severity: "warn", message: "NATIVE: from the daemon" }]
+          : undefined,
+      direction: "code-led",
+    });
+    const verdict = report.results[0]!.verdict!;
+    const a11yI18n = verdict.findings.filter(
+      (f) => f.kind === "a11y" || f.kind === "i18n" || f.kind === "contrast",
+    );
+    // a11y/i18n come solely from the injected native provider…
+    expect(a11yI18n).toEqual([
+      { kind: "a11y", severity: "warn", message: "NATIVE: from the daemon" },
+    ]);
+    // …while the default checks' contrast finding (present without injection) is gone.
+    expect(verdict.findings.some((f) => f.message.includes("WCAG"))).toBe(false);
+  });
+
+  it("falls back to the default checks when nativeChecks returns undefined", async () => {
+    const { reference, candidate } = await load();
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(adapterReturning(reference)),
+      correspondences: [corr],
+      candidate: () => candidate,
+      nativeChecks: () => undefined,
+      direction: "code-led",
+    });
+    // The golden candidate trips the default dark-theme contrast check.
+    const verdict = report.results[0]!.verdict!;
+    expect(verdict.findings.some((f) => f.kind === "contrast")).toBe(true);
+  });
+});
+
 describe("renderReport", () => {
   it("includes the marker, blocking headline, and component summary", async () => {
     const { reference, candidate } = await load();

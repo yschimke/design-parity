@@ -18,7 +18,6 @@ import {
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
-  daemonSource,
   firstAvailable,
   InvalidBundleError,
   NotImplementedError,
@@ -188,11 +187,4 @@ describe("stub sources", () => {
     );
   });
 
-  it("daemonSource throws a clear not-implemented error", async () => {
-    const source = daemonSource();
-    expect(source.kind).toBe("daemon");
-    await expect(source.getCandidate("x", ctx)).rejects.toThrow(
-      /not implemented/,
-    );
-  });
 });

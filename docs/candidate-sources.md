@@ -28,7 +28,7 @@ is **not** swallowed.
 | `bundleCandidateSource` | `bundle` | **1 — shipped** | cheapest | nothing (pure JS) | yes (from the bundle blob) |
 | `cliRenderSource` | `cli` | shipped (wrap) | high | JVM/Android + `compose-preview` CLI | yes (CLI data product) |
 | `localComposeWebSource` | `local-compose-web` | **stub** | low | a CMP/wasm render entrypoint | (future) |
-| `daemonSource` | `daemon` | **stub** | low per render, warm | a running compose-preview daemon/session API | (future) |
+| `daemonSource` | `daemon` | **2 — shipped (#43)** | low per render, warm | a running compose-ai-tools daemon | yes (a11y/hierarchy) **+ native findings** |
 
 ### 1. `bundleCandidateSource` — static preview-bundle reader (Phase 1 of #38)
 
@@ -83,13 +83,41 @@ cheapest *live* path for CMP projects (docs/PRINCIPLES.md, Principle 6) and
 opens the door to rendering candidates in a JS playground. **Not implemented**:
 needs the wasm render entrypoint. Throws `NotImplementedError`.
 
-### 4. `daemonSource` — compose-preview daemon/session *(stub)*
+### 4. `daemonSource` — compose-ai-tools daemon, native findings (#43)
 
-Would drive a long-lived compose-preview **daemon / session API** — a warm JVM
-that re-renders interactively and serves data products (a11y/semantics) on
-demand via `fetchData`. Best for fast iterative local use. **Not implemented**:
-needs the session/data-product API to be published. Throws
-`NotImplementedError`.
+Drives a long-lived compose-ai-tools **daemon** (a warm JVM that re-renders
+interactively and serves data products on demand) over the
+{@link DaemonDataClient} transport seam — production speaks the
+JSON-RPC-over-stdio protocol (compose-ai-tools `docs/daemon/PROTOCOL.md`, e.g.
+`compose-preview bundle daemon <bundle>`); tests inject a fake.
+
+**Decision (issue #43): on the daemon path design-parity ingests the renderer's
+*native* a11y/i18n findings** rather than re-running its own checks — the
+renderer already computed them from the live render. Per preview the source:
+
+- maps the rendered capture → the candidate `Image` (`data:` or path);
+- builds the `SemanticTree` from `a11y/hierarchy` (for the parity
+  token/visual/semantic diff and pairing);
+- maps the native data products → `Finding[]`:
+
+  | Data product | → Finding |
+  | --- | --- |
+  | `a11y/atf` (incl. contrast) | `contrast` / `a11y` (ERROR→error, WARNING→warn) |
+  | `a11y/touchTargets` | `a11y` (belowMinimum→error, else warn) |
+  | `text/strings` (truncated/overflow) | `i18n` (text-expansion risk) |
+  | `i18n/translations` (missing locales) | `i18n` (coverage) |
+
+The source exposes `nativeFindingsFor(componentId)`; the action injects those as
+the diff's `checks` provider (`diff(reference, candidate, { checks })`), so they
+**supersede** `@design-parity/checks` for that component while the parity diff
+(token / visual / semantic-vs-reference) still runs — **reusing the existing
+`ChecksProvider` seam, no diff change** (the orchestrator's `nativeChecks`
+option). `@design-parity/checks` remains the path for sources with no native
+findings (static bundle, figma, stitch, claude-design).
+
+The mappers are pure and unit-tested against captured/mocked `data/fetch`
+payloads (no live daemon required). Driving a live daemon end-to-end is the
+remaining trial step.
 
 ## Wiring into the Action / CLI
 
