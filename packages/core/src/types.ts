@@ -315,5 +315,17 @@ export type MaturityRung = "machine-link" | "manifest" | "bootstrap";
 export interface ParityConfig {
   /** Defaults to `"auto"` until setup materializes a concrete direction. */
   direction: ParityDirection;
+  /**
+   * Whether the repo is Compose Multiplatform capable (docs/PRINCIPLES.md,
+   * Principle 6). Recorded by setup/bootstrap from its deterministic CMP scan so
+   * the unattended Action can promote CMP to Android-only repos *without
+   * re-deriving it on every run* (Principle 1) — the Action only reads this
+   * committed flag, it never re-scans. `false` ⇒ Android-only, so the PR comment
+   * carries a non-blocking "could run parity faster on CMP" suggestion; `true` ⇒
+   * already CMP, nothing to promote; omitted ⇒ setup hasn't recorded it (an
+   * older or hand-written config), so the Action stays silent rather than guess.
+   * Advisory only — never a gate.
+   */
+  cmpCapable?: boolean;
 }
 

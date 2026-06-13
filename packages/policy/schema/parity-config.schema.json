@@ -12,6 +12,10 @@
       "enum": ["auto", "design-led", "code-led"],
       "default": "auto",
       "description": "Who is canonical when design and code disagree. 'design-led' blocks the PR on a violation (fix is in code); 'code-led' makes violations advisory and allows pushing drift back to the design tool; 'auto' is a transitional default that setup materializes — and the Action resolves as a late fallback — into a concrete direction from the repo's maturity rung."
+    },
+    "cmpCapable": {
+      "type": "boolean",
+      "description": "Whether the repo is Compose Multiplatform capable (Principle 6). Recorded by setup/bootstrap from its deterministic CMP scan so the unattended Action can promote CMP to Android-only repos without re-deriving it per run (Principle 1). false ⇒ Android-only (the PR comment carries a non-blocking 'could run faster on CMP' suggestion); true ⇒ already CMP; omitted ⇒ setup hasn't recorded it. Advisory only — never a gate."
     }
   }
 }

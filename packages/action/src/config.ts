@@ -19,6 +19,13 @@ import {
 export interface RunConfig {
   designMap?: DesignMap;
   direction: ResolvedDirection;
+  /**
+   * The committed CMP capability flag (Principle 6), read verbatim from
+   * `.design-parity.json` — *not* re-derived here (Principle 1). `false` lets
+   * the run promote CMP in the PR comment; `true`/omitted stays silent. See
+   * {@link ParityConfig.cmpCapable}.
+   */
+  cmpCapable?: boolean;
   warnings: string[];
 }
 
@@ -56,5 +63,9 @@ export async function resolveRunConfig(repoRoot: string): Promise<RunConfig> {
     direction = config.direction;
   }
 
-  return { designMap, direction, warnings };
+  const runConfig: RunConfig = { designMap, direction, warnings };
+  // Carry the committed CMP flag through verbatim (only when setup recorded it).
+  if (typeof config.cmpCapable === "boolean")
+    runConfig.cmpCapable = config.cmpCapable;
+  return runConfig;
 }

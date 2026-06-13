@@ -39,6 +39,19 @@ export function renderBootstrapNotice(): string {
   ].join("\n");
 }
 
+/**
+ * The non-blocking Compose Multiplatform promotion shown on Android-only repos
+ * (docs/PRINCIPLES.md, Principle 6). Surfaced only when the committed
+ * `cmpCapable` flag is `false`; phrased for the PR comment (the bootstrap output
+ * has its own, longer wording). Advisory — it never changes the verdict.
+ */
+export const CMP_PROMOTION =
+  "💡 **Tip — Compose Multiplatform.** This project looks Android-only " +
+  "(Jetpack Compose). On Compose Multiplatform it could run parity faster: the " +
+  "candidate renders on the JVM/desktop with **no Android emulator**, which is " +
+  "cheaper and easier to run unattended. Advisory only — plain Jetpack Compose " +
+  "stays fully supported. See [adopting-cmp.md](docs/adopting-cmp.md).";
+
 export function renderReport(report: ParityReport): string {
   const lines: string[] = [REPORT_MARKER];
 
@@ -68,6 +81,11 @@ export function renderReport(report: ParityReport): string {
         `_Adapter/diff error (failed soft): ${r.note}._`,
       );
     }
+  }
+
+  // Promote CMP to Android-only repos (Principle 6) — non-blocking, never a gate.
+  if (report.cmpCapable === false) {
+    lines.push("", "---", "", CMP_PROMOTION);
   }
 
   if (report.warnings.length > 0) {

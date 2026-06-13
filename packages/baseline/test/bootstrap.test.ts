@@ -64,6 +64,22 @@ describe("planBootstrap", () => {
     expect(cfg.direction).toBe("design-led");
   });
 
+  it("records cmpCapable in the materialized config (Principle 6)", async () => {
+    const cmp = await planBootstrap(fixture("cmp-capable"));
+    expect(cmp.maturity.cmpCapable).toBe(true);
+    const cmpCfg = JSON.parse(
+      cmp.artifacts.find((a) => a.path === CONFIG_FILE)!.contents,
+    ) as ParityConfig;
+    expect(cmpCfg.cmpCapable).toBe(true);
+
+    const android = await planBootstrap(fixture("android-only"));
+    expect(android.maturity.cmpCapable).toBe(false);
+    const andCfg = JSON.parse(
+      android.artifacts.find((a) => a.path === CONFIG_FILE)!.contents,
+    ) as ParityConfig;
+    expect(andCfg.cmpCapable).toBe(false);
+  });
+
   it("never leaves auto in the materialized config", async () => {
     for (const f of ["rung1-code-connect", "rung2-design-map", "rung3-greenfield"]) {
       const plan = await planBootstrap(fixture(f));

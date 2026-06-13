@@ -66,6 +66,8 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
   — the emulator-free Desktop/JVM render path, end to end (Claude Design or Stitch).
 - [Candidate sources](./docs/candidate-sources.md) — the four candidate-render
   backends (static bundle, CLI, local-compose-web, daemon) and how they wire in.
+- [Compose-for-Web / wasm renderer — feasibility verdict](./docs/cmp-web-wasm-feasibility.md)
+  — why the web/wasm candidate backend is a deliberate stub (issue #30 stretch).
 - [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
 
 ## Develop

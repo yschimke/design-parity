@@ -75,13 +75,17 @@ here. `optionsFor(componentId)` maps a component to its render request
 **When to use:** no pre-generated bundles, but the JVM/Android toolchain (or the
 CLI) is available in the step to render on demand.
 
-### 3. `localComposeWebSource` — local in-process render *(stub)*
+### 3. `localComposeWebSource` — Compose-for-Web / wasm render *(stub)*
 
-Would render a Compose Multiplatform component **in-process** via Compose for
-Web / wasm in a headless JS runtime — no JVM, no Android emulator. This is the
-cheapest *live* path for CMP projects (docs/PRINCIPLES.md, Principle 6) and
-opens the door to rendering candidates in a JS playground. **Not implemented**:
-needs the wasm render entrypoint. Throws `NotImplementedError`.
+Would render a Compose Multiplatform component via Compose for Web / wasm (real
+Compose UI on an HTML canvas via Skia), screenshotting it in a headless browser
+— no Android emulator (docs/PRINCIPLES.md, Principle 6). **Not implemented**, by
+decision: the feasibility verdict (issue #30 stretch) is **defer**. It needs a
+headless browser rather than pure Node, an upstream compose-ai-tools wasm render
+entrypoint, and a web a11y/semantics export the Principle-2 checks rely on — so
+the **Desktop/JVM** path stays the recommended emulator-free renderer. Throws
+`NotImplementedError`. Full write-up:
+[cmp-web-wasm-feasibility.md](./cmp-web-wasm-feasibility.md).
 
 ### 4. `daemonSource` — compose-ai-tools daemon, native findings (#43)
 

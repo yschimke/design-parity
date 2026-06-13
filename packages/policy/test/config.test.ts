@@ -56,6 +56,15 @@ describe("parity-config schema", () => {
       false,
     );
   });
+
+  it("accepts the optional cmpCapable boolean", () => {
+    expect(validateParityConfig({ direction: "code-led", cmpCapable: false }).valid).toBe(true);
+    expect(validateParityConfig({ direction: "code-led", cmpCapable: true }).valid).toBe(true);
+  });
+
+  it("rejects a non-boolean cmpCapable", () => {
+    expect(validateParityConfig({ cmpCapable: "yes" }).valid).toBe(false);
+  });
 });
 
 describe("loadParityConfig", () => {
@@ -68,6 +77,14 @@ describe("loadParityConfig", () => {
     const path = await write("no-direction.json", "{}");
     const config = await loadParityConfig(path);
     expect(config.direction).toBe("auto");
+  });
+
+  it("round-trips the cmpCapable flag and omits it when absent", async () => {
+    const path = await write("cmp.json", '{ "direction": "code-led", "cmpCapable": false }');
+    expect((await loadParityConfig(path)).cmpCapable).toBe(false);
+
+    const none = await write("nocmp.json", '{ "direction": "code-led" }');
+    expect("cmpCapable" in (await loadParityConfig(none))).toBe(false);
   });
 
   it("throws a readable error for a missing file", async () => {

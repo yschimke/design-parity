@@ -17,6 +17,7 @@ import {
   renderReport,
   renderBootstrapNotice,
   REPORT_MARKER,
+  CMP_PROMOTION,
   type AdapterRegistry,
 } from "../src/index.js";
 
@@ -263,6 +264,30 @@ describe("renderReport", () => {
     expect(md).toContain("design-parity-report");
     expect(md).toContain("blocking");
     expect(md).toContain("ui/Button.kt#PrimaryButton");
+  });
+
+  it("promotes CMP only when the repo is Android-only (cmpCapable === false)", async () => {
+    const { reference, candidate } = await load();
+    const base = {
+      repoRoot,
+      registry: reg(adapterReturning(reference)),
+      correspondences: [corr],
+      candidate: () => candidate,
+      direction: "code-led" as const,
+    };
+    const report = await orchestrate(base);
+
+    // Android-only repo → advisory present, but never blocking/failing.
+    report.cmpCapable = false;
+    const promoted = renderReport(report);
+    expect(promoted).toContain(CMP_PROMOTION);
+    expect(promoted).not.toContain("blocking");
+
+    // Already CMP, or unknown (omitted) → no promotion.
+    report.cmpCapable = true;
+    expect(renderReport(report)).not.toContain(CMP_PROMOTION);
+    delete report.cmpCapable;
+    expect(renderReport(report)).not.toContain(CMP_PROMOTION);
   });
 });
 

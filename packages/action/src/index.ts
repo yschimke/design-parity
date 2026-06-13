@@ -30,7 +30,12 @@ export type { BuildProviderOptions } from "./candidate.js";
 export { resolveRunConfig } from "./config.js";
 export type { RunConfig } from "./config.js";
 
-export { renderReport, renderBootstrapNotice, REPORT_MARKER } from "./report.js";
+export {
+  renderReport,
+  renderBootstrapNotice,
+  REPORT_MARKER,
+  CMP_PROMOTION,
+} from "./report.js";
 
 export { selectMode } from "./mode.js";
 export type { ActionMode, ModeInputs } from "./mode.js";
