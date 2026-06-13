@@ -32,6 +32,21 @@ export type { RunConfig } from "./config.js";
 
 export { renderReport, REPORT_MARKER } from "./report.js";
 
+export { selectMode } from "./mode.js";
+export type { ActionMode, ModeInputs } from "./mode.js";
+
+export {
+  baselineSummary,
+  renderBaselineIndex,
+  writeBaselineArtifacts,
+} from "./baseline.js";
+export type {
+  BaselineArtifacts,
+  BaselineComponent,
+  BaselineMeta,
+  BaselineSummary,
+} from "./baseline.js";
+
 // GitHub surface
 export { postReport } from "./github/surface.js";
 export type {
@@ -47,3 +62,10 @@ export {
 } from "./github/changed-components.js";
 export { checkConclusion, exitCode } from "./github/conclusion.js";
 export type { CheckConclusion } from "./github/conclusion.js";
+export { publishBaseline, execGit } from "./github/publish.js";
+export type {
+  GitRunner,
+  GitResult,
+  PublishOptions,
+  PublishResult,
+} from "./github/publish.js";
