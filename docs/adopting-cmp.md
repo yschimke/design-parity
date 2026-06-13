@@ -25,13 +25,28 @@ The **candidate** side comes from compose-ai-tools' `compose-preview`; the
 **reference** side and the **correspondence** (which design maps to which code)
 are design-parity's job.
 
-## Repos you need
+## What you need
 
-- [`yschimke/design-parity`](https://github.com/yschimke/design-parity) — the tool.
-- [`yschimke/compose-ai-tools`](https://github.com/yschimke/compose-ai-tools) —
-  ships `compose-preview` (CMP Desktop render + portable bundles + the daemon)
-  and the Gradle plugin. Required to produce candidates.
+You run **one** tool and pull the renderer in as **published artifacts** — you
+do not clone compose-ai-tools.
+
+- [`yschimke/design-parity`](https://github.com/yschimke/design-parity) — the
+  tool itself; clone it and `npm install` (not yet published to npm).
+- the **`compose-preview` toolchain** (built in
+  [`yschimke/compose-ai-tools`](https://github.com/yschimke/compose-ai-tools)),
+  consumed as published artifacts — **no checkout of that repo**:
+  - the **Gradle plugin** from Maven Central, applied in your app to emit the
+    preview bundles design-parity reads —
+    `plugins { id("ee.schimke.composeai.preview") version "0.15.0" }`;
+  - **and/or** the **`compose-preview` CLI** binary, for on-demand renders and
+    the daemon — install once with
+    `curl -fsSL https://raw.githubusercontent.com/yschimke/skills/main/scripts/install.sh | bash`.
 - **your CMP app** — the subject under parity.
+
+The default bundle path needs only the **plugin** (the static reader is pure JS,
+no JVM); the CLI / daemon paths need only the installed **binary**. The
+compose-ai-tools repo is a link for docs and issues — never a build dependency
+of this pipeline.
 
 ## Rendering target: get faithfulness right first
 
@@ -133,8 +148,8 @@ Sequencing that keeps the first adoption tractable:
 
 1. **Prove one screen end to end first.** Pick a single *shared, static* screen
    (no Bluetooth / permission / connection state) and drive it all the way to a
-   `report.html` before mapping the rest. The pipeline spans three repos — get one
-   green verdict before scaling.
+   `report.html` before mapping the rest. The pipeline spans the tool, the
+   published renderer toolchain, and your app — get one green verdict before scaling.
 2. **Only the preview surface needs to be CMP.** Don't make the whole app
    multiplatform. Lift the pure composable + a preview into `commonMain` /
    `desktopMain`; if a screen genuinely needs Android APIs, leave it on the Android
