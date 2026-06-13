@@ -25,12 +25,14 @@
 import type {
   Bounds,
   CandidateRender,
+  DesignTokens,
   Finding,
   Image,
   SemanticNode,
   SemanticTree,
   Severity,
   Theme,
+  TypographyToken,
 } from "@design-parity/core";
 
 import type { CandidateSource } from "./source.js";
@@ -109,16 +111,34 @@ export interface ComposeSemanticsPayload {
   root?: ComposeSemanticsNode;
 }
 
+/** `compose/theme` typography token (producer shape, units carried separately). */
+export interface ComposeThemeTypography {
+  fontFamily?: string;
+  fontSize?: number;
+  fontSizeUnit?: string;
+  /** e.g. `"FontWeight(weight=400)"` or a bare number. */
+  fontWeight?: string | number;
+  lineHeight?: number;
+  lineHeightUnit?: string;
+  letterSpacing?: number;
+  letterSpacingUnit?: string;
+}
+
 /**
- * `compose/theme` — resolved `MaterialTheme.*` values. We consume only the
- * colour scheme (`#AARRGGBB` keyed by Material role) to seed a root-level
- * fg/bg so text nodes that don't carry their own background still resolve one
- * for contrast.
+ * `compose/theme` — resolved `MaterialTheme.*` values: the `colorScheme`
+ * (`#AARRGGBB` keyed by Material role), `typography` (text styles), and
+ * `shapes` (`RoundedCornerShape(...)` descriptions). `consumers` ties nodes to
+ * the tokens they read, but is empty in the producer's v1 schema — so per-node
+ * attribution falls back to reverse-matching a node's resolved colour against
+ * the scheme (see {@link semanticsToSemanticTree}).
  */
 export interface ComposeThemePayload {
   resolvedTokens?: {
     colorScheme?: Record<string, string>;
+    typography?: Record<string, ComposeThemeTypography>;
+    shapes?: Record<string, string>;
   };
+  consumers?: Array<{ nodeId?: string; tokens?: string[] }>;
 }
 
 /** `text/strings` — drawn-text entries with overflow/truncation flags. */
@@ -395,8 +415,32 @@ function normalizeSemanticsRole(
   return lower === "radiobutton" ? "radio" : lower;
 }
 
+/** A Material "on-" colour (`onPrimary`, `onSurface`) is a foreground role. */
+const isOnColor = (name: string): boolean => /^on[A-Z]/.test(name);
+
+/**
+ * Choose the colour-token key for a node's resolved `cssValue`: the theme token
+ * name when it reverse-matches **exactly one** token of the right role
+ * (`fg` → `on*`; `bg` → the rest), else the generic `fg`/`bg`. Keying by the
+ * code name surfaces the attribute the element is using (e.g. `onSurface`) and
+ * still classifies correctly for contrast (`classifyColor` reads `on*` as fg).
+ */
+function colorTokenKey(
+  cssValue: string,
+  role: "fg" | "bg",
+  themeTokens: DesignTokens | undefined,
+): string {
+  const matches = themeTokenNamesFor(cssValue, themeTokens).filter((n) =>
+    role === "fg" ? isOnColor(n) : !isOnColor(n),
+  );
+  return matches.length === 1 ? matches[0]! : role;
+}
+
 /** Map one `compose/semantics` node (recursively) to a {@link SemanticNode}. */
-function semanticsNode(node: ComposeSemanticsNode): SemanticNode {
+function semanticsNode(
+  node: ComposeSemanticsNode,
+  themeTokens: DesignTokens | undefined,
+): SemanticNode {
   const out: SemanticNode = {};
   const role = normalizeSemanticsRole(node.role);
   if (role) out.role = role;
@@ -407,9 +451,9 @@ function semanticsNode(node: ComposeSemanticsNode): SemanticNode {
 
   const colors: Record<string, string> = {};
   const fg = argbToCssHex(node.layoutForegroundColor);
-  if (fg) colors["fg"] = fg;
+  if (fg) colors[colorTokenKey(fg, "fg", themeTokens)] = fg;
   const bg = argbToCssHex(node.layoutBackgroundColor);
-  if (bg) colors["bg"] = bg;
+  if (bg) colors[colorTokenKey(bg, "bg", themeTokens)] = bg;
   const fontSize = parseFontSizeSp(node.layoutFontSize);
   if (Object.keys(colors).length || fontSize !== undefined) {
     out.tokens = {};
@@ -417,22 +461,115 @@ function semanticsNode(node: ComposeSemanticsNode): SemanticNode {
     if (fontSize !== undefined) out.tokens.typography = { text: { fontSize } };
   }
 
-  const children = (node.children ?? []).map(semanticsNode);
+  const children = (node.children ?? []).map((c) => semanticsNode(c, themeTokens));
   if (children.length) out.children = children;
   return out;
 }
 
-/** Seed a root-level fg/bg from the theme colour scheme (none if unresolved). */
+/** Parse a Compose `"FontWeight(weight=400)"` (or bare number) into a number. */
+function parseFontWeight(w: string | number | undefined): number | undefined {
+  if (typeof w === "number") return w;
+  if (typeof w !== "string") return undefined;
+  const m = /(\d+)/.exec(w);
+  return m ? Number(m[1]) : undefined;
+}
+
+/** Pull the first dp size out of a `RoundedCornerShape(... size = 4.0.dp ...)`. */
+function parseShapeDp(spec: string | undefined): number | undefined {
+  if (!spec) return undefined;
+  const m = /size\s*=\s*(-?\d+(?:\.\d+)?)/.exec(spec);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Map a `compose/theme` typography token to the core {@link TypographyToken}. */
+function themeTypography(t: ComposeThemeTypography): TypographyToken {
+  const out: TypographyToken = {};
+  if (t.fontFamily !== undefined) out.fontFamily = t.fontFamily;
+  if (t.fontSize !== undefined) out.fontSize = t.fontSize;
+  const weight = parseFontWeight(t.fontWeight);
+  if (weight !== undefined) out.fontWeight = weight;
+  if (t.lineHeight !== undefined) out.lineHeight = t.lineHeight;
+  if (t.letterSpacing !== undefined) out.letterSpacing = t.letterSpacing;
+  return out;
+}
+
+/**
+ * Map a `compose/theme` payload to the resolved {@link DesignTokens} — the full
+ * design system behind a render: `colors` (the scheme, `#AARRGGBB` → CSS), the
+ * Material `typography` styles, and corner `radius` parsed from the shape specs.
+ * Keys keep their code token names (`onBackground`, `bodyLarge`, `medium`).
+ */
+export function composeThemeToTokens(
+  payload: ComposeThemePayload | undefined,
+): DesignTokens | undefined {
+  const rt = payload?.resolvedTokens;
+  if (!rt) return undefined;
+  const out: DesignTokens = {};
+
+  const colors: Record<string, string> = {};
+  for (const [name, value] of Object.entries(rt.colorScheme ?? {})) {
+    const hex = argbToCssHex(value);
+    if (hex) colors[name] = hex;
+  }
+  if (Object.keys(colors).length) out.colors = colors;
+
+  const typography: Record<string, TypographyToken> = {};
+  for (const [name, t] of Object.entries(rt.typography ?? {})) {
+    typography[name] = themeTypography(t);
+  }
+  if (Object.keys(typography).length) out.typography = typography;
+
+  const radius: Record<string, number> = {};
+  for (const [name, spec] of Object.entries(rt.shapes ?? {})) {
+    const dp = parseShapeDp(spec);
+    if (dp !== undefined) radius[name] = dp;
+  }
+  if (Object.keys(radius).length) out.radius = radius;
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Reverse-match a node's resolved colour (CSS `#rrggbbaa`) back to the theme
+ * token name(s) that resolve to it. The producer's `compose/theme.consumers`
+ * (which node read which token) is empty in v1, so this is the available signal
+ * for "what code attribute is this element using". Returns names in a stable
+ * order; ambiguous values (e.g. white = `onPrimary`/`onError`/…) yield several.
+ *
+ * TODO(compose-ai-tools#1847): switch to `compose/theme.consumers` (join by
+ * nodeId) for exact per-node attribution once the producer populates it, and
+ * drop this reverse-match heuristic.
+ */
+function themeTokenNamesFor(
+  cssValue: string,
+  themeTokens: DesignTokens | undefined,
+): string[] {
+  const colors = themeTokens?.colors;
+  if (!colors) return [];
+  return Object.entries(colors)
+    .filter(([, v]) => v === cssValue)
+    .map(([name]) => name)
+    .sort();
+}
+
+/**
+ * Seed a root-level background/foreground from the theme so text nodes without
+ * their own background still resolve one for contrast. Keyed by the **code
+ * token name** picked (`background`/`surface`, `onBackground`/`onSurface`) so
+ * the screen's default theme attributes are visible; `classifyColor` reads
+ * those names as bg/fg. Empty when the scheme exposes neither.
+ */
 function themeRootColors(
-  themeColors: ComposeThemePayload | undefined,
+  themeTokens: DesignTokens | undefined,
 ): Record<string, string> | undefined {
-  const scheme = themeColors?.resolvedTokens?.colorScheme;
+  const scheme = themeTokens?.colors;
   if (!scheme) return undefined;
-  const bg = argbToCssHex(scheme["background"] ?? scheme["surface"]);
-  const fg = argbToCssHex(scheme["onBackground"] ?? scheme["onSurface"]);
+  const bgName = scheme["background"] !== undefined ? "background" : "surface";
+  const fgName = scheme["onBackground"] !== undefined ? "onBackground" : "onSurface";
   const out: Record<string, string> = {};
-  if (bg) out["bg"] = bg;
-  if (fg) out["fg"] = fg;
+  if (scheme[bgName]) out[bgName] = scheme[bgName]!;
+  if (scheme[fgName]) out[fgName] = scheme[fgName]!;
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -460,9 +597,10 @@ export function semanticsToSemanticTree(
   themeColors?: ComposeThemePayload,
 ): SemanticTree | undefined {
   if (!payload?.root) return undefined;
-  const root = semanticsNode(payload.root);
+  const themeTokens = composeThemeToTokens(themeColors);
+  const root = semanticsNode(payload.root, themeTokens);
 
-  const seed = themeRootColors(themeColors);
+  const seed = themeRootColors(themeTokens);
   if (seed) {
     const existing = root.tokens?.colors ?? {};
     // The root's own colours (rare) win; the theme only fills gaps.
@@ -472,6 +610,7 @@ export function semanticsToSemanticTree(
 
   const tree: SemanticTree = { root };
   if (theme) tree.theme = theme;
+  if (themeTokens) tree.themeTokens = themeTokens;
   return tree;
 }
 

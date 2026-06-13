@@ -86,6 +86,14 @@ export interface SemanticNode {
 export interface SemanticTree {
   root: SemanticNode;
   theme?: Theme;
+  /**
+   * The resolved design-system tokens this render was themed with — the full
+   * palette (colors), `typography`, and corner `radius` (shapes), keyed by their
+   * code token name (`onBackground`, `bodyLarge`, `medium`). Populated when a
+   * source exposes its theme (e.g. the daemon's `compose/theme`); lets a UX-spec
+   * review see the design system behind a screen, not just per-node values.
+   */
+  themeTokens?: DesignTokens;
 }
 
 /**

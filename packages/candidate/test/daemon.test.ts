@@ -219,8 +219,11 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
         },
       },
     );
-    // Root seeded from the theme scheme (ARGB → RGBA).
-    expect(tree?.root.tokens?.colors).toEqual({ bg: "#ffffffff", fg: "#111111ff" });
+    // Root seeded from the theme scheme (ARGB → RGBA), keyed by code name.
+    expect(tree?.root.tokens?.colors).toEqual({
+      background: "#ffffffff",
+      onBackground: "#111111ff",
+    });
     // The text node keeps its own fg; bg resolves up to the seeded root.
     expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ fg: "#000000ff" });
   });
@@ -276,7 +279,65 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
       theme,
     );
     // background #FFFEF7FF → #fef7ffff, onBackground #FF1D1B20 → #1d1b20ff.
-    expect(tree?.root.tokens?.colors).toEqual({ bg: "#fef7ffff", fg: "#1d1b20ff" });
+    expect(tree?.root.tokens?.colors).toEqual({
+      background: "#fef7ffff",
+      onBackground: "#1d1b20ff",
+    });
+  });
+
+  it("exposes the full resolved theme (colours/typography/shapes) on the tree", () => {
+    const theme = JSON.parse(
+      readFileSync(fixture("fixtures/daemon/compose-theme.json"), "utf8"),
+    );
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,10,10" } },
+      "light",
+      theme,
+    );
+    const tokens = tree?.themeTokens;
+    // Colours keyed by code name, ARGB → CSS.
+    expect(tokens?.colors?.["onBackground"]).toBe("#1d1b20ff");
+    expect(tokens?.colors?.["primary"]).toBe("#6750a4ff");
+    // Typography parsed (FontWeight(weight=400) → 400; sp value → number).
+    expect(tokens?.typography?.["bodyLarge"]).toMatchObject({
+      fontSize: 16,
+      fontWeight: 400,
+      lineHeight: 24,
+      letterSpacing: 0.5,
+    });
+    // Shapes → corner radius in dp.
+    expect(tokens?.radius).toMatchObject({ extraSmall: 4, medium: 12, extraLarge: 28 });
+  });
+
+  it("labels a node's colour with its code token name when the match is unambiguous", () => {
+    // onSurface (#FF1D1B20) is a distinctive value — exactly one fg token — so a
+    // text node drawn in it is labelled `onSurface`, not the generic `fg`.
+    const theme = {
+      resolvedTokens: { colorScheme: { surface: "#FFFEF7FF", onSurface: "#FF1D1B20" } },
+    };
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,100,40", children: [
+        { text: "Title", boundsInRoot: "0,0,100,40", layoutForegroundColor: "#FF1D1B20" },
+      ] } },
+      "light",
+      theme,
+    );
+    expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ onSurface: "#1d1b20ff" });
+  });
+
+  it("keeps a generic fg when a colour matches several theme tokens (ambiguous)", () => {
+    // White is onPrimary AND onError in M3 — can't attribute, so stays `fg`.
+    const theme = {
+      resolvedTokens: { colorScheme: { onPrimary: "#FFFFFFFF", onError: "#FFFFFFFF" } },
+    };
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,100,40", children: [
+        { text: "Go", boundsInRoot: "0,0,100,40", layoutForegroundColor: "#FFFFFFFF" },
+      ] } },
+      "light",
+      theme,
+    );
+    expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ fg: "#ffffffff" });
   });
 });
 
@@ -358,7 +419,7 @@ describe("daemonSource", () => {
     // Nested semantics, not the flat hierarchy fallback.
     const button = candidate?.semantics.root.children?.[0];
     expect(button?.role).toBe("button");
-    expect(candidate?.semantics.root.tokens?.colors).toEqual({ bg: "#ffffffff" });
+    expect(candidate?.semantics.root.tokens?.colors).toEqual({ background: "#ffffffff" });
     expect(button?.children?.[0]?.tokens?.colors).toEqual({ fg: "#222222ff" });
   });
 
