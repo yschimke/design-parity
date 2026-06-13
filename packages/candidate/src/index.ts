@@ -94,6 +94,8 @@ export {
   parseShow,
   normalizeSemantics,
   themeFromUiMode,
+  themeFromName,
+  themeForPreview,
   sizeFromParams,
   stateFromParams,
 } from "./cli.js";

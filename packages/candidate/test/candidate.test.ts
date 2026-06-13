@@ -11,6 +11,8 @@ import {
   MissingComposePreviewError,
   NoPreviewsError,
   themeFromUiMode,
+  themeFromName,
+  themeForPreview,
   sizeFromParams,
   normalizeSemantics,
   parseShow,
@@ -176,6 +178,28 @@ describe("param mappers", () => {
     expect(themeFromUiMode("UI_MODE_NIGHT_YES")).toBe("dark");
     expect(themeFromUiMode("notnight")).toBe("light");
     expect(themeFromUiMode(undefined)).toBeUndefined();
+  });
+
+  it("derives theme from a preview-id trailing token, ignoring embedded words (#48)", () => {
+    expect(themeFromName("ee.app.Tile_LightOn_Dark")).toBe("dark");
+    expect(themeFromName("Tile_Dark")).toBe("dark");
+    expect(themeFromName("Preview (dark)")).toBe("dark");
+    expect(themeFromName("Foo_Night")).toBe("dark");
+    expect(themeFromName("Tile_Light")).toBe("light");
+    // The trial's trap: "LightOn" is not a light-theme variant.
+    expect(themeFromName("ee.app.Tile_LightOn")).toBeUndefined();
+    expect(themeFromName("PrimaryButton")).toBeUndefined();
+    expect(themeFromName(undefined)).toBeUndefined();
+  });
+
+  it("themeForPreview prefers explicit hint > uiMode > name convention (#48)", () => {
+    // Explicit hint wins even against a contradicting name/uiMode.
+    expect(themeForPreview({ theme: "dark", uiMode: 0x10 }, "Foo_Light")).toBe("dark");
+    // No hint → uiMode.
+    expect(themeForPreview({ uiMode: 0x20 }, "Foo_Light")).toBe("dark");
+    // No hint, uiMode unset (CompositionLocal theming) → name convention.
+    expect(themeForPreview({ uiMode: 0 }, "Tile_LightOn_Dark")).toBe("dark");
+    expect(themeForPreview({}, "Tile_LightOn")).toBeUndefined();
   });
 
   it("buckets width into Material window-size classes", () => {

@@ -15,6 +15,7 @@ import {
   parsePreviewBundle,
   bundleToCandidates,
   loadPreviewBundle,
+  previewToCandidate,
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
@@ -22,6 +23,8 @@ import {
   InvalidBundleError,
   NotImplementedError,
   type CandidateSource,
+  type PreviewBundle,
+  type PreviewEntry,
 } from "../src/index.js";
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -98,6 +101,38 @@ describe("readPreviewBundle", () => {
     );
     expect(declined!.componentId).toBe("ui.Button.PrimaryButton");
     expect(declined!.previewId).toBe("ui.Button.PrimaryButton");
+  });
+
+  it("assigns image theme from a name convention and an explicit hint (#48)", async () => {
+    // A real PNG so readPngSize can read the IHDR; the bytes are theme-agnostic.
+    const png = new Uint8Array(
+      await readFile(resolve(repoRoot, "fixtures/figma/button-primary.light.png")),
+    );
+    const bundleFor = (entry: PreviewEntry): PreviewBundle => ({
+      manifest: {},
+      previews: [entry],
+      entries: { [`previews/${entry.id}.png`]: png },
+    });
+
+    // uiMode unset (CompositionLocal theming) + a `_Dark` suffix → dark.
+    const dark = previewToCandidate(
+      bundleFor({ id: "ee.app.Tile_LightOn_Dark" }),
+      { id: "ee.app.Tile_LightOn_Dark" },
+    );
+    expect(dark.images[0]?.theme).toBe("dark");
+
+    // The sibling without the suffix gets no (mis-read) theme from "LightOn".
+    const plain = previewToCandidate(bundleFor({ id: "ee.app.Tile_LightOn" }), {
+      id: "ee.app.Tile_LightOn",
+    });
+    expect(plain.images[0]?.theme).toBeUndefined();
+
+    // An explicit per-preview hint wins.
+    const hinted = previewToCandidate(
+      bundleFor({ id: "ee.app.Tile_LightOn", params: { theme: "dark" } }),
+      { id: "ee.app.Tile_LightOn", params: { theme: "dark" } },
+    );
+    expect(hinted.images[0]?.theme).toBe("dark");
   });
 
   it("fails clearly on bytes with no embedded bundle", () => {

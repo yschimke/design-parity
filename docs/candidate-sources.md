@@ -45,7 +45,7 @@ Zip layout consumed:
 - `previews.json` — `{ schema, module, variant, previews: [{ id, functionName,
   className, sourceFile, params, captures[] }] }`. The preview `id`
   (`<fqClass>.<function>[_<variant>]`) maps to `componentId`; `params`
-  (`uiMode`, `widthDp`, …) map to `theme` (via `themeFromUiMode`) and `size`
+  (`uiMode`, `widthDp`, …) map to `theme` (via `themeForPreview`) and `size`
   (via `normalizeSize`).
 - `previews/<id>.png` — the rendered image. Emitted as a
   `data:image/png;base64,…` URI (bundle PNGs are not on disk); dimensions are
@@ -161,3 +161,25 @@ The matched candidate is re-keyed to the **code handle** (`componentId`) so it
 pairs with its reference, while the raw preview id is preserved on
 `CandidateRender.previewId`. A preview id that maps to neither surfaces a
 **warning** in the run report rather than silently failing to pair.
+
+### Deriving an image's theme (#48)
+
+Pairing keys on `state/theme/size`, so a candidate image needs a `theme` to line
+up with a `theme`-tagged reference. `themeForPreview` derives it in precedence
+order:
+
+1. **Explicit hint** — `params.theme` (`"light"`/`"dark"`) on the preview or
+   capture. **Set this when the app themes via a `CompositionLocal`** (e.g.
+   `ProvideHaTheme(HaTheme.Dark)`) rather than the Android night-mode config: in
+   that case every preview reports `uiMode: 0` and the theme is otherwise
+   undiscoverable.
+2. **`uiMode`** — the Android `Configuration.UI_MODE_NIGHT_*` bits, when the app
+   themes through `uiMode`.
+3. **Name convention** — the preview id's **trailing** `dark`/`light`/`night`
+   token (`Tile_LightOn_Dark` → dark). Only the last `[_\-. ()]`-separated token
+   is read, so an embedded word like `Tile_LightOn` is **not** mistaken for a
+   light-theme variant. Low confidence.
+
+A producer that themes via a `CompositionLocal` should prefer setting `theme` on
+the bundle/daemon image directly (option 1) — the convention is a best-effort
+fallback for when it can't.

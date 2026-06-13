@@ -14,7 +14,7 @@ import {
   SpawnComposePreviewCli,
   sizeFromParams,
   stateFromParams,
-  themeFromUiMode,
+  themeForPreview,
   type ComposePreviewCli,
   type RenderRequest,
   type RenderedPreview,
@@ -48,7 +48,7 @@ function toImage(p: RenderedPreview, repoRoot: string | undefined): Image {
     width: p.pngWidth,
     height: p.pngHeight,
   };
-  const theme = themeFromUiMode(params.uiMode);
+  const theme = themeForPreview(params, p.entry.id);
   if (theme) image.theme = theme;
   const size = sizeFromParams(params);
   if (size) image.size = size;

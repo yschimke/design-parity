@@ -39,7 +39,7 @@ import {
 
 import {
   normalizeSemantics,
-  themeFromUiMode,
+  themeForPreview,
   type PreviewParams,
   type RawSemantics,
 } from "./cli.js";
@@ -237,10 +237,11 @@ function toImage(
   bytes: Uint8Array,
   params: PreviewParams,
   state: string,
+  id?: string,
 ): Image {
   const { width, height } = readPngSize(bytes);
   const image: Image = { state, uri: toDataUri(bytes), width, height };
-  const theme = themeFromUiMode(params.uiMode);
+  const theme = themeForPreview(params, id);
   if (theme) image.theme = theme;
   const size = normalizeSize(params.widthDp);
   if (size) image.size = size;
@@ -299,7 +300,7 @@ export function previewToCandidate(
         `preview '${entry.id}' references image '${imgPath}' which is not in the zip`,
       );
     }
-    images.push(toImage(imgBytes, params, state));
+    images.push(toImage(imgBytes, params, state, entry.id));
 
     // Semantics blob (the #38 contract). Optional per capture; a bundle that
     // omits it degrades to visual/structural-only, matching graceful checks.
@@ -312,7 +313,7 @@ export function previewToCandidate(
       } catch (cause) {
         throw new InvalidBundleError(`${semPath} is not valid JSON`, cause);
       }
-      const tree = normalizeSemantics(raw, themeFromUiMode(params.uiMode));
+      const tree = normalizeSemantics(raw, themeForPreview(params, entry.id));
       if (tree) {
         semantics ??= tree;
         if (tree.theme === "light") lightSemantics ??= tree;
