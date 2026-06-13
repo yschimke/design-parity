@@ -17,14 +17,42 @@ export {
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
-  daemonSource,
 } from "./sources.js";
 export type {
   BundleSourceOptions,
   CliRenderOptions,
   LocalComposeWebOptions,
-  DaemonSourceOptions,
 } from "./sources.js";
+
+// Live compose-ai-tools daemon source + native data-product mappers (#43).
+export {
+  daemonSource,
+  nativeFindings,
+  atfFindings,
+  touchTargetFindings,
+  textStringFindings,
+  translationFindings,
+  hierarchyToSemanticTree,
+  parseScreenBounds,
+} from "./daemon.js";
+export type {
+  DaemonDataClient,
+  DaemonImage,
+  DaemonCandidate,
+  DaemonCandidateSource,
+  DaemonSourceOptions,
+  NativeDataProducts,
+  AtfPayload,
+  AtfFinding,
+  TouchTargetsPayload,
+  TouchTarget,
+  HierarchyPayload,
+  HierarchyNode,
+  TextStringsPayload,
+  TextStringEntry,
+  I18nTranslationsPayload,
+  I18nVisibleString,
+} from "./daemon.js";
 
 // Static preview-bundle reader (Phase 1 of #38).
 export {
