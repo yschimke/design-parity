@@ -180,6 +180,16 @@ export async function diff(
   const visualFindings: Finding[] = [];
   for (const v of visuals) {
     visualScores[v.key] = round(v.score);
+    if (v.dimensionMismatch) {
+      // The pair was diffed over its overlap after a sub-tolerance size delta;
+      // note it so the reviewer knows the score is an aligned comparison (#47).
+      visualFindings.push({
+        kind: "visual",
+        severity: "info",
+        message: `${v.key}: reference and candidate differ slightly in size; compared over their overlap`,
+        detail: { key: v.key },
+      });
+    }
     if (v.score > config.visualWarnRatio) {
       visualFindings.push({
         kind: "visual",
