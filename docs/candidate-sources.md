@@ -175,6 +175,23 @@ identically):
   render is the remaining step; the mappers are unit-tested against the
   documented `a11y/atf` shape.
 
+**Theme exposure for UX-spec review (#55).** `compose/theme` carries the
+resolved design system — `colorScheme`, `typography`, `shapes` — which
+`composeThemeToTokens` maps into a `DesignTokens` (colours `#AARRGGBB` → CSS,
+`FontWeight(weight=400)` → `400`, `RoundedCornerShape(… 4.0.dp …)` → `4`)
+attached to `SemanticTree.themeTokens`, keyed by code token name
+(`onBackground`, `bodyLarge`, `medium`). A review then sees the whole palette /
+type scale / shape scale behind a screen, not just per-node values.
+
+Per element, `semanticsToSemanticTree` also surfaces the **code attribute** a
+node draws with: the node's resolved colour is reverse-matched against the
+scheme and keyed by the token name when the match is unambiguous (e.g.
+`onSurface: "#1d1b20ff"`), so a report shows both the code attribute and its
+resolved value. Ambiguous values (white = `onPrimary`/`onError`/… in M3) keep
+the generic `fg`/`bg` rather than guess. Exact per-node attribution will come
+from `compose/theme.consumers` once the producer populates it (empty in its v1
+schema); until then the reverse-match is the available signal.
+
 ## Wiring into the Action / CLI
 
 `@design-parity/action` builds a `CandidateProvider` from these sources
