@@ -77,6 +77,30 @@ describe("readPreviewBundle", () => {
     expect(fromBytes).toEqual(fromPath);
   });
 
+  it("re-keys componentId via the resolver callback, preserving previewId (#44)", async () => {
+    // Default (no resolver): componentId stays the raw preview id, no previewId.
+    const [plain] = bundleToCandidates(await readPreviewBundle(bundlePath));
+    expect(plain!.componentId).toBe("ui.Button.PrimaryButton");
+    expect(plain!.previewId).toBeUndefined();
+
+    // With a resolver: componentId becomes the code handle; previewId retained.
+    const [keyed] = bundleToCandidates(
+      await readPreviewBundle(bundlePath),
+      (p) => (p.id === "ui.Button.PrimaryButton" ? "ui/Button.kt#PrimaryButton" : undefined),
+    );
+    expect(keyed!.componentId).toBe("ui/Button.kt#PrimaryButton");
+    expect(keyed!.previewId).toBe("ui.Button.PrimaryButton");
+
+    // Resolver declines (undefined): componentId falls back to the preview id,
+    // but previewId is still set (a resolver ran).
+    const [declined] = bundleToCandidates(
+      await readPreviewBundle(bundlePath),
+      () => undefined,
+    );
+    expect(declined!.componentId).toBe("ui.Button.PrimaryButton");
+    expect(declined!.previewId).toBe("ui.Button.PrimaryButton");
+  });
+
   it("fails clearly on bytes with no embedded bundle", () => {
     // A bare PNG signature with no appended zip is not a bundle.
     const notABundle = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5, 6, 7, 8);

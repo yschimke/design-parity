@@ -105,3 +105,31 @@ design-parity run --components ui/Button.kt#PrimaryButton \
 
 When both `--candidates` (JSON) and `--candidate-bundles` are given, bundles are
 tried first and the JSON is the fallback override.
+
+### Reconciling preview ids with code handles (#44)
+
+A bundle/daemon candidate is identified by a compose-ai-tools **preview id**
+(`<fqClass>.<function>`, e.g. `ee.app.ButtonKt.PrimaryButton`), but the
+orchestrator pairs a candidate to its reference **by `componentId`**, and
+references use a **code handle** (`path#Member`, e.g.
+`ui/Button.kt#PrimaryButton`). Left alone, the two namespaces never match.
+
+`buildCandidateProvider` bridges them through `@design-parity/resolver`'s
+`resolvePreviewIds`, mirroring the resolver's precedence:
+
+1. **Explicit** — a `previewId` field on the matching `design-map.json` entry
+   (high confidence). Use this when the convention can't recover the path
+   (e.g. the bundle's `sourceFile` isn't repo-relative):
+
+   ```json
+   { "code": "ui/Button.kt#PrimaryButton", "source": "bundle",
+     "ref": "design/button", "previewId": "ee.app.ButtonKt.PrimaryButton" }
+   ```
+
+2. **Convention** — `sourceFile#functionName` from the bundle's own
+   `previews.json` entry (low confidence), when no explicit link exists.
+
+The matched candidate is re-keyed to the **code handle** (`componentId`) so it
+pairs with its reference, while the raw preview id is preserved on
+`CandidateRender.previewId`. A preview id that maps to neither surfaces a
+**warning** in the run report rather than silently failing to pair.

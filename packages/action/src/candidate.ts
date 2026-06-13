@@ -17,12 +17,19 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
-import type { AdapterContext, CandidateRender } from "@design-parity/core";
+import type {
+  AdapterContext,
+  CandidateRender,
+  DesignMap,
+} from "@design-parity/core";
 import {
   bundleCandidateSource,
   firstAvailable,
+  readPreviewBundle,
   type CandidateSource,
+  type PreviewBundle,
 } from "@design-parity/candidate";
+import { resolvePreviewIds, type PreviewIdentity } from "@design-parity/resolver";
 
 import type { CandidateProvider } from "./orchestrate.js";
 
@@ -88,28 +95,73 @@ export interface BuildProviderOptions {
   candidatesPath?: string;
   /** Preview-bundle inputs: polyglot `.png` files and/or directories of them. */
   bundlePaths?: string[];
+  /**
+   * The loaded `design-map.json`, used to reconcile bundle preview ids to code
+   * handles so bundle candidates pair with their references (issue #44).
+   */
+  designMap?: DesignMap;
+}
+
+/** The candidate provider plus any non-fatal diagnostics from building it. */
+export interface BuiltCandidateProvider {
+  /** `undefined` when no candidate source was configured. */
+  provider?: CandidateProvider;
+  /** e.g. preview ids that couldn't be reconciled to a code handle (#44). */
+  warnings: string[];
 }
 
 /**
  * Assemble a {@link CandidateProvider} from the configured inputs. When both a
  * precomputed JSON and bundles are given, bundles are tried first and the JSON
- * is the fallback (a hand-authored override). Returns `undefined` when neither
- * is configured (the run has no candidate source).
+ * is the fallback (a hand-authored override). The `provider` is `undefined`
+ * when neither is configured (the run has no candidate source).
+ *
+ * Bundle preview ids are reconciled to code handles through
+ * `@design-parity/resolver` (the `design-map` `previewId` field, else the
+ * `sourceFile#functionName` convention) so a bundle candidate keys on the same
+ * id the orchestrator pairs references by (issue #44). Unreconcilable preview
+ * ids surface as `warnings` rather than silently failing to pair.
  */
 export async function buildCandidateProvider(
   options: BuildProviderOptions,
-): Promise<CandidateProvider | undefined> {
+): Promise<BuiltCandidateProvider> {
   const sources: CandidateSource[] = [];
+  const warnings: string[] = [];
 
   if (options.bundlePaths && options.bundlePaths.length > 0) {
     const paths = await resolveBundlePaths(options.repoRoot, options.bundlePaths);
-    if (paths.length > 0) sources.push(bundleCandidateSource({ paths }));
+    if (paths.length > 0) {
+      const bundles: PreviewBundle[] = [];
+      for (const p of paths) bundles.push(await readPreviewBundle(p));
+
+      const identities: PreviewIdentity[] = bundles.flatMap((b) =>
+        b.previews.map((e) => ({
+          id: e.id,
+          ...(e.sourceFile !== undefined ? { sourceFile: e.sourceFile } : {}),
+          ...(e.functionName !== undefined
+            ? { functionName: e.functionName }
+            : {}),
+        })),
+      );
+      const { matches, warnings: mapWarnings } = resolvePreviewIds(
+        identities,
+        options.designMap,
+      );
+      warnings.push(...mapWarnings);
+
+      sources.push(
+        bundleCandidateSource({
+          bundles,
+          resolveComponentId: (preview) => matches.get(preview.id)?.code,
+        }),
+      );
+    }
   }
   if (options.candidatesPath) {
     sources.push(await loadPrecomputed(options.repoRoot, options.candidatesPath));
   }
 
-  if (sources.length === 0) return undefined;
+  if (sources.length === 0) return { warnings };
   const source = sources.length === 1 ? sources[0]! : firstAvailable(sources);
-  return providerFromSource(source);
+  return { provider: providerFromSource(source), warnings };
 }
