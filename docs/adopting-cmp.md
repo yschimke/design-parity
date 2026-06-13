@@ -175,8 +175,10 @@ Sequencing that keeps the first adoption tractable:
   automatically (compact/medium/expanded).
 - **preview-id ↔ code-handle:** use the `previewId` field (#44); unreconciled ids
   surface a warning, not a silent non-pair.
-- **CMP Web/wasm render** (`localComposeWebSource`) is still a stub — use the
-  **Desktop** path today (#30's automatic prefer/promote isn't built yet).
+- **CMP Web/wasm render** (`localComposeWebSource`) is a deliberate stub — the
+  [feasibility verdict](./cmp-web-wasm-feasibility.md) is *defer* (it needs a
+  headless browser, an upstream wasm render entrypoint, and a web a11y export).
+  Use the **Desktop** path today.
 - **Live iteration:** the daemon path
   ([#43](https://github.com/yschimke/design-parity/issues/43)) can ingest the
   renderer's native a11y/i18n findings instead of re-deriving them.

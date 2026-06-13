@@ -157,10 +157,17 @@ export interface LocalComposeWebOptions {
 }
 
 /**
- * **STUB.** A {@link CandidateSource} that would render a CMP component
- * in-process via Compose for Web / wasm in a headless JS runtime — no JVM, no
- * Android. The cheapest path for CMP projects (docs/PRINCIPLES.md Principle 6),
- * but it needs the wasm render entrypoint, which is not wired yet.
+ * **STUB.** A {@link CandidateSource} that would render a CMP component via
+ * Compose for Web / wasm (the Skia-on-Canvas path), screenshotting it in a
+ * headless browser — no Android emulator (docs/PRINCIPLES.md Principle 6).
+ *
+ * Deliberately **not implemented**: the feasibility verdict (issue #30, stretch)
+ * is **defer** — it needs a headless browser (not pure Node), an upstream
+ * compose-ai-tools wasm render entrypoint, and a web a11y/semantics export
+ * design-parity's Principle-2 checks depend on. The Desktop/JVM path is the
+ * recommended emulator-free renderer today. See
+ * `docs/cmp-web-wasm-feasibility.md`; the {@link CandidateSource} contract is
+ * kept ready so this drops in unchanged if those blockers clear.
  *
  * @throws NotImplementedError on every lookup.
  */

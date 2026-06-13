@@ -107,6 +107,15 @@ export interface ParityReport {
   results: ComponentResult[];
   /** Non-fatal issues: adapter errors, skipped components, resolver warnings. */
   warnings: string[];
+  /**
+   * The committed CMP capability flag (Principle 6), threaded from
+   * `.design-parity.json` for the report layer. `false` ⇒ the repo is
+   * Android-only, so the comment carries a non-blocking "could run parity faster
+   * on Compose Multiplatform" suggestion; `true`/omitted ⇒ no promotion. Never
+   * affects {@link ParityReport.status} or {@link ParityReport.blocked} —
+   * advisory only.
+   */
+  cmpCapable?: boolean;
 }
 
 function worst(a: VerdictStatus, b: VerdictStatus): VerdictStatus {

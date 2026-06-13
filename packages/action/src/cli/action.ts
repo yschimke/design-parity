@@ -110,7 +110,8 @@ async function runComment(
   rest: GitHubRest,
   prNumber: number,
 ): Promise<number> {
-  const { designMap, direction, warnings } = await resolveRunConfig(repoRoot);
+  const { designMap, direction, cmpCapable, warnings } =
+    await resolveRunConfig(repoRoot);
 
   // No committed setup at all: don't guess the design ↔ code mapping at run time
   // (Principle 1). Post a comment pointing at the interactive bootstrap (#11)
@@ -154,6 +155,8 @@ async function runComment(
     ...candidateWarnings,
     ...resolved.unresolved.map((u) => `unresolved (no source matched): ${u}`),
   );
+  // Promote CMP to Android-only repos in the comment (Principle 6); advisory.
+  if (typeof cmpCapable === "boolean") report.cmpCapable = cmpCapable;
 
   const outcome = await postReport(
     rest.commentClient(ref, prNumber),

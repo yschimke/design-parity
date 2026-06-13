@@ -96,8 +96,14 @@ export async function planBootstrap(
     });
   };
 
-  // Every rung: materialize a concrete direction (Principle 5).
-  await add(CONFIG_FILE, `parity direction (${direction})`, { direction });
+  // Every rung: materialize a concrete direction (Principle 5) and record the
+  // CMP capability so the unattended Action can promote CMP without re-scanning
+  // (Principles 1, 6) — the one CMP decision, committed once instead of re-made
+  // per PR run.
+  await add(CONFIG_FILE, `parity direction (${direction})`, {
+    direction,
+    cmpCapable: maturity.cmpCapable,
+  });
 
   let review: DiscoveredComponent[] = [];
   if (maturity.rung === "bootstrap") {

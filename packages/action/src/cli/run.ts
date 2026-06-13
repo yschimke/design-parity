@@ -86,7 +86,9 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const { designMap, direction, warnings } = await resolveRunConfig(args.repoRoot);
+  const { designMap, direction, cmpCapable, warnings } = await resolveRunConfig(
+    args.repoRoot,
+  );
   const resolved = resolveCorrespondences(args.components, { designMap });
 
   const candidateOpts: Parameters<typeof buildCandidateProvider>[0] = {
@@ -114,6 +116,11 @@ async function main(): Promise<number> {
     ...candidateWarnings,
     ...resolved.unresolved.map((u) => `unresolved (no source matched): ${u}`),
   );
+
+  // Promote CMP in the comment for Android-only repos (Principle 6). Read from
+  // the committed config (set false by bootstrap on a non-CMP repo); advisory
+  // only, so it never touches the verdict or exit code.
+  if (typeof cmpCapable === "boolean") report.cmpCapable = cmpCapable;
 
   stdout.write(renderReport(report) + "\n");
 

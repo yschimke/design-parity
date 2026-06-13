@@ -61,8 +61,14 @@ export function validateParityConfig(value: unknown): ValidationResult {
 }
 
 /** Fill omitted fields so callers always get a complete {@link ParityConfig}. */
-function normalize(parsed: { direction?: ParityDirection }): ParityConfig {
-  return { direction: parsed.direction ?? DEFAULT_DIRECTION };
+function normalize(
+  parsed: { direction?: ParityDirection; cmpCapable?: boolean },
+): ParityConfig {
+  const config: ParityConfig = { direction: parsed.direction ?? DEFAULT_DIRECTION };
+  // Preserve the CMP capability flag verbatim when present; omitted stays
+  // omitted (the Action only promotes when it's explicitly false, Principle 6).
+  if (typeof parsed.cmpCapable === "boolean") config.cmpCapable = parsed.cmpCapable;
+  return config;
 }
 
 /**
@@ -118,5 +124,5 @@ function parse(path: string, raw: string): ParityConfig {
       `parity-config: '${path}' failed schema validation:\n  ${result.errors.join("\n  ")}`,
     );
   }
-  return normalize(parsed as { direction?: ParityDirection });
+  return normalize(parsed as { direction?: ParityDirection; cmpCapable?: boolean });
 }
