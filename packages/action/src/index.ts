@@ -35,6 +35,17 @@ export { renderReport, REPORT_MARKER } from "./report.js";
 export { selectMode } from "./mode.js";
 export type { ActionMode, ModeInputs } from "./mode.js";
 
+export { pushBack, decidePushBack } from "./pushback.js";
+export type {
+  PushBackGate,
+  PushBackOptions,
+  PushBackReport,
+  PushBackComponent,
+  PushBackSkip,
+  PushBackError,
+  PushedImage,
+} from "./pushback.js";
+
 export {
   baselineSummary,
   renderBaselineIndex,

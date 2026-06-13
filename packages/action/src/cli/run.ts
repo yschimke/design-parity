@@ -20,11 +20,13 @@ import { argv, cwd, env, exit, stdout } from "node:process";
 import { resolve as resolvePath } from "node:path";
 
 import { resolve as resolveCorrespondences } from "@design-parity/resolver";
+import { FigmaCanvasWriter } from "@design-parity/adapter-figma";
 
 import { buildCandidateProvider } from "../candidate.js";
 import { resolveRunConfig } from "../config.js";
 import { createAdapterRegistry } from "../registry.js";
 import { orchestrate } from "../orchestrate.js";
+import { pushBack } from "../pushback.js";
 import { renderReport } from "../report.js";
 
 interface Args {
@@ -33,10 +35,12 @@ interface Args {
   candidatesPath?: string;
   bundlePaths: string[];
   outDir?: string;
+  pushBack: boolean;
+  canvasEndpoint?: string;
 }
 
 function parseArgs(args: string[]): Args {
-  const out: Args = { repoRoot: cwd(), components: [], bundlePaths: [] };
+  const out: Args = { repoRoot: cwd(), components: [], bundlePaths: [], pushBack: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     const next = () => args[(i += 1)];
@@ -58,6 +62,12 @@ function parseArgs(args: string[]): Args {
       case "--out":
         out.outDir = next();
         break;
+      case "--push-back":
+        out.pushBack = true;
+        break;
+      case "--canvas-endpoint":
+        out.canvasEndpoint = next();
+        break;
       default:
         if (a && !a.startsWith("--")) out.components.push(a);
     }
@@ -70,7 +80,8 @@ async function main(): Promise<number> {
   if (args.components.length === 0) {
     stdout.write(
       "design-parity run --components <code#Member,...> [--repo .] " +
-        "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir]\n",
+        "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir] " +
+        "[--push-back [--canvas-endpoint <url>]]\n",
     );
     return 2;
   }
@@ -105,6 +116,18 @@ async function main(): Promise<number> {
   );
 
   stdout.write(renderReport(report) + "\n");
+
+  // Optional Code-to-Canvas push-back (#9): no-op (with a log) unless the
+  // `--push-back` flag is set, the direction is `code-led`, and a figma bridge
+  // endpoint is configured. A side effect only — it never affects the exit code.
+  const endpoint = args.canvasEndpoint ?? env.FIGMA_CANVAS_ENDPOINT;
+  await pushBack({
+    report,
+    enabled: args.pushBack,
+    ...(endpoint ? { writer: new FigmaCanvasWriter({ endpoint }) } : {}),
+    ctx: { repoRoot: args.repoRoot, env },
+    log: (m) => stdout.write(m + "\n"),
+  });
 
   // Point at the self-contained HTML comparison pages, when written (#50).
   const pages = report.results

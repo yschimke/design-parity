@@ -82,6 +82,13 @@ export interface ComponentResult {
   source?: DesignSource;
   status: ComponentStatus;
   reference?: DesignReference;
+  /**
+   * The candidate render that was diffed, retained so a downstream consumer can
+   * act on the shipped pixels — notably Code-to-Canvas push-back (issue #9),
+   * which writes this image back to the design tool in `code-led` mode. Only
+   * present when a candidate was available (i.e. `status` is `ok`).
+   */
+  candidate?: CandidateRender;
   verdict?: Verdict;
   summary?: string;
   triptychs?: Triptych[];
@@ -144,6 +151,8 @@ export async function orchestrate(
         results.push(result);
         continue;
       }
+      // Retain the render so push-back (#9) can write the shipped pixels back.
+      result.candidate = candidate;
 
       // Each component writes into its own subdir so triptychs (keyed only by
       // image variant) and the HTML page don't collide across components (#49).

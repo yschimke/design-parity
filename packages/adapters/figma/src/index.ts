@@ -8,6 +8,9 @@
 export { FigmaAdapter, createFigmaAdapter } from "./adapter.js";
 export type { FigmaAdapterOptions, RenderTarget } from "./adapter.js";
 
+export { FigmaCanvasWriter, createFigmaCanvasWriter } from "./canvas-writer.js";
+export type { FigmaCanvasWriterOptions, CanvasFetch } from "./canvas-writer.js";
+
 export { FigmaRestClient } from "./rest-client.js";
 export type {
   FetchLike,

@@ -245,6 +245,55 @@ export type ParityDirection = "auto" | "design-led" | "code-led";
 /** What `auto` is materialized/resolved into. */
 export type ResolvedDirection = "design-led" | "code-led";
 
+// ---------------------------------------------------------------------------
+// Code-to-Canvas push-back (issue #9) — the code-led, Figma-only stretch.
+// ---------------------------------------------------------------------------
+
+/**
+ * One candidate render to push back into the design tool so the design file
+ * reflects what shipped. Only produced in `code-led` mode for `figma` sources
+ * (see docs/PRINCIPLES.md, Principle 5).
+ */
+export interface CanvasTarget {
+  /** Code handle of the component being pushed back (trace/debug). */
+  componentId: string;
+  /** The design source to write into — only `figma` is supported today. */
+  source: DesignSource;
+  /** Source-specific handle of the node to update (e.g. `figma:<key>/<node>`). */
+  ref: string;
+  /** The candidate render image (the shipped pixels) to place on the canvas. */
+  image: Image;
+}
+
+/** Outcome of writing one {@link CanvasTarget} back to the design tool. */
+export interface CanvasWriteResult {
+  /** A URL/handle to the written or updated node, when the writer exposes one. */
+  url?: string;
+  /** Human-readable detail for the log (e.g. which node was updated). */
+  detail?: string;
+}
+
+/**
+ * Writes a candidate render back into the design tool (Code-to-Canvas).
+ *
+ * The transport is intentionally abstract. The Figma **REST** API is read-only,
+ * so a real writer drives a companion Figma plugin / Dev Mode bridge — not the
+ * public REST API the {@link ReferenceAdapter} reads from. Keeping this a thin
+ * contract lets the Action gate and orchestrate push-back without coupling to
+ * any one transport, and lets tests inject a fake.
+ */
+export interface CanvasWriter {
+  /** The source this writer targets; push-back only runs for matching results. */
+  readonly source: DesignSource;
+  /**
+   * Write one candidate image back to the design tool.
+   *
+   * @throws if the write fails (auth, missing endpoint, unreachable bridge).
+   *   The Action treats a throw as fail-soft per component.
+   */
+  write(target: CanvasTarget, ctx: AdapterContext): Promise<CanvasWriteResult>;
+}
+
 /**
  * Where a repo sits on the maturity ladder (docs/PRINCIPLES.md, Principle 3).
  * Detected by setup/bootstrap (issue #11); the only input `auto` direction
