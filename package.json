@@ -1,8 +1,8 @@
 {
-  "name": "design-parity",
-  "version": "0.0.0",
+  "name": "design-parity-monorepo",
+  "version": "0.1.0",
   "private": true,
-  "description": "A tool-neutral bot that proves a UI pull request is at parity with its intended design.",
+  "description": "Monorepo root for design-parity. The publishable CLI is the top-level `design-parity` package (packages/cli); the building blocks are the `@design-parity/*` scope.",
   "license": "Apache-2.0",
   "type": "module",
   "workspaces": [
@@ -13,6 +13,7 @@
     "build": "npm run build --workspace @design-parity/core && npm run build --workspaces --if-present",
     "typecheck": "npm run build",
     "test": "vitest run",
+    "set-version": "node scripts/set-version.mjs",
     "validate": "npm run build --workspace @design-parity/core && node packages/core/dist/cli/validate-design-map.js"
   },
   "devDependencies": {

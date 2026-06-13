@@ -47,7 +47,12 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
   identity; no `Co-authored-by` / `Signed-off-by` / `claude.ai/code` trailers.
 - New packages are `@design-parity/<name>`, ESM (`"type": "module"`),
   `NodeNext` module resolution, and join the workspace via `packages/*` or
-  `packages/adapters/*`.
+  `packages/adapters/*`. **One deliberate exception:** the published top-level
+  CLI is the *unscoped* `design-parity` package (`packages/cli`), so the bare
+  `npx design-parity run …` works; it's a thin launcher over
+  `@design-parity/action`. The monorepo root is `design-parity-monorepo`
+  (private) — don't rename it back to `design-parity` or the launcher name
+  collides.
 - **Do not register packages in a root `tsconfig.json` `references` array** —
   there is none. The root build iterates workspaces
   (`npm run build --workspaces`), and each package's own `tsconfig.json`
@@ -55,6 +60,25 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
   editing one shared file and conflicting. Touch only your own
   `packages/<name>/` files; `package-lock.json` updates from `npm install` are
   expected and regenerate cleanly.
+
+## Releasing
+
+The whole scope publishes to npm at **one shared version** so cross-package
+ranges stay coherent. To cut a release:
+
+1. `npm run set-version X.Y.Z` — rewrites every workspace `version` and every
+   internal `@design-parity/*` / `design-parity` dependency range to `^X.Y.Z`
+   (see [`scripts/set-version.mjs`](./scripts/set-version.mjs)). Don't hand-edit
+   versions; this keeps them in sync.
+2. Commit (`chore: release vX.Y.Z`) and tag `vX.Y.Z`.
+3. Push the tag — [`.github/workflows/release.yml`](./.github/workflows/release.yml)
+   rebuilds from a clean checkout, verifies the tag matches package.json, and
+   runs `npm publish --workspaces --access public --provenance`. The private
+   root is skipped automatically. (`workflow_dispatch` offers a `--dry-run`
+   pack.) Requires the `NPM_TOKEN` secret.
+
+Internal deps use concrete `^` ranges, **not** the `workspace:` protocol — npm
+(unlike pnpm/yarn) doesn't rewrite `workspace:` on publish.
 
 ## Design facts (verified — do not re-derive)
 

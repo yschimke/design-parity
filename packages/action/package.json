@@ -1,35 +1,33 @@
 {
   "name": "@design-parity/action",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Integration layer: wires resolver, adapters, candidate, checks, diff, and policy into a parity run, and surfaces the verdict (CLI now; GitHub Action surface to follow).",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./run": "./dist/cli/run.js"
   },
   "files": [
     "dist"
   ],
-  "bin": {
-    "design-parity": "./dist/cli/run.js"
-  },
   "scripts": {
     "build": "tsc --build",
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "*",
-    "@design-parity/resolver": "*",
-    "@design-parity/policy": "*",
-    "@design-parity/diff": "*",
-    "@design-parity/report-html": "*",
-    "@design-parity/checks": "*",
-    "@design-parity/candidate": "*",
-    "@design-parity/adapter-figma": "*",
-    "@design-parity/adapter-stitch": "*",
-    "@design-parity/adapter-claude-design": "*",
-    "@design-parity/adapter-bundle": "*"
+    "@design-parity/core": "^0.1.0",
+    "@design-parity/resolver": "^0.1.0",
+    "@design-parity/policy": "^0.1.0",
+    "@design-parity/diff": "^0.1.0",
+    "@design-parity/report-html": "^0.1.0",
+    "@design-parity/checks": "^0.1.0",
+    "@design-parity/candidate": "^0.1.0",
+    "@design-parity/adapter-figma": "^0.1.0",
+    "@design-parity/adapter-stitch": "^0.1.0",
+    "@design-parity/adapter-claude-design": "^0.1.0",
+    "@design-parity/adapter-bundle": "^0.1.0"
   }
 }
