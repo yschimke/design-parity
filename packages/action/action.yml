@@ -1,14 +1,29 @@
 name: "Design parity"
-description: "Check that a UI pull request is at parity with its design reference and post a single verdict comment."
+description: "Check a UI pull request against its design reference (comment mode) and publish always-current parity artifacts on every push to the development branch (baseline mode)."
 author: "design-parity"
 
 inputs:
   github_token:
-    description: "Token used to read the PR's changed files and post/update the verdict comment."
+    description: >
+      Token for the Action. In comment mode it reads the PR's changed files and
+      posts/updates the verdict comment. In baseline mode it force-updates the
+      artifact branch, so the workflow must grant `contents: write`.
     default: ${{ github.token }}
   candidates:
-    description: "Repo-relative path to a CandidateRender[] JSON for the changed components (produced by a prior compose-preview step)."
+    description: "Repo-relative path to a CandidateRender[] JSON for the components (produced by a prior compose-preview step)."
     required: false
+  candidate_bundles:
+    description: "Comma-separated compose-preview bundle inputs (polyglot .png files and/or directories of them) to read candidate renders from. Combined with `candidates` (bundles win, JSON is the fallback)."
+    required: false
+  development_branch:
+    description: "Long-lived branch whose pushes flip the Action into baseline mode (publishing artifacts). PRs run in comment mode regardless."
+    default: "main"
+  artifact_branch:
+    description: "Permanent branch the rendered parity artifacts (index.html + per-component report.html + verdict.json) are force-published to in baseline mode. Defaults to `design-parity/<development_branch>`."
+    required: false
+  mode:
+    description: "Override the event-based mode selector: `auto` (default), `baseline`, `comment`, or `skip`."
+    default: "auto"
 
 runs:
   using: "node20"

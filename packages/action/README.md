@@ -32,36 +32,63 @@ resolver ──(Correspondence[])──┐
 
 ## GitHub Action
 
-`action.yml` + `dist/cli/action.js` run a parity check on a PR: read the
-changed files, keep the `design-map.json` components whose file changed (a PR
-that touches none is treated as non-UI and skipped), run the pipeline, and
-**post/update a single verdict comment** (idempotent via the report marker). It
-exits non-zero only when the direction blocks (`design-led` + a failure).
+`action.yml` + `dist/cli/action.js` **auto-select a mode from the triggering
+event** (mirroring the sibling `compose-ai-tools` `apply` action):
+
+- **comment** — a `pull_request`: read the changed files, keep the
+  `design-map.json` components whose file changed (a PR that touches none is
+  treated as non-UI and skipped), run the pipeline, and **post/update a single
+  verdict comment** (idempotent via the report marker). Exits non-zero only when
+  the direction blocks (`design-led` + a failure).
+- **baseline** — a `push` to the **`development_branch`** (default `main`):
+  render the **full** mapped surface, run the pipeline, and **publish the
+  browsable artifacts** — a top-level `index.html`, each component's
+  self-contained `report.html` triptych, and a machine-readable `verdict.json` —
+  to a permanent **`artifact_branch`** (default `design-parity/<dev-branch>`),
+  force-updated each run. This gives a stable, always-current view of `main`'s
+  parity state without committing generated PNGs/HTML onto `main`, and a real
+  baseline a PR can diff its candidate against. Requires `contents: write`.
+- **skip** — nothing applies (e.g. a push to a non-dev branch).
+
+`mode: baseline|comment|skip` overrides the selector when needed.
 
 ```yaml
 # .github/workflows/design-parity.yml
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches: [main]
 jobs:
   parity:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # baseline mode force-updates the artifact branch
+      pull-requests: write  # comment mode posts the verdict comment
     steps:
       - uses: actions/checkout@v4
-      # ... a prior step renders candidates -> candidates.json ...
+      # ... a prior step renders candidates -> candidates.json (or bundles) ...
       - uses: yschimke/design-parity/packages/action@main
         with:
-          candidates: candidates.json   # CandidateRender[] for the changed components
+          candidates: candidates.json        # CandidateRender[] …
+          # candidate_bundles: out/previews   # … and/or compose-preview bundles
+          # development_branch: main          # push here → baseline mode
+          # artifact_branch: design-parity/main
 ```
 
-The surface logic (`postReport`, `componentsForChangedFiles`, `checkConclusion`)
-is pure and unit-tested with a fake client; the entrypoint adds a dependency-free
-`fetch` GitHub client.
+The selector + surface logic (`selectMode`, `postReport`,
+`componentsForChangedFiles`, `checkConclusion`) and the artifact builders
+(`baselineSummary`, `renderBaselineIndex`) are pure and unit-tested; the git
+plumbing (`publishBaseline`) takes an injectable `GitRunner` so its
+orphan/re-parent/force-push sequence is unit-tested without a real remote.
 
 ## Still to come (issue #8)
 
 - Live `compose-preview` rendering in the candidate provider (today candidates
-  come from a precomputed `CandidateRender[]`).
-- Bundle + commit `dist/` so the action is directly consumable (e.g. via `ncc`).
-- Upload triptychs as artifacts; consume the checks-config loader (#25).
+  come from a precomputed `CandidateRender[]` / preview bundles).
+- Bundle + commit `dist/` so the action is directly consumable (e.g. via `ncc`)
+  and can be pinned as `yschimke/design-parity/packages/action@<tag>`.
+- Comment mode diffing the PR candidate against the published baseline (the
+  `verdict.json` on the artifact branch) for regression detection.
 
 ## Use
 
