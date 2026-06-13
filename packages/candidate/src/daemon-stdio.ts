@@ -187,6 +187,8 @@ const DEFAULT_KINDS = [
   "a11y/atf",
   "a11y/hierarchy",
   "a11y/touchTargets",
+  "compose/semantics",
+  "compose/theme",
   "text/strings",
   "i18n/translations",
 ];

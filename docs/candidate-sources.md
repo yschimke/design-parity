@@ -28,7 +28,7 @@ is **not** swallowed.
 | `bundleCandidateSource` | `bundle` | **1 — shipped** | cheapest | nothing (pure JS) | yes (from the bundle blob) |
 | `cliRenderSource` | `cli` | shipped (wrap) | high | JVM/Android + `compose-preview` CLI | yes (CLI data product) |
 | `localComposeWebSource` | `local-compose-web` | **stub** | low | a CMP/wasm render entrypoint | (future) |
-| `daemonSource` | `daemon` | **2 — shipped (#43)** | low per render, warm | a running compose-ai-tools daemon | yes (a11y/hierarchy) **+ native findings** |
+| `daemonSource` | `daemon` | **2 — shipped (#43, #55)** | low per render, warm | a running compose-ai-tools daemon | yes (compose/semantics → a11y/hierarchy) **+ native findings** |
 
 ### 1. `bundleCandidateSource` — static preview-bundle reader (Phase 1 of #38)
 
@@ -96,8 +96,15 @@ JSON-RPC-over-stdio protocol (compose-ai-tools `docs/daemon/PROTOCOL.md`, e.g.
 renderer already computed them from the live render. Per preview the source:
 
 - maps the rendered capture → the candidate `Image` (`data:` or path);
-- builds the `SemanticTree` from `a11y/hierarchy` (for the parity
-  token/visual/semantic diff and pairing);
+- builds the `SemanticTree` from `compose/semantics` when available — the
+  **nested** SemanticsNode projection, so the tree reflects real structure and
+  each text node carries its resolved fg/bg colours (`layout*Color`, converted
+  from `#AARRGGBB` to CSS `#RRGGBBAA`) and font size, letting **colour-based
+  contrast run from the tree**; `compose/theme`'s colour scheme seeds a
+  root-level background so text without its own background still resolves one.
+  Falls back to the **flat** `a11y/hierarchy` (every node off a synthetic root,
+  contrast left to native `a11y/atf`) when the richer product isn't served
+  (#55);
 - maps the native data products → `Finding[]`:
 
   | Data product | → Finding |

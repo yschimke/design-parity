@@ -33,6 +33,9 @@ export {
   textStringFindings,
   translationFindings,
   hierarchyToSemanticTree,
+  semanticsToSemanticTree,
+  argbToCssHex,
+  parseFontSizeSp,
   parseScreenBounds,
 } from "./daemon.js";
 export type {
@@ -48,6 +51,9 @@ export type {
   TouchTarget,
   HierarchyPayload,
   HierarchyNode,
+  ComposeSemanticsPayload,
+  ComposeSemanticsNode,
+  ComposeThemePayload,
   TextStringsPayload,
   TextStringEntry,
   I18nTranslationsPayload,
