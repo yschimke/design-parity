@@ -28,6 +28,9 @@ export type {
   ResolvedDirection,
   MaturityRung,
   ParityConfig,
+  CanvasTarget,
+  CanvasWriteResult,
+  CanvasWriter,
 } from "./types.js";
 
 export type {

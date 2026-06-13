@@ -53,7 +53,7 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 | [`@design-parity/checks`](./packages/checks) | ✅ #25 | a11y + i18n spec checks (the high-value findings) + the committed `design-parity.checks.json` (schema, loader, validator CLI) so bootstrap's tuned thresholds reach the engine at run time. |
 | [`@design-parity/baseline`](./packages/baseline) | ✅ | Detect maturity (3 rungs); materialize a concrete parity direction; bootstrap an opinionated committed baseline (tokens, starter `design-map.json`, check config) when there's no design system. Interactive CLI; never on the Action path. |
 | [`@design-parity/policy`](./packages/policy) | ✅ issue #12 | Committed `.design-parity.json` (schema, loader, validator CLI) + the deterministic `auto` → `design-led`/`code-led` direction resolver. |
-| [`@design-parity/action`](./packages/action) | 🚧 #8 | Orchestrator + CLI landed (registry → resolve → diff → policy → report); GitHub Action surface next. |
+| [`@design-parity/action`](./packages/action) | 🚧 #8 · #9 | Orchestrator + CLI landed (registry → resolve → diff → policy → report); GitHub Action surface next. Includes optional Code-to-Canvas push-back (#9): gated on an opt-in flag + `code-led` + a `figma` source, writing the candidate render back via an injectable `CanvasWriter` (`@design-parity/adapter-figma`'s `FigmaCanvasWriter`). |
 | [`@design-parity/report-html`](./packages/report-html) | ✅ #31 | Per-run self-contained HTML comparison page: reference \| candidate \| diff side by side with the verdict findings, inlined to one offline `.html` (data-URI PNGs + inline CSS/JS, no external assets). Deterministic; leaf consumer. |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so

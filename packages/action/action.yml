@@ -24,6 +24,24 @@ inputs:
   mode:
     description: "Override the event-based mode selector: `auto` (default), `baseline`, `comment`, or `skip`."
     default: "auto"
+  push_back:
+    description: >
+      Opt in to Code-to-Canvas push-back (issue #9): after a parity run, push the
+      candidate render back into the design file. A no-op (logged) unless this is
+      truthy AND the resolved direction is `code-led` AND the component's source
+      is `figma` — in `design-led` the design stays canonical and code is never
+      pushed back. Requires `canvas_endpoint` to actually write.
+    default: "false"
+  canvas_endpoint:
+    description: >
+      Code-to-Canvas bridge endpoint (a Figma plugin / Dev Mode hook) that
+      accepts the candidate PNG + target node. The Figma REST API is read-only,
+      so push-back has no transport without this; falls back to the
+      `FIGMA_CANVAS_ENDPOINT` env var.
+    required: false
+  canvas_token:
+    description: "Bearer token for the Code-to-Canvas bridge. Falls back to `FIGMA_CANVAS_TOKEN`, then `FIGMA_OAUTH_TOKEN`."
+    required: false
 
 runs:
   using: "node20"

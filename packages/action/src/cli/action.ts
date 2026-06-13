@@ -25,8 +25,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { resolve as resolveCorrespondences } from "@design-parity/resolver";
+import { FigmaCanvasWriter } from "@design-parity/adapter-figma";
+import type { CanvasWriter } from "@design-parity/core";
 
 import { buildCandidateProvider } from "../candidate.js";
+import { pushBack } from "../pushback.js";
 import { resolveRunConfig } from "../config.js";
 import { createAdapterRegistry } from "../registry.js";
 import { orchestrate } from "../orchestrate.js";
@@ -42,6 +45,25 @@ import { selectMode } from "../mode.js";
 interface RepoRef {
   owner: string;
   repo: string;
+}
+
+/** Whether an Action input string is set to a truthy opt-in value. */
+function isOptedIn(value: string | undefined): boolean {
+  if (!value) return false;
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+/**
+ * Build the Code-to-Canvas writer (issue #9) from the configured bridge
+ * endpoint. Returns `undefined` when no endpoint is set, so push-back no-ops
+ * with a clear log even when opted in — the Figma REST API can't write, so a
+ * bridge must be configured for the candidate to reach the canvas.
+ */
+function canvasWriter(): CanvasWriter | undefined {
+  const endpoint = env.INPUT_CANVAS_ENDPOINT ?? env.FIGMA_CANVAS_ENDPOINT;
+  if (!endpoint?.trim()) return undefined;
+  const token = env.INPUT_CANVAS_TOKEN ?? env.FIGMA_CANVAS_TOKEN ?? env.FIGMA_OAUTH_TOKEN;
+  return new FigmaCanvasWriter({ endpoint, ...(token ? { token } : {}) });
 }
 
 async function readPrNumber(): Promise<number | undefined> {
@@ -126,6 +148,19 @@ async function runComment(
   stdout.write(
     `design-parity: ${outcome} report — status=${report.status} blocked=${report.blocked}\n`,
   );
+
+  // Optional Code-to-Canvas push-back (#9): gated on the opt-in flag + a
+  // `code-led` direction + a `figma` source, and a no-op (with a log) otherwise.
+  // A side effect only — it never changes the PR verdict / exit code.
+  const writer = canvasWriter();
+  await pushBack({
+    report,
+    enabled: isOptedIn(env.INPUT_PUSH_BACK ?? env.DESIGN_PARITY_PUSH_BACK),
+    ...(writer ? { writer } : {}),
+    ctx: { repoRoot, env },
+    log: (m) => stdout.write(m + "\n"),
+  });
+
   return exitCode(report);
 }
 
