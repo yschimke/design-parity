@@ -15,3 +15,10 @@ export type {
 } from "./resolver.js";
 
 export { resolveComponent, resolve } from "./resolver.js";
+
+export type {
+  PreviewIdentity,
+  PreviewCodeMatch,
+  PreviewResolveResult,
+} from "./preview-id.js";
+export { codeHandleForPreview, resolvePreviewIds } from "./preview-id.js";

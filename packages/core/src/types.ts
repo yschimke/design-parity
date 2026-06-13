@@ -109,7 +109,20 @@ export interface DesignReference {
  * `compose-preview` CLI and parsed by `@design-parity/candidate`.
  */
 export interface CandidateRender {
+  /**
+   * The handle the orchestrator pairs on — a code handle
+   * (`"ui/Button.kt#PrimaryButton"`) once reconciled, so it lines up with a
+   * {@link DesignReference}. A source that can't reconcile leaves its native id
+   * here (and the pair simply won't match).
+   */
   componentId: string;
+  /**
+   * The raw compose-ai-tools preview id (`"a.b.C.fn"`), when the candidate came
+   * from a preview bundle / daemon. Kept alongside {@link componentId} so the
+   * two namespaces stay reconcilable (issue #44); absent for sources with no
+   * preview id (e.g. a hand-authored `CandidateRender`).
+   */
+  previewId?: string;
   images: Image[];
   semantics: SemanticTree;
 }

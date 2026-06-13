@@ -82,8 +82,10 @@ async function main(): Promise<number> {
     repoRoot: args.repoRoot,
     bundlePaths: args.bundlePaths,
   };
+  if (designMap) candidateOpts.designMap = designMap;
   if (args.candidatesPath) candidateOpts.candidatesPath = args.candidatesPath;
-  const provider = await buildCandidateProvider(candidateOpts);
+  const { provider, warnings: candidateWarnings } =
+    await buildCandidateProvider(candidateOpts);
 
   const report = await orchestrate({
     repoRoot: args.repoRoot,
@@ -98,6 +100,7 @@ async function main(): Promise<number> {
   report.warnings.unshift(
     ...warnings,
     ...resolved.warnings,
+    ...candidateWarnings,
     ...resolved.unresolved.map((u) => `unresolved (no source matched): ${u}`),
   );
 

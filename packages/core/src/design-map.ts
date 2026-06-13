@@ -26,6 +26,14 @@ export interface DesignMapEntry {
   source: DesignSource;
   /** Source-specific reference handle (see schema for per-source format). */
   ref: string;
+  /**
+   * Optional compose-ai-tools preview id (`"a.b.C.fn"`) this code handle
+   * renders as. The authoritative link between a preview-bundle / daemon
+   * candidate (keyed by preview id) and this reference (keyed by code handle) —
+   * see issue #44. When omitted, the resolver falls back to a low-confidence
+   * convention (`sourceFile#functionName`).
+   */
+  previewId?: string;
 }
 
 export interface DesignMap {

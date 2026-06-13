@@ -23,6 +23,7 @@ import {
 import {
   bundleToCandidates,
   parsePreviewBundle,
+  type ComponentIdResolver,
   type PreviewBundle,
 } from "./bundle.js";
 import { InvalidBundleError, NotImplementedError } from "./errors.js";
@@ -44,6 +45,12 @@ export interface BundleSourceOptions {
   bundles?: PreviewBundle[];
   /** Byte reader; defaults to `node:fs`. Injectable for tests. */
   readFile?: (path: string) => Promise<Uint8Array>;
+  /**
+   * Reconcile each preview to its code handle so bundle candidates key on the
+   * same id the orchestrator pairs references by (issue #44). When omitted,
+   * candidates stay keyed by their raw preview id.
+   */
+  resolveComponentId?: ComponentIdResolver;
 }
 
 /**
@@ -77,11 +84,13 @@ export function bundleCandidateSource(
     const ingest = (candidates: CandidateRender[]) => {
       for (const c of candidates) map.set(c.componentId, c);
     };
-    for (const bundle of preloaded) ingest(bundleToCandidates(bundle));
+    const toCandidates = (bundle: PreviewBundle) =>
+      bundleToCandidates(bundle, options.resolveComponentId);
+    for (const bundle of preloaded) ingest(toCandidates(bundle));
     for (const p of paths) {
       const abs = isAbsolute(p) ? p : resolve(ctx.repoRoot, p);
       const bytes = await read(abs);
-      ingest(bundleToCandidates(parsePreviewBundle(bytes)));
+      ingest(toCandidates(parsePreviewBundle(bytes)));
     }
     index = map;
     return map;

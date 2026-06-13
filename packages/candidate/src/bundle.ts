@@ -248,12 +248,33 @@ function toImage(
 }
 
 /**
+ * Reconcile a bundle preview to the code handle the orchestrator pairs on
+ * (issue #44). Given the preview's identifying bits, return its code handle
+ * (`path#Member`) or `undefined` to leave the candidate keyed by its raw
+ * preview id. Kept structural so this package depends only on
+ * `@design-parity/core` — the action wires `@design-parity/resolver` in.
+ */
+export type ComponentIdResolver = (preview: {
+  id: string;
+  sourceFile?: string;
+  functionName?: string;
+  className?: string;
+}) => string | undefined;
+
+/**
  * Build the {@link CandidateRender} for one preview. A preview with no explicit
  * `captures[]` is treated as a single default capture keyed on its `id`.
+ *
+ * When `resolveComponentId` maps the preview to a code handle, that becomes the
+ * render's `componentId` (so it pairs with a {@link DesignReference}) and the
+ * raw preview id is preserved on `previewId`; otherwise the preview id stays the
+ * `componentId` (today's behaviour, and the pair simply won't match a
+ * code-handle reference).
  */
 export function previewToCandidate(
   bundle: PreviewBundle,
   entry: PreviewEntry,
+  resolveComponentId?: ComponentIdResolver,
 ): CandidateRender {
   if (!entry.id) {
     throw new InvalidBundleError("a previews.json entry is missing its `id`");
@@ -299,18 +320,36 @@ export function previewToCandidate(
     }
   }
 
-  return {
-    componentId: entry.id,
+  const code = resolveComponentId?.({
+    id: entry.id,
+    ...(entry.sourceFile !== undefined ? { sourceFile: entry.sourceFile } : {}),
+    ...(entry.functionName !== undefined
+      ? { functionName: entry.functionName }
+      : {}),
+    ...(entry.className !== undefined ? { className: entry.className } : {}),
+  });
+
+  const candidate: CandidateRender = {
+    componentId: code ?? entry.id,
     images,
     // Prefer the light capture's tree (the diff engine keys tokens off one),
     // else the first available, else an empty tree.
     semantics: lightSemantics ?? semantics ?? { root: {} },
   };
+  // When a resolver ran, keep the raw preview id reconcilable alongside the
+  // code-handle componentId (issue #44).
+  if (resolveComponentId) candidate.previewId = entry.id;
+  return candidate;
 }
 
 /** Map every preview in a bundle to a {@link CandidateRender}. */
-export function bundleToCandidates(bundle: PreviewBundle): CandidateRender[] {
-  return bundle.previews.map((entry) => previewToCandidate(bundle, entry));
+export function bundleToCandidates(
+  bundle: PreviewBundle,
+  resolveComponentId?: ComponentIdResolver,
+): CandidateRender[] {
+  return bundle.previews.map((entry) =>
+    previewToCandidate(bundle, entry, resolveComponentId),
+  );
 }
 
 /**
@@ -319,6 +358,7 @@ export function bundleToCandidates(bundle: PreviewBundle): CandidateRender[] {
  */
 export async function loadPreviewBundle(
   input: Uint8Array | string,
+  resolveComponentId?: ComponentIdResolver,
 ): Promise<CandidateRender[]> {
-  return bundleToCandidates(await readPreviewBundle(input));
+  return bundleToCandidates(await readPreviewBundle(input), resolveComponentId);
 }

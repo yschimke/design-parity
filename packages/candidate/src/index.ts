@@ -40,6 +40,7 @@ export type {
   PreviewsFile,
   PreviewEntry,
   PreviewCapture,
+  ComponentIdResolver,
 } from "./bundle.js";
 
 export { renderCandidate, toCandidateRender } from "./candidate.js";
