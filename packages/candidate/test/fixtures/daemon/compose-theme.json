@@ -1,0 +1,210 @@
+{
+  "resolvedTokens": {
+    "colorScheme": {
+      "primary": "#FF6750A4",
+      "onPrimary": "#FFFFFFFF",
+      "primaryContainer": "#FFEADDFF",
+      "onPrimaryContainer": "#FF21005D",
+      "inversePrimary": "#FFD0BCFF",
+      "secondary": "#FF625B71",
+      "onSecondary": "#FFFFFFFF",
+      "secondaryContainer": "#FFE8DEF8",
+      "onSecondaryContainer": "#FF1D192B",
+      "tertiary": "#FF7D5260",
+      "onTertiary": "#FFFFFFFF",
+      "tertiaryContainer": "#FFFFD8E4",
+      "onTertiaryContainer": "#FF31111D",
+      "background": "#FFFEF7FF",
+      "onBackground": "#FF1D1B20",
+      "surface": "#FFFEF7FF",
+      "onSurface": "#FF1D1B20",
+      "surfaceVariant": "#FFE7E0EC",
+      "onSurfaceVariant": "#FF49454F",
+      "surfaceTint": "#FF6750A4",
+      "inverseSurface": "#FF322F35",
+      "inverseOnSurface": "#FFF5EFF7",
+      "error": "#FFB3261E",
+      "onError": "#FFFFFFFF",
+      "errorContainer": "#FFF9DEDC",
+      "onErrorContainer": "#FF410E0B",
+      "outline": "#FF79747E",
+      "outlineVariant": "#FFCAC4D0",
+      "scrim": "#FF000000"
+    },
+    "typography": {
+      "displayLarge": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 57,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 64,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": -0.2,
+        "letterSpacingUnit": "Sp"
+      },
+      "displayMedium": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 45,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 52,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0,
+        "letterSpacingUnit": "Sp"
+      },
+      "displaySmall": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 36,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 44,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0,
+        "letterSpacingUnit": "Sp"
+      },
+      "headlineLarge": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 32,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 40,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0,
+        "letterSpacingUnit": "Sp"
+      },
+      "headlineMedium": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 28,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 36,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0,
+        "letterSpacingUnit": "Sp"
+      },
+      "headlineSmall": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 24,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 32,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0,
+        "letterSpacingUnit": "Sp"
+      },
+      "titleLarge": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 22,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 28,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0,
+        "letterSpacingUnit": "Sp"
+      },
+      "titleMedium": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 16,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=500)",
+        "fontStyle": null,
+        "lineHeight": 24,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.2,
+        "letterSpacingUnit": "Sp"
+      },
+      "titleSmall": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 14,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=500)",
+        "fontStyle": null,
+        "lineHeight": 20,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.1,
+        "letterSpacingUnit": "Sp"
+      },
+      "bodyLarge": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 16,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 24,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.5,
+        "letterSpacingUnit": "Sp"
+      },
+      "bodyMedium": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 14,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 20,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.2,
+        "letterSpacingUnit": "Sp"
+      },
+      "bodySmall": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 12,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=400)",
+        "fontStyle": null,
+        "lineHeight": 16,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.4,
+        "letterSpacingUnit": "Sp"
+      },
+      "labelLarge": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 14,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=500)",
+        "fontStyle": null,
+        "lineHeight": 20,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.1,
+        "letterSpacingUnit": "Sp"
+      },
+      "labelMedium": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 12,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=500)",
+        "fontStyle": null,
+        "lineHeight": 16,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.5,
+        "letterSpacingUnit": "Sp"
+      },
+      "labelSmall": {
+        "fontFamily": "FontFamily.SansSerif",
+        "fontSize": 11,
+        "fontSizeUnit": "Sp",
+        "fontWeight": "FontWeight(weight=500)",
+        "fontStyle": null,
+        "lineHeight": 16,
+        "lineHeightUnit": "Sp",
+        "letterSpacing": 0.5,
+        "letterSpacingUnit": "Sp"
+      }
+    },
+    "shapes": {
+      "extraSmall": "RoundedCornerShape(topStart = CornerSize(size = 4.0.dp), topEnd = CornerSize(size = 4.0.dp), bottomEnd = CornerSize(size = 4.0.dp), bottomStart = CornerSize(size = 4.0.dp))",
+      "small": "RoundedCornerShape(topStart = CornerSize(size = 8.0.dp), topEnd = CornerSize(size = 8.0.dp), bottomEnd = CornerSize(size = 8.0.dp), bottomStart = CornerSize(size = 8.0.dp))",
+      "medium": "RoundedCornerShape(topStart = CornerSize(size = 12.0.dp), topEnd = CornerSize(size = 12.0.dp), bottomEnd = CornerSize(size = 12.0.dp), bottomStart = CornerSize(size = 12.0.dp))",
+      "large": "RoundedCornerShape(topStart = CornerSize(size = 16.0.dp), topEnd = CornerSize(size = 16.0.dp), bottomEnd = CornerSize(size = 16.0.dp), bottomStart = CornerSize(size = 16.0.dp))",
+      "extraLarge": "RoundedCornerShape(topStart = CornerSize(size = 28.0.dp), topEnd = CornerSize(size = 28.0.dp), bottomEnd = CornerSize(size = 28.0.dp), bottomStart = CornerSize(size = 28.0.dp))"
+    }
+  },
+  "consumers": []
+}

@@ -1,6 +1,11 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, it, expect } from "vitest";
 
 import type { AdapterContext } from "@design-parity/core";
+
+const fixture = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 import {
   atfFindings,
@@ -223,6 +228,23 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
   it("returns undefined with no root, so the daemon falls back to a11y/hierarchy", () => {
     expect(semanticsToSemanticTree(undefined)).toBeUndefined();
     expect(semanticsToSemanticTree({})).toBeUndefined();
+  });
+
+  it("seeds the root from a REAL captured compose/theme payload (#55 live)", () => {
+    // fixtures/daemon/compose-theme.json was captured from a live standalone
+    // CMP-desktop daemon (`compose-preview bundle daemon`) via StdioDaemonClient
+    // — Material 3 tokens in `#AARRGGBB`. Guards that the mapper consumes the
+    // producer's real shape, not just hand-written fixtures.
+    const theme = JSON.parse(
+      readFileSync(fixture("fixtures/daemon/compose-theme.json"), "utf8"),
+    );
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,100,40", children: [{ text: "Hi", boundsInRoot: "0,0,100,40" }] } },
+      "light",
+      theme,
+    );
+    // background #FFFEF7FF → #fef7ffff, onBackground #FF1D1B20 → #1d1b20ff.
+    expect(tree?.root.tokens?.colors).toEqual({ bg: "#fef7ffff", fg: "#1d1b20ff" });
   });
 });
 

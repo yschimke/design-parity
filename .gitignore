@@ -6,3 +6,4 @@ coverage/
 .claude/
 .DS_Store
 *.log
+.compose-preview-history/
