@@ -536,6 +536,10 @@ export function composeThemeToTokens(
  * (which node read which token) is empty in v1, so this is the available signal
  * for "what code attribute is this element using". Returns names in a stable
  * order; ambiguous values (e.g. white = `onPrimary`/`onError`/…) yield several.
+ *
+ * TODO(compose-ai-tools#1847): switch to `compose/theme.consumers` (join by
+ * nodeId) for exact per-node attribution once the producer populates it, and
+ * drop this reverse-match heuristic.
  */
 function themeTokenNamesFor(
   cssValue: string,
