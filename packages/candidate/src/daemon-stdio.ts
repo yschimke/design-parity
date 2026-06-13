@@ -175,6 +175,12 @@ export interface StdioDaemonOptions {
   enableKinds?: string[];
   /** ms to await a `renderFinished` after `renderNow` (default 120000). */
   renderTimeoutMs?: number;
+  /**
+   * Transport seam for tests: when provided, {@link StdioDaemonClient.start}
+   * drives this {@link ByteTransport} instead of spawning a process, so the
+   * handshake is unit-testable over in-memory streams (no daemon).
+   */
+  transportFactory?: () => ByteTransport;
 }
 
 interface RenderState {
@@ -213,18 +219,22 @@ export class StdioDaemonClient implements DaemonDataClient {
   /** Spawn the daemon, handshake (`initialize` + `extensions/enable`). */
   async start(): Promise<void> {
     if (this.#started) return;
-    const proc = spawn(this.opts.command, this.opts.args ?? [], {
-      cwd: this.opts.cwd,
-      env: this.opts.env ?? process.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    }) as ChildProcessWithoutNullStreams;
-    this.#proc = proc;
-
-    const transport: ByteTransport = {
-      write: (frame) => proc.stdin.write(frame),
-      onData: (h) => proc.stdout.on("data", h),
-      onClose: (h) => proc.on("exit", h),
-    };
+    let transport: ByteTransport;
+    if (this.opts.transportFactory) {
+      transport = this.opts.transportFactory();
+    } else {
+      const proc = spawn(this.opts.command, this.opts.args ?? [], {
+        cwd: this.opts.cwd,
+        env: this.opts.env ?? process.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      }) as ChildProcessWithoutNullStreams;
+      this.#proc = proc;
+      transport = {
+        write: (frame) => proc.stdin.write(frame),
+        onData: (h) => proc.stdout.on("data", h),
+        onClose: (h) => proc.on("exit", h),
+      };
+    }
     const conn = new JsonRpcConnection(transport);
     this.#conn = conn;
 
@@ -239,10 +249,36 @@ export class StdioDaemonClient implements DaemonDataClient {
       moduleProjectDir: this.opts.moduleProjectDir,
       capabilities: { visibility: true, metrics: false },
     });
-    await conn
-      .request("extensions/enable", { ids: this.opts.enableKinds ?? DEFAULT_KINDS })
-      .catch(() => undefined); // best-effort: a daemon may auto-enable
+    // Mandatory handshake step (PROTOCOL.md §3): after processing the
+    // `initialize` response the client MUST send the `initialized` notification
+    // before issuing any further request — the daemon rejects `renderNow` /
+    // `extensions/enable` with NotInitialized until it arrives.
+    conn.notify("initialized");
+    // `extensions/enable` opts in by **extension id**, not data-product kind
+    // (PROTOCOL.md §3a): the `data/theme` extension produces the `compose/theme`
+    // kind, etc. We want kinds, so resolve them to their owning extension ids
+    // via `extensions/list` first — passing kinds directly silently enables
+    // nothing (they're reported as unknown) and every `data/fetch` comes back
+    // empty. Best-effort throughout: a daemon may auto-enable or omit a kind.
+    await this.#enableForKinds(conn, this.opts.enableKinds ?? DEFAULT_KINDS);
     this.#started = true;
+  }
+
+  /** Resolve the desired data-product kinds to extension ids, then enable them. */
+  async #enableForKinds(conn: JsonRpcConnection, kinds: string[]): Promise<void> {
+    const want = new Set(kinds);
+    try {
+      const list = (await conn.request("extensions/list")) as {
+        extensions?: Array<{ id?: string; dataProductKinds?: string[] }>;
+      };
+      const ids = (list.extensions ?? [])
+        .filter((e) => (e.dataProductKinds ?? []).some((k) => want.has(k)))
+        .map((e) => e.id)
+        .filter((id): id is string => typeof id === "string");
+      if (ids.length > 0) await conn.request("extensions/enable", { ids });
+    } catch {
+      // Daemon may predate extensions/list or auto-enable — degrade quietly.
+    }
   }
 
   #onRenderFinished(params: unknown): void {

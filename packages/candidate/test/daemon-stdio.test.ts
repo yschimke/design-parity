@@ -4,8 +4,11 @@ import {
   encodeFrame,
   FrameDecoder,
   JsonRpcConnection,
+  StdioDaemonClient,
   type ByteTransport,
 } from "../src/index.js";
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
 describe("LSP framing codec", () => {
   it("round-trips a message through encode → decode", () => {
@@ -103,5 +106,70 @@ describe("JsonRpcConnection", () => {
     const p = conn.request("initialize");
     f.serverClose();
     await expect(p).rejects.toThrow(/closed/);
+  });
+});
+
+describe("StdioDaemonClient handshake", () => {
+  type Frame = { method?: string; id?: number; params?: { ids?: string[] } };
+
+  function newClient(f: ReturnType<typeof fakeTransport>): StdioDaemonClient {
+    return new StdioDaemonClient({
+      command: "compose-preview",
+      workspaceRoot: "/repo",
+      moduleId: ":app",
+      moduleProjectDir: "/repo/app",
+      enableKinds: ["compose/theme", "a11y/atf"],
+      transportFactory: () => f.transport,
+    });
+  }
+
+  // Regression guard for #55, found driving a live daemon: two handshake bugs
+  // the fake-transport unit tests didn't model.
+  //
+  // 1. A live daemon rejects `renderNow` with NotInitialized unless the client
+  //    sends the `initialized` notification after the `initialize` response and
+  //    before any further request.
+  // 2. `extensions/enable` opts in by **extension id**, not data-product kind —
+  //    so the client must resolve its desired kinds to owning extension ids via
+  //    `extensions/list` first. Passing kinds directly enables nothing.
+  it("sends initialized, then enables extensions by id resolved from kinds", async () => {
+    const f = fakeTransport();
+    const client = newClient(f);
+
+    const started = client.start();
+    // initialize (id 1) is written synchronously — respond, then let each
+    // awaited request's continuation run before answering the next.
+    f.serverSend({ jsonrpc: "2.0", id: 1, result: { daemonVersion: "x" } });
+    await tick();
+    // extensions/list (id 2): data/theme owns compose/theme; a11y owns a11y/atf;
+    // render/trace owns a kind we didn't ask for and must be left alone.
+    f.serverSend({
+      jsonrpc: "2.0",
+      id: 2,
+      result: {
+        extensions: [
+          { id: "data/theme", dataProductKinds: ["compose/theme"] },
+          { id: "a11y", dataProductKinds: ["a11y/atf", "a11y/hierarchy"] },
+          { id: "render/trace", dataProductKinds: ["render/trace"] },
+        ],
+      },
+    });
+    await tick();
+    f.serverSend({ jsonrpc: "2.0", id: 3, result: { newlyEnabled: [] } }); // enable
+    await started;
+
+    const frames = f.sent as Frame[];
+    expect(frames.map((m) => m.method)).toEqual([
+      "initialize",
+      "initialized",
+      "extensions/list",
+      "extensions/enable",
+    ]);
+    // `initialized` is a notification — no id.
+    expect(frames.find((m) => m.method === "initialized")?.id).toBeUndefined();
+    // Enable is called with the owning extension *ids*, not the kinds, and only
+    // for the kinds we asked for (render/trace is excluded).
+    const enable = frames.find((m) => m.method === "extensions/enable");
+    expect(enable?.params?.ids).toEqual(["data/theme", "a11y"]);
   });
 });

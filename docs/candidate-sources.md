@@ -127,8 +127,27 @@ option). `@design-parity/checks` remains the path for sources with no native
 findings (static bundle, figma, stitch, claude-design).
 
 The mappers are pure and unit-tested against captured/mocked `data/fetch`
-payloads (no live daemon required). Driving a live daemon end-to-end is the
-remaining trial step.
+payloads (no live daemon required).
+
+**Live round-trip (validated, #55).** Driving a real standalone CMP-desktop
+daemon (`compose-preview bundle daemon <bundle>`) through `StdioDaemonClient`
+end-to-end surfaced — and fixed — two transport bugs the fake-transport tests
+couldn't model: (1) the client must send the `initialized` notification after
+the `initialize` response or the daemon rejects `renderNow` with
+`NotInitialized`; (2) `extensions/enable` opts in by **extension id**, not
+data-product kind, so the client resolves its desired kinds to owning extension
+ids via `extensions/list` first (passing kinds directly enables nothing). With
+both fixed, `initialize → renderNow → renderFinished → data/fetch` completes:
+the desktop daemon returns the rendered PNG and the `compose/theme` product (a
+captured payload is checked in at
+`packages/candidate/test/fixtures/daemon/compose-theme.json`).
+
+The **desktop** daemon does not yet produce `compose/semantics`, `text/strings`,
+or the a11y findings (`compose/semantics` / `text/strings` are registry-only and
+a11y is Android-producer-only — see compose-ai-tools
+`docs/daemon/DATA-PRODUCTS.md`), so validating the deeper `SemanticTree`
+(nesting + colours) and native `Finding[]` against a live daemon still requires
+the **Android** daemon backend.
 
 ## Wiring into the Action / CLI
 
