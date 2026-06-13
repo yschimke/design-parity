@@ -39,7 +39,10 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   `design-map.json` components whose file changed (a PR that touches none is
   treated as non-UI and skipped), run the pipeline, and **post/update a single
   verdict comment** (idempotent via the report marker). Exits non-zero only when
-  the direction blocks (`design-led` + a failure).
+  the direction blocks (`design-led` + a failure). If the repo has **no
+  committed `design-map.json`** (parity isn't set up), it posts a one-time
+  notice pointing at the interactive bootstrap (`design-parity-bootstrap`, #11)
+  rather than guessing the design ↔ code mapping at run time — and never blocks.
 - **baseline** — a `push` to the **`development_branch`** (default `main`):
   render the **full** mapped surface, run the pipeline, and **publish the
   browsable artifacts** — a top-level `index.html`, each component's
