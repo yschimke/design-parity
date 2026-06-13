@@ -54,6 +54,18 @@ export type {
   I18nVisibleString,
 } from "./daemon.js";
 
+// Production stdio JSON-RPC transport for the daemon source (#43).
+export {
+  StdioDaemonClient,
+  JsonRpcConnection,
+  FrameDecoder,
+  encodeFrame,
+} from "./daemon-stdio.js";
+export type {
+  StdioDaemonOptions,
+  ByteTransport,
+} from "./daemon-stdio.js";
+
 // Static preview-bundle reader (Phase 1 of #38).
 export {
   readPreviewBundle,
