@@ -34,6 +34,19 @@ export interface VisualResult {
   totalPixels: number;
   /** Side-by-side reference | candidate | diff PNG. */
   triptych: Buffer;
+  /**
+   * The standalone diff heatmap PNG (just the pixelmatch panel), for consumers
+   * that lay out their own reference/candidate columns — e.g. the HTML report
+   * (#50). Absent when there was no aligned region to diff (a beyond-tolerance
+   * dimension mismatch).
+   */
+  diffPng?: Buffer;
+  /**
+   * True when reference and candidate had different dimensions but within
+   * {@link DiffConfig.visualDimTolerancePx}, so they were diffed over their
+   * top-left overlap rather than scored a total mismatch (#47).
+   */
+  dimensionMismatch?: boolean;
 }
 
 /** Human-readable key (raw size) — also the {@link Verdict.visualScores} key. */
@@ -101,26 +114,70 @@ export async function diffImagePair(
   const cand = await readRaster(repoRoot, candidate.uri);
   const key = imageKey(reference);
 
-  const sameSize = ref.width === cand.width && ref.height === cand.height;
+  const dw = Math.abs(ref.width - cand.width);
+  const dh = Math.abs(ref.height - cand.height);
+  const sameSize = dw === 0 && dh === 0;
+  // A sub-tolerance dimension delta (e.g. density rounding between two render
+  // tools) is diffed over the shared top-left overlap rather than written off as
+  // a total mismatch, so the real content drift isn't masked (#47).
+  const aligned =
+    !sameSize &&
+    dw <= config.visualDimTolerancePx &&
+    dh <= config.visualDimTolerancePx;
+
+  // Score against the union box so the non-overlapping border (counted as
+  // differing below) can't push the ratio past 1; for equal sizes this is just
+  // the shared area.
+  const totalPixels = Math.max(ref.width, cand.width) * Math.max(ref.height, cand.height);
   let diffPixels: number;
   let diff: Raster | null = null;
+  let diffPng: Buffer | undefined;
 
-  if (sameSize) {
-    const out = new PNG({ width: ref.width, height: ref.height });
-    diffPixels = pixelmatch(ref.data, cand.data, out.data, ref.width, ref.height, {
-      threshold: config.pixelThreshold,
-    });
-    diff = { width: ref.width, height: ref.height, data: out.data };
+  if (sameSize || aligned) {
+    const ow = Math.min(ref.width, cand.width);
+    const oh = Math.min(ref.height, cand.height);
+    const out = new PNG({ width: ow, height: oh });
+    const overlapDiff = pixelmatch(
+      cropTopLeft(ref, ow, oh),
+      cropTopLeft(cand, ow, oh),
+      out.data,
+      ow,
+      oh,
+      { threshold: config.pixelThreshold },
+    );
+    diff = { width: ow, height: oh, data: out.data };
+    diffPng = PNG.sync.write(out);
+    // Differing overlap pixels + the border only one image covers.
+    diffPixels = overlapDiff + (totalPixels - ow * oh);
   } else {
-    // Dimension drift is a total mismatch; there's no aligned diff to render.
-    diffPixels = Math.max(ref.width * ref.height, cand.width * cand.height);
+    // Dimension drift beyond tolerance is a genuine total mismatch; there's no
+    // meaningful aligned region to render.
+    diffPixels = totalPixels;
   }
 
-  const totalPixels = ref.width * ref.height;
   const score = totalPixels === 0 ? 0 : diffPixels / totalPixels;
   const triptych = composeTriptych([ref, cand, diff]);
 
-  return { key, score, diffPixels, totalPixels, triptych };
+  const result: VisualResult = { key, score, diffPixels, totalPixels, triptych };
+  if (diffPng) result.diffPng = diffPng;
+  if (aligned) result.dimensionMismatch = true;
+  return result;
+}
+
+/**
+ * Copy the top-left `w×h` region of a raster into a fresh, tightly-packed RGBA
+ * buffer (pixelmatch needs both inputs at one common stride). A no-op when the
+ * region already spans the whole raster.
+ */
+function cropTopLeft(src: Raster, w: number, h: number): Buffer {
+  if (src.width === w && src.height === h) return src.data;
+  const out = Buffer.alloc(w * h * 4);
+  const rowBytes = w * 4;
+  for (let y = 0; y < h; y++) {
+    const srcStart = y * src.width * 4;
+    src.data.copy(out, y * rowBytes, srcStart, srcStart + rowBytes);
+  }
+  return out;
 }
 
 /** Lay panels out left-to-right on a gap-coloured strip, top-aligned. */

@@ -134,6 +134,12 @@ design-parity run --components ui/Button.kt#PrimaryButton \
 When both `--candidates` (JSON) and `--candidate-bundles` are given, bundles are
 tried first and the JSON is the fallback override.
 
+With `--out <dir>`, each component writes into its **own subdir**
+(`<out>/<sanitised-component-id>/`) so multiple components never overwrite each
+other's artifacts (#49): the triptych PNGs land there alongside a self-contained
+`report.html` — the reference | candidate | diff comparison page, with each
+pair's pixelmatch heatmap inlined (#50). The run prints the page paths.
+
 ### Reconciling preview ids with code handles (#44)
 
 A bundle/daemon candidate is identified by a compose-ai-tools **preview id**

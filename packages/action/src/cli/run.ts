@@ -105,6 +105,19 @@ async function main(): Promise<number> {
   );
 
   stdout.write(renderReport(report) + "\n");
+
+  // Point at the self-contained HTML comparison pages, when written (#50).
+  const pages = report.results
+    .map((r) => r.reportPath)
+    .filter((p): p is string => p !== undefined);
+  if (pages.length > 0) {
+    stdout.write(
+      `\nWrote ${pages.length} comparison page(s):\n` +
+        pages.map((p) => `  ${p}`).join("\n") +
+        "\n",
+    );
+  }
+
   return report.blocked ? 1 : 0;
 }
 

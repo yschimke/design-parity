@@ -19,6 +19,9 @@ import type {
   Verdict,
   VerdictStatus,
 } from "@design-parity/core";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import {
   diff,
   type ChecksProvider,
@@ -26,6 +29,7 @@ import {
   type Triptych,
 } from "@design-parity/diff";
 import { directionPolicy } from "@design-parity/policy";
+import { renderHtmlReport, type DiffImage } from "@design-parity/report-html";
 
 import type { AdapterRegistry } from "./registry.js";
 
@@ -66,6 +70,11 @@ function nativeChecksProvider(findings: Finding[]): ChecksProvider {
   return { run: () => findings };
 }
 
+/** A filesystem-safe slug for a component id (`ui/Tile.kt#LightOn_Dark` → `ui-Tile-kt-LightOn_Dark`). */
+function sanitizeId(code: string): string {
+  return code.replace(/[^a-z0-9_]+/gi, "-").replace(/^-+|-+$/g, "");
+}
+
 export type ComponentStatus = "ok" | "skipped" | "error";
 
 export interface ComponentResult {
@@ -76,6 +85,8 @@ export interface ComponentResult {
   verdict?: Verdict;
   summary?: string;
   triptychs?: Triptych[];
+  /** Path to the self-contained HTML comparison page, when `outDir` was set (#50). */
+  reportPath?: string;
   /** Reason for `skipped` (no candidate) or `error` (adapter/diff failure). */
   note?: string;
 }
@@ -134,12 +145,18 @@ export async function orchestrate(
         continue;
       }
 
+      // Each component writes into its own subdir so triptychs (keyed only by
+      // image variant) and the HTML page don't collide across components (#49).
+      const componentOutDir = options.outDir
+        ? join(options.outDir, sanitizeId(corr.code))
+        : undefined;
+
       // Renderer-native findings (daemon path) supersede the default checks
       // for this component (issue #43); the parity diff itself is unchanged.
       const native = await options.nativeChecks?.(corr.code, ctx);
       const diffOptions = {
         repoRoot: options.repoRoot,
-        ...(options.outDir ? { outDir: options.outDir } : {}),
+        ...(componentOutDir ? { outDir: componentOutDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
         ...(native ? { checks: nativeChecksProvider(native) } : {}),
       };
@@ -151,6 +168,26 @@ export async function orchestrate(
       result.verdict = verdict;
       result.summary = summary;
       result.triptychs = triptychs;
+
+      // Emit the self-contained HTML comparison page alongside the triptychs,
+      // inlining each pair's diff heatmap when the engine produced one (#50).
+      if (componentOutDir) {
+        const diffImages: DiffImage[] = triptychs
+          .filter((t): t is Triptych & { diff: Buffer } => t.diff !== undefined)
+          .map((t) => ({ key: t.key, png: t.diff }));
+        const html = renderHtmlReport({
+          reference,
+          candidate,
+          verdict,
+          repoRoot: options.repoRoot,
+          ...(diffImages.length > 0 ? { diffImages } : {}),
+        });
+        const reportPath = join(componentOutDir, "report.html");
+        await mkdir(componentOutDir, { recursive: true });
+        await writeFile(reportPath, html);
+        result.reportPath = reportPath;
+      }
+
       status = worst(status, verdict.status);
     } catch (err) {
       // Fail soft: surface, never throw, never escalate overall status.

@@ -24,6 +24,7 @@
     "@design-parity/resolver": "*",
     "@design-parity/policy": "*",
     "@design-parity/diff": "*",
+    "@design-parity/report-html": "*",
     "@design-parity/checks": "*",
     "@design-parity/candidate": "*",
     "@design-parity/adapter-figma": "*",

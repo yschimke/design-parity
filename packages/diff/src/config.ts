@@ -28,6 +28,15 @@ export interface DiffConfig {
    * it never escalates past `warn`.
    */
   visualWarnRatio: number;
+  /**
+   * Max per-axis dimension delta (px) between reference and candidate that is
+   * still diffed as an aligned overlap rather than scored a 100% mismatch. Two
+   * render tools rounding density differently (e.g. Robolectric 2.625 vs a
+   * `deviceScaleFactor=2` capture) can differ by a pixel or two without any real
+   * visual drift; tolerating that keeps the heatmap informative (#47). A delta
+   * beyond this on either axis is a genuine total mismatch.
+   */
+  visualDimTolerancePx: number;
 }
 
 /** The committed defaults: exact-match tokens, sensitive visual diff. */
@@ -36,6 +45,7 @@ export const defaultDiffConfig: DiffConfig = {
   radiusTolerance: 0,
   pixelThreshold: 0.05,
   visualWarnRatio: 0,
+  visualDimTolerancePx: 8,
 };
 
 /** Merge a partial override over the committed defaults. */
