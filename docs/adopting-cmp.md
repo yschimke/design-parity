@@ -106,8 +106,10 @@ a failure; `code-led` is advisory).
 
 ## Step 4 — Run it
 
+No design-parity checkout needed — the CLI runs straight from npm:
+
 ```sh
-design-parity run \
+npx design-parity run \
   --repo . \
   --components "ui/Home.kt#HomeScreen" \
   --candidate-bundles build/compose-previews/ \

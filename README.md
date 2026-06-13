@@ -55,6 +55,7 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 | [`@design-parity/policy`](./packages/policy) | ✅ issue #12 | Committed `.design-parity.json` (schema, loader, validator CLI) + the deterministic `auto` → `design-led`/`code-led` direction resolver. |
 | [`@design-parity/action`](./packages/action) | 🚧 #8 · #9 | Orchestrator + CLI landed (registry → resolve → diff → policy → report); GitHub Action surface next. Includes optional Code-to-Canvas push-back (#9): gated on an opt-in flag + `code-led` + a `figma` source, writing the candidate render back via an injectable `CanvasWriter` (`@design-parity/adapter-figma`'s `FigmaCanvasWriter`). |
 | [`@design-parity/report-html`](./packages/report-html) | ✅ #31 | Per-run self-contained HTML comparison page: reference \| candidate \| diff side by side with the verdict findings, inlined to one offline `.html` (data-URI PNGs + inline CSS/JS, no external assets). Deterministic; leaf consumer. |
+| [`design-parity`](./packages/cli) | ✅ #61 | Top-level CLI package (unscoped) — owns the `design-parity` bin so `npx design-parity run …` works with no checkout. A thin launcher over `@design-parity/action` that also re-exports its programmatic API. |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so
 every package can be built and tested against stubs with no live source or
@@ -67,6 +68,26 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
 - [Candidate sources](./docs/candidate-sources.md) — the four candidate-render
   backends (static bundle, CLI, local-compose-web, daemon) and how they wire in.
 - [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
+
+## Use
+
+Run a parity check with no checkout — the `design-parity` CLI installs straight
+from npm, pairing with the already-published
+[`compose-preview`](https://github.com/yschimke/compose-ai-tools) CLI and Gradle
+plugin:
+
+```sh
+npx design-parity run \
+  --components "ui/Home.kt#HomeScreen" \
+  --candidate-bundles build/compose-previews/ \
+  --out .design-parity/out
+```
+
+You get the markdown verdict on stdout plus a self-contained `report.html` per
+component under `--out`. See the
+[CMP adoption guide](./docs/adopting-cmp.md) for the full pipeline, and
+[`packages/cli`](./packages/cli) for the package. For CI, consume the GitHub
+Action (`@design-parity/action`).
 
 ## Develop
 
