@@ -64,6 +64,12 @@ export interface Triptych {
   png: Buffer;
   /** Absolute path, present only when {@link DiffOptions.outDir} was set. */
   path?: string;
+  /**
+   * The standalone diff heatmap PNG for this pair (the pixelmatch panel only),
+   * so a consumer laying out its own columns can inline it — e.g. the HTML
+   * report (#50). Absent when there was no aligned region to diff.
+   */
+  diff?: Buffer;
 }
 
 export interface DiffResult {
@@ -222,6 +228,7 @@ async function emitTriptychs(
   for (const v of visuals) {
     const safeKey = v.key.replace(/[^a-z0-9]+/gi, "-");
     const triptych: Triptych = { key: v.key, png: v.triptych };
+    if (v.diffPng) triptych.diff = v.diffPng;
     if (outDir) {
       const path = join(outDir, `triptych-${safeKey}.png`);
       await writeFile(path, v.triptych);

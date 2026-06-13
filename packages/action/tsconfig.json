@@ -10,6 +10,7 @@
     { "path": "../resolver" },
     { "path": "../policy" },
     { "path": "../diff" },
+    { "path": "../report-html" },
     { "path": "../checks" },
     { "path": "../candidate" },
     { "path": "../adapters/figma" },
