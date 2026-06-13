@@ -35,6 +35,13 @@ export interface VisualResult {
   /** Side-by-side reference | candidate | diff PNG. */
   triptych: Buffer;
   /**
+   * The standalone diff heatmap PNG (just the pixelmatch panel), for consumers
+   * that lay out their own reference/candidate columns — e.g. the HTML report
+   * (#50). Absent when there was no aligned region to diff (a beyond-tolerance
+   * dimension mismatch).
+   */
+  diffPng?: Buffer;
+  /**
    * True when reference and candidate had different dimensions but within
    * {@link DiffConfig.visualDimTolerancePx}, so they were diffed over their
    * top-left overlap rather than scored a total mismatch (#47).
@@ -124,6 +131,7 @@ export async function diffImagePair(
   const totalPixels = Math.max(ref.width, cand.width) * Math.max(ref.height, cand.height);
   let diffPixels: number;
   let diff: Raster | null = null;
+  let diffPng: Buffer | undefined;
 
   if (sameSize || aligned) {
     const ow = Math.min(ref.width, cand.width);
@@ -138,6 +146,7 @@ export async function diffImagePair(
       { threshold: config.pixelThreshold },
     );
     diff = { width: ow, height: oh, data: out.data };
+    diffPng = PNG.sync.write(out);
     // Differing overlap pixels + the border only one image covers.
     diffPixels = overlapDiff + (totalPixels - ow * oh);
   } else {
@@ -150,6 +159,7 @@ export async function diffImagePair(
   const triptych = composeTriptych([ref, cand, diff]);
 
   const result: VisualResult = { key, score, diffPixels, totalPixels, triptych };
+  if (diffPng) result.diffPng = diffPng;
   if (aligned) result.dimensionMismatch = true;
   return result;
 }

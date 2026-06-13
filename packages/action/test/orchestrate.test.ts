@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import { readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 import type {
   CandidateRender,
@@ -121,6 +122,85 @@ describe("orchestrate (golden figma button vs candidate)", () => {
       direction: "code-led",
     });
     expect(report.results[0]!.status).toBe("skipped");
+  });
+});
+
+describe("run output artifacts (#49, #50)", () => {
+  it("writes each component's triptychs + HTML page into its own subdir", async () => {
+    const { reference, candidate } = await load();
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      const corrA = { ...corr, code: "ui/Tile.kt#LightOn" };
+      const corrB = { ...corr, code: "ui/Tile.kt#LightOn_Dark" };
+      const report = await orchestrate({
+        repoRoot,
+        registry: reg(adapterReturning(reference)),
+        correspondences: [corrA, corrB],
+        candidate: () => candidate,
+        direction: "code-led",
+        outDir,
+      });
+
+      const [rA, rB] = report.results;
+      // Each component got its own HTML page under its own sanitised subdir (#50).
+      expect(rA!.reportPath).toBe(
+        join(outDir, "ui-Tile-kt-LightOn", "report.html"),
+      );
+      expect(rB!.reportPath).toBe(
+        join(outDir, "ui-Tile-kt-LightOn_Dark", "report.html"),
+      );
+
+      // The page is self-contained HTML and names the component.
+      const htmlA = await readFile(rA!.reportPath!, "utf8");
+      expect(htmlA).toContain("<!doctype html>");
+
+      // Triptychs land under the per-component subdir — siblings never collide,
+      // the bug #49 reported (all four tiles were default/compact).
+      const pathsA = (rA!.triptychs ?? []).map((t) => t.path);
+      const pathsB = (rB!.triptychs ?? []).map((t) => t.path);
+      expect(pathsA.length).toBeGreaterThan(0);
+      for (const p of pathsA) {
+        expect(p).toContain(join(outDir, "ui-Tile-kt-LightOn"));
+        expect(pathsB).not.toContain(p);
+      }
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("inlines the pixelmatch heatmap into the page (#47 → #50)", async () => {
+    const { reference, candidate } = await load();
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      const report = await orchestrate({
+        repoRoot,
+        registry: reg(adapterReturning(reference)),
+        correspondences: [corr],
+        candidate: () => candidate,
+        direction: "code-led",
+        outDir,
+      });
+      const r0 = report.results[0]!;
+      // The diff engine exposed a standalone heatmap for the (same-size) pair…
+      expect((r0.triptychs ?? []).some((t) => t.diff !== undefined)).toBe(true);
+      // …and it was inlined as the page's Diff panel.
+      const html = await readFile(r0.reportPath!, "utf8");
+      expect(html).toContain('data-role="diff" src="data:image/png;base64,');
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes no HTML page when no outDir is configured", async () => {
+    const { reference, candidate } = await load();
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(adapterReturning(reference)),
+      correspondences: [corr],
+      candidate: () => candidate,
+      direction: "code-led",
+    });
+    expect(report.results[0]!.reportPath).toBeUndefined();
   });
 });
 
