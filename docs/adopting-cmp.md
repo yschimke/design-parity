@@ -127,6 +127,43 @@ Run the GitHub Action (`@design-parity/action`) so PRs render previews and get a
 verdict comment: `design-led` blocks on parity failures, `code-led` stays
 advisory.
 
+## First-run playbook
+
+Sequencing that keeps the first adoption tractable:
+
+1. **Prove one screen end to end first.** Pick a single *shared, static* screen
+   (no Bluetooth / permission / connection state) and drive it all the way to a
+   `report.html` before mapping the rest. The pipeline spans three repos — get one
+   green verdict before scaling.
+2. **Only the preview surface needs to be CMP.** Don't make the whole app
+   multiplatform. Lift the pure composable + a preview into `commonMain` /
+   `desktopMain`; if a screen genuinely needs Android APIs, leave it on the Android
+   render path rather than fighting it.
+3. **Inject deterministic fake state into previews.** Live data (nodes, messages,
+   connection state) breaks determinism (Principle 1). Use preview-parameter
+   providers with sample state — never real transport, clock, or network.
+4. **Verify the renderer side in isolation first.** Before blaming a bad verdict on
+   design-parity: render one preview to PNG with the `compose-preview` skill and
+   confirm the **bundle carries the semantics blob with resolved fg/bg colours**.
+   Missing colours silently degrade contrast/a11y to visual-only — and that's a
+   compose-ai-tools fix, not design-parity. The blob is where the high-value
+   findings live (Principle 2).
+5. **Remove pairing as a variable, then add it back.** The most common day-one
+   failure is candidate/reference not pairing (no theme from a `CompositionLocal`,
+   or a size mismatch). Start with **one variant** — single theme, default state,
+   theme hint set — get it pairing, *then* add dark/other variants. Don't debug
+   content drift and pairing at the same time.
+6. **Start `code-led` (advisory), flip to `design-led` later.** A blocking check on
+   day one kills trust before thresholds are calibrated. Run advisory, eyeball the
+   `report.html` (not just the markdown verdict), tune `pixelThreshold` /
+   `visualDimTolerancePx`, then gate.
+7. **File friction back as issues, scoped per repo.** A CMP subject surfaces gaps
+   an Android trial won't — likely CMP render-path detection (#30), the
+   `localComposeWeb` stub, and desktop-vs-design DPI. One fix = one PR; be
+   deliberate about whether it belongs in design-parity, compose-ai-tools, or the app.
+8. **Defer other form factors.** If there are Wear/other surfaces, they're a
+   different size class and render path — out of scope until the phone screens are proven.
+
 ## Gotchas (all handled — just know them)
 
 - **DPI / density:** the Desktop render resolution won't exactly match the design
