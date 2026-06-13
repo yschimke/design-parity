@@ -15,6 +15,8 @@ import {
   orchestrate,
   createAdapterRegistry,
   renderReport,
+  renderBootstrapNotice,
+  REPORT_MARKER,
   type AdapterRegistry,
 } from "../src/index.js";
 
@@ -261,5 +263,21 @@ describe("renderReport", () => {
     expect(md).toContain("design-parity-report");
     expect(md).toContain("blocking");
     expect(md).toContain("ui/Button.kt#PrimaryButton");
+  });
+});
+
+describe("renderBootstrapNotice", () => {
+  it("carries the report marker so it updates in place / is replaced by a verdict", () => {
+    const md = renderBootstrapNotice();
+    expect(md).toContain(REPORT_MARKER);
+  });
+
+  it("points at the interactive bootstrap and never blocks", () => {
+    const md = renderBootstrapNotice();
+    expect(md).toContain("design-parity-bootstrap");
+    expect(md).toContain("#11");
+    expect(md).toContain("no PR is blocked");
+    // It is a setup pointer, not a verdict — never claims a parity failure.
+    expect(md).not.toContain("blocking");
   });
 });

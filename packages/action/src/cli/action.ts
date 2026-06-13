@@ -33,7 +33,7 @@ import { pushBack } from "../pushback.js";
 import { resolveRunConfig } from "../config.js";
 import { createAdapterRegistry } from "../registry.js";
 import { orchestrate } from "../orchestrate.js";
-import { renderReport } from "../report.js";
+import { renderReport, renderBootstrapNotice } from "../report.js";
 import { GitHubRest } from "../github/rest.js";
 import { postReport } from "../github/surface.js";
 import { componentsForChangedFiles } from "../github/changed-components.js";
@@ -111,6 +111,20 @@ async function runComment(
   prNumber: number,
 ): Promise<number> {
   const { designMap, direction, warnings } = await resolveRunConfig(repoRoot);
+
+  // No committed setup at all: don't guess the design ↔ code mapping at run time
+  // (Principle 1). Post a comment pointing at the interactive bootstrap (#11)
+  // instead of silently skipping, so the repo owner knows parity isn't wired up.
+  if (!designMap || designMap.components.length === 0) {
+    const outcome = await postReport(
+      rest.commentClient(ref, prNumber),
+      renderBootstrapNotice(),
+    );
+    stdout.write(
+      `design-parity: ${outcome} bootstrap notice — no committed design-map.json (run design-parity-bootstrap)\n`,
+    );
+    return 0;
+  }
 
   const changedFiles = await rest.listPullRequestFiles(ref, prNumber);
   const components = componentsForChangedFiles(designMap, changedFiles);
