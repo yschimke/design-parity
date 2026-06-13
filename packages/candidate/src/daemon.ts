@@ -80,6 +80,47 @@ export interface HierarchyPayload {
   nodes?: HierarchyNode[];
 }
 
+/**
+ * `compose/semantics` — the SemanticsNode projection (schemaVersion 2). Unlike
+ * the flat `a11y/hierarchy` list this is a **real tree** (`root` + per-node
+ * `children`), and each node carries the text style's resolved fg/bg colours
+ * (`layout*Color`, as `#AARRGGBB`) and font size, so the {@link SemanticTree}
+ * built from it supports tree-side contrast. `ref` is a stable match key (not a
+ * parent pointer) — the nesting is structural, so no reassembly is needed.
+ */
+export interface ComposeSemanticsNode {
+  ref?: string;
+  /** `"left,top,right,bottom"` in PNG pixels (same shape as boundsInScreen). */
+  boundsInRoot?: string;
+  label?: string;
+  text?: string;
+  layoutText?: string;
+  /** e.g. `"22.0sp"` — the resolved text size, sp. */
+  layoutFontSize?: string;
+  /** Text foreground, `#AARRGGBB` (ARGB, alpha-first). */
+  layoutForegroundColor?: string;
+  /** Text background, `#AARRGGBB`; usually unset (the surface supplies it). */
+  layoutBackgroundColor?: string;
+  role?: string | null;
+  testTag?: string;
+  children?: ComposeSemanticsNode[];
+}
+export interface ComposeSemanticsPayload {
+  root?: ComposeSemanticsNode;
+}
+
+/**
+ * `compose/theme` — resolved `MaterialTheme.*` values. We consume only the
+ * colour scheme (`#AARRGGBB` keyed by Material role) to seed a root-level
+ * fg/bg so text nodes that don't carry their own background still resolve one
+ * for contrast.
+ */
+export interface ComposeThemePayload {
+  resolvedTokens?: {
+    colorScheme?: Record<string, string>;
+  };
+}
+
 /** `text/strings` — drawn-text entries with overflow/truncation flags. */
 export interface TextStringEntry {
   text?: string;
@@ -122,6 +163,34 @@ export function parseScreenBounds(spec: string | undefined): Bounds | undefined 
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return undefined;
   const [left, top, right, bottom] = parts as [number, number, number, number];
   return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Convert a Compose/Android `#AARRGGBB` colour (ARGB, alpha-first — what
+ * `Color.toArgb()` formats) into the CSS `#RRGGBBAA` (alpha-last) that
+ * `@design-parity/checks` `parseColor` reads. A 6-digit `#RRGGBB` (no alpha)
+ * passes through. Returns `undefined` for anything that isn't a hex colour so
+ * callers drop it rather than emit a token the contrast check can't parse.
+ */
+export function argbToCssHex(spec: string | undefined): string | undefined {
+  if (!spec) return undefined;
+  const hex = spec.startsWith("#") ? spec.slice(1) : spec;
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) return `#${hex.toLowerCase()}`;
+  if (/^[0-9a-fA-F]{8}$/.test(hex)) {
+    const aa = hex.slice(0, 2);
+    const rgb = hex.slice(2, 8);
+    return `#${rgb}${aa}`.toLowerCase();
+  }
+  return undefined;
+}
+
+/** Parse a `"22.0sp"` / `"22sp"` text size into its leading number (sp). */
+export function parseFontSizeSp(spec: string | undefined): number | undefined {
+  if (!spec) return undefined;
+  const m = /^-?\d+(?:\.\d+)?/.exec(spec.trim());
+  if (!m) return undefined;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /** Map an ATF `level` to a finding {@link Severity}. */
@@ -310,6 +379,103 @@ export function hierarchyToSemanticTree(
 }
 
 // ---------------------------------------------------------------------------
+// compose/semantics (+ compose/theme) → deeper SemanticTree.
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize a Compose `Role` name (`"Button"`, `"RadioButton"`, …) into the
+ * lowercase vocabulary `@design-parity/checks` matches on (`"button"`,
+ * `"radio"`, …). Plain text and containers carry no role and stay unset.
+ */
+function normalizeSemanticsRole(
+  role: string | null | undefined,
+): string | undefined {
+  if (!role) return undefined;
+  const lower = role.toLowerCase();
+  return lower === "radiobutton" ? "radio" : lower;
+}
+
+/** Map one `compose/semantics` node (recursively) to a {@link SemanticNode}. */
+function semanticsNode(node: ComposeSemanticsNode): SemanticNode {
+  const out: SemanticNode = {};
+  const role = normalizeSemanticsRole(node.role);
+  if (role) out.role = role;
+  const label = node.label ?? node.text ?? node.layoutText;
+  if (label !== undefined) out.label = label;
+  const bounds = parseScreenBounds(node.boundsInRoot);
+  if (bounds) out.bounds = bounds;
+
+  const colors: Record<string, string> = {};
+  const fg = argbToCssHex(node.layoutForegroundColor);
+  if (fg) colors["fg"] = fg;
+  const bg = argbToCssHex(node.layoutBackgroundColor);
+  if (bg) colors["bg"] = bg;
+  const fontSize = parseFontSizeSp(node.layoutFontSize);
+  if (Object.keys(colors).length || fontSize !== undefined) {
+    out.tokens = {};
+    if (Object.keys(colors).length) out.tokens.colors = colors;
+    if (fontSize !== undefined) out.tokens.typography = { text: { fontSize } };
+  }
+
+  const children = (node.children ?? []).map(semanticsNode);
+  if (children.length) out.children = children;
+  return out;
+}
+
+/** Seed a root-level fg/bg from the theme colour scheme (none if unresolved). */
+function themeRootColors(
+  themeColors: ComposeThemePayload | undefined,
+): Record<string, string> | undefined {
+  const scheme = themeColors?.resolvedTokens?.colorScheme;
+  if (!scheme) return undefined;
+  const bg = argbToCssHex(scheme["background"] ?? scheme["surface"]);
+  const fg = argbToCssHex(scheme["onBackground"] ?? scheme["onSurface"]);
+  const out: Record<string, string> = {};
+  if (bg) out["bg"] = bg;
+  if (fg) out["fg"] = fg;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Build a {@link SemanticTree} from the **nested** `compose/semantics` tree,
+ * with per-node fg/bg colours + font size resolved so colour-based contrast can
+ * run from the tree (issue #55) — deeper than the flat `a11y/hierarchy` path,
+ * which hangs every node off a synthetic root and leaves contrast to native
+ * `a11y/atf`.
+ *
+ * `compose/semantics` already carries real structure (`root` + `children`) and
+ * each text node's resolved style colours (`layout*Color`, `#AARRGGBB`), so the
+ * mapper just walks the tree and converts the colour format. When a
+ * `compose/theme` colour scheme is supplied, the root is seeded with the
+ * surface/background (and its on-colour) so text nodes that don't carry their
+ * own background still resolve one — `resolveColorUp` walks to the root. A
+ * node's own colours always win over the seeded root (nearest-first).
+ *
+ * Returns `undefined` when the payload has no `root`, so the daemon source can
+ * fall back to {@link hierarchyToSemanticTree}.
+ */
+export function semanticsToSemanticTree(
+  payload: ComposeSemanticsPayload | undefined,
+  theme?: Theme,
+  themeColors?: ComposeThemePayload,
+): SemanticTree | undefined {
+  if (!payload?.root) return undefined;
+  const root = semanticsNode(payload.root);
+
+  const seed = themeRootColors(themeColors);
+  if (seed) {
+    const existing = root.tokens?.colors ?? {};
+    // The root's own colours (rare) win; the theme only fills gaps.
+    const merged = { ...seed, ...existing };
+    root.tokens = { ...root.tokens, colors: merged };
+  }
+
+  const tree: SemanticTree = { root };
+  if (theme) tree.theme = theme;
+  return tree;
+}
+
+// ---------------------------------------------------------------------------
 // Transport seam + daemon source.
 // ---------------------------------------------------------------------------
 
@@ -394,20 +560,31 @@ export function daemonSource(options: DaemonSourceOptions): DaemonCandidateSourc
     }
 
     const theme = options.themeFor?.(componentId);
-    const [atf, touchTargets, textStrings, translations, hierarchy] =
-      (await Promise.all([
-        options.client.fetch(previewId, "a11y/atf"),
-        options.client.fetch(previewId, "a11y/touchTargets"),
-        options.client.fetch(previewId, "text/strings"),
-        options.client.fetch(previewId, "i18n/translations"),
-        options.client.fetch(previewId, "a11y/hierarchy"),
-      ])) as [
-        AtfPayload | undefined,
-        TouchTargetsPayload | undefined,
-        TextStringsPayload | undefined,
-        I18nTranslationsPayload | undefined,
-        HierarchyPayload | undefined,
-      ];
+    const [
+      atf,
+      touchTargets,
+      textStrings,
+      translations,
+      hierarchy,
+      composeSemantics,
+      composeTheme,
+    ] = (await Promise.all([
+      options.client.fetch(previewId, "a11y/atf"),
+      options.client.fetch(previewId, "a11y/touchTargets"),
+      options.client.fetch(previewId, "text/strings"),
+      options.client.fetch(previewId, "i18n/translations"),
+      options.client.fetch(previewId, "a11y/hierarchy"),
+      options.client.fetch(previewId, "compose/semantics"),
+      options.client.fetch(previewId, "compose/theme"),
+    ])) as [
+      AtfPayload | undefined,
+      TouchTargetsPayload | undefined,
+      TextStringsPayload | undefined,
+      I18nTranslationsPayload | undefined,
+      HierarchyPayload | undefined,
+      ComposeSemanticsPayload | undefined,
+      ComposeThemePayload | undefined,
+    ];
 
     const img: Image = {
       state: "default",
@@ -417,11 +594,18 @@ export function daemonSource(options: DaemonSourceOptions): DaemonCandidateSourc
     };
     if (theme) img.theme = theme;
 
+    // Prefer the nested compose/semantics tree (real structure + resolved
+    // colours for tree-side contrast, #55); fall back to the flat
+    // a11y/hierarchy when the richer product isn't available.
+    const semantics =
+      semanticsToSemanticTree(composeSemantics, theme, composeTheme) ??
+      hierarchyToSemanticTree(hierarchy, theme);
+
     const candidate: CandidateRender = {
       componentId,
       previewId,
       images: [img],
-      semantics: hierarchyToSemanticTree(hierarchy, theme),
+      semantics,
     };
 
     const result: DaemonCandidate = {

@@ -9,6 +9,9 @@ import {
   translationFindings,
   nativeFindings,
   hierarchyToSemanticTree,
+  semanticsToSemanticTree,
+  argbToCssHex,
+  parseFontSizeSp,
   parseScreenBounds,
   daemonSource,
   type DaemonDataClient,
@@ -124,6 +127,105 @@ describe("native data-product mappers", () => {
   });
 });
 
+describe("compose/semantics → deeper SemanticTree (#55)", () => {
+  it("argbToCssHex flips ARGB (#AARRGGBB) to CSS RGBA (#RRGGBBAA)", () => {
+    expect(argbToCssHex("#FF1A73E8")).toBe("#1a73e8ff");
+    expect(argbToCssHex("#801A73E8")).toBe("#1a73e880"); // translucent
+    expect(argbToCssHex("#1A73E8")).toBe("#1a73e8"); // no alpha — pass through
+    expect(argbToCssHex(undefined)).toBeUndefined();
+    expect(argbToCssHex("rgb(0,0,0)")).toBeUndefined();
+  });
+
+  it("parseFontSizeSp reads the leading number off a sp string", () => {
+    expect(parseFontSizeSp("22.0sp")).toBe(22);
+    expect(parseFontSizeSp("16sp")).toBe(16);
+    expect(parseFontSizeSp(undefined)).toBeUndefined();
+    expect(parseFontSizeSp("auto")).toBeUndefined();
+  });
+
+  it("nests nodes from the tree and resolves per-node fg + font size", () => {
+    const tree = semanticsToSemanticTree(
+      {
+        root: {
+          ref: "r0",
+          boundsInRoot: "0,0,360,640",
+          children: [
+            {
+              ref: "r1",
+              role: "Button",
+              label: "Continue",
+              boundsInRoot: "0,0,360,48",
+              children: [
+                {
+                  ref: "r2",
+                  text: "Continue",
+                  boundsInRoot: "8,8,200,40",
+                  layoutForegroundColor: "#FFFFFFFF",
+                  layoutFontSize: "16.0sp",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      "light",
+    );
+    expect(tree?.theme).toBe("light");
+    const button = tree?.root.children?.[0];
+    expect(button?.role).toBe("button"); // Role lowercased
+    expect(button?.label).toBe("Continue");
+    const text = button?.children?.[0];
+    expect(text?.bounds).toEqual({ x: 8, y: 8, width: 192, height: 32 });
+    expect(text?.tokens?.colors).toEqual({ fg: "#ffffffff" });
+    expect(text?.tokens?.typography?.["text"]?.fontSize).toBe(16);
+  });
+
+  it("maps RadioButton → radio and falls back label ← text ← layoutText", () => {
+    const tree = semanticsToSemanticTree({
+      root: {
+        children: [
+          { role: "RadioButton", layoutText: "Option A", boundsInRoot: "0,0,48,48" },
+        ],
+      },
+    });
+    const node = tree?.root.children?.[0];
+    expect(node?.role).toBe("radio");
+    expect(node?.label).toBe("Option A");
+  });
+
+  it("seeds a root bg/fg from compose/theme so text inherits a background", () => {
+    const tree = semanticsToSemanticTree(
+      {
+        root: {
+          boundsInRoot: "0,0,100,40",
+          children: [
+            {
+              text: "Hi",
+              boundsInRoot: "0,0,100,40",
+              layoutForegroundColor: "#FF000000", // black text, own fg
+            },
+          ],
+        },
+      },
+      "light",
+      {
+        resolvedTokens: {
+          colorScheme: { background: "#FFFFFFFF", onBackground: "#FF111111" },
+        },
+      },
+    );
+    // Root seeded from the theme scheme (ARGB → RGBA).
+    expect(tree?.root.tokens?.colors).toEqual({ bg: "#ffffffff", fg: "#111111ff" });
+    // The text node keeps its own fg; bg resolves up to the seeded root.
+    expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ fg: "#000000ff" });
+  });
+
+  it("returns undefined with no root, so the daemon falls back to a11y/hierarchy", () => {
+    expect(semanticsToSemanticTree(undefined)).toBeUndefined();
+    expect(semanticsToSemanticTree({})).toBeUndefined();
+  });
+});
+
 describe("daemonSource", () => {
   // A fake transport returning canned image + data products per (previewId, kind).
   function fakeClient(): DaemonDataClient {
@@ -164,6 +266,46 @@ describe("daemonSource", () => {
 
     const findings = await source.nativeFindingsFor("ui/Home.kt#Home", ctx);
     expect(findings?.map((f) => f.kind)).toEqual(["contrast", "i18n"]);
+  });
+
+  it("prefers the nested compose/semantics tree (with resolved colours) over a11y/hierarchy", async () => {
+    const client: DaemonDataClient = {
+      async image() {
+        return { uri: "data:image/png;base64,AAAA", width: 320, height: 240 };
+      },
+      async fetch(_previewId, kind) {
+        switch (kind) {
+          case "a11y/hierarchy":
+            return { nodes: [{ role: "flat", label: "from hierarchy" }] };
+          case "compose/semantics":
+            return {
+              root: {
+                children: [
+                  {
+                    role: "Button",
+                    label: "Go",
+                    boundsInRoot: "0,0,48,48",
+                    children: [
+                      { text: "Go", boundsInRoot: "0,0,48,48", layoutForegroundColor: "#FF222222", layoutFontSize: "20sp" },
+                    ],
+                  },
+                ],
+              },
+            };
+          case "compose/theme":
+            return { resolvedTokens: { colorScheme: { background: "#FFFFFFFF" } } };
+          default:
+            return undefined;
+        }
+      },
+    };
+    const source = daemonSource({ client, previewIdFor: () => "p", themeFor: () => "light" });
+    const candidate = await source.getCandidate("ui/Home.kt#Home", ctx);
+    // Nested semantics, not the flat hierarchy fallback.
+    const button = candidate?.semantics.root.children?.[0];
+    expect(button?.role).toBe("button");
+    expect(candidate?.semantics.root.tokens?.colors).toEqual({ bg: "#ffffffff" });
+    expect(button?.children?.[0]?.tokens?.colors).toEqual({ fg: "#222222ff" });
   });
 
   it("returns undefined for a component it has no preview id for", async () => {
