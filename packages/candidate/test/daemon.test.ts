@@ -230,6 +230,38 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     expect(semanticsToSemanticTree({})).toBeUndefined();
   });
 
+  it("maps a REAL Android compose/semantics payload: nesting + colour + font (#55 live)", () => {
+    // android-greenbutton.compose-semantics.json was written by a live standalone
+    // Android (Robolectric) daemon rendering :samples:android-daemon-bench —
+    // a real nested tree with a Compose `Role.Button` wrapping a text node that
+    // carries layoutForegroundColor (#AARRGGBB) + layoutFontSize. Guards that the
+    // mapper recovers the producer's real structure, not just hand-written shapes.
+    const payload = JSON.parse(
+      readFileSync(fixture("fixtures/daemon/android-greenbutton.compose-semantics.json"), "utf8"),
+    );
+    const tree = semanticsToSemanticTree(payload, "light");
+    // root → container → Button → text, with the Compose Role lowercased.
+    const button = tree?.root.children?.[0]?.children?.[0];
+    expect(button?.role).toBe("button");
+    expect(button?.bounds).toEqual({ x: 42, y: 44, width: 174, height: 105 });
+    const text = button?.children?.[0];
+    expect(text?.label).toBe("Go");
+    expect(text?.tokens?.colors).toEqual({ fg: "#ffffffff" }); // #FFFFFFFF → #ffffffff
+    expect(text?.tokens?.typography?.["text"]?.fontSize).toBe(14); // "14.0sp" → 14
+  });
+
+  it("maps a REAL Android text-node payload (BlueLabel) with resolved fg + size (#55 live)", () => {
+    const payload = JSON.parse(
+      readFileSync(fixture("fixtures/daemon/android-bluelabel.compose-semantics.json"), "utf8"),
+    );
+    const tree = semanticsToSemanticTree(payload, "light");
+    const text = tree?.root.children?.[0]?.children?.[0];
+    expect(text?.label).toBe("blue");
+    expect(text?.bounds).toEqual({ x: 42, y: 42, width: 84, height: 63 });
+    expect(text?.tokens?.colors).toEqual({ fg: "#ffffffff" });
+    expect(text?.tokens?.typography?.["text"]?.fontSize).toBe(16);
+  });
+
   it("seeds the root from a REAL captured compose/theme payload (#55 live)", () => {
     // fixtures/daemon/compose-theme.json was captured from a live standalone
     // CMP-desktop daemon (`compose-preview bundle daemon`) via StdioDaemonClient

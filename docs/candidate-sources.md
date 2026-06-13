@@ -145,9 +145,35 @@ captured payload is checked in at
 The **desktop** daemon does not yet produce `compose/semantics`, `text/strings`,
 or the a11y findings (`compose/semantics` / `text/strings` are registry-only and
 a11y is Android-producer-only — see compose-ai-tools
-`docs/daemon/DATA-PRODUCTS.md`), so validating the deeper `SemanticTree`
-(nesting + colours) and native `Finding[]` against a live daemon still requires
-the **Android** daemon backend.
+`docs/daemon/DATA-PRODUCTS.md`), so the deeper `SemanticTree` (nesting + colours)
+is validated against the **Android** daemon backend.
+
+**Deeper SemanticTree (validated against a live Android daemon, #55).** Running
+the standalone **Android** (Robolectric) daemon on `:samples:android-daemon-bench`
+confirmed `hierarchyToSemanticTree`'s richer sibling, `semanticsToSemanticTree`,
+against real producer output: a nested `compose/semantics` tree with a Compose
+`Role.Button` wrapping a text node carrying `layoutForegroundColor` (`#AARRGGBB`)
+and `layoutFontSize`. Captured payloads are checked in
+(`fixtures/daemon/android-{bluelabel,greenbutton}.compose-semantics.json`) and the
+mapper is asserted against them: real nesting, role normalisation
+(`Role.Button` → `button`), `#FFFFFFFF` → `#ffffffff`, and `"14.0sp"` → `14`.
+
+Two behaviours of the **standalone** daemon shape how this is consumed, and are
+**not** bundle-dependent (a coordinate bundle and an `--embed-deps` bundle behave
+identically):
+
+- The daemon writes `compose/semantics`, `layout/inspector`, `i18n/translations`,
+  etc. as **on-disk artifacts** under its history dir
+  (`.compose-preview-history/data/<previewId>/compose-semantics.json`, the same
+  shape #43's on-disk ingest already consumes) and does **not** serve those kinds
+  over `data/fetch`. So the live `SemanticTree` for the daemon path is fed from
+  the on-disk product, not a `data/fetch` round-trip.
+- `a11y/atf` is gated behind the daemon's a11y render mode
+  (`effectiveRunAccessibility`); a plain `renderNow` leaves it off, so native
+  a11y `Finding[]` come from the dedicated `compose-preview a11y` path rather
+  than an ordinary render. Validating `nativeFindings` against a *live* a11y
+  render is the remaining step; the mappers are unit-tested against the
+  documented `a11y/atf` shape.
 
 ## Wiring into the Action / CLI
 
