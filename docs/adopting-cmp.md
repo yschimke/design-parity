@@ -1,0 +1,151 @@
+# Adopting design-parity on a Compose Multiplatform project
+
+A step-by-step guide to put a Compose Multiplatform (CMP) project under design
+parity. CMP is the cheapest candidate-render path — the Desktop/JVM target
+renders previews with **no Android emulator** (docs/PRINCIPLES.md Principle 6;
+issue [#30](https://github.com/yschimke/design-parity/issues/30)) — so it's the
+recommended way to try the tool end to end.
+
+This guide is source-agnostic: it works with **Claude Design** or **Stitch**
+references (and Figma / image bundles too). Where a step differs, both are shown.
+
+## How the pieces fit
+
+```
+@Preview (CMP module)                          design reference
+        │ compose-preview (Desktop/JVM render)         │ claude-design HTML export
+        ▼                                              ▼  or stitch:<id>
+  preview bundle (PNG+zip)  ──▶  design-parity diff  ◀──  DesignReference
+                                       │
+                                       ▼
+                          verdict (md) + report.html
+```
+
+The **candidate** side comes from compose-ai-tools' `compose-preview`; the
+**reference** side and the **correspondence** (which design maps to which code)
+are design-parity's job.
+
+## Repos you need
+
+- [`yschimke/design-parity`](https://github.com/yschimke/design-parity) — the tool.
+- [`yschimke/compose-ai-tools`](https://github.com/yschimke/compose-ai-tools) —
+  ships `compose-preview` (CMP Desktop render + portable bundles + the daemon)
+  and the Gradle plugin. Required to produce candidates.
+- **your CMP app** — the subject under parity.
+
+## Rendering target: get faithfulness right first
+
+Parity asserts **candidate render ≈ what ships**, so render on a target that
+represents the shipped UI:
+
+- **Shared, platform-agnostic UI** (composables in `commonMain`, Material3, no
+  Android-only APIs/resources) → the **Desktop/JVM** render is a faithful proxy.
+  This is the cheap path; prefer it.
+- **Platform-specific UI** (Android-only APIs, `actual` impls, Android resources)
+  → a Desktop render won't match the shipped Android pixels. Render those on
+  Android (heavier), or lift the screen's composable into `commonMain` so it can
+  render on Desktop.
+
+If the project isn't CMP yet, adding a `jvm()`/desktop target and moving the
+target screens' previews into a desktop-visible source set is usually a modest
+change — and it's what unlocks the emulator-free path.
+
+## Step 1 — Render candidates (Desktop → bundles)
+
+1. Apply the compose-ai-tools `compose-preview` Gradle plugin (see that repo's
+   README and the `compose-preview` skill).
+2. Ensure the `@Preview`s you want under parity are in a **desktop-visible source
+   set** (`commonMain`, or `desktopMain`).
+3. Render them on Desktop and emit the **portable preview bundles** (PNG+zip
+   polyglots). design-parity reads these statically — no second render.
+
+**Theme (read this for CMP):** CMP apps usually theme via `MaterialTheme` / a
+`CompositionLocal`, so the Android night-mode `uiMode` is unset and a candidate
+image would get no `theme` — which then fails to pair with a `theme`-tagged
+reference. design-parity derives theme in precedence order
+([#48](https://github.com/yschimke/design-parity/issues/48)):
+
+1. an explicit `theme` hint on the preview/capture (`"light"`/`"dark"`) — set
+   this when you theme via a `CompositionLocal`;
+2. the Android `uiMode`;
+3. the preview id's **trailing** `_Dark`/`_Light`/`Night` token (only the last
+   `[_\-. ()]`-separated token, so `Home_LightOn` is *not* mistaken for light).
+
+**Semantics:** make sure the bundle carries the semantics blob (a11y tree +
+resolved fg/bg colours + typography, the
+[#38 contract](https://github.com/yschimke/design-parity/issues/38)). With it the
+full a11y/i18n + contrast + token checks run; without it they degrade gracefully
+to visual/structural-only. See [candidate-sources.md](./candidate-sources.md).
+
+## Step 2 — Provide design references
+
+Pick one source and commit/point at the references:
+
+- **Claude Design** — commit the **HTML export** of each screen into the repo
+  (e.g. `design/Home.html`); the `claude-design` adapter rasterizes it. No API
+  token, fully offline, deterministic. Best fit for a first adoption.
+- **Stitch** — reference each screen as `stitch:<designId>`.
+
+## Step 3 — Map code ↔ design
+
+Commit a root `design-map.json` linking each **code handle** (`path#Member`) to
+its reference. Because a bundle/daemon candidate is keyed by a compose-preview
+**preview id** (`<fqClass>.<function>`), add the `previewId` field to reconcile
+the two namespaces ([#44](https://github.com/yschimke/design-parity/issues/44)):
+
+```json
+{ "components": [
+  { "code": "ui/Home.kt#HomeScreen", "source": "claude-design",
+    "ref": "design/Home.html", "previewId": "app.ui.HomeKt.HomeScreen_Light" }
+]}
+```
+
+For Stitch use `"source": "stitch", "ref": "stitch:abc123"`. Optionally add
+`.design-parity.json` to set the parity **direction** (`design-led` blocks PRs on
+a failure; `code-led` is advisory).
+
+## Step 4 — Run it
+
+```sh
+design-parity run \
+  --repo . \
+  --components "ui/Home.kt#HomeScreen" \
+  --candidate-bundles build/compose-previews/ \
+  --out .design-parity/out
+```
+
+You get the markdown verdict on stdout **and** a self-contained
+`.design-parity/out/<component>/report.html` per component — reference | candidate
+| diff with the pixelmatch heatmap inlined, findings in value order (a11y/i18n,
+then tokens, then pixels) — issues
+[#49](https://github.com/yschimke/design-parity/issues/49) /
+[#50](https://github.com/yschimke/design-parity/issues/50).
+
+## Step 5 — Wire CI (optional)
+
+Run the GitHub Action (`@design-parity/action`) so PRs render previews and get a
+verdict comment: `design-led` blocks on parity failures, `code-led` stays
+advisory.
+
+## Gotchas (all handled — just know them)
+
+- **DPI / density:** the Desktop render resolution won't exactly match the design
+  export. design-parity tolerates a sub-pixel dimension delta and diffs over the
+  overlap instead of scoring 100%
+  ([#47](https://github.com/yschimke/design-parity/issues/47), default 8px — raise
+  `visualDimTolerancePx` if your scale gap is larger).
+- **Theme / size pairing:** set the theme hint (#48); size normalizes
+  automatically (compact/medium/expanded).
+- **preview-id ↔ code-handle:** use the `previewId` field (#44); unreconciled ids
+  surface a warning, not a silent non-pair.
+- **CMP Web/wasm render** (`localComposeWebSource`) is still a stub — use the
+  **Desktop** path today (#30's automatic prefer/promote isn't built yet).
+- **Live iteration:** the daemon path
+  ([#43](https://github.com/yschimke/design-parity/issues/43)) can ingest the
+  renderer's native a11y/i18n findings instead of re-deriving them.
+
+## Conventions
+
+`agent/...` branches; human-only git authorship (no AI attribution); one issue =
+one branch + one PR; build + test + CI green before merge; keep README/docs in
+sync. See [AGENTS.md](../AGENTS.md).

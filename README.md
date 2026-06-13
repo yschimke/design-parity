@@ -60,6 +60,14 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 every package can be built and tested against stubs with no live source or
 renderer. See [`fixtures/README.md`](./fixtures/README.md).
 
+## Guides
+
+- [Adopting design-parity on a Compose Multiplatform project](./docs/adopting-cmp.md)
+  — the emulator-free Desktop/JVM render path, end to end (Claude Design or Stitch).
+- [Candidate sources](./docs/candidate-sources.md) — the four candidate-render
+  backends (static bundle, CLI, local-compose-web, daemon) and how they wire in.
+- [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
+
 ## Develop
 
 ```sh
