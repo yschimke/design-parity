@@ -186,9 +186,10 @@ type scale / shape scale behind a screen, not just per-node values.
 Per element, `semanticsToSemanticTree` also surfaces the **code attribute** a
 node draws with, keyed by the token name (e.g. `onSurface: "#1d1b20ff"`) so a
 report shows both the code attribute and its resolved value. Attribution prefers
-`compose/theme.consumers` (schema v2, compose-ai-tools#1847): the producer
-reports which tokens each node read, joined by `nodeId`, which pins exactly the
-role even for values several roles share (white = `onPrimary`/`onError`/… in M3).
+`compose/theme.consumers` (schema v2, shipped in `compose-preview` v0.15.2 —
+compose-ai-tools#1847): the producer reports which tokens each node read, joined
+by `nodeId`, which pins exactly the role even for values several roles share
+(white = `onPrimary`/`onError`/… in M3).
 When `consumers` is absent or empty — a v1 producer, or a node it didn't
 attribute — it falls back to reverse-matching the resolved colour against the
 scheme, keeping the generic `fg`/`bg` when that match is ambiguous rather than
