@@ -92,6 +92,8 @@ export interface HierarchyPayload {
  */
 export interface ComposeSemanticsNode {
   ref?: string;
+  /** Stable SemanticsNode id — the join key for `compose/theme.consumers` (#1847). */
+  nodeId?: string;
   /** `"left,top,right,bottom"` in PNG pixels (same shape as boundsInScreen). */
   boundsInRoot?: string;
   label?: string;
@@ -429,10 +431,19 @@ function colorTokenKey(
   cssValue: string,
   role: "fg" | "bg",
   themeTokens: DesignTokens | undefined,
+  consumerTokens?: readonly string[],
 ): string {
   const matches = themeTokenNamesFor(cssValue, themeTokens).filter((n) =>
     role === "fg" ? isOnColor(n) : !isOnColor(n),
   );
+  // Exact attribution (#1847): when the producer reported which tokens this node
+  // read, intersect them with the value-matched candidates. That disambiguates
+  // the values several roles share (white = onPrimary/onError/…) where the
+  // reverse-match alone can't, so the node keeps the role it actually read.
+  if (consumerTokens?.length) {
+    const attributed = matches.filter((n) => consumerTokens.includes(n));
+    if (attributed.length === 1) return attributed[0]!;
+  }
   return matches.length === 1 ? matches[0]! : role;
 }
 
@@ -440,6 +451,7 @@ function colorTokenKey(
 function semanticsNode(
   node: ComposeSemanticsNode,
   themeTokens: DesignTokens | undefined,
+  consumersByNode: ReadonlyMap<string, readonly string[]>,
 ): SemanticNode {
   const out: SemanticNode = {};
   const role = normalizeSemanticsRole(node.role);
@@ -449,11 +461,12 @@ function semanticsNode(
   const bounds = parseScreenBounds(node.boundsInRoot);
   if (bounds) out.bounds = bounds;
 
+  const consumerTokens = node.nodeId ? consumersByNode.get(node.nodeId) : undefined;
   const colors: Record<string, string> = {};
   const fg = argbToCssHex(node.layoutForegroundColor);
-  if (fg) colors[colorTokenKey(fg, "fg", themeTokens)] = fg;
+  if (fg) colors[colorTokenKey(fg, "fg", themeTokens, consumerTokens)] = fg;
   const bg = argbToCssHex(node.layoutBackgroundColor);
-  if (bg) colors[colorTokenKey(bg, "bg", themeTokens)] = bg;
+  if (bg) colors[colorTokenKey(bg, "bg", themeTokens, consumerTokens)] = bg;
   const fontSize = parseFontSizeSp(node.layoutFontSize);
   if (Object.keys(colors).length || fontSize !== undefined) {
     out.tokens = {};
@@ -461,9 +474,27 @@ function semanticsNode(
     if (fontSize !== undefined) out.tokens.typography = { text: { fontSize } };
   }
 
-  const children = (node.children ?? []).map((c) => semanticsNode(c, themeTokens));
+  const children = (node.children ?? []).map((c) =>
+    semanticsNode(c, themeTokens, consumersByNode),
+  );
   if (children.length) out.children = children;
   return out;
+}
+
+/**
+ * Index `compose/theme.consumers` (#1847) by nodeId — the theme tokens each node
+ * read, keyed by the same SemanticsNode id `compose/semantics` uses, so the two
+ * products join directly. Empty when the producer left `consumers` unpopulated
+ * (schema v1), in which case attribution falls back to the reverse-match below.
+ */
+function consumerTokensByNode(
+  payload: ComposeThemePayload | undefined,
+): ReadonlyMap<string, readonly string[]> {
+  const map = new Map<string, readonly string[]>();
+  for (const c of payload?.consumers ?? []) {
+    if (c?.nodeId && c.tokens?.length) map.set(c.nodeId, c.tokens);
+  }
+  return map;
 }
 
 /** Parse a Compose `"FontWeight(weight=400)"` (or bare number) into a number. */
@@ -532,14 +563,14 @@ export function composeThemeToTokens(
 
 /**
  * Reverse-match a node's resolved colour (CSS `#rrggbbaa`) back to the theme
- * token name(s) that resolve to it. The producer's `compose/theme.consumers`
- * (which node read which token) is empty in v1, so this is the available signal
- * for "what code attribute is this element using". Returns names in a stable
- * order; ambiguous values (e.g. white = `onPrimary`/`onError`/…) yield several.
+ * token name(s) that resolve to it. Returns names in a stable order; ambiguous
+ * values (e.g. white = `onPrimary`/`onError`/…) yield several.
  *
- * TODO(compose-ai-tools#1847): switch to `compose/theme.consumers` (join by
- * nodeId) for exact per-node attribution once the producer populates it, and
- * drop this reverse-match heuristic.
+ * This is the **fallback** signal. When the producer populates
+ * `compose/theme.consumers` (schema v2, compose-ai-tools#1847), {@link colorTokenKey}
+ * uses the per-node attribution to pick exactly the role the node read and only
+ * falls back to this reverse-match for nodes/producers without it (v1 emits
+ * `consumers: []`).
  */
 function themeTokenNamesFor(
   cssValue: string,
@@ -598,7 +629,8 @@ export function semanticsToSemanticTree(
 ): SemanticTree | undefined {
   if (!payload?.root) return undefined;
   const themeTokens = composeThemeToTokens(themeColors);
-  const root = semanticsNode(payload.root, themeTokens);
+  const consumersByNode = consumerTokensByNode(themeColors);
+  const root = semanticsNode(payload.root, themeTokens, consumersByNode);
 
   const seed = themeRootColors(themeTokens);
   if (seed) {

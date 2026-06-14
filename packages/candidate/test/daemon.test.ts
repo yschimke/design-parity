@@ -339,6 +339,56 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     );
     expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ fg: "#ffffffff" });
   });
+
+  it("attributes an otherwise-ambiguous colour exactly via compose/theme.consumers (#1847)", () => {
+    // White is onPrimary AND onError in M3 — the reverse-match can't choose. With
+    // the producer's per-node consumers (joined by nodeId) reporting this node
+    // read onPrimary, it's attributed exactly instead of the generic `fg`.
+    const theme = {
+      resolvedTokens: { colorScheme: { onPrimary: "#FFFFFFFF", onError: "#FFFFFFFF" } },
+      consumers: [{ nodeId: "42", tokens: ["onPrimary"] }],
+    };
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,100,40", children: [
+        { nodeId: "42", text: "Go", boundsInRoot: "0,0,100,40", layoutForegroundColor: "#FFFFFFFF" },
+      ] } },
+      "light",
+      theme,
+    );
+    expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ onPrimary: "#ffffffff" });
+  });
+
+  it("disambiguates an ambiguous background colour from its consumer role (#1847)", () => {
+    // surface == background share a value; consumers pins the node to surface.
+    const theme = {
+      resolvedTokens: { colorScheme: { surface: "#FFFEF7FF", background: "#FFFEF7FF" } },
+      consumers: [{ nodeId: "7", tokens: ["surface"] }],
+    };
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,100,40", children: [
+        { nodeId: "7", text: "Hi", boundsInRoot: "0,0,100,40", layoutBackgroundColor: "#FFFEF7FF" },
+      ] } },
+      "light",
+      theme,
+    );
+    expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ surface: "#fef7ffff" });
+  });
+
+  it("falls back to the reverse-match when consumers is empty (v1 producer, #1847)", () => {
+    // Same ambiguous white, but the producer left consumers empty — stays `fg`.
+    const theme = {
+      resolvedTokens: { colorScheme: { onPrimary: "#FFFFFFFF", onError: "#FFFFFFFF" } },
+      consumers: [],
+    };
+    const tree = semanticsToSemanticTree(
+      { root: { boundsInRoot: "0,0,100,40", children: [
+        { nodeId: "42", text: "Go", boundsInRoot: "0,0,100,40", layoutForegroundColor: "#FFFFFFFF" },
+      ] } },
+      "light",
+      theme,
+    );
+    expect(tree?.root.children?.[0]?.tokens?.colors).toEqual({ fg: "#ffffffff" });
+  });
 });
 
 describe("daemonSource", () => {
