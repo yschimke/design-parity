@@ -29,5 +29,12 @@
     "@design-parity/adapter-stitch": "^0.1.0",
     "@design-parity/adapter-claude-design": "^0.1.0",
     "@design-parity/adapter-bundle": "^0.1.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/action"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/action#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
 }

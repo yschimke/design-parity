@@ -18,5 +18,12 @@
   },
   "dependencies": {
     "@design-parity/core": "^0.1.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/resolver"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/resolver#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
 }

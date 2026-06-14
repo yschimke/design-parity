@@ -24,5 +24,12 @@
   "dependencies": {
     "@design-parity/core": "^0.1.0",
     "ajv": "^8.17.1"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/checks"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/checks#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
 }

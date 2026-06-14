@@ -5,6 +5,13 @@ name: release
 # tag (the version in package.json must already match — run
 # `npm run set-version X.Y.Z`, commit, then tag). The job rebuilds from a clean
 # checkout and publishes every non-private workspace.
+#
+# Auth is npm Trusted Publishing (OIDC) — no NPM_TOKEN secret. Each package must
+# have a trusted publisher configured on npmjs.com (org/user + this repo +
+# workflow file `release.yml`) BEFORE its first OIDC publish, and a package's
+# initial version cannot be published over OIDC, so bootstrap each new package
+# once with a manual `npm publish` (see AGENTS.md → Releasing). Provenance is
+# generated automatically under trusted publishing.
 on:
   push:
     tags:
@@ -18,7 +25,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # OIDC trusted publishing + provenance
 
 jobs:
   publish:
@@ -30,6 +37,8 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: "https://registry.npmjs.org"
+      - name: Upgrade npm (OIDC trusted publishing needs >= 11.5.1)
+        run: npm install -g npm@latest
       - run: npm ci
       - name: Verify tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -47,8 +56,8 @@ jobs:
       - name: Publish (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry-run
         run: npm publish --workspaces --access public --dry-run
+      # Trusted publishing: OIDC supplies the credential (no NODE_AUTH_TOKEN) and
+      # provenance is automatic (no --provenance flag).
       - name: Publish
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry-run)
-        run: npm publish --workspaces --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --workspaces --access public

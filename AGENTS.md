@@ -52,7 +52,9 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
   `npx design-parity run …` works; it's a thin launcher over
   `@design-parity/action`. The monorepo root is `design-parity-monorepo`
   (private) — don't rename it back to `design-parity` or the launcher name
-  collides.
+  collides. A new publishable package also needs a `repository` field with its
+  `directory` (e.g. `packages/<name>`) — npm provenance under trusted publishing
+  requires it.
 - **Do not register packages in a root `tsconfig.json` `references` array** —
   there is none. The root build iterates workspaces
   (`npm run build --workspaces`), and each package's own `tsconfig.json`
@@ -64,7 +66,23 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
 ## Releasing
 
 The whole scope publishes to npm at **one shared version** so cross-package
-ranges stay coherent. To cut a release:
+ranges stay coherent. Auth is **npm Trusted Publishing (OIDC)** — there is no
+`NPM_TOKEN` secret; GitHub Actions authenticates to npm directly and provenance
+is generated automatically.
+
+**One-time setup per package** (and once for every *new* package added later):
+
+1. **Bootstrap the first version manually.** OIDC can't publish a package that
+   doesn't exist yet (npm's trusted-publisher settings page only appears once
+   the package is on the registry). From a clean checkout: `npm login` (browser
+   auth — no token to store), `npm run build`, then
+   `npm publish --workspaces --access public` to create all packages at the
+   current version. This first cut has no provenance — that's fine.
+2. **Configure the trusted publisher** for each package on npmjs.com →
+   *Settings → Trusted Publisher*: GitHub Actions, repo `yschimke/design-parity`,
+   workflow file `release.yml`. After this, every release is token-free.
+
+**Cutting a release** (steady state):
 
 1. `npm run set-version X.Y.Z` — rewrites every workspace `version` and every
    internal `@design-parity/*` / `design-parity` dependency range to `^X.Y.Z`
@@ -72,10 +90,10 @@ ranges stay coherent. To cut a release:
    versions; this keeps them in sync.
 2. Commit (`chore: release vX.Y.Z`) and tag `vX.Y.Z`.
 3. Push the tag — [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-   rebuilds from a clean checkout, verifies the tag matches package.json, and
-   runs `npm publish --workspaces --access public --provenance`. The private
-   root is skipped automatically. (`workflow_dispatch` offers a `--dry-run`
-   pack.) Requires the `NPM_TOKEN` secret.
+   rebuilds from a clean checkout, upgrades npm to ≥ 11.5.1 (OIDC requirement),
+   verifies the tag matches package.json, and runs
+   `npm publish --workspaces --access public` over OIDC. The private root is
+   skipped automatically. (`workflow_dispatch` offers a `--dry-run` pack.)
 
 Internal deps use concrete `^` ranges, **not** the `workspace:` protocol — npm
 (unlike pnpm/yarn) doesn't rewrite `workspace:` on publish.
