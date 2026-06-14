@@ -1,34 +1,36 @@
 name: release
 
-# Publish the whole `@design-parity/*` scope and the top-level `design-parity`
-# CLI to npm at one shared version. Tag the release commit `vX.Y.Z` and push the
-# tag (the version in package.json must already match — run
-# `npm run set-version X.Y.Z`, commit, then tag). The job rebuilds from a clean
-# checkout and publishes every non-private workspace.
+# release-please drives releases. On every push to main it maintains a single
+# "release PR" (one shared version + one CHANGELOG for the whole repo). Merging
+# that PR makes release-please tag `vX.Y.Z`, cut the GitHub release, and — in the
+# same run — publish all 14 packages to npm.
 #
-# Auth is npm Trusted Publishing (OIDC) — no NPM_TOKEN secret. Each package must
-# have a trusted publisher configured on npmjs.com (org/user + this repo +
-# workflow file `release.yml`) BEFORE its first OIDC publish, and a package's
-# initial version cannot be published over OIDC, so bootstrap each new package
-# once with a manual `npm publish` (see AGENTS.md → Releasing). Provenance is
-# generated automatically under trusted publishing.
+# IMPORTANT: this file is `release.yml` because the npm Trusted Publisher (OIDC)
+# for each package is bound to this exact workflow filename. Don't rename it, or
+# OIDC publishing breaks until every package's trusted publisher is reconfigured.
 on:
   push:
-    tags:
-      - "v*.*.*"
-  workflow_dispatch:
-    inputs:
-      dry-run:
-        description: "Pack each workspace without publishing"
-        type: boolean
-        default: true
+    branches: [main]
 
 permissions:
-  contents: read
+  contents: write # release-please commits/tags; publish job pushes the version sync
+  pull-requests: write # release-please maintains the release PR
   id-token: write # OIDC trusted publishing + provenance
 
 jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   publish:
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,24 +42,20 @@ jobs:
       - name: Upgrade npm (OIDC trusted publishing needs >= 11.5.1)
         run: npm install -g npm@latest
       - run: npm ci
-      - name: Verify tag matches package version
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          pkg="$(node -p "require('./packages/cli/package.json').version")"
-          if [ "$tag" != "$pkg" ]; then
-            echo "::error::tag v$tag does not match package version $pkg — run 'npm run set-version $tag', commit, then re-tag"
-            exit 1
-          fi
-      - name: Build
-        run: npm run build
-      - name: Test
-        run: npm test
-      - name: Publish (dry run)
-        if: github.event_name == 'workflow_dispatch' && inputs.dry-run
-        run: npm publish --workspaces --access public --dry-run
-      # Trusted publishing: OIDC supplies the credential (no NODE_AUTH_TOKEN) and
+      # release-please bumps the root version; fan it out to every workspace
+      # package + internal dependency range before publishing.
+      - name: Sync workspace versions to the release
+        run: npm run set-version "$(node -p "require('./package.json').version")"
+      - run: npm run build
+      - run: npm test
+      # Trusted publishing: OIDC supplies the credential (no NODE_AUTH_TOKEN),
       # provenance is automatic (no --provenance flag).
-      - name: Publish
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry-run)
-        run: npm publish --workspaces --access public
+      - run: npm publish --workspaces --access public
+      - name: Commit the version sync back to main
+        run: |
+          if ! git diff --quiet; then
+            v="$(node -p "require('./package.json').version")"
+            git -c user.name='Yuri Schimke' -c user.email='yuri@schimke.ee' \
+              commit -am "chore: sync workspace versions to v$v [skip ci]"
+            git push origin HEAD:main
+          fi
