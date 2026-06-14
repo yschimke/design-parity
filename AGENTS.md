@@ -82,18 +82,29 @@ is generated automatically.
    *Settings → Trusted Publisher*: GitHub Actions, repo `yschimke/design-parity`,
    workflow file `release.yml`. After this, every release is token-free.
 
-**Cutting a release** (steady state):
+**Cutting a release** (steady state) — driven by **release-please**, no manual
+tagging:
 
-1. `npm run set-version X.Y.Z` — rewrites every workspace `version` and every
-   internal `@design-parity/*` / `design-parity` dependency range to `^X.Y.Z`
-   (see [`scripts/set-version.mjs`](./scripts/set-version.mjs)). Don't hand-edit
-   versions; this keeps them in sync.
-2. Commit (`chore: release vX.Y.Z`) and tag `vX.Y.Z`.
-3. Push the tag — [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-   rebuilds from a clean checkout, upgrades npm to ≥ 11.5.1 (OIDC requirement),
-   verifies the tag matches package.json, and runs
-   `npm publish --workspaces --access public` over OIDC. The private root is
-   skipped automatically. (`workflow_dispatch` offers a `--dry-run` pack.)
+1. Land your changes on `main` with **conventional-commit** subjects (`feat:`,
+   `fix:`, `feat!:`/`BREAKING CHANGE:` etc.) — that's what determines the bump.
+2. [`release-please`](https://github.com/googleapis/release-please) keeps a
+   single open **release PR** ("chore(main): release X.Y.Z") that bumps the root
+   version and updates `CHANGELOG.md`. Review and **merge it** when you want to
+   ship — that's the whole release action.
+3. Merging the PR makes release-please tag `vX.Y.Z` (one shared tag for the repo)
+   and cut the GitHub release; the same `release.yml` run then upgrades npm,
+   runs [`scripts/set-version.mjs`](./scripts/set-version.mjs) to fan the version
+   out to every workspace package + internal `^` range, builds, tests, and
+   `npm publish --workspaces`es over OIDC. The private root is skipped.
+
+The publish job commits the version fan-out back to `main` (authored as the repo
+owner, not a bot, to satisfy the human-authorship rule). Config lives in
+[`release-please-config.json`](./release-please-config.json) +
+[`.release-please-manifest.json`](./.release-please-manifest.json); a single
+component at `.` with `include-component-in-tag: false` gives the one shared
+`vX.Y.Z` tag + one `CHANGELOG.md` (lockstep style, like Babel/Jest/Angular).
+**Don't rename `release.yml`** — each package's OIDC trusted publisher is bound
+to that filename.
 
 Internal deps use concrete `^` ranges, **not** the `workspace:` protocol — npm
 (unlike pnpm/yarn) doesn't rewrite `workspace:` on publish.
