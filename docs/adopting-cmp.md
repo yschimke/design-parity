@@ -27,11 +27,11 @@ are design-parity's job.
 
 ## What you need
 
-You run **one** tool and pull the renderer in as **published artifacts** — you
-do not clone compose-ai-tools.
+Everything but your own app is a **published artifact** — nothing here needs a
+source checkout.
 
-- [`yschimke/design-parity`](https://github.com/yschimke/design-parity) — the
-  tool itself; clone it and `npm install` (not yet published to npm).
+- [`design-parity`](https://www.npmjs.com/package/design-parity) — the tool
+  itself, on npm; run it with `npx design-parity …` (no checkout).
 - the **`compose-preview` toolchain** (built in
   [`yschimke/compose-ai-tools`](https://github.com/yschimke/compose-ai-tools)),
   consumed as published artifacts — **no checkout of that repo**:
@@ -122,7 +122,7 @@ a failure; `code-led` is advisory).
 ## Step 4 — Run it
 
 ```sh
-design-parity run \
+npx design-parity run \
   --repo . \
   --components "ui/Home.kt#HomeScreen" \
   --candidate-bundles build/compose-previews/ \
