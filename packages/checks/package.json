@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/checks",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Deterministic a11y + i18n spec checks over a DesignReference / CandidateRender pair. No model at run time — only committed rules and thresholds.",
   "license": "Apache-2.0",
   "type": "module",
@@ -22,7 +22,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.0",
+    "@design-parity/core": "^0.1.1",
     "ajv": "^8.17.1"
   },
   "repository": {

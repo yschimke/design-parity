@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared contracts for design-parity: DesignReference, CandidateRender, tokens, semantics, verdict, and the design-map schema.",
   "license": "Apache-2.0",
   "type": "module",
