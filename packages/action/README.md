@@ -45,8 +45,10 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   rather than guessing the design ↔ code mapping at run time — and never blocks.
 - **baseline** — a `push` to the **`development_branch`** (default `main`):
   render the **full** mapped surface, run the pipeline, and **publish the
-  browsable artifacts** — a top-level `index.html`, each component's
-  self-contained `report.html` triptych, and a machine-readable `verdict.json` —
+  browsable artifacts** — a top-level `README.md` + `index.html` landing page
+  (linking each component's report, with a "generated, do not edit" banner),
+  each component's self-contained `report.html` triptych, and a machine-readable
+  `verdict.json` —
   to a permanent **`artifact_branch`** (default `design-parity/<dev-branch>`),
   force-updated each run. This gives a stable, always-current view of `main`'s
   parity state without committing generated PNGs/HTML onto `main`, and a real

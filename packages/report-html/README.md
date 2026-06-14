@@ -43,6 +43,23 @@ Reference and candidate PNGs are read from disk via `repoRoot + Image.uri`
 (the same resolution the diff engine uses) and inlined. A side with no images
 (a semantic/token-only verdict) degrades cleanly — the findings still render.
 
+## Branch landing page
+
+`report.html` is per-component; `renderIndex` stitches a whole run together so
+the published artifact branch has an entry point instead of a wall of
+machine-named directories. Given the run's components it returns
+`{ readme, html }`:
+
+- `README.md` — what GitHub renders when you open the branch: a "generated, do
+  not edit" banner, the source commit, and a table linking each component to
+  its report.
+- `index.html` — a self-contained landing page for GitHub Pages / local view.
+
+Because GitHub serves a linked `.html` blob as source (the slider JS won't run),
+pass the published `repoSlug` + `branch` to wrap the README's report links
+through `htmlpreview.github.io` so they render on click; without them the links
+are relative. Deterministic, same as `renderHtmlReport`.
+
 ## CLI
 
 A small demo CLI ships as `design-parity-report`:

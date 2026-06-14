@@ -29,7 +29,12 @@ import {
   type Triptych,
 } from "@design-parity/diff";
 import { directionPolicy } from "@design-parity/policy";
-import { renderHtmlReport, type DiffImage } from "@design-parity/report-html";
+import {
+  renderHtmlReport,
+  renderIndex,
+  type DiffImage,
+  type IndexEntry,
+} from "@design-parity/report-html";
 
 import type { AdapterRegistry } from "./registry.js";
 
@@ -63,6 +68,21 @@ export interface OrchestrateOptions {
   /** Where triptych PNGs are written (optional). */
   outDir?: string;
   diffConfig?: Partial<DiffConfig>;
+  /**
+   * When `outDir` is set, a `README.md` + `index.html` landing page is written at
+   * its root so the published branch has an entry point. These describe where the
+   * index will live so report links render on GitHub (see {@link renderIndex}).
+   */
+  index?: {
+    /** Candidate commit the reports were rendered from, shown on the landing page. */
+    sourceCommit?: string;
+    /** `owner/repo` the branch is published to (enables htmlpreview report links). */
+    repoSlug?: string;
+    /** Branch the index is published to (e.g. `design-parity/main`). */
+    branch?: string;
+    /** Overview image at the branch root, e.g. `candidates.bundle.png`. */
+    bundleImage?: string;
+  };
 }
 
 /** Wrap precomputed native findings as a {@link ChecksProvider} for the diff. */
@@ -215,6 +235,22 @@ export async function orchestrate(
     }
 
     results.push(result);
+  }
+
+  // Stitch the per-component reports into a branch landing page so the published
+  // branch has an entry point instead of a wall of machine-named directories.
+  if (options.outDir) {
+    const entries: IndexEntry[] = results.map((r) => ({
+      code: r.code,
+      status: r.verdict?.status ?? (r.status === "error" ? "error" : "skipped"),
+      ...(r.reportPath
+        ? { reportPath: `${sanitizeId(r.code)}/report.html` }
+        : {}),
+    }));
+    const { readme, html } = renderIndex({ entries, ...options.index });
+    await mkdir(options.outDir, { recursive: true });
+    await writeFile(join(options.outDir, "README.md"), readme);
+    await writeFile(join(options.outDir, "index.html"), html);
   }
 
   const blocked = directionPolicy(options.direction).blocksPr && status === "fail";
