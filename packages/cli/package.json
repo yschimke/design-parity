@@ -19,5 +19,12 @@
   },
   "dependencies": {
     "@design-parity/action": "^0.1.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/cli#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
 }
