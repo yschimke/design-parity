@@ -184,13 +184,15 @@ attached to `SemanticTree.themeTokens`, keyed by code token name
 type scale / shape scale behind a screen, not just per-node values.
 
 Per element, `semanticsToSemanticTree` also surfaces the **code attribute** a
-node draws with: the node's resolved colour is reverse-matched against the
-scheme and keyed by the token name when the match is unambiguous (e.g.
-`onSurface: "#1d1b20ff"`), so a report shows both the code attribute and its
-resolved value. Ambiguous values (white = `onPrimary`/`onError`/… in M3) keep
-the generic `fg`/`bg` rather than guess. Exact per-node attribution will come
-from `compose/theme.consumers` once the producer populates it (empty in its v1
-schema); until then the reverse-match is the available signal.
+node draws with, keyed by the token name (e.g. `onSurface: "#1d1b20ff"`) so a
+report shows both the code attribute and its resolved value. Attribution prefers
+`compose/theme.consumers` (schema v2, compose-ai-tools#1847): the producer
+reports which tokens each node read, joined by `nodeId`, which pins exactly the
+role even for values several roles share (white = `onPrimary`/`onError`/… in M3).
+When `consumers` is absent or empty — a v1 producer, or a node it didn't
+attribute — it falls back to reverse-matching the resolved colour against the
+scheme, keeping the generic `fg`/`bg` when that match is ambiguous rather than
+guessing.
 
 ## Wiring into the Action / CLI
 
