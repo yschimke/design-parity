@@ -50,6 +50,15 @@ export {
   entryRefs,
 } from "./design-map.js";
 
+export type { DtcgReadResult } from "./dtcg.js";
+export {
+  dtcgTokensSchema,
+  dtcgTokensSchemaPath,
+  validateDtcgTokens,
+  readDtcgTokens,
+  loadDtcgTokens,
+} from "./dtcg.js";
+
 export type { CanonicalSize } from "./size.js";
 export {
   CANONICAL_SIZES,
