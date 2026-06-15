@@ -49,10 +49,18 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   (linking each component's report, with a "generated, do not edit" banner),
   each component's self-contained `report.html` triptych, and a machine-readable
   `verdict.json` —
-  to a permanent **`artifact_branch`** (default `design-parity/<dev-branch>`),
-  force-updated each run. This gives a stable, always-current view of `main`'s
-  parity state without committing generated PNGs/HTML onto `main`, and a real
-  baseline a PR can diff its candidate against. Requires `contents: write`.
+  to a permanent **`artifact_branch`** (default `design-parity/<dev-branch>`).
+  This gives a stable, always-current view of `main`'s parity state without
+  committing generated PNGs/HTML onto `main`, and a real baseline a PR can diff
+  its candidate against. Requires `contents: write`.
+
+  **History accrues automatically.** `publishBaseline` re-parents each run's tree
+  on the existing branch tip (a linear commit chain, fast-forward push — no
+  force), so the artifact branch already carries one commit per run. The landing
+  page links a per-screen **History** to each `report.html`'s commit log. Because
+  `report.html` is deterministic, a run that doesn't change a screen touches no
+  file and adds no commit noise — the history shows exactly the runs where a
+  screen's code or mock actually changed.
 - **skip** — nothing applies (e.g. a push to a non-dev branch).
 
 `mode: baseline|comment|skip` overrides the selector when needed.

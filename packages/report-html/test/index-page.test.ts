@@ -7,14 +7,22 @@ import {
   type IndexInput,
 } from "../src/index.js";
 
+const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 const base: IndexInput = {
   title: "Design parity",
   sourceCommit: "0123456789abcdef0123456789abcdef01234567",
   entries: [
-    { code: "ui/DeviceBody.kt#DeviceBodyPreview", status: "pass", reportPath: "ui-DeviceBody-kt-DeviceBodyPreview/report.html" },
+    { code: "ui/DeviceBody.kt#DeviceBodyPreview", status: "pass", reportPath: "ui-DeviceBody-kt-DeviceBodyPreview/report.html", thumbnail: PIXEL },
     { code: "ui/DeviceBody.kt#DeviceBodyDarkPreview", status: "fail", reportPath: "ui-DeviceBody-kt-DeviceBodyDarkPreview/report.html" },
     { code: "ui/Pipe|Name.kt#Skipped", status: "skipped" },
   ],
+};
+
+const withRepo: IndexInput = {
+  ...base,
+  repoSlug: "yschimke/meshcore-mobile",
+  branch: "design-parity/main",
 };
 
 describe("renderReadme", () => {
@@ -48,13 +56,25 @@ describe("renderReadme", () => {
   });
 
   it("wraps report links through htmlpreview when repoSlug + branch are set", () => {
-    const md = renderReadme({
-      ...base,
-      repoSlug: "yschimke/meshcore-mobile",
-      branch: "design-parity/main",
-    });
+    const md = renderReadme(withRepo);
     expect(md).toContain(
       "https://htmlpreview.github.io/?https://github.com/yschimke/meshcore-mobile/blob/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html",
+    );
+  });
+
+  it("offers a previewable 'open the board' link only when the repo is known", () => {
+    expect(renderReadme(base)).not.toContain("Open the board");
+    expect(renderReadme(withRepo)).toContain(
+      "[**Open the board →**](https://htmlpreview.github.io/?https://github.com/yschimke/meshcore-mobile/blob/design-parity/main/index.html)",
+    );
+  });
+
+  it("adds a per-screen History column linking to GitHub commit history when the repo is known", () => {
+    expect(renderReadme(base)).not.toContain("History");
+    const md = renderReadme(withRepo);
+    expect(md).toContain("| Component | Status | Report | History |");
+    expect(md).toContain(
+      "[history](https://github.com/yschimke/meshcore-mobile/commits/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html)",
     );
   });
 
@@ -81,6 +101,32 @@ describe("renderIndexHtml", () => {
     expect(html).toContain('class="status status-pass"');
     expect(html).toContain('class="status status-fail"');
     expect(html).toContain('href="./ui-DeviceBody-kt-DeviceBodyPreview/report.html"');
+  });
+
+  it("wraps index report links through htmlpreview when the repo is known", () => {
+    const html = renderIndexHtml(withRepo);
+    expect(html).toContain(
+      'href="https://htmlpreview.github.io/?https://github.com/yschimke/meshcore-mobile/blob/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html"',
+    );
+  });
+
+  it("adds a History column linking to commit history only when the repo is known", () => {
+    expect(renderIndexHtml(base)).not.toContain("<th>History</th>");
+    const html = renderIndexHtml(withRepo);
+    expect(html).toContain("<th>History</th>");
+    expect(html).toContain(
+      'href="https://github.com/yschimke/meshcore-mobile/commits/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html"',
+    );
+  });
+
+  it("shows the real candidate render as a thumbnail when provided", () => {
+    const html = renderIndexHtml(base);
+    expect(html).toContain('<img class="thumb"');
+    expect(html).toContain(PIXEL);
+    expect(html).toContain("<th>Preview</th>");
+    // a component with no candidate render shows a placeholder, not an <img>
+    expect(html).toMatch(/Pipe\|Name[\s\S]*?/);
+    expect((html.match(/class="thumb"/g) ?? []).length).toBe(1);
   });
 
   it("escapes html-special characters in component ids", () => {
