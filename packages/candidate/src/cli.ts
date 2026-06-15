@@ -14,7 +14,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { SemanticNode, SemanticTree, Theme } from "@design-parity/core";
+import type {
+  DesignTokens,
+  SemanticNode,
+  SemanticTree,
+  Theme,
+} from "@design-parity/core";
 
 import { execFileRunner, isNotFound, type CommandRunner } from "./exec.js";
 import {
@@ -182,6 +187,22 @@ export function stateFromParams(params: PreviewParams): string {
 // ---------------------------------------------------------------------------
 
 /** Loosely-typed node as the renderer's hierarchy product emits it. */
+/**
+ * The compose/semantics producer's resolved design-token shape (schema v3,
+ * compose-ai-tools#1897): a node's container background colour, corner radius,
+ * and padding, extracted from its `Modifier.background`/`clip`/`padding`. This
+ * is the producer wire format — distinct from the core {@link DesignTokens} —
+ * and is translated by {@link composeTokensToDesign}.
+ */
+export interface RawComposeTokens {
+  /** Container/fill colour as ARGB hex `#AARRGGBB` (e.g. from `Modifier.background`). */
+  backgroundColor?: string;
+  /** Corner radius in dp: `"12.0dp"` uniform, or four comma-separated corners. */
+  cornerRadius?: string;
+  /** Per-edge padding in dp (`"16.0dp"`). */
+  padding?: { start?: string; top?: string; end?: string; bottom?: string };
+}
+
 export interface RawSemanticsNode {
   role?: string;
   label?: string;
@@ -199,7 +220,16 @@ export interface RawSemanticsNode {
     right?: number;
     bottom?: number;
   };
-  tokens?: SemanticNode["tokens"];
+  /** Resolved text foreground colour, ARGB `#AARRGGBB` (compose/semantics). */
+  layoutForegroundColor?: string;
+  /** Resolved text background colour, ARGB `#AARRGGBB`; usually unset. */
+  layoutBackgroundColor?: string;
+  /**
+   * Either the core {@link DesignTokens} bag (the a11y/hierarchy product) or the
+   * compose/semantics producer's {@link RawComposeTokens} (schema v3). Detected
+   * by key shape and normalized to {@link DesignTokens} in {@link normalizeNode}.
+   */
+  tokens?: DesignTokens | RawComposeTokens;
   children?: RawSemanticsNode[];
 }
 
@@ -232,6 +262,92 @@ function normalizeBounds(
   return undefined;
 }
 
+/** ARGB `#AARRGGBB` → CSS `#RRGGBBAA` (alpha last); 6-digit passes through; else undefined. */
+function argbToCss(spec: string | undefined): string | undefined {
+  if (!spec) return undefined;
+  const hex = spec.startsWith("#") ? spec.slice(1) : spec;
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) return `#${hex.toLowerCase()}`;
+  if (/^[0-9a-fA-F]{8}$/.test(hex))
+    return `#${hex.slice(2, 8)}${hex.slice(0, 2)}`.toLowerCase();
+  return undefined;
+}
+
+/** Leading dp number of a `"16.0dp"` / `"12.0dp,12.0dp,…"` value, or undefined. */
+function parseDp(spec: string | undefined): number | undefined {
+  if (!spec) return undefined;
+  const m = /^-?\d+(?:\.\d+)?/.exec(spec.trim());
+  if (!m) return undefined;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** A node `tokens` field in the producer's shape rather than core {@link DesignTokens}. */
+function isComposeTokens(
+  t: DesignTokens | RawComposeTokens,
+): t is RawComposeTokens {
+  return "backgroundColor" in t || "cornerRadius" in t || "padding" in t;
+}
+
+/**
+ * Translate the compose/semantics producer's {@link RawComposeTokens} into core
+ * {@link DesignTokens}. The candidate has no reference token *names*, so the
+ * resolved values land under generic keys — the colour under role `bg`, the
+ * radius under `corner`, and padding per edge (plus a uniform `padding`). The
+ * token-compliance diff matches these by role/value, not name (#74, #1897).
+ */
+function composeTokensToDesign(t: RawComposeTokens): DesignTokens {
+  const out: DesignTokens = {};
+  const bg = argbToCss(t.backgroundColor);
+  if (bg) out.colors = { bg };
+  const corner = parseDp(t.cornerRadius);
+  if (corner !== undefined) out.radius = { corner };
+  if (t.padding) {
+    const edges: Record<string, number> = {};
+    const start = parseDp(t.padding.start);
+    const top = parseDp(t.padding.top);
+    const end = parseDp(t.padding.end);
+    const bottom = parseDp(t.padding.bottom);
+    if (start !== undefined) edges["paddingStart"] = start;
+    if (top !== undefined) edges["paddingTop"] = top;
+    if (end !== undefined) edges["paddingEnd"] = end;
+    if (bottom !== undefined) edges["paddingBottom"] = bottom;
+    const all = [start, top, end, bottom];
+    if (all.every((v): v is number => v !== undefined) && all.every((v) => v === start))
+      edges["padding"] = start!;
+    if (Object.keys(edges).length) out.spacing = edges;
+  }
+  return out;
+}
+
+/**
+ * Resolve a node's {@link DesignTokens}: the text fg/bg colours from the
+ * compose/semantics `layout*Color` fields, plus either the pass-through core
+ * tokens (a11y/hierarchy) or the translated producer tokens (schema v3,
+ * compose-ai-tools#1897). Returns `undefined` when the node declares none.
+ */
+function nodeTokens(n: RawSemanticsNode): DesignTokens | undefined {
+  const out: DesignTokens = {};
+  const colors: Record<string, string> = {};
+  const fg = argbToCss(n.layoutForegroundColor);
+  if (fg) colors["fg"] = fg;
+  const bg = argbToCss(n.layoutBackgroundColor);
+  if (bg) colors["bg"] = bg;
+
+  if (n.tokens) {
+    const design = isComposeTokens(n.tokens)
+      ? composeTokensToDesign(n.tokens)
+      : n.tokens;
+    if (design.spacing) out.spacing = { ...out.spacing, ...design.spacing };
+    if (design.radius) out.radius = { ...out.radius, ...design.radius };
+    if (design.typography) out.typography = { ...design.typography };
+    // A producer container colour (or a hierarchy bag's named colours) wins over
+    // the text background read from `layout*Color`.
+    if (design.colors) Object.assign(colors, design.colors);
+  }
+  if (Object.keys(colors).length) out.colors = colors;
+  return Object.keys(out).length ? out : undefined;
+}
+
 function normalizeNode(n: RawSemanticsNode): SemanticNode {
   const node: SemanticNode = {};
   if (n.role !== undefined) node.role = n.role;
@@ -239,7 +355,8 @@ function normalizeNode(n: RawSemanticsNode): SemanticNode {
   if (label !== undefined) node.label = label;
   const bounds = normalizeBounds(n.bounds);
   if (bounds) node.bounds = bounds;
-  if (n.tokens !== undefined) node.tokens = n.tokens;
+  const tokens = nodeTokens(n);
+  if (tokens) node.tokens = tokens;
   if (n.children?.length) node.children = n.children.map(normalizeNode);
   return node;
 }

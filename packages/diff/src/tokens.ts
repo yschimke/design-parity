@@ -6,8 +6,10 @@
  * the candidate's tree into the same shape, then compare key-by-key against the
  * reference spec. Numeric tokens honour a committed tolerance; typography must
  * match exactly; colours match modulo a full-alpha suffix (`#RRGGBB` ==
- * `#RRGGBBAA`), and a spec colour the candidate couldn't name falls back to a
- * same-role value match before being reported missing.
+ * `#RRGGBBAA`). A spec token the candidate couldn't name falls back to a value
+ * match before being reported missing — same-role for colours, within-tolerance
+ * for spacing/radius — since the candidate carries resolved values under generic
+ * keys rather than the reference's names (compose-ai-tools#1897).
  */
 import type {
   DesignTokens,
@@ -63,12 +65,10 @@ export function diffTokens(
   if (!spec) return findings;
 
   for (const [name, want] of Object.entries(spec.spacing ?? {})) {
-    const got = candidate.spacing?.[name];
-    numericFinding("spacing", name, want, got, config.spacingTolerance, findings);
+    numericFinding("spacing", name, want, candidate.spacing, config.spacingTolerance, findings);
   }
   for (const [name, want] of Object.entries(spec.radius ?? {})) {
-    const got = candidate.radius?.[name];
-    numericFinding("radius", name, want, got, config.radiusTolerance, findings);
+    numericFinding("radius", name, want, candidate.radius, config.radiusTolerance, findings);
   }
   for (const [name, want] of Object.entries(spec.colors ?? {})) {
     // A node carries its colour under the reference's token name only when the
@@ -109,10 +109,16 @@ function numericFinding(
   group: "spacing" | "radius",
   name: string,
   want: number,
-  got: number | undefined,
+  candidate: Record<string, number> | undefined,
   tolerance: number,
   findings: Finding[],
 ): void {
+  // Prefer an exact name match; otherwise fall back to a value match. The
+  // candidate carries resolved spacing/radius values under generic keys, not the
+  // reference's token names (compose-ai-tools#1897), so a spec token is satisfied
+  // by any candidate value within tolerance before it's reported missing — the
+  // numeric analogue of the colour role-match (issue #74).
+  const got = candidate?.[name] ?? numericValueMatch(want, tolerance, candidate);
   if (got === undefined) {
     findings.push(missing(group, name, String(want)));
     return;
@@ -126,6 +132,25 @@ function numericFinding(
       detail: { token: `${group}.${name}`, expected: want, actual: got, delta },
     });
   }
+}
+
+/** The candidate value closest to `want` within `tolerance`, or `undefined`. */
+function numericValueMatch(
+  want: number,
+  tolerance: number,
+  candidate: Record<string, number> | undefined,
+): number | undefined {
+  if (!candidate) return undefined;
+  let best: number | undefined;
+  let bestDelta = Infinity;
+  for (const value of Object.values(candidate)) {
+    const delta = Math.abs(value - want);
+    if (delta <= tolerance && delta < bestDelta) {
+      best = value;
+      bestDelta = delta;
+    }
+  }
+  return best;
 }
 
 /** A token name carries a foreground (text/icon) colour: `onPrimary`, `fg`. */

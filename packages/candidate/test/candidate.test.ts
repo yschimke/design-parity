@@ -235,6 +235,66 @@ describe("normalizeSemantics", () => {
     expect(normalizeSemantics(undefined)).toBeUndefined();
     expect(normalizeSemantics({})).toBeUndefined();
   });
+
+  it("reads resolved fg/bg colours from layout*Color into role keys", () => {
+    const tree = normalizeSemantics({
+      root: {
+        role: "text",
+        label: "Hi",
+        layoutForegroundColor: "#FF161D1B",
+        layoutBackgroundColor: "#FFF4FBF8",
+      },
+    });
+    expect(tree?.root.tokens?.colors).toEqual({
+      fg: "#161d1bff",
+      bg: "#f4fbf8ff",
+    });
+  });
+
+  it("translates the compose/semantics producer token shape (#1897)", () => {
+    const tree = normalizeSemantics({
+      root: {
+        role: "button",
+        layoutForegroundColor: "#FFFFFFFF",
+        tokens: {
+          backgroundColor: "#FF006A60",
+          cornerRadius: "12.0dp",
+          padding: {
+            start: "16.0dp",
+            top: "16.0dp",
+            end: "16.0dp",
+            bottom: "16.0dp",
+          },
+        },
+      },
+    });
+    expect(tree?.root.tokens).toEqual({
+      colors: { fg: "#ffffffff", bg: "#006a60ff" },
+      radius: { corner: 12 },
+      spacing: {
+        paddingStart: 16,
+        paddingTop: 16,
+        paddingEnd: 16,
+        paddingBottom: 16,
+        padding: 16,
+      },
+    });
+  });
+
+  it("passes a core DesignTokens bag through unchanged", () => {
+    const tree = normalizeSemantics({
+      root: {
+        tokens: {
+          spacing: { padding: 12 },
+          colors: { "container.light": "#645AFF" },
+        },
+      },
+    });
+    expect(tree?.root.tokens).toEqual({
+      spacing: { padding: 12 },
+      colors: { "container.light": "#645AFF" },
+    });
+  });
 });
 
 describe("parseShow", () => {
