@@ -133,6 +133,51 @@ describe("precedence", () => {
   });
 });
 
+describe("multi-node manifest refs", () => {
+  const multiMap: DesignMap = {
+    components: [
+      {
+        code: "ui/Device.kt#DeviceScreen",
+        source: "figma",
+        ref: [
+          { ref: "figma:KEY/1:10", state: "default" },
+          { ref: "figma:KEY/1:20", state: "error" },
+          { ref: "figma:KEY/1:30", theme: "dark" },
+        ],
+      },
+    ],
+  };
+
+  it("carries the variant list and the primary (first) ref", () => {
+    const { correspondence } = resolveComponent("ui/Device.kt#DeviceScreen", {
+      designMap: multiMap,
+    });
+    expect(correspondence).toEqual({
+      code: "ui/Device.kt#DeviceScreen",
+      source: "figma",
+      ref: "figma:KEY/1:10",
+      refs: [
+        { ref: "figma:KEY/1:10", state: "default" },
+        { ref: "figma:KEY/1:20", state: "error" },
+        { ref: "figma:KEY/1:30", theme: "dark" },
+      ],
+      linkMethod: "manifest",
+      confidence: "high",
+    });
+  });
+
+  it("leaves a string ref single, with no refs field", () => {
+    const stringMap: DesignMap = {
+      components: [{ code: "ui/A.kt#B", source: "figma", ref: "figma:KEY/1:1" }],
+    };
+    const { correspondence } = resolveComponent("ui/A.kt#B", {
+      designMap: stringMap,
+    });
+    expect(correspondence?.ref).toBe("figma:KEY/1:1");
+    expect(correspondence?.refs).toBeUndefined();
+  });
+});
+
 describe("convention fallback", () => {
   const catalog: DesignCatalogEntry[] = [
     { source: "figma", ref: "figma:Lib/9:1", name: "PrimaryButton" },

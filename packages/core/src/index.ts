@@ -19,6 +19,7 @@ export type {
   AdapterContext,
   ReferenceAdapter,
   Correspondence,
+  RefVariant,
   VerdictStatus,
   FindingKind,
   Severity,
@@ -46,6 +47,7 @@ export {
   validateDesignMap,
   loadDesignMap,
   findByCode,
+  entryRefs,
 } from "./design-map.js";
 
 export type { CanonicalSize } from "./size.js";

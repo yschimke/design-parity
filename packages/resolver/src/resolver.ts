@@ -17,7 +17,7 @@
  * unresolved rather than guessing — never a crash.
  */
 import type { Correspondence, DesignMap, DesignSource } from "@design-parity/core";
-import { findByCode } from "@design-parity/core";
+import { entryRefs, findByCode } from "@design-parity/core";
 
 /**
  * Figma Code Connect links, indexed by code handle.
@@ -114,14 +114,19 @@ export function resolveComponent(
     };
   }
 
-  // 2. design-map.json — the committed manifest.
+  // 2. design-map.json — the committed manifest. A list `ref` binds several
+  // variant-tagged nodes; the primary (first) is the structure node and the
+  // full list is carried for the orchestrator to resolve and merge.
   const entry = inputs.designMap ? findByCode(inputs.designMap, code) : undefined;
   if (entry) {
+    const variants = entryRefs(entry);
+    const multi = Array.isArray(entry.ref);
     return {
       correspondence: {
         code,
         source: entry.source,
-        ref: entry.ref,
+        ref: variants[0]!.ref,
+        ...(multi ? { refs: variants } : {}),
         linkMethod: "manifest",
         confidence: "high",
       },

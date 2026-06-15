@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import AjvModule, { type ValidateFunction } from "ajv";
 
-import type { DesignSource } from "./types.js";
+import type { DesignSource, RefVariant } from "./types.js";
 import schema from "../schema/design-map.schema.json" with { type: "json" };
 
 // ajv ships CJS; under NodeNext the constructable class can land on `.default`.
@@ -24,8 +24,12 @@ export interface DesignMapEntry {
   /** Code handle, e.g. `"ui/Button.kt#PrimaryButton"`. */
   code: string;
   source: DesignSource;
-  /** Source-specific reference handle (see schema for per-source format). */
-  ref: string;
+  /**
+   * Source-specific reference handle(s). A string binds a single node; a list of
+   * variant-tagged handles binds several nodes — a screen's states/themes/sizes
+   * living in separate frames — each re-tagged onto its variant slot.
+   */
+  ref: string | RefVariant[];
   /**
    * Optional compose-ai-tools preview id (`"a.b.C.fn"`) this code handle
    * renders as. The authoritative link between a preview-bundle / daemon
@@ -124,4 +128,12 @@ export function findByCode(
   code: string,
 ): DesignMapEntry | undefined {
   return map.components.find((c) => c.code === code);
+}
+
+/**
+ * Normalize an entry's `ref` (string shorthand or variant list) to a
+ * {@link RefVariant} list. A bare string becomes a single untagged variant.
+ */
+export function entryRefs(entry: DesignMapEntry): RefVariant[] {
+  return typeof entry.ref === "string" ? [{ ref: entry.ref }] : entry.ref;
 }
