@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/adapter-figma",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Figma ReferenceAdapter: resolves a component to a Figma node via Code Connect, fetches the reference image + variables over the REST API, and normalizes to a DesignReference.",
   "license": "Apache-2.0",
   "type": "module",
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.2"
+    "@design-parity/core": "^0.1.3"
   },
   "repository": {
     "type": "git",
