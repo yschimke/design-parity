@@ -65,6 +65,13 @@ for Pages / local view). Per-entry thumbnails come from the caller as `data:`
 URIs (`orchestrate` inlines the candidate's first render), keeping this package a
 leaf with no disk reads. Deterministic, same as `renderHtmlReport`.
 
+When `repoSlug` + `branch` are set, each entry also gets a **History** link to
+GitHub's commit history for that screen's `report.html`. Since `report.html` is
+regenerated whenever a screen's code or mock changes, its commit log is that
+screen's change timeline — **but only if the publish step commits each run
+rather than force-updating the branch.** With a force-updated (single-commit)
+branch the link resolves but shows just the latest run.
+
 ## CLI
 
 A small demo CLI ships as `design-parity-report`:

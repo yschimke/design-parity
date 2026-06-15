@@ -98,6 +98,19 @@ function previewHref(path: string, input: IndexInput): string {
   return `./${path}`;
 }
 
+/**
+ * GitHub commit-history URL for a branch-relative path, or `undefined` when the
+ * repo isn't known. Since `report.html` is regenerated whenever a screen's code
+ * or mock changes, its history is that screen's change timeline — provided the
+ * publish step commits each run rather than force-updating the branch.
+ */
+function historyHref(path: string, input: IndexInput): string | undefined {
+  if (input.repoSlug && input.branch) {
+    return `https://github.com/${input.repoSlug}/commits/${input.branch}/${path}`;
+  }
+  return undefined;
+}
+
 /** Render the branch's `README.md`. */
 export function renderReadme(input: IndexInput): string {
   const title = input.title ?? "Design parity";
@@ -122,13 +135,25 @@ export function renderReadme(input: IndexInput): string {
     lines.push(`![Candidate overview](./${input.bundleImage})`, "");
   }
 
-  lines.push("| Component | Status | Report |", "| --- | --- | --- |");
+  const hasHistory = !!(input.repoSlug && input.branch);
+  lines.push(
+    hasHistory ? "| Component | Status | Report | History |" : "| Component | Status | Report |",
+    hasHistory ? "| --- | --- | --- | --- |" : "| --- | --- | --- |",
+  );
   for (const e of input.entries) {
     const status = `${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]}`;
     const report = e.reportPath
       ? `[report](${previewHref(e.reportPath, input)})`
       : "—";
-    lines.push(`| ${mdCell(e.code)} | ${status} | ${report} |`);
+    const history =
+      e.reportPath && historyHref(e.reportPath, input)
+        ? `[history](${historyHref(e.reportPath, input)})`
+        : "—";
+    lines.push(
+      hasHistory
+        ? `| ${mdCell(e.code)} | ${status} | ${report} | ${history} |`
+        : `| ${mdCell(e.code)} | ${status} | ${report} |`,
+    );
   }
   lines.push("");
   lines.push(
@@ -163,7 +188,7 @@ td.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .status-error{background:#3a1820;color:#f08a9c}
 .muted{color:#666}`;
 
-function rowMarkup(e: IndexEntry, input: IndexInput): string {
+function rowMarkup(e: IndexEntry, input: IndexInput, hasHistory: boolean): string {
   const status = `<span class="status status-${e.status}">${STATUS_TEXT[e.status]}</span>`;
   const report = e.reportPath
     ? `<a href="${escapeHtml(previewHref(e.reportPath, input))}">report</a>`
@@ -171,7 +196,11 @@ function rowMarkup(e: IndexEntry, input: IndexInput): string {
   const preview = e.thumbnail
     ? `<img class="thumb" src="${e.thumbnail}" alt="${escapeHtml(e.code)} candidate render" loading="lazy" />`
     : `<span class="muted">—</span>`;
-  return `<tr><td>${preview}</td><td class="code">${escapeHtml(e.code)}</td><td>${status}</td><td>${report}</td></tr>`;
+  const href = e.reportPath ? historyHref(e.reportPath, input) : undefined;
+  const historyCell = hasHistory
+    ? `<td>${href ? `<a href="${escapeHtml(href)}">history</a>` : `<span class="muted">—</span>`}</td>`
+    : "";
+  return `<tr><td>${preview}</td><td class="code">${escapeHtml(e.code)}</td><td>${status}</td><td>${report}</td>${historyCell}</tr>`;
 }
 
 /** Render the branch's self-contained `index.html` landing page. */
@@ -183,7 +212,8 @@ export function renderIndexHtml(input: IndexInput): string {
   const overview = input.bundleImage
     ? `<img class="overview" src="./${escapeHtml(input.bundleImage)}" alt="Candidate overview" />`
     : "";
-  const rows = input.entries.map((e) => rowMarkup(e, input)).join("\n");
+  const hasHistory = !!(input.repoSlug && input.branch);
+  const rows = input.entries.map((e) => rowMarkup(e, input, hasHistory)).join("\n");
 
   return `<!doctype html>
 <html lang="en">
@@ -201,7 +231,7 @@ export function renderIndexHtml(input: IndexInput): string {
 <main>
 ${overview}
 <table>
-<thead><tr><th>Preview</th><th>Component</th><th>Status</th><th>Report</th></tr></thead>
+<thead><tr><th>Preview</th><th>Component</th><th>Status</th><th>Report</th>${hasHistory ? "<th>History</th>" : ""}</tr></thead>
 <tbody>
 ${rows}
 </tbody>

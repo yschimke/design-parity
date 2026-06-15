@@ -69,6 +69,15 @@ describe("renderReadme", () => {
     );
   });
 
+  it("adds a per-screen History column linking to GitHub commit history when the repo is known", () => {
+    expect(renderReadme(base)).not.toContain("History");
+    const md = renderReadme(withRepo);
+    expect(md).toContain("| Component | Status | Report | History |");
+    expect(md).toContain(
+      "[history](https://github.com/yschimke/meshcore-mobile/commits/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html)",
+    );
+  });
+
   it("falls back to a generic SOURCE_COMMIT reference without a sha", () => {
     const md = renderReadme({ ...base, sourceCommit: undefined });
     expect(md).toContain("Rendered from the commit in [`SOURCE_COMMIT`](./SOURCE_COMMIT).");
@@ -98,6 +107,15 @@ describe("renderIndexHtml", () => {
     const html = renderIndexHtml(withRepo);
     expect(html).toContain(
       'href="https://htmlpreview.github.io/?https://github.com/yschimke/meshcore-mobile/blob/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html"',
+    );
+  });
+
+  it("adds a History column linking to commit history only when the repo is known", () => {
+    expect(renderIndexHtml(base)).not.toContain("<th>History</th>");
+    const html = renderIndexHtml(withRepo);
+    expect(html).toContain("<th>History</th>");
+    expect(html).toContain(
+      'href="https://github.com/yschimke/meshcore-mobile/commits/design-parity/main/ui-DeviceBody-kt-DeviceBodyPreview/report.html"',
     );
   });
 
