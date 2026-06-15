@@ -40,6 +40,9 @@ export {
 export { selectMode } from "./mode.js";
 export type { ActionMode, ModeInputs } from "./mode.js";
 
+export { runReverse } from "./reverse.js";
+export type { ReverseIO } from "./reverse.js";
+
 export { pushBack, decidePushBack } from "./pushback.js";
 export type {
   PushBackGate,

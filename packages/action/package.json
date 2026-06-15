@@ -8,7 +8,8 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./run": "./dist/cli/run.js"
+    "./run": "./dist/cli/run.js",
+    "./reverse": "./dist/cli/reverse.js"
   },
   "files": [
     "dist"
