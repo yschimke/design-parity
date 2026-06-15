@@ -281,6 +281,26 @@ describe("normalizeSemantics", () => {
     });
   });
 
+  it("translates the #1908 token-capture fields (gap, border, circle radius)", () => {
+    const tree = normalizeSemantics({
+      root: {
+        tokens: {
+          // outline colour from Modifier.border, gap from Arrangement.spacedBy, and a
+          // CircleShape avatar whose percent corner resolved to a dp radius upstream.
+          borderColor: "#FFCAC4D0",
+          gap: "8.0dp",
+          shape: "circle",
+          cornerRadius: "18.0dp",
+        },
+      },
+    });
+    expect(tree?.root.tokens).toEqual({
+      colors: { border: "#cac4d0ff" },
+      radius: { corner: 18 },
+      spacing: { gap: 8 },
+    });
+  });
+
   it("passes a core DesignTokens bag through unchanged", () => {
     const tree = normalizeSemantics({
       root: {
