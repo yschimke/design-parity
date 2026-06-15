@@ -28,9 +28,15 @@ gets a concrete parity direction in policy's committed `.design-parity.json` —
 - `design-tokens.json` — Material 3 + WCAG AA + i18n-ready token baseline,
 - `design-parity.checks.json` — `@design-parity/checks`'s `ChecksConfig`
   (WCAG AA, hardcoded-string lint on),
-- `design-map.json` — a schema-valid starter scaffold. Components discovered by
-  name convention are surfaced as **low-confidence review items** to wire to a
-  design source later.
+- `design-map.json` — components that authored a binding next to them — a
+  `@DesignRef("figma:…")` annotation or a `design-ref:` comment — become **real,
+  high-confidence entries** (source inferred from the ref). The rest, discovered
+  by name convention, are surfaced as **low-confidence review items** to wire to
+  a design source later. With no authored refs the manifest is an empty scaffold.
+
+This is the design→code half of the binding: the code references its design
+element, and the resolver's `buildReverseIndex` inverts the manifest so a design
+node can answer "what implements me?" without Code Connect.
 
 ## Compose Multiplatform (Principle 6)
 
