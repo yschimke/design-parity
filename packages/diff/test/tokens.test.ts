@@ -79,11 +79,15 @@ describe("diffTokens", () => {
     expect(drift[0]).toMatchObject({ kind: "token", severity: "warn" });
   });
 
-  it("flags a reference token missing from the candidate", () => {
+  it("flags an absent token: numeric is a hard error, unmappable colour is advisory (#102)", () => {
     const findings = diffTokens(spec, { spacing: { padding: 16 } }, defaultDiffConfig);
-    // radius.corner and colors.label are both absent.
+    // radius.corner (numeric) stays strict → error; colors.label maps to no
+    // Material role and didn't value-match → non-blocking advisory.
     expect(findings).toHaveLength(2);
-    expect(findings.every((f) => f.severity === "error")).toBe(true);
+    const radius = findings.find((f) => f.detail?.token === "radius.corner");
+    const label = findings.find((f) => f.detail?.token === "colors.label");
+    expect(radius).toMatchObject({ severity: "error" });
+    expect(label).toMatchObject({ severity: "info", detail: { unmapped: true } });
   });
 
   it("matches a colour that differs only by a full-alpha suffix (issue #74)", () => {
@@ -222,12 +226,35 @@ describe("diffTokens", () => {
       expect(diffTokens(designSpec, candidate, defaultDiffConfig)).toEqual([]);
     });
 
-    it("still reports a colour that maps to no Material role as missing", () => {
-      // `label` is not a colour role; with no value match it stays a hard error.
+    it("reports a colour that maps to no Material role as advisory, not missing (#102)", () => {
+      // `label` is not a colour role; with no value match it's unverifiable, so
+      // a non-blocking advisory rather than a false `missing` error.
       const designSpec: DesignTokens = { colors: { label: "#FFFFFF" } };
       const findings = diffTokens(designSpec, {}, defaultDiffConfig);
       expect(findings).toHaveLength(1);
-      expect(findings[0]).toMatchObject({ severity: "error" });
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { token: "colors.label", unmapped: true },
+      });
+    });
+
+    it("keeps a role-mapped colour the candidate lacks as a hard error (#102)", () => {
+      // `onSurface` IS a Material role; the candidate genuinely lacking it is a
+      // real gap, not an unmappable one.
+      const designSpec: DesignTokens = { colors: { onSurface: "#161D1B" } };
+      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "error", detail: { actual: null } });
+    });
+
+    it("reports an unmappable typography token as advisory (#102)", () => {
+      const designSpec: DesignTokens = { typography: { caption: { fontSize: 12 } } };
+      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { token: "typography.caption", unmapped: true },
+      });
     });
 
     it("lets an explicit alias override the heuristic", () => {
