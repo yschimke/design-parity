@@ -14,6 +14,7 @@ import type {
   Correspondence,
   DesignReference,
   DesignSource,
+  DesignTokens,
   Finding,
   ResolvedDirection,
   TokenAliasMap,
@@ -79,6 +80,15 @@ export interface OrchestrateOptions {
    */
   tokenAlias?: TokenAliasMap;
   /**
+   * Per-component spec tokens declared in committed config (a `design-map`
+   * `tokensFile` DTCG document, issue #89), keyed by code handle. When present
+   * for a component, they are merged into the resolved
+   * {@link DesignReference.tokens} (declared values win), so a source that
+   * doesn't expose tokens still has a spec to diff against. Matched via the
+   * Material-role heuristic (issue #87), same as any reference tokens.
+   */
+  referenceTokens?: ReadonlyMap<string, DesignTokens>;
+  /**
    * When `outDir` is set, a `README.md` + `index.html` landing page is written at
    * its root so the published branch has an entry point. These describe where the
    * index will live so report links render on GitHub (see {@link renderIndex}).
@@ -98,6 +108,23 @@ export interface OrchestrateOptions {
 /** Wrap precomputed native findings as a {@link ChecksProvider} for the diff. */
 function nativeChecksProvider(findings: Finding[]): ChecksProvider {
   return { run: () => findings };
+}
+
+/** Merge declared spec tokens over a reference's, per group; declared values win. */
+function mergeReferenceTokens(
+  base: DesignTokens | undefined,
+  declared: DesignTokens,
+): DesignTokens {
+  const out: DesignTokens = {};
+  const spacing = { ...base?.spacing, ...declared.spacing };
+  if (Object.keys(spacing).length > 0) out.spacing = spacing;
+  const radius = { ...base?.radius, ...declared.radius };
+  if (Object.keys(radius).length > 0) out.radius = radius;
+  const colors = { ...base?.colors, ...declared.colors };
+  if (Object.keys(colors).length > 0) out.colors = colors;
+  const typography = { ...base?.typography, ...declared.typography };
+  if (Object.keys(typography).length > 0) out.typography = typography;
+  return out;
 }
 
 /**
@@ -219,6 +246,11 @@ export async function orchestrate(
       }
 
       const reference = await resolveReference(adapter, corr, ctx);
+      // A component can declare its spec tokens via a committed DTCG file
+      // (design-map `tokensFile`, issue #89); merge them over whatever the
+      // adapter resolved so a token-less source still has a spec to diff.
+      const declared = options.referenceTokens?.get(corr.code);
+      if (declared) reference.tokens = mergeReferenceTokens(reference.tokens, declared);
       result.reference = reference;
 
       const candidate = await options.candidate(corr.code, ctx);
