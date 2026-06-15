@@ -179,6 +179,14 @@ low-confidence *name* match, so a mismatch found that way is flagged
 `via: "role-heuristic"` in the finding detail. Typography gets the analogous
 type-scale heuristic (`type/body/large` → `bodyLarge`).
 
+When all tiers miss, severity depends on whether we could map the token at all
+(issue #102): a colour/typography token that maps to a Material role the
+candidate genuinely lacks is a real gap → hard `error`; one that maps to **no**
+role (`brand/blue-600`, `label`) is unverifiable, not proof the candidate is
+wrong → a non-blocking `info` advisory (`detail.unmapped`). Numeric
+spacing/radius have no role taxonomy and stay strict — a missing numeric is
+always an `error`.
+
 The #74 fallback is the tell that the **naming** is the weak link: when the
 code's theme can't name a value, the colour lands under a generic role key
 (`fg`/`bg`) instead of `onSurface`, and a name-keyed comparison misses it. The

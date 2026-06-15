@@ -137,7 +137,16 @@ export function diffTokens(
     const got =
       candidate.colors?.[name] ?? byRole ?? roleMatch(name, want, candidate.colors);
     if (got === undefined) {
-      findings.push(missing("colors", name, want));
+      // A spec token that maps to a Material role the candidate genuinely lacks
+      // is a real gap (hard error). One that maps to *no* role and didn't value-
+      // match is something we couldn't verify, not proof the candidate is wrong —
+      // report it as a non-blocking advisory rather than a false mismatch
+      // (issue #102 / #87).
+      findings.push(
+        role !== undefined
+          ? missing("colors", name, want)
+          : advisory("colors", name, want),
+      );
     } else if (!colorsEqual(got, want)) {
       const viaRole = candidate.colors?.[name] === undefined && byRole === got;
       findings.push({
@@ -162,7 +171,13 @@ export function diffTokens(
       candidate.typography?.[name] ??
       (role !== undefined ? candidate.typography?.[role] : undefined);
     if (got === undefined) {
-      findings.push(missing("typography", name, JSON.stringify(want)));
+      // Same rule as colours (#102): mapped-to-a-role-but-absent is a hard
+      // error; unmappable is an advisory, not a false mismatch.
+      findings.push(
+        role !== undefined
+          ? missing("typography", name, JSON.stringify(want))
+          : advisory("typography", name, JSON.stringify(want)),
+      );
     } else if (!typographyEqual(want, got)) {
       findings.push({
         kind: "token",
@@ -276,5 +291,20 @@ function missing(group: string, name: string, want: string): Finding {
     severity: "error",
     message: `${group}.${name} missing from candidate (spec ${want})`,
     detail: { token: `${group}.${name}`, expected: want, actual: null },
+  };
+}
+
+/**
+ * A spec token that maps to no Material role and didn't value-match: we can't
+ * line it up with anything the candidate resolved, so we can't verify it.
+ * Non-blocking `info` (never escalates the verdict) — reported, not a false
+ * `missing` error (issue #102). Numerics stay strict and never come here.
+ */
+function advisory(group: string, name: string, want: string): Finding {
+  return {
+    kind: "token",
+    severity: "info",
+    message: `${group}.${name} has no Material-role mapping; unverified (spec ${want})`,
+    detail: { token: `${group}.${name}`, expected: want, actual: null, unmapped: true },
   };
 }
