@@ -3,6 +3,9 @@
 These are binding constraints on every package and issue in this repo, not
 aspirations. When a design decision is unclear, resolve it in favor of these.
 
+For deliberate boundaries — things we've decided *not* to do, and why — see
+[NON-GOALS.md](./NON-GOALS.md).
+
 ## 1. Generate scripts, don't put AI in the loop
 
 AI is used at **authoring / bootstrap time** to generate deterministic,
