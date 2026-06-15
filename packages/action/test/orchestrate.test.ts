@@ -51,14 +51,19 @@ const reg = (a: ReferenceAdapter): AdapterRegistry => ({
   "claude-design": a,
 });
 
-const load = async () => ({
-  reference: await readJson<DesignReference>(
+const load = async () => {
+  const reference = await readJson<DesignReference>(
     "fixtures/figma/button-primary.reference.json",
-  ),
-  candidate: await readJson<CandidateRender>(
+  );
+  const candidate = await readJson<CandidateRender>(
     "fixtures/candidate/button-primary.candidate.json",
-  ),
-});
+  );
+  // The resolved compose theme behind the render, for the design-system audit.
+  candidate.semantics.themeTokens = {
+    colors: { "container.light": "#645AFF", "container.dark": "#7A72F0" },
+  };
+  return { reference, candidate };
+};
 
 describe("createAdapterRegistry", () => {
   it("wires all three sources with correct source tags", () => {
@@ -86,6 +91,27 @@ describe("orchestrate (golden figma button vs candidate)", () => {
     expect(r0.status).toBe("ok");
     expect(r0.verdict?.findings.some((f) => f.kind === "contrast")).toBe(true);
     expect(r0.verdict?.findings.some((f) => f.kind === "token")).toBe(true);
+  });
+
+  it("reports a shared design-system drift once across components", async () => {
+    const { reference, candidate } = await load();
+    const ds = (i: number) =>
+      (report.results[i]!.verdict?.findings ?? []).filter(
+        (f) => f.detail?.scope === "design-system",
+      );
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(adapterReturning(reference)),
+      correspondences: [
+        { ...corr, code: "ui/A.kt#A" },
+        { ...corr, code: "ui/B.kt#B" },
+      ],
+      candidate: () => candidate,
+      direction: "design-led",
+    });
+    // Same palette → the container drift surfaces on the first component only.
+    expect(ds(0)).toHaveLength(1);
+    expect(ds(1)).toHaveLength(0);
   });
 
   it("is advisory (not blocked) under code-led", async () => {

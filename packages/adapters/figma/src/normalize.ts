@@ -89,10 +89,7 @@ function typographyFrom(text: FigmaNodeDoc | undefined): TypographyToken | undef
   return Object.keys(token).length ? token : undefined;
 }
 
-function tokensFrom(
-  node: FigmaNodeDoc,
-  variables: VariablesResponse,
-): DesignTokens | undefined {
+function tokensFrom(node: FigmaNodeDoc): DesignTokens | undefined {
   const tokens: DesignTokens = {};
 
   const padding = node.paddingLeft ?? node.paddingTop ?? node.paddingRight ?? node.paddingBottom;
@@ -100,11 +97,11 @@ function tokensFrom(
 
   if (node.cornerRadius !== undefined) tokens.radius = { corner: node.cornerRadius };
 
-  const colors: Record<string, string> = colorsFromVariables(variables);
+  // Per-node colours: the frame's own fill and its first text colour. The
+  // design-system palette (Variables) lives in `themeTokens`, not here.
+  const colors: Record<string, string> = {};
   const container = solidFill(node.fills);
-  // Only fall back to the node fill when variables didn't supply a container.
-  if (container && !Object.keys(colors).some((k) => k.startsWith("container")))
-    colors.container = container;
+  if (container) colors.container = container;
   const text = firstTextNode(node);
   const label = solidFill(text?.fills);
   if (label) colors.label = label;
@@ -114,6 +111,12 @@ function tokensFrom(
   if (typography) tokens.typography = { label: typography };
 
   return Object.keys(tokens).length ? tokens : undefined;
+}
+
+/** The design-system palette: every COLOR Variable, keyed `<name>.<mode>`. */
+function themeTokensFrom(variables: VariablesResponse): DesignTokens | undefined {
+  const colors = colorsFromVariables(variables);
+  return Object.keys(colors).length ? { colors } : undefined;
 }
 
 export interface NormalizeInput {
@@ -127,7 +130,8 @@ export interface NormalizeInput {
 
 /** Build a `DesignReference` with `linkMethod: "code-connect"`. */
 export function normalizeReference(input: NormalizeInput): DesignReference {
-  const tokens = tokensFrom(input.node, input.variables);
+  const tokens = tokensFrom(input.node);
+  const themeTokens = themeTokensFrom(input.variables);
   const ref: DesignReference = {
     componentId: input.componentId,
     source: "figma",
@@ -136,5 +140,6 @@ export function normalizeReference(input: NormalizeInput): DesignReference {
     referenceImages: input.referenceImages,
   };
   if (tokens) ref.tokens = tokens;
+  if (themeTokens) ref.themeTokens = themeTokens;
   return ref;
 }

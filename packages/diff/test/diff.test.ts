@@ -13,14 +13,20 @@ async function readJson<T>(p: string): Promise<T> {
   return JSON.parse(await readFile(resolve(repoRoot, p), "utf8")) as T;
 }
 
-const loadPair = async () => ({
-  reference: await readJson<DesignReference>(
+const loadPair = async () => {
+  const reference = await readJson<DesignReference>(
     "fixtures/figma/button-primary.reference.json",
-  ),
-  candidate: await readJson<CandidateRender>(
+  );
+  const candidate = await readJson<CandidateRender>(
     "fixtures/candidate/button-primary.candidate.json",
-  ),
-});
+  );
+  // The candidate's resolved theme (the compose theme behind the render); the
+  // design-system audit compares it against the reference's Variables palette.
+  candidate.semantics.themeTokens = {
+    colors: { "container.light": "#645AFF", "container.dark": "#7A72F0" },
+  };
+  return { reference, candidate };
+};
 
 describe("diff engine on the figma button fixtures", () => {
   it("fails the verdict and shares the componentId", async () => {
@@ -56,16 +62,18 @@ describe("diff engine on the figma button fixtures", () => {
     expect(failures[0]!.detail!.ratio as number).toBeLessThan(4.5);
   });
 
-  it("flags the drifted dark container colour as a token warning", async () => {
+  it("flags the drifted dark container colour via the design-system audit", async () => {
     const { reference, candidate } = await loadPair();
     const { verdict } = await diff(reference, candidate, { repoRoot });
 
     const color = verdict.findings.find(
-      (f) => f.kind === "token" && f.detail?.token === "colors.container.dark",
+      (f) => f.kind === "token" && f.detail?.scope === "design-system",
     );
     expect(color).toBeDefined();
     expect(color!.severity).toBe("warn");
     expect(color!.detail).toMatchObject({
+      token: "colors.container",
+      mode: "dark",
       expected: "#8A82FF",
       actual: "#7A72F0",
     });

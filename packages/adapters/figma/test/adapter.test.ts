@@ -142,6 +142,8 @@ describe("FigmaAdapter.resolve (happy path)", () => {
       await readFile(resolve(repoRoot, "fixtures/figma/button-primary.reference.json"), "utf8"),
     ) as DesignReference;
     expect(result.tokens).toEqual(golden.tokens);
+    // The Variables palette is the design-system table, separate from per-node tokens.
+    expect(result.themeTokens).toEqual(golden.themeTokens);
   });
 
   it("produces a light + dark image with the golden variants and real dims", async () => {

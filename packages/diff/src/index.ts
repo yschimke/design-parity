@@ -16,6 +16,8 @@ export { defaultChecks } from "./checks.js";
 export type { ChecksProvider, ChecksInput, ChecksConfig } from "./checks.js";
 
 export { collectTokens, diffTokens } from "./tokens.js";
+export { diffDesignSystem } from "./design-system.js";
+export type { DesignSystemOptions } from "./design-system.js";
 export { diffSemantics, referenceThemes, candidateThemes } from "./semantic.js";
 export { diffImagePair, imageKey } from "./visual.js";
 export type { VisualResult } from "./visual.js";

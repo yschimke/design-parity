@@ -107,6 +107,15 @@ export interface DesignReference {
   /** One image per state / theme / size the source exposes. */
   referenceImages: Image[];
   tokens?: DesignTokens;
+  /**
+   * The resolved design-system tokens the source exposes — the full palette
+   * behind the reference (e.g. the Figma Variables table), keyed by design token
+   * name; colours may carry a `<name>.<mode>` mode suffix. Mirrors
+   * {@link SemanticTree.themeTokens} on the candidate side and feeds the
+   * design-system audit (whole-table parity, once per run) rather than the
+   * per-node token diff. Absent for sources that expose no system table.
+   */
+  themeTokens?: DesignTokens;
   linkMethod: LinkMethod;
   /** Raw source handle (Figma node-id, html path, …) kept for trace/debug. */
   ref?: string;

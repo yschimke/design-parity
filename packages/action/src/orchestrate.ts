@@ -26,6 +26,7 @@ import { join, resolve } from "node:path";
 
 import {
   diff,
+  renderSummary,
   type ChecksProvider,
   type DiffConfig,
   type Triptych,
@@ -97,6 +98,27 @@ export interface OrchestrateOptions {
 /** Wrap precomputed native findings as a {@link ChecksProvider} for the diff. */
 function nativeChecksProvider(findings: Finding[]): ChecksProvider {
   return { run: () => findings };
+}
+
+/**
+ * Drop design-system findings (`detail.scope === "design-system"`) whose
+ * signature was already reported this run, keeping all other findings and order.
+ * Mutates `seen` with each newly kept signature.
+ */
+function dedupeDesignSystem(findings: Finding[], seen: Set<string>): Finding[] {
+  return findings.filter((f) => {
+    if (f.detail?.scope !== "design-system") return true;
+    if (seen.has(f.message)) return false;
+    seen.add(f.message);
+    return true;
+  });
+}
+
+/** The verdict status implied by a finding set (mirrors the diff engine's rule). */
+function verdictStatus(findings: Finding[]): VerdictStatus {
+  if (findings.some((f) => f.severity === "error")) return "fail";
+  if (findings.some((f) => f.severity === "warn")) return "warn";
+  return "pass";
 }
 
 /** A filesystem-safe slug for a component id (`ui/Tile.kt#LightOn_Dark` → `ui-Tile-kt-LightOn_Dark`). */
@@ -176,6 +198,8 @@ export async function orchestrate(
   const results: ComponentResult[] = [];
   const warnings: string[] = [];
   let status: VerdictStatus = "pass";
+  // Signatures of design-system findings already reported this run (see below).
+  const seenDesignSystem = new Set<string>();
 
   for (const corr of options.correspondences) {
     const result: ComponentResult = {
@@ -229,8 +253,17 @@ export async function orchestrate(
         candidate,
         diffOptions,
       );
+      // The design-system audit runs per component but its palette is shared, so
+      // drop drift already reported on an earlier component — each design-system
+      // finding surfaces once per run, not once per screen (#78 Phase 3).
+      const deduped = dedupeDesignSystem(verdict.findings, seenDesignSystem);
       result.verdict = verdict;
       result.summary = summary;
+      if (deduped.length !== verdict.findings.length) {
+        verdict.findings = deduped;
+        verdict.status = verdictStatus(deduped);
+        result.summary = renderSummary(verdict);
+      }
       result.triptychs = triptychs;
 
       // Emit the self-contained HTML comparison page alongside the triptychs,
