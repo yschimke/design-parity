@@ -22,3 +22,6 @@ export type {
   PreviewResolveResult,
 } from "./preview-id.js";
 export { codeHandleForPreview, resolvePreviewIds } from "./preview-id.js";
+
+export type { ReverseIndex } from "./reverse-index.js";
+export { buildReverseIndex, codeForRef } from "./reverse-index.js";

@@ -107,9 +107,12 @@ export async function planBootstrap(
 
   let review: DiscoveredComponent[] = [];
   if (maturity.rung === "bootstrap") {
-    review = await discoverCodeComponents(repoRoot);
+    const discovered = await discoverCodeComponents(repoRoot);
+    // Components that authored a @DesignRef are wired in the manifest already;
+    // only the unbound ones need a human to link them.
+    review = discovered.filter((c) => c.ref === undefined);
 
-    const designMap = seedDesignMap();
+    const designMap = seedDesignMap(discovered);
     const check = validateDesignMap(designMap);
     if (!check.valid) {
       // The seeded map is hand-built; an invalid one is a bug in this package.
@@ -118,9 +121,16 @@ export async function planBootstrap(
       );
     }
 
+    const bound = designMap.components.length;
     await add(TOKENS_FILE, "Material 3 + WCAG AA token baseline", materialBaselineTokens());
     await add(CHECKS_FILE, "a11y + i18n checks config", defaultCheckConfig());
-    await add(DESIGN_MAP_FILE, "starter design-map (empty scaffold)", designMap);
+    await add(
+      DESIGN_MAP_FILE,
+      bound
+        ? `design-map (${bound} authored via @DesignRef)`
+        : "starter design-map (empty scaffold)",
+      designMap,
+    );
   }
 
   return {
