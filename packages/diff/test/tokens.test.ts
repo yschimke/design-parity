@@ -185,13 +185,58 @@ describe("diffTokens", () => {
       });
     });
 
-    it("leaves behaviour unchanged when no alias is supplied", () => {
-      // Without the alias the design name doesn't match the code name → missing.
+    it("falls back to the Material role heuristic when no alias is supplied (issue #87)", () => {
+      // `color/on-surface` denotes the Material role `onSurface`; with values in
+      // agreement the heuristic satisfies the spec without an explicit alias.
       const designSpec: DesignTokens = { colors: { "color/on-surface": "#161D1B" } };
       const candidate: DesignTokens = { colors: { onSurface: "#161d1b" } };
+      expect(diffTokens(designSpec, candidate, defaultDiffConfig)).toEqual([]);
+    });
+  });
+
+  describe("Material role heuristic (issue #87)", () => {
+    it("matches a design-vocabulary colour to the candidate's resolved role", () => {
+      const designSpec: DesignTokens = {
+        colors: { "color/on-surface-variant": "#44483E" },
+      };
+      const candidate: DesignTokens = { colors: { onSurfaceVariant: "#44483e" } };
+      expect(diffTokens(designSpec, candidate, defaultDiffConfig)).toEqual([]);
+    });
+
+    it("flags a role-mapped colour mismatch as a low-confidence warning", () => {
+      const designSpec: DesignTokens = { colors: { "color/on-surface": "#161D1B" } };
+      const candidate: DesignTokens = { colors: { onSurface: "#101413" } };
       const findings = diffTokens(designSpec, candidate, defaultDiffConfig);
       expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "warn",
+        detail: { token: "colors.color/on-surface", role: "onSurface", via: "role-heuristic" },
+      });
+    });
+
+    it("matches a design-vocabulary typography token to its Material type role", () => {
+      const designSpec: DesignTokens = {
+        typography: { "type/body/large": { fontSize: 16 } },
+      };
+      const candidate: DesignTokens = { typography: { bodyLarge: { fontSize: 16 } } };
+      expect(diffTokens(designSpec, candidate, defaultDiffConfig)).toEqual([]);
+    });
+
+    it("still reports a colour that maps to no Material role as missing", () => {
+      // `label` is not a colour role; with no value match it stays a hard error.
+      const designSpec: DesignTokens = { colors: { label: "#FFFFFF" } };
+      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({ severity: "error" });
+    });
+
+    it("lets an explicit alias override the heuristic", () => {
+      // The alias renames the spec to a non-role code name the candidate carries;
+      // the heuristic (which would map to `onSurface`) is never consulted.
+      const designSpec: DesignTokens = { colors: { "color/on-surface": "#161D1B" } };
+      const candidate: DesignTokens = { colors: { brandFg: "#161d1b" } };
+      const alias = { colors: { brandFg: "color/on-surface" } };
+      expect(diffTokens(designSpec, candidate, defaultDiffConfig, alias)).toEqual([]);
     });
   });
 });

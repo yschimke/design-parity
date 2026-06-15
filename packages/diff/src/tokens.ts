@@ -11,12 +11,14 @@
  * for spacing/radius — since the candidate carries resolved values under generic
  * keys rather than the reference's names (compose-ai-tools#1897).
  */
-import type {
-  DesignTokens,
-  Finding,
-  SemanticNode,
-  TokenAliasMap,
-  TypographyToken,
+import {
+  type DesignTokens,
+  type Finding,
+  type SemanticNode,
+  type TokenAliasMap,
+  type TypographyToken,
+  materialColorRole,
+  materialTypeRole,
 } from "@design-parity/core";
 
 import type { DiffConfig } from "./config.js";
@@ -121,26 +123,44 @@ export function diffTokens(
     numericFinding("radius", name, want, candidate.radius, config.radiusTolerance, findings);
   }
   for (const [name, want] of Object.entries(spec.colors ?? {})) {
-    // A node carries its colour under the reference's token name only when the
-    // candidate's theme could name it; without a resolved theme (compose-ai-tools
-    // #1897) the value lands under the generic role key `fg`/`bg`. So when the
-    // spec name isn't present, fall back to a value match within the same role
-    // before declaring it missing — the candidate already provides the value
-    // (issue #74), just not under this name.
-    const got = candidate.colors?.[name] ?? roleMatch(name, want, candidate.colors);
+    // Match a spec colour against the candidate in three tiers, most precise
+    // first. (1) Exact name — the explicit alias map has already canonicalised
+    // design names to code names (issue #78). (2) Material colour role — a
+    // reference token *named in design-system vocabulary* (`color/on-surface`)
+    // is recognised as the role it denotes (`onSurface`) and matched against the
+    // candidate's resolved role (compose-ai-tools#1897, issue #87); a low-
+    // confidence name match, so a mismatch is flagged `via: "role-heuristic"`.
+    // (3) Value match under the same generic role key (`fg`/`bg`) for an
+    // unresolved theme (issue #74).
+    const role = materialColorRole(name);
+    const byRole = role !== undefined ? candidate.colors?.[role] : undefined;
+    const got =
+      candidate.colors?.[name] ?? byRole ?? roleMatch(name, want, candidate.colors);
     if (got === undefined) {
       findings.push(missing("colors", name, want));
     } else if (!colorsEqual(got, want)) {
+      const viaRole = candidate.colors?.[name] === undefined && byRole === got;
       findings.push({
         kind: "token",
         severity: "warn",
         message: `colors.${name}: ${got} vs spec ${want}`,
-        detail: { token: `colors.${name}`, expected: want, actual: got },
+        detail: {
+          token: `colors.${name}`,
+          expected: want,
+          actual: got,
+          ...(viaRole ? { role, via: "role-heuristic" } : {}),
+        },
       });
     }
   }
   for (const [name, want] of Object.entries(spec.typography ?? {})) {
-    const got = candidate.typography?.[name];
+    // Exact name first, then the Material type-scale role a design-vocabulary
+    // name denotes (`type/body/large` → `bodyLarge`) — the typography analogue
+    // of the colour role heuristic (issue #87).
+    const role = materialTypeRole(name);
+    const got =
+      candidate.typography?.[name] ??
+      (role !== undefined ? candidate.typography?.[role] : undefined);
     if (got === undefined) {
       findings.push(missing("typography", name, JSON.stringify(want)));
     } else if (!typographyEqual(want, got)) {
