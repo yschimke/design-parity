@@ -107,6 +107,7 @@ async function main(): Promise<number> {
     correspondences: resolved.correspondences,
     candidate: provider ?? (() => undefined),
     direction,
+    ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(args.outDir ? { outDir: args.outDir } : {}),
   });
 

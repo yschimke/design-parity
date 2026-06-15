@@ -36,6 +36,7 @@ export type {
 export type {
   DesignMap,
   DesignMapEntry,
+  TokenAliasMap,
   ValidationResult,
 } from "./design-map.js";
 

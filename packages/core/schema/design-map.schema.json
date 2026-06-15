@@ -11,9 +11,25 @@
     "components": {
       "type": "array",
       "items": { "$ref": "#/definitions/component" }
+    },
+    "tokens": {
+      "type": "object",
+      "description": "Design-name to code-name token aliases, keyed by code token name. Lets token-compliance match tokens whose design and code vocabularies differ (e.g. code 'onSurface' <-> design 'color/on-surface').",
+      "additionalProperties": false,
+      "properties": {
+        "colors": { "$ref": "#/definitions/aliasGroup" },
+        "typography": { "$ref": "#/definitions/aliasGroup" },
+        "spacing": { "$ref": "#/definitions/aliasGroup" },
+        "radius": { "$ref": "#/definitions/aliasGroup" }
+      }
     }
   },
   "definitions": {
+    "aliasGroup": {
+      "type": "object",
+      "description": "Code token name -> design token name.",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
     "component": {
       "type": "object",
       "required": ["code", "source", "ref"],

@@ -16,5 +16,9 @@
       "source": "claude-design",
       "ref": "design/reference/offer-card.html"
     }
-  ]
+  ],
+  "tokens": {
+    "colors": { "onSurface": "color/on-surface" },
+    "typography": { "bodyLarge": "type/body/large" }
+  }
 }

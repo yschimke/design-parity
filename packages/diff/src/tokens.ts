@@ -15,6 +15,7 @@ import type {
   DesignTokens,
   Finding,
   SemanticNode,
+  TokenAliasMap,
   TypographyToken,
 } from "@design-parity/core";
 
@@ -50,19 +51,68 @@ function typographyEqual(a: TypographyToken, b: TypographyToken): boolean {
   );
 }
 
+/** Fold a token name to an alias-lookup key: last `/`-segment, lowercased. */
+function aliasKey(name: string): string {
+  return name.slice(name.lastIndexOf("/") + 1).toLowerCase();
+}
+
+/** Invert a code→design alias group into a design-key → code-name index. */
+function aliasInverse(group?: Record<string, string>): Map<string, string> {
+  const inv = new Map<string, string>();
+  for (const [code, design] of Object.entries(group ?? {})) {
+    const key = aliasKey(design);
+    if (!inv.has(key)) inv.set(key, code); // first declaration wins, deterministically
+  }
+  return inv;
+}
+
+/** Rewrite a token group's keys from design names to code names via the alias. */
+function remapKeys<T>(
+  group: Record<string, T> | undefined,
+  alias?: Record<string, string>,
+): Record<string, T> | undefined {
+  if (!group) return group;
+  const inv = aliasInverse(alias);
+  if (inv.size === 0) return group;
+  const out: Record<string, T> = {};
+  for (const [name, value] of Object.entries(group)) {
+    out[inv.get(aliasKey(name)) ?? name] = value;
+  }
+  return out;
+}
+
+/**
+ * Canonicalise the design-named reference spec to code names via the alias map,
+ * so the key-by-key comparison below lines design tokens up with their code
+ * counterparts (issue #78). Groups without an alias pass through untouched.
+ */
+function applyAlias(spec: DesignTokens, alias: TokenAliasMap): DesignTokens {
+  return {
+    spacing: remapKeys(spec.spacing, alias.spacing),
+    radius: remapKeys(spec.radius, alias.radius),
+    colors: remapKeys(spec.colors, alias.colors),
+    typography: remapKeys(spec.typography, alias.typography),
+  };
+}
+
 /**
  * Compare candidate tokens against the reference spec. Findings are emitted in
  * a stable order — spacing, radius, colours, typography — so the verdict is
  * reproducible. A reference token absent from the candidate is a `missing`
  * finding; tokens the candidate adds beyond the spec are ignored.
+ *
+ * When a {@link TokenAliasMap} is supplied, the design-named spec is first
+ * canonicalised to code names so differing vocabularies still match.
  */
 export function diffTokens(
-  spec: DesignTokens | undefined,
+  specInput: DesignTokens | undefined,
   candidate: DesignTokens,
   config: DiffConfig,
+  alias?: TokenAliasMap,
 ): Finding[] {
   const findings: Finding[] = [];
-  if (!spec) return findings;
+  if (!specInput) return findings;
+  const spec = alias ? applyAlias(specInput, alias) : specInput;
 
   for (const [name, want] of Object.entries(spec.spacing ?? {})) {
     numericFinding("spacing", name, want, candidate.spacing, config.spacingTolerance, findings);

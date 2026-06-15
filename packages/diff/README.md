@@ -35,8 +35,12 @@ are ordered a11y → token → semantic → visual; `verdict.visualScores` maps 
   targets, semantic roles/labels, and i18n risks. `defaultChecks` wires the real
   package; inject a custom provider (or `checksConfig`) to override.
 - **Token compliance** — flatten the candidate's tree tokens and compare against
-  the reference spec: numeric tokens honour a committed tolerance, colours and
-  typography must match exactly.
+  the reference spec: numeric tokens honour a committed tolerance, typography
+  matches exactly, colours match modulo a full-alpha suffix (with a same-role
+  value fallback). When the design and code token vocabularies differ, a
+  `design-map.json` `tokens` alias (code-name → design-name) canonicalises the
+  reference to code names first, so e.g. design `color/on-surface` lines up with
+  code `onSurface`.
 - **Semantics** — theme-coverage and structural (role/label) deltas.
 - **Visual** — per-pixel diff via `pixelmatch`, plus the triptych.
 

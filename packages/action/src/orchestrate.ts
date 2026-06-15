@@ -16,6 +16,7 @@ import type {
   DesignSource,
   Finding,
   ResolvedDirection,
+  TokenAliasMap,
   Verdict,
   VerdictStatus,
 } from "@design-parity/core";
@@ -69,6 +70,12 @@ export interface OrchestrateOptions {
   /** Where triptych PNGs are written (optional). */
   outDir?: string;
   diffConfig?: Partial<DiffConfig>;
+  /**
+   * The repo's `design-map.json` `tokens` section — design-name ↔ code-name
+   * token aliases, passed to the diff so token-compliance matches differing
+   * vocabularies (issue #78).
+   */
+  tokenAlias?: TokenAliasMap;
   /**
    * When `outDir` is set, a `README.md` + `index.html` landing page is written at
    * its root so the published branch has an entry point. These describe where the
@@ -213,6 +220,7 @@ export async function orchestrate(
         repoRoot: options.repoRoot,
         ...(componentOutDir ? { outDir: componentOutDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
+        ...(options.tokenAlias ? { tokenAlias: options.tokenAlias } : {}),
         ...(native ? { checks: nativeChecksProvider(native) } : {}),
       };
       const { verdict, summary, triptychs } = await diff(
