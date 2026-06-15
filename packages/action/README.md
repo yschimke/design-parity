@@ -54,11 +54,12 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   committing generated PNGs/HTML onto `main`, and a real baseline a PR can diff
   its candidate against. Requires `contents: write`.
 
-  **Commit each run (don't force-update).** The landing page links a per-screen
-  **History** to each `report.html`'s commit log, so the artifact branch must
-  accumulate normal commits — one per run — rather than being force-overwritten.
-  Because `report.html` is deterministic, a run with no change to a screen
-  touches no file and adds no noise; the history shows exactly the runs where a
+  **History accrues automatically.** `publishBaseline` re-parents each run's tree
+  on the existing branch tip (a linear commit chain, fast-forward push — no
+  force), so the artifact branch already carries one commit per run. The landing
+  page links a per-screen **History** to each `report.html`'s commit log. Because
+  `report.html` is deterministic, a run that doesn't change a screen touches no
+  file and adds no commit noise — the history shows exactly the runs where a
   screen's code or mock actually changed.
 - **skip** — nothing applies (e.g. a push to a non-dev branch).
 

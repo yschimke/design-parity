@@ -50,7 +50,7 @@ export const execGit: GitRunner = async (args, { cwd }) => {
 export interface PublishOptions {
   /** Directory whose current contents become the published tree. */
   sourceDir: string;
-  /** Destination branch on the remote (force-updated / re-parented each run). */
+  /** Destination branch; re-parented on its tip each run — linear history, no force. */
   branch: string;
   /** `owner/repo`. */
   repo: string;
