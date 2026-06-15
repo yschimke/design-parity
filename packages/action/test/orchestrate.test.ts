@@ -127,6 +127,27 @@ describe("orchestrate (golden figma button vs candidate)", () => {
     expect(report.blocked).toBe(false);
   });
 
+  it("merges declared spec tokens into a token-less reference (#89)", async () => {
+    const { candidate } = await load();
+    // A bundle/claude-design-style reference the adapter resolved without tokens.
+    const bare: DesignReference = {
+      componentId: corr.code,
+      source: "figma",
+      linkMethod: "code-connect",
+      referenceImages: [],
+    };
+    const declared = new Map([[corr.code, { colors: { onSurface: "#161D1B" } }]]);
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(adapterReturning(bare)),
+      correspondences: [corr],
+      candidate: () => candidate,
+      direction: "code-led",
+      referenceTokens: declared,
+    });
+    expect(report.results[0]!.reference?.tokens?.colors?.onSurface).toBe("#161D1B");
+  });
+
   it("fails soft when an adapter throws — error does not escalate or block", async () => {
     const report = await orchestrate({
       repoRoot,

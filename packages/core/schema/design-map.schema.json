@@ -71,6 +71,11 @@
           "type": "string",
           "description": "Optional compose-ai-tools preview id (e.g. 'ee.app.FooKt.Bar') this code handle renders as. Links a preview-bundle/daemon candidate (keyed by preview id) to this reference (keyed by code handle). See design-parity issue #44.",
           "minLength": 1
+        },
+        "tokensFile": {
+          "type": "string",
+          "description": "Optional repo-relative path to a committed W3C DTCG token file whose tokens are this component's spec tokens. Populates the reference's tokens for sources that don't expose them (bundle, claude-design) or overrides what an adapter resolved. See design-parity issues #89 and #87.",
+          "minLength": 1
         }
       }
     }

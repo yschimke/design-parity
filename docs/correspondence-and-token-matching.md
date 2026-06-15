@@ -142,6 +142,13 @@ image pairing.
   comes from the first TEXT node's `style`. **This is the design token table.**
 - **claude-design / bundle**: the table is whatever the committed handoff /
   `manifest.json` declares under `tokens` (a `DesignTokens` bag).
+- **A committed DTCG file** (any source): a `design-map.json` entry can point
+  `tokensFile` at a W3C DTCG document (Figma Variables export, Tokens Studio)
+  read by `@design-parity/core`'s `loadDtcgTokens` (issue #89). The action loads
+  it once up front (`loadSpecTokens`) and merges it over whatever the adapter
+  resolved (declared values win), so a source that exposes no tokens still has a
+  spec to diff against. DTCG names are matched via the Material-role heuristic
+  (§4.3, issue #87).
 
 ### 4.2 Where the **candidate** token table comes from
 

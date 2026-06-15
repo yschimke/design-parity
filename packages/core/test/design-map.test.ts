@@ -62,6 +62,15 @@ describe("design-map schema", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("accepts a component declaring a DTCG tokensFile (issue #89)", () => {
+    const r = validateDesignMap({
+      components: [
+        { code: "a#b", source: "bundle", ref: "x", tokensFile: "design/a.tokens.json" },
+      ],
+    });
+    expect(r.valid).toBe(true);
+  });
+
   it("rejects an unknown token kind", () => {
     const r = validateDesignMap({
       components: [],

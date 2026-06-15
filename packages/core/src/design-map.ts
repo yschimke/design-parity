@@ -38,6 +38,15 @@ export interface DesignMapEntry {
    * convention (`sourceFile#functionName`).
    */
   previewId?: string;
+  /**
+   * Optional repo-relative path to a committed W3C DTCG token file whose tokens
+   * are this component's spec tokens (issue #89). For sources that don't expose
+   * tokens (bundle, claude-design) — or to override what an adapter resolved —
+   * the author commits a DTCG file and links it here; the loaded tokens populate
+   * {@link DesignReference.tokens} and are matched against the candidate via the
+   * Material-role heuristic (issue #87) and the alias map (issue #78).
+   */
+  tokensFile?: string;
 }
 
 export interface DesignMap {

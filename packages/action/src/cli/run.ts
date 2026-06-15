@@ -26,6 +26,7 @@ import { buildCandidateProvider } from "../candidate.js";
 import { resolveRunConfig } from "../config.js";
 import { createAdapterRegistry } from "../registry.js";
 import { orchestrate } from "../orchestrate.js";
+import { loadSpecTokens } from "../specTokens.js";
 import { pushBack } from "../pushback.js";
 import { renderReport } from "../report.js";
 
@@ -90,6 +91,9 @@ async function main(): Promise<number> {
     args.repoRoot,
   );
   const resolved = resolveCorrespondences(args.components, { designMap });
+  // Spec tokens a component declares via a committed DTCG file (design-map
+  // `tokensFile`, issue #89), loaded once up front so a bad file warns (#1).
+  const spec = await loadSpecTokens(designMap, args.repoRoot);
 
   const candidateOpts: Parameters<typeof buildCandidateProvider>[0] = {
     repoRoot: args.repoRoot,
@@ -108,6 +112,7 @@ async function main(): Promise<number> {
     candidate: provider ?? (() => undefined),
     direction,
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
+    ...(spec.byCode.size > 0 ? { referenceTokens: spec.byCode } : {}),
     ...(args.outDir ? { outDir: args.outDir } : {}),
   });
 
@@ -115,6 +120,7 @@ async function main(): Promise<number> {
     ...warnings,
     ...resolved.warnings,
     ...candidateWarnings,
+    ...spec.warnings,
     ...resolved.unresolved.map((u) => `unresolved (no source matched): ${u}`),
   );
 

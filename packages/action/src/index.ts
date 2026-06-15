@@ -30,6 +30,9 @@ export type { BuildProviderOptions } from "./candidate.js";
 export { resolveRunConfig } from "./config.js";
 export type { RunConfig } from "./config.js";
 
+export { loadSpecTokens } from "./specTokens.js";
+export type { SpecTokens } from "./specTokens.js";
+
 export {
   renderReport,
   renderBootstrapNotice,
