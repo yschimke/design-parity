@@ -15,6 +15,15 @@
       "code": "ui/Card.kt#OfferCard",
       "source": "claude-design",
       "ref": "design/reference/offer-card.html"
+    },
+    {
+      "code": "ui/Device.kt#DeviceScreen",
+      "source": "figma",
+      "ref": [
+        { "ref": "figma:AbCdEf123456/10:2", "state": "default" },
+        { "ref": "figma:AbCdEf123456/10:8", "state": "error" },
+        { "ref": "figma:AbCdEf123456/10:9", "theme": "dark" }
+      ]
     }
   ],
   "tokens": {

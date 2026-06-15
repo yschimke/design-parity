@@ -7,6 +7,7 @@ import {
   validateDesignMap,
   designMapSchema,
   findByCode,
+  entryRefs,
 } from "../src/index.js";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -75,6 +76,57 @@ describe("design-map schema", () => {
       tokens: { colors: { onSurface: 42 } },
     });
     expect(r.valid).toBe(false);
+  });
+
+  it("accepts a variant-list ref binding several nodes", () => {
+    const r = validateDesignMap({
+      components: [
+        {
+          code: "ui/Device.kt#DeviceScreen",
+          source: "figma",
+          ref: [
+            { ref: "figma:KEY/1:10", state: "default" },
+            { ref: "figma:KEY/1:20", theme: "dark" },
+            { ref: "figma:KEY/1:30", size: "compact" },
+          ],
+        },
+      ],
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects a variant missing its ref", () => {
+    const r = validateDesignMap({
+      components: [{ code: "a#b", source: "figma", ref: [{ state: "default" }] }],
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  it("rejects an unknown variant theme", () => {
+    const r = validateDesignMap({
+      components: [
+        { code: "a#b", source: "figma", ref: [{ ref: "x", theme: "sepia" }] },
+      ],
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  it("rejects an empty variant list", () => {
+    const r = validateDesignMap({
+      components: [{ code: "a#b", source: "figma", ref: [] }],
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  it("normalizes string and list refs via entryRefs", () => {
+    expect(entryRefs({ code: "a#b", source: "figma", ref: "figma:K/1:1" })).toEqual([
+      { ref: "figma:K/1:1" },
+    ]);
+    const list = [
+      { ref: "figma:K/1:1", state: "default" },
+      { ref: "figma:K/1:2", theme: "dark" as const },
+    ];
+    expect(entryRefs({ code: "a#b", source: "figma", ref: list })).toEqual(list);
   });
 
   it("throws a readable error for a missing file", async () => {

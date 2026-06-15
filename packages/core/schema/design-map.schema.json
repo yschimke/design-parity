@@ -30,6 +30,18 @@
       "description": "Code token name -> design token name.",
       "additionalProperties": { "type": "string", "minLength": 1 }
     },
+    "refVariant": {
+      "type": "object",
+      "description": "A reference handle tagged with the variant slot (state/theme/size) it fills.",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "size": { "type": "string", "minLength": 1 }
+      }
+    },
     "component": {
       "type": "object",
       "required": ["code", "source", "ref"],
@@ -45,9 +57,15 @@
           "enum": ["figma", "stitch", "claude-design", "bundle"]
         },
         "ref": {
-          "type": "string",
-          "description": "Source-specific reference handle. Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export. Bundle: repo-relative path to a committed directory or '.zip' of reference PNGs plus a manifest.json.",
-          "minLength": 1
+          "description": "Source-specific reference handle(s). A string binds a single node. A list of variant-tagged handles binds several nodes (a screen's states/themes/sizes in separate frames). Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export. Bundle: repo-relative path to a committed directory or '.zip' of reference PNGs plus a manifest.json.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/definitions/refVariant" }
+            }
+          ]
         },
         "previewId": {
           "type": "string",

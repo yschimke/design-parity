@@ -166,13 +166,36 @@ export interface ReferenceAdapter {
 // Correspondence (code <-> design) — produced by the resolver, Issue 7.
 // ---------------------------------------------------------------------------
 
+/**
+ * One design reference handle tagged with the variant slot it fills. Lets a
+ * single code component bind several design nodes — a screen's states, themes,
+ * or breakpoints living in separate frames (issue: multi-node references). The
+ * tags key the resolved image against its candidate counterpart in `pairImages`.
+ */
+export interface RefVariant {
+  /** Source-specific reference handle (e.g. `figma:<fileKey>/<nodeId>`). */
+  ref: string;
+  /** Variant state this node represents, e.g. `"default"`, `"error"`. */
+  state?: string;
+  theme?: Theme;
+  /** Breakpoint label, e.g. `"compact"`. */
+  size?: string;
+}
+
 /** Resolved link between a code component and its design reference. */
 export interface Correspondence {
   /** Code handle, e.g. `"ui/Button.kt#PrimaryButton"`. */
   code: string;
   source: DesignSource;
-  /** Source-specific reference handle passed to the adapter. */
+  /** Primary source-specific reference handle (the first/structure node). */
   ref: string;
+  /**
+   * Present when the manifest bound several variant-tagged nodes to this
+   * component. Includes the primary `ref`; the orchestrator resolves each and
+   * merges them into one {@link DesignReference}. Absent for single-ref links
+   * (Code Connect, convention, a string manifest `ref`).
+   */
+  refs?: RefVariant[];
   linkMethod: LinkMethod;
   /** `convention` links are always `"low"`; explicit links are `"high"`. */
   confidence: "high" | "low";

@@ -39,6 +39,7 @@ import {
 } from "@design-parity/report-html";
 
 import type { AdapterRegistry } from "./registry.js";
+import { resolveReference } from "./reference.js";
 
 /** Supplies the candidate render for a component (compose-preview, or precomputed). */
 export type CandidateProvider = (
@@ -193,7 +194,7 @@ export async function orchestrate(
         continue;
       }
 
-      const reference = await adapter.resolve(corr.code, corr.ref, ctx);
+      const reference = await resolveReference(adapter, corr, ctx);
       result.reference = reference;
 
       const candidate = await options.candidate(corr.code, ctx);

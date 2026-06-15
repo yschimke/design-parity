@@ -9,6 +9,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
+  entryRefs,
   findByCode,
   loadDesignMap,
   type AdapterContext,
@@ -140,7 +141,9 @@ export class StitchAdapter implements ReferenceAdapter {
         `maps to source '${entry.source}', not 'stitch'`,
       );
     }
-    return parseStitchRef(entry.ref);
+    // The manifest fallback resolves to the primary node; multi-node bindings
+    // are merged upstream, so a direct adapter call uses the structure node.
+    return parseStitchRef(entryRefs(entry)[0]!.ref);
   }
 }
 
