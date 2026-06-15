@@ -188,17 +188,25 @@ export function stateFromParams(params: PreviewParams): string {
 
 /** Loosely-typed node as the renderer's hierarchy product emits it. */
 /**
- * The compose/semantics producer's resolved design-token shape (schema v3,
- * compose-ai-tools#1897): a node's container background colour, corner radius,
- * and padding, extracted from its `Modifier.background`/`clip`/`padding`. This
- * is the producer wire format — distinct from the core {@link DesignTokens} —
- * and is translated by {@link composeTokensToDesign}.
+ * The compose/semantics producer's resolved design-token shape (schema v3
+ * compose-ai-tools#1897, extended in v4 compose-ai-tools#1908): a node's container
+ * background and border colours, corner radius (dp or percent-resolved), shape
+ * descriptor, arrangement gap, and padding, extracted from its
+ * `Modifier.background`/`border`/`clip`/`padding` and the layout's arrangement. This
+ * is the producer wire format — distinct from the core {@link DesignTokens} — and is
+ * translated by {@link composeTokensToDesign}.
  */
 export interface RawComposeTokens {
   /** Container/fill colour as ARGB hex `#AARRGGBB` (e.g. from `Modifier.background`). */
   backgroundColor?: string;
+  /** Outline/stroke colour as ARGB hex `#AARRGGBB` from `Modifier.border` (compose-ai-tools#1908). */
+  borderColor?: string;
   /** Corner radius in dp: `"12.0dp"` uniform, or four comma-separated corners. */
   cornerRadius?: string;
+  /** Shape-family descriptor (`"circle"` / `"cut"`) for non-dp shapes (compose-ai-tools#1908). */
+  shape?: string;
+  /** `Row`/`Column` `Arrangement.spacedBy` inter-child spacing in dp, `"8.0dp"` (compose-ai-tools#1908). */
+  gap?: string;
   /** Per-edge padding in dp (`"16.0dp"`). */
   padding?: { start?: string; top?: string; end?: string; bottom?: string };
 }
@@ -285,37 +293,57 @@ function parseDp(spec: string | undefined): number | undefined {
 function isComposeTokens(
   t: DesignTokens | RawComposeTokens,
 ): t is RawComposeTokens {
-  return "backgroundColor" in t || "cornerRadius" in t || "padding" in t;
+  return (
+    "backgroundColor" in t ||
+    "borderColor" in t ||
+    "cornerRadius" in t ||
+    "shape" in t ||
+    "gap" in t ||
+    "padding" in t
+  );
 }
 
 /**
  * Translate the compose/semantics producer's {@link RawComposeTokens} into core
  * {@link DesignTokens}. The candidate has no reference token *names*, so the
- * resolved values land under generic keys — the colour under role `bg`, the
- * radius under `corner`, and padding per edge (plus a uniform `padding`). The
- * token-compliance diff matches these by role/value, not name (#74, #1897).
+ * resolved values land under generic keys — the fill colour under role `bg`, the
+ * outline under `border`, the radius under `corner`, the arrangement spacing under
+ * `gap`, and padding per edge (plus a uniform `padding`). The token-compliance diff
+ * matches these by role/value, not name (#74, #1897, compose-ai-tools#1908).
  */
 function composeTokensToDesign(t: RawComposeTokens): DesignTokens {
   const out: DesignTokens = {};
+  const colors: Record<string, string> = {};
   const bg = argbToCss(t.backgroundColor);
-  if (bg) out.colors = { bg };
+  if (bg) colors["bg"] = bg;
+  // The outline colour is a background-role (non-`fg`) value, so `roleMatch` lines it
+  // up with `outline` / `outlineVariant` spec tokens by value (compose-ai-tools#1908).
+  const border = argbToCss(t.borderColor);
+  if (border) colors["border"] = border;
+  if (Object.keys(colors).length) out.colors = colors;
+  // `cornerRadius` carries dp corners verbatim and percent shapes (`CircleShape`) already
+  // resolved to dp upstream, so `corner` is the effective radius either way.
   const corner = parseDp(t.cornerRadius);
   if (corner !== undefined) out.radius = { corner };
+  const spacing: Record<string, number> = {};
+  // Arrangement spacing is a separate signal from the node's own inset; key it `gap` so the
+  // numeric value-match satisfies `cardGap` / `rowGap` spec tokens (compose-ai-tools#1908).
+  const gap = parseDp(t.gap);
+  if (gap !== undefined) spacing["gap"] = gap;
   if (t.padding) {
-    const edges: Record<string, number> = {};
     const start = parseDp(t.padding.start);
     const top = parseDp(t.padding.top);
     const end = parseDp(t.padding.end);
     const bottom = parseDp(t.padding.bottom);
-    if (start !== undefined) edges["paddingStart"] = start;
-    if (top !== undefined) edges["paddingTop"] = top;
-    if (end !== undefined) edges["paddingEnd"] = end;
-    if (bottom !== undefined) edges["paddingBottom"] = bottom;
+    if (start !== undefined) spacing["paddingStart"] = start;
+    if (top !== undefined) spacing["paddingTop"] = top;
+    if (end !== undefined) spacing["paddingEnd"] = end;
+    if (bottom !== undefined) spacing["paddingBottom"] = bottom;
     const all = [start, top, end, bottom];
     if (all.every((v): v is number => v !== undefined) && all.every((v) => v === start))
-      edges["padding"] = start!;
-    if (Object.keys(edges).length) out.spacing = edges;
+      spacing["padding"] = start!;
   }
+  if (Object.keys(spacing).length) out.spacing = spacing;
   return out;
 }
 
