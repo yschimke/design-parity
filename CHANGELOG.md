@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.4](https://github.com/yschimke/design-parity/compare/v0.1.3...v0.1.4) (2026-06-15)
+
+
+### Features
+
+* bidirectional binding — reverse index + @DesignRef harvest (Phase 4) ([eacf2ec](https://github.com/yschimke/design-parity/commit/eacf2ec025adf346418d1f9ac188e58481a7aee4))
+* **candidate:** translate extended compose/semantics token fields ([e6056a7](https://github.com/yschimke/design-parity/commit/e6056a7919bdcc3e35ce36cf6f6d5c26baf86468))
+* **candidate:** translate extended compose/semantics token fields ([9bcaae0](https://github.com/yschimke/design-parity/commit/9bcaae08b70bf480bc9bac27a6f8613846abfd66))
+* **cli:** design-parity reverse — design→code lookup ([daccc86](https://github.com/yschimke/design-parity/commit/daccc86de73265559fac21e2dff0c367bd386aec))
+* **core:** accept W3C DTCG token files as a reference-side token-spec format ([5bf214f](https://github.com/yschimke/design-parity/commit/5bf214f45cc734caf3c7318ba614cc29b9608d07))
+* **core:** accept W3C DTCG token files as a reference-side token-spec format ([#89](https://github.com/yschimke/design-parity/issues/89)) ([035a7e7](https://github.com/yschimke/design-parity/commit/035a7e7421a9c2d258c15ff98afb81034f0c296b))
+* design-system token-table audit (Phase 3) ([64ce1f0](https://github.com/yschimke/design-parity/commit/64ce1f080b3156a5afc0339475aa2c01caaef0ac))
+* **diff:** match tokens by Material role with a low-confidence naming heuristic ([85a032c](https://github.com/yschimke/design-parity/commit/85a032c36829bf761a0f022cc10f3fe136557f75))
+* **diff:** match tokens by Material role with a low-confidence naming heuristic ([#87](https://github.com/yschimke/design-parity/issues/87)) ([9b0fdf1](https://github.com/yschimke/design-parity/commit/9b0fdf1794eaf0502fdc2d5762bafbfc788aa46a))
+* multi-node design references (one component, several frames) ([c16a94f](https://github.com/yschimke/design-parity/commit/c16a94ff623e0bd15f3c8f30695ff0bb5b110dd4))
+* **report-html:** shorten component labels on the landing page so the table fits ([28465e6](https://github.com/yschimke/design-parity/commit/28465e68b2fd084b5411019f7c122b4fd99575dd))
+* **report-html:** shorten component labels on the landing page so the table fits ([32c4f29](https://github.com/yschimke/design-parity/commit/32c4f2986d8036903ffe36979372607262d5cafd))
+
 ## [0.1.3](https://github.com/yschimke/design-parity/compare/v0.1.2...v0.1.3) (2026-06-15)
 
 
