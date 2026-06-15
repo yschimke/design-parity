@@ -24,6 +24,10 @@ jobs:
         run: |
           node packages/core/dist/cli/validate-design-map.js \
             fixtures/design-map.json examples/design-map.json
+      - name: Validate DTCG token fixture against schema
+        run: |
+          node packages/core/dist/cli/validate-dtcg.js \
+            fixtures/tokens.tokens.json
       - name: Validate parity-config example against schema
         run: |
           node packages/policy/dist/cli/validate-config.js \

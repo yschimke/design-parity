@@ -8,14 +8,16 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./schema/design-map.schema.json": "./schema/design-map.schema.json"
+    "./schema/design-map.schema.json": "./schema/design-map.schema.json",
+    "./schema/dtcg-tokens.schema.json": "./schema/dtcg-tokens.schema.json"
   },
   "files": [
     "dist",
     "schema"
   ],
   "bin": {
-    "design-parity-validate-map": "./dist/cli/validate-design-map.js"
+    "design-parity-validate-map": "./dist/cli/validate-design-map.js",
+    "design-parity-validate-tokens": "./dist/cli/validate-dtcg.js"
   },
   "scripts": {
     "build": "tsc --build",

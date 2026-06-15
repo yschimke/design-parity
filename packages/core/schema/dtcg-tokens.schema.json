@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/dtcg-tokens.schema.json",
+  "title": "dtcg-tokens",
+  "description": "A W3C Design Tokens Community Group (DTCG) token document. A standards-based token-spec format design-parity accepts on the reference side (Figma Variables export, Tokens Studio). Every node is an object; a token carries '$value' (and optionally '$type'), a group nests further nodes. '$type' is inherited from the nearest ancestor group when omitted.",
+  "type": "object",
+  "$ref": "#/definitions/node",
+  "definitions": {
+    "node": {
+      "type": "object",
+      "properties": {
+        "$schema": { "type": "string" },
+        "$type": { "$ref": "#/definitions/type" },
+        "$value": {},
+        "$description": { "type": "string" },
+        "$deprecated": {},
+        "$extensions": { "type": "object" }
+      },
+      "additionalProperties": { "$ref": "#/definitions/node" }
+    },
+    "type": {
+      "description": "DTCG token type. design-parity consumes color, dimension, number, and the composite typography type; the rest validate but are not (yet) routed into DesignTokens.",
+      "enum": [
+        "color",
+        "dimension",
+        "number",
+        "fontFamily",
+        "fontWeight",
+        "duration",
+        "cubicBezier",
+        "typography",
+        "shadow",
+        "strokeStyle",
+        "border",
+        "transition",
+        "gradient"
+      ]
+    }
+  }
+}
