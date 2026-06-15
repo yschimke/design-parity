@@ -149,4 +149,49 @@ describe("diffTokens", () => {
       detail: { token: "spacing.screenPadding", actual: null },
     });
   });
+
+  describe("token alias map (issue #78)", () => {
+    it("matches a design-named token to its code counterpart across kinds", () => {
+      const designSpec: DesignTokens = {
+        colors: { "color/on-surface": "#161D1B" },
+        typography: { "type/body/large": { fontSize: 16 } },
+        spacing: { "space/gutter": 16 },
+        radius: { "radius/card": 8 },
+      };
+      const candidate: DesignTokens = {
+        colors: { onSurface: "#161d1b" },
+        typography: { bodyLarge: { fontSize: 16 } },
+        spacing: { gutter: 16 },
+        radius: { card: 8 },
+      };
+      const alias = {
+        colors: { onSurface: "color/on-surface" },
+        typography: { bodyLarge: "type/body/large" },
+        spacing: { gutter: "space/gutter" },
+        radius: { card: "radius/card" },
+      };
+      expect(diffTokens(designSpec, candidate, defaultDiffConfig, alias)).toEqual([]);
+    });
+
+    it("still flags drift after aliasing (value compare is unchanged)", () => {
+      const designSpec: DesignTokens = { colors: { "color/on-surface": "#161D1B" } };
+      const candidate: DesignTokens = { colors: { onSurface: "#101413" } };
+      const alias = { colors: { onSurface: "color/on-surface" } };
+      const findings = diffTokens(designSpec, candidate, defaultDiffConfig, alias);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "warn",
+        detail: { token: "colors.onSurface" },
+      });
+    });
+
+    it("leaves behaviour unchanged when no alias is supplied", () => {
+      // Without the alias the design name doesn't match the code name → missing.
+      const designSpec: DesignTokens = { colors: { "color/on-surface": "#161D1B" } };
+      const candidate: DesignTokens = { colors: { onSurface: "#161d1b" } };
+      const findings = diffTokens(designSpec, candidate, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "error" });
+    });
+  });
 });

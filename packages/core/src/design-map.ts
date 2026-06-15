@@ -39,6 +39,25 @@ export interface DesignMapEntry {
 export interface DesignMap {
   $schema?: string;
   components: DesignMapEntry[];
+  /** Optional design-name ↔ code-name token aliases (see {@link TokenAliasMap}). */
+  tokens?: TokenAliasMap;
+}
+
+/**
+ * Repo-global aliases binding a **code** token name to the **design** token name
+ * it implements, per kind. Keyed by the code name (`onSurface`), valued by the
+ * design name as the source exposes it (`color/on-surface`, `text.primary`).
+ *
+ * Token-compliance matches design tokens to code by name; when the two
+ * vocabularies differ, this map lets the diff canonicalise the design side to
+ * code names before comparing — and inverts to answer the design→code direction
+ * a source with no machine link needs (issue #78).
+ */
+export interface TokenAliasMap {
+  colors?: Record<string, string>;
+  typography?: Record<string, string>;
+  spacing?: Record<string, string>;
+  radius?: Record<string, string>;
 }
 
 /** The JSON Schema (draft-07) for `design-map.json`, as a plain object. */

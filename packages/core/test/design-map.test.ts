@@ -48,6 +48,35 @@ describe("design-map schema", () => {
     expect(r.valid).toBe(false);
   });
 
+  it("accepts a tokens alias section", () => {
+    const r = validateDesignMap({
+      components: [],
+      tokens: {
+        colors: { onSurface: "color/on-surface" },
+        typography: { bodyLarge: "type/body/large" },
+        spacing: { gutter: "space/gutter" },
+        radius: { card: "radius/card" },
+      },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects an unknown token kind", () => {
+    const r = validateDesignMap({
+      components: [],
+      tokens: { shadows: { card: "elevation/card" } },
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  it("rejects a non-string alias target", () => {
+    const r = validateDesignMap({
+      components: [],
+      tokens: { colors: { onSurface: 42 } },
+    });
+    expect(r.valid).toBe(false);
+  });
+
   it("throws a readable error for a missing file", async () => {
     await expect(loadDesignMap(fixture("nope.json"))).rejects.toThrow(
       /cannot read/,

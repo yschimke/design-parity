@@ -15,6 +15,7 @@ import type {
   DesignReference,
   Finding,
   Image,
+  TokenAliasMap,
   Verdict,
   VerdictStatus,
 } from "@design-parity/core";
@@ -49,6 +50,12 @@ export interface DiffOptions {
   checks?: ChecksProvider;
   /** Committed a11y/i18n thresholds passed to the checks provider. */
   checksConfig?: ChecksConfig;
+  /**
+   * Design-name ↔ code-name token aliases (the repo's `design-map.json`
+   * `tokens` section). When set, token-compliance canonicalises the design-named
+   * reference spec to code names before comparing (issue #78).
+   */
+  tokenAlias?: TokenAliasMap;
   /**
    * If set, triptych PNGs are written here as `triptych-<key>.png` and their
    * paths land in {@link DiffResult.triptychs}. Omit to skip disk writes; the
@@ -155,7 +162,12 @@ export async function diff(
   });
 
   // 2. token compliance.
-  const tokens = diffTokens(reference.tokens, candidateTokens, config);
+  const tokens = diffTokens(
+    reference.tokens,
+    candidateTokens,
+    config,
+    options.tokenAlias,
+  );
 
   // 3. semantics (+ reference variants with no candidate counterpart).
   const semantic = diffSemantics(reference, candidate);

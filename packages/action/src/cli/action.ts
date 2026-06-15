@@ -147,6 +147,7 @@ async function runComment(
     correspondences: resolved.correspondences,
     candidate: provider,
     direction,
+    ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(env.DESIGN_PARITY_OUT ? { outDir: env.DESIGN_PARITY_OUT } : {}),
   });
   report.warnings.unshift(
@@ -209,6 +210,7 @@ async function runBaseline(
     correspondences: resolved.correspondences,
     candidate: provider,
     direction,
+    ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     outDir,
   });
   report.warnings.unshift(
