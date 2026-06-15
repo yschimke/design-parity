@@ -220,7 +220,13 @@ sides reference.
 Phased so each step is independently shippable and the earlier ones de-risk the
 later.
 
+> **Status: all four phases shipped** (#80, #83, #93, #94). The notes below are
+> the plan as written; each phase header records where it landed and any way the
+> implementation diverged.
+
 ### Phase 1 — Token alias map (foundation)
+
+**✅ Shipped — #80** (closes #78).
 
 Add an optional alias layer binding design token names ↔ code token names.
 
@@ -247,6 +253,10 @@ unit-testable.
 
 ### Phase 2 — Multi-node design references
 
+**✅ Shipped — #83.** Landed without touching the adapters: a `resolveReference`
+helper in `packages/action` resolves each variant-ref and re-tags the images,
+so the diff engine and every adapter stayed unchanged.
+
 Let one code handle bind several design nodes, each tagged with the variant
 slot it fills.
 
@@ -263,6 +273,12 @@ slot it fills.
 
 ### Phase 3 — Design-system token-table audit
 
+**✅ Shipped — #93.** `DesignReference.themeTokens` now carries the design-system
+palette (the Figma adapter splits Variables into it); `diffDesignSystem` audits
+it mode-aware against `SemanticTree.themeTokens`, and `orchestrate` dedupes the
+findings so each drift is reported once per run. v1 covers colours; typography /
+numeric system tokens are a follow-up.
+
 A once-per-run check that diffs the **whole** design token table against the
 code theme table, independent of any screen.
 
@@ -276,6 +292,11 @@ code theme table, independent of any screen.
 existing `themeTokens` + Figma Variables, no new extraction.
 
 ### Phase 4 — Reverse index for designless sources
+
+**✅ Shipped — #94.** Both halves: `buildReverseIndex` in `packages/resolver`
+inverts the manifest + Code Connect to `ref → code[]`, and the baseline seed
+scanner harvests a code-authored `@DesignRef("…")` annotation (or a
+`design-ref:` comment) into real `design-map.json` entries.
 
 Make the design→code direction resolvable without Code Connect.
 
@@ -293,3 +314,5 @@ Make the design→code direction resolvable without Code Connect.
 Phase 1 first — it unblocks 3 and 4 and retires the #74 heuristic. Phase 2 is
 independent and can land in parallel. Phase 3 depends on 1. Phase 4 depends on
 1 (for the token half) and is otherwise standalone.
+
+This is the order the work shipped in: #80 (1) → #83 (2) → #93 (3) → #94 (4).
