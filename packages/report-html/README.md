@@ -51,14 +51,19 @@ machine-named directories. Given the run's components it returns
 `{ readme, html }`:
 
 - `README.md` — what GitHub renders when you open the branch: a "generated, do
-  not edit" banner, the source commit, and a table linking each component to
-  its report.
-- `index.html` — a self-contained landing page for GitHub Pages / local view.
+  not edit" banner, the source commit, an "open the board" link, and a table
+  linking each component to its report.
+- `index.html` — a self-contained landing page for GitHub Pages / local view,
+  with a small **preview thumbnail of the real candidate render** (reality, not
+  the mock) next to each component, inlined as a `data:` URI.
 
 Because GitHub serves a linked `.html` blob as source (the slider JS won't run),
-pass the published `repoSlug` + `branch` to wrap the README's report links
-through `htmlpreview.github.io` so they render on click; without them the links
-are relative. Deterministic, same as `renderHtmlReport`.
+pass the published `repoSlug` + `branch` to wrap every report link — and the
+"open the board" link to `index.html` — through `htmlpreview.github.io` so they
+render on click without GitHub Pages; without them the links are relative (right
+for Pages / local view). Per-entry thumbnails come from the caller as `data:`
+URIs (`orchestrate` inlines the candidate's first render), keeping this package a
+leaf with no disk reads. Deterministic, same as `renderHtmlReport`.
 
 ## CLI
 

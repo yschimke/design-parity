@@ -33,6 +33,12 @@ export interface IndexEntry {
   status: IndexStatus;
   /** Path to the component's `report.html`, relative to the branch root. */
   reportPath?: string;
+  /**
+   * The real candidate render (reality, not the mock) as a `data:` URI, shown as
+   * a small preview on the landing page. Inlined so `index.html` stays
+   * self-contained. Omitted when there's no candidate (e.g. a skipped component).
+   */
+  thumbnail?: string;
 }
 
 export interface IndexInput {
@@ -78,13 +84,18 @@ function mdCell(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 }
 
-/** README link target for a report, htmlpreview-wrapped when the repo is known. */
-function readmeReportHref(reportPath: string, input: IndexInput): string {
+/**
+ * Link target for a branch-relative `.html` path. GitHub serves a linked `.html`
+ * blob as source, so when the published repo + branch are known the link is
+ * wrapped through htmlpreview.github.io to render on click (works without Pages);
+ * otherwise it stays relative (right for Pages / local view).
+ */
+function previewHref(path: string, input: IndexInput): string {
   if (input.repoSlug && input.branch) {
-    const blob = `https://github.com/${input.repoSlug}/blob/${input.branch}/${reportPath}`;
+    const blob = `https://github.com/${input.repoSlug}/blob/${input.branch}/${path}`;
     return `https://htmlpreview.github.io/?${blob}`;
   }
-  return `./${reportPath}`;
+  return `./${path}`;
 }
 
 /** Render the branch's `README.md`. */
@@ -101,6 +112,12 @@ export function renderReadme(input: IndexInput): string {
     "",
   );
 
+  // A one-click previewable entry to the whole board (renders the rendered
+  // `index.html` with thumbnails), only useful once it resolves to htmlpreview.
+  if (input.repoSlug && input.branch) {
+    lines.push(`[**Open the board →**](${previewHref("index.html", input)}) — rendered previews of every screen.`, "");
+  }
+
   if (input.bundleImage) {
     lines.push(`![Candidate overview](./${input.bundleImage})`, "");
   }
@@ -109,7 +126,7 @@ export function renderReadme(input: IndexInput): string {
   for (const e of input.entries) {
     const status = `${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]}`;
     const report = e.reportPath
-      ? `[report](${readmeReportHref(e.reportPath, input)})`
+      ? `[report](${previewHref(e.reportPath, input)})`
       : "—";
     lines.push(`| ${mdCell(e.code)} | ${status} | ${report} |`);
   }
@@ -134,9 +151,10 @@ header.page h1{margin:0 0 6px;font-size:18px}
 main{padding:20px 28px;max-width:900px}
 .overview{max-width:100%;border:1px solid #26262f;border-radius:10px;margin-bottom:20px}
 table{border-collapse:collapse;width:100%}
-th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #26262f;font-size:13px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #26262f;font-size:13px;vertical-align:top}
 th{color:#9a9ab0;font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:11px}
 td.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.thumb{display:block;max-height:140px;max-width:200px;border:1px solid #26262f;border-radius:6px;background:#0c0c11;image-rendering:auto}
 .status{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:600;font-size:12px}
 .status-pass{background:#16351f;color:#7ee29a}
 .status-warn{background:#3a3115;color:#e8c66b}
@@ -145,12 +163,15 @@ td.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .status-error{background:#3a1820;color:#f08a9c}
 .muted{color:#666}`;
 
-function rowMarkup(e: IndexEntry): string {
+function rowMarkup(e: IndexEntry, input: IndexInput): string {
   const status = `<span class="status status-${e.status}">${STATUS_TEXT[e.status]}</span>`;
   const report = e.reportPath
-    ? `<a href="./${escapeHtml(e.reportPath)}">report</a>`
+    ? `<a href="${escapeHtml(previewHref(e.reportPath, input))}">report</a>`
     : `<span class="muted">—</span>`;
-  return `<tr><td class="code">${escapeHtml(e.code)}</td><td>${status}</td><td>${report}</td></tr>`;
+  const preview = e.thumbnail
+    ? `<img class="thumb" src="${e.thumbnail}" alt="${escapeHtml(e.code)} candidate render" loading="lazy" />`
+    : `<span class="muted">—</span>`;
+  return `<tr><td>${preview}</td><td class="code">${escapeHtml(e.code)}</td><td>${status}</td><td>${report}</td></tr>`;
 }
 
 /** Render the branch's self-contained `index.html` landing page. */
@@ -162,7 +183,7 @@ export function renderIndexHtml(input: IndexInput): string {
   const overview = input.bundleImage
     ? `<img class="overview" src="./${escapeHtml(input.bundleImage)}" alt="Candidate overview" />`
     : "";
-  const rows = input.entries.map(rowMarkup).join("\n");
+  const rows = input.entries.map((e) => rowMarkup(e, input)).join("\n");
 
   return `<!doctype html>
 <html lang="en">
@@ -180,7 +201,7 @@ export function renderIndexHtml(input: IndexInput): string {
 <main>
 ${overview}
 <table>
-<thead><tr><th>Component</th><th>Status</th><th>Report</th></tr></thead>
+<thead><tr><th>Preview</th><th>Component</th><th>Status</th><th>Report</th></tr></thead>
 <tbody>
 ${rows}
 </tbody>

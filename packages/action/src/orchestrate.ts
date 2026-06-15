@@ -19,8 +19,9 @@ import type {
   Verdict,
   VerdictStatus,
 } from "@design-parity/core";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   diff,
@@ -93,6 +94,22 @@ function nativeChecksProvider(findings: Finding[]): ChecksProvider {
 /** A filesystem-safe slug for a component id (`ui/Tile.kt#LightOn_Dark` → `ui-Tile-kt-LightOn_Dark`). */
 function sanitizeId(code: string): string {
   return code.replace(/[^a-z0-9_]+/gi, "-").replace(/^-+|-+$/g, "");
+}
+
+/** Inline the candidate's first render (reality, not the mock) as a `data:` URI for the landing-page thumbnail. */
+function inlineCandidateThumb(
+  root: string,
+  candidate: CandidateRender,
+): string | undefined {
+  const img = candidate.images[0];
+  if (!img) return undefined;
+  if (img.uri.startsWith("data:")) return img.uri;
+  try {
+    const bytes = readFileSync(resolve(root, img.uri));
+    return `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`;
+  } catch {
+    return undefined; // a missing render must not break the run
+  }
 }
 
 export type ComponentStatus = "ok" | "skipped" | "error";
@@ -240,13 +257,17 @@ export async function orchestrate(
   // Stitch the per-component reports into a branch landing page so the published
   // branch has an entry point instead of a wall of machine-named directories.
   if (options.outDir) {
-    const entries: IndexEntry[] = results.map((r) => ({
-      code: r.code,
-      status: r.verdict?.status ?? (r.status === "error" ? "error" : "skipped"),
-      ...(r.reportPath
-        ? { reportPath: `${sanitizeId(r.code)}/report.html` }
-        : {}),
-    }));
+    const entries: IndexEntry[] = results.map((r) => {
+      const thumbnail = r.candidate
+        ? inlineCandidateThumb(options.repoRoot, r.candidate)
+        : undefined;
+      return {
+        code: r.code,
+        status: r.verdict?.status ?? (r.status === "error" ? "error" : "skipped"),
+        ...(r.reportPath ? { reportPath: `${sanitizeId(r.code)}/report.html` } : {}),
+        ...(thumbnail ? { thumbnail } : {}),
+      };
+    });
     const { readme, html } = renderIndex({ entries, ...options.index });
     await mkdir(options.outDir, { recursive: true });
     await writeFile(join(options.outDir, "README.md"), readme);
