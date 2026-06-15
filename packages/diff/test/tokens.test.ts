@@ -85,4 +85,34 @@ describe("diffTokens", () => {
     expect(findings).toHaveLength(2);
     expect(findings.every((f) => f.severity === "error")).toBe(true);
   });
+
+  it("matches a colour that differs only by a full-alpha suffix (issue #74)", () => {
+    // `argbToCssHex` emits `#RRGGBBAA`; `#FF161D1B` (ARGB) becomes `#161d1bff`.
+    const colourSpec: DesignTokens = { colors: { onSurface: "#161D1B" } };
+    expect(
+      diffTokens(colourSpec, { colors: { onSurface: "#161d1bff" } }, defaultDiffConfig),
+    ).toEqual([]);
+  });
+
+  it("satisfies a named spec colour from a generic role key of the same role (issue #74)", () => {
+    // No resolved theme → the value lands under the role key `fg`, not `onSurface`.
+    const colourSpec: DesignTokens = { colors: { onSurface: "#161D1B" } };
+    expect(
+      diffTokens(colourSpec, { colors: { fg: "#161d1bff" } }, defaultDiffConfig),
+    ).toEqual([]);
+  });
+
+  it("does not let a background candidate value satisfy a foreground spec token", () => {
+    const colourSpec: DesignTokens = { colors: { onSurface: "#161D1B" } };
+    const findings = diffTokens(
+      colourSpec,
+      { colors: { bg: "#161d1bff" } },
+      defaultDiffConfig,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "error",
+      detail: { token: "colors.onSurface", actual: null },
+    });
+  });
 });
