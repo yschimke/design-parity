@@ -14,5 +14,5 @@ export { pairVariants } from "./variants.js";
 export type { Variant } from "./variants.js";
 export { groupFindings, tokenDelta, SECTIONS } from "./findings.js";
 export type { FindingSection, GroupedSection, TokenDelta } from "./findings.js";
-export { renderIndex, renderReadme, renderIndexHtml } from "./index-page.js";
+export { renderIndex, renderReadme, renderIndexHtml, shortCode } from "./index-page.js";
 export type { IndexEntry, IndexInput, IndexStatus } from "./index-page.js";

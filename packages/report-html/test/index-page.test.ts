@@ -4,6 +4,7 @@ import {
   renderIndex,
   renderReadme,
   renderIndexHtml,
+  shortCode,
   type IndexInput,
 } from "../src/index.js";
 
@@ -46,7 +47,22 @@ describe("renderReadme", () => {
 
   it("escapes pipe characters in the component cell", () => {
     const md = renderReadme(base);
-    expect(md).toContain("ui/Pipe\\|Name.kt#Skipped");
+    expect(md).toContain("Pipe\\|Name.kt#Skipped");
+  });
+
+  it("shows a shortened component label (file basename + member), not the full path", () => {
+    const md = renderReadme({
+      ...base,
+      entries: [
+        {
+          code: "meshcore-components/src/commonMain/kotlin/ee/x/DeviceBodyPreviews.kt#DeviceBodyPreview",
+          status: "fail",
+          reportPath: "x/report.html",
+        },
+      ],
+    });
+    expect(md).toContain("DeviceBodyPreviews.kt#DeviceBodyPreview");
+    expect(md).not.toContain("commonMain/kotlin");
   });
 
   it("uses relative report links when the repo is unknown", () => {
@@ -131,8 +147,23 @@ describe("renderIndexHtml", () => {
 
   it("escapes html-special characters in component ids", () => {
     const html = renderIndexHtml(base);
-    expect(html).toContain("ui/Pipe|Name.kt#Skipped"); // | is not html-special, passes through
+    expect(html).toContain("Pipe|Name.kt#Skipped"); // | is not html-special, passes through
     expect(html).not.toContain("<Pipe");
+  });
+
+  it("shows a short component label but keeps the full handle in a title tooltip", () => {
+    const html = renderIndexHtml({
+      ...base,
+      entries: [
+        {
+          code: "a/b/c/DeviceBodyPreviews.kt#DeviceBodyPreview",
+          status: "fail",
+          reportPath: "x/report.html",
+        },
+      ],
+    });
+    expect(html).toContain('title="a/b/c/DeviceBodyPreviews.kt#DeviceBodyPreview"');
+    expect(html).toContain(">DeviceBodyPreviews.kt#DeviceBodyPreview</td>");
   });
 
   it("shows an overview image only when provided", () => {
@@ -152,5 +183,21 @@ describe("renderIndex", () => {
     const { readme, html } = renderIndex(base);
     expect(readme).toBe(renderReadme(base));
     expect(html).toBe(renderIndexHtml(base));
+  });
+});
+
+describe("shortCode", () => {
+  it("reduces a full source path to file basename + member", () => {
+    expect(
+      shortCode(
+        "meshcore-components/src/commonMain/kotlin/ee/x/DeviceBodyPreviews.kt#DeviceBodyPreview",
+      ),
+    ).toBe("DeviceBodyPreviews.kt#DeviceBodyPreview");
+  });
+
+  it("passes through an already-short handle, a path without a member, and a bare name", () => {
+    expect(shortCode("ui/DeviceBody.kt#Preview")).toBe("DeviceBody.kt#Preview");
+    expect(shortCode("a/b/File.kt")).toBe("File.kt");
+    expect(shortCode("Plain")).toBe("Plain");
   });
 });

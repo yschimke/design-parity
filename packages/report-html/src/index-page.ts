@@ -79,6 +79,21 @@ function short(sha: string): string {
   return /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7) : sha;
 }
 
+/**
+ * A compact display label for a component handle. Component ids are often a full
+ * source path (`…/ui/DeviceBodyPreviews.kt#DeviceBodyPreview`) which overflows the
+ * landing-page table on narrow screens, so show just the file basename and member
+ * (`DeviceBodyPreviews.kt#DeviceBodyPreview`). The full handle stays available —
+ * as the row's `title` tooltip in `index.html` and on each report's own heading.
+ */
+export function shortCode(code: string): string {
+  const hash = code.indexOf("#");
+  const path = hash >= 0 ? code.slice(0, hash) : code;
+  const member = hash >= 0 ? code.slice(hash) : "";
+  const base = path.slice(path.lastIndexOf("/") + 1);
+  return `${base}${member}`;
+}
+
 /** Escape a cell for a GitHub-flavored markdown table. */
 function mdCell(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
@@ -149,10 +164,11 @@ export function renderReadme(input: IndexInput): string {
       e.reportPath && historyHref(e.reportPath, input)
         ? `[history](${historyHref(e.reportPath, input)})`
         : "—";
+    const name = mdCell(shortCode(e.code));
     lines.push(
       hasHistory
-        ? `| ${mdCell(e.code)} | ${status} | ${report} | ${history} |`
-        : `| ${mdCell(e.code)} | ${status} | ${report} |`,
+        ? `| ${name} | ${status} | ${report} | ${history} |`
+        : `| ${name} | ${status} | ${report} |`,
     );
   }
   lines.push("");
@@ -178,8 +194,9 @@ main{padding:20px 28px;max-width:900px}
 table{border-collapse:collapse;width:100%}
 th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #26262f;font-size:13px;vertical-align:top}
 th{color:#9a9ab0;font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:11px}
-td.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+td.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word}
 .thumb{display:block;max-height:140px;max-width:200px;border:1px solid #26262f;border-radius:6px;background:#0c0c11;image-rendering:auto}
+@media (max-width:560px){main{padding:16px}th,td{padding:6px 8px}.thumb{max-width:110px;max-height:90px}}
 .status{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:600;font-size:12px}
 .status-pass{background:#16351f;color:#7ee29a}
 .status-warn{background:#3a3115;color:#e8c66b}
@@ -200,7 +217,8 @@ function rowMarkup(e: IndexEntry, input: IndexInput, hasHistory: boolean): strin
   const historyCell = hasHistory
     ? `<td>${href ? `<a href="${escapeHtml(href)}">history</a>` : `<span class="muted">—</span>`}</td>`
     : "";
-  return `<tr><td>${preview}</td><td class="code">${escapeHtml(e.code)}</td><td>${status}</td><td>${report}</td>${historyCell}</tr>`;
+  const code = `<td class="code" title="${escapeHtml(e.code)}">${escapeHtml(shortCode(e.code))}</td>`;
+  return `<tr><td>${preview}</td>${code}<td>${status}</td><td>${report}</td>${historyCell}</tr>`;
 }
 
 /** Render the branch's self-contained `index.html` landing page. */
