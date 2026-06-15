@@ -25,12 +25,17 @@
     "spacing": { "padding": 16 },
     "radius": { "corner": 8 },
     "colors": {
-      "container.light": "#645AFF",
-      "container.dark": "#8A82FF",
+      "container": "#645AFF",
       "label": "#FFFFFF"
     },
     "typography": {
       "label": { "fontFamily": "Roboto", "fontSize": 14, "fontWeight": 500, "lineHeight": 20 }
+    }
+  },
+  "themeTokens": {
+    "colors": {
+      "container.light": "#645AFF",
+      "container.dark": "#8A82FF"
     }
   }
 }

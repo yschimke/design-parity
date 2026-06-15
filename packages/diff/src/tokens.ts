@@ -52,12 +52,12 @@ function typographyEqual(a: TypographyToken, b: TypographyToken): boolean {
 }
 
 /** Fold a token name to an alias-lookup key: last `/`-segment, lowercased. */
-function aliasKey(name: string): string {
+export function aliasKey(name: string): string {
   return name.slice(name.lastIndexOf("/") + 1).toLowerCase();
 }
 
 /** Invert a code→design alias group into a design-key → code-name index. */
-function aliasInverse(group?: Record<string, string>): Map<string, string> {
+export function aliasInverse(group?: Record<string, string>): Map<string, string> {
   const inv = new Map<string, string>();
   for (const [code, design] of Object.entries(group ?? {})) {
     const key = aliasKey(design);
@@ -243,7 +243,7 @@ function parseHexColor(value: string): { rgb: string; alpha: string } | undefine
 }
 
 /** Compare two colours, treating `#RRGGBB` and full-alpha `#RRGGBBAA` as equal. */
-function colorsEqual(a: string, b: string): boolean {
+export function colorsEqual(a: string, b: string): boolean {
   const pa = parseHexColor(a);
   const pb = parseHexColor(b);
   if (!pa || !pb) return a.toLowerCase() === b.toLowerCase();

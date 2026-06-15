@@ -26,6 +26,7 @@ import {
   type ChecksProvider,
 } from "./checks.js";
 import { resolveConfig, type DiffConfig } from "./config.js";
+import { diffDesignSystem } from "./design-system.js";
 import { diffSemantics } from "./semantic.js";
 import { renderSummary } from "./summary.js";
 import { collectTokens, diffTokens } from "./tokens.js";
@@ -161,12 +162,17 @@ export async function diff(
     config: options.checksConfig ?? {},
   });
 
-  // 2. token compliance.
+  // 2. token compliance: per-node tokens, then the design-system palette audit.
   const tokens = diffTokens(
     reference.tokens,
     candidateTokens,
     config,
     options.tokenAlias,
+  );
+  const designSystem = diffDesignSystem(
+    reference.themeTokens,
+    candidate.semantics.themeTokens,
+    { ...(candidate.semantics.theme ? { theme: candidate.semantics.theme } : {}), ...(options.tokenAlias ? { alias: options.tokenAlias } : {}) },
   );
 
   // 3. semantics (+ reference variants with no candidate counterpart).
@@ -218,7 +224,7 @@ export async function diff(
     }
   }
 
-  const findings = [...a11y, ...tokens, ...semantic, ...visualFindings];
+  const findings = [...a11y, ...tokens, ...designSystem, ...semantic, ...visualFindings];
   const verdict: Verdict = {
     componentId: candidate.componentId,
     status: statusFor(findings),
