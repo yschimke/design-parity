@@ -4,8 +4,10 @@
  * A {@link DesignReference} carries one flat {@link DesignTokens} bag; a
  * {@link CandidateRender} scatters tokens across its semantic tree. We flatten
  * the candidate's tree into the same shape, then compare key-by-key against the
- * reference spec. Numeric tokens honour a committed tolerance; colours and
- * typography must match exactly.
+ * reference spec. Numeric tokens honour a committed tolerance; typography must
+ * match exactly; colours match modulo a full-alpha suffix (`#RRGGBB` ==
+ * `#RRGGBBAA`), and a spec colour the candidate couldn't name falls back to a
+ * same-role value match before being reported missing.
  */
 import type {
   DesignTokens,
@@ -69,10 +71,16 @@ export function diffTokens(
     numericFinding("radius", name, want, got, config.radiusTolerance, findings);
   }
   for (const [name, want] of Object.entries(spec.colors ?? {})) {
-    const got = candidate.colors?.[name];
+    // A node carries its colour under the reference's token name only when the
+    // candidate's theme could name it; without a resolved theme (compose-ai-tools
+    // #1897) the value lands under the generic role key `fg`/`bg`. So when the
+    // spec name isn't present, fall back to a value match within the same role
+    // before declaring it missing — the candidate already provides the value
+    // (issue #74), just not under this name.
+    const got = candidate.colors?.[name] ?? roleMatch(name, want, candidate.colors);
     if (got === undefined) {
       findings.push(missing("colors", name, want));
-    } else if (got.toLowerCase() !== want.toLowerCase()) {
+    } else if (!colorsEqual(got, want)) {
       findings.push({
         kind: "token",
         severity: "warn",
@@ -118,6 +126,53 @@ function numericFinding(
       detail: { token: `${group}.${name}`, expected: want, actual: got, delta },
     });
   }
+}
+
+/** A token name carries a foreground (text/icon) colour: `onPrimary`, `fg`. */
+function isForegroundToken(name: string): boolean {
+  return name === "fg" || /^on[A-Z]/.test(name);
+}
+
+/**
+ * Find a candidate colour matching `want` under the same role as the spec
+ * token `name`. The candidate's per-node colours collapse onto generic role
+ * keys (`fg`/`bg`) when its theme can't name them, so a foreground spec token
+ * is satisfied by any foreground candidate value of the same colour (and a
+ * background token likewise). Returns the matching value, or `undefined`.
+ */
+function roleMatch(
+  name: string,
+  want: string,
+  candidate?: Record<string, string>,
+): string | undefined {
+  if (!candidate) return undefined;
+  const wantForeground = isForegroundToken(name);
+  for (const [key, value] of Object.entries(candidate)) {
+    if (isForegroundToken(key) === wantForeground && colorsEqual(value, want)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+/** Split a hex colour into lowercase `rgb` + `alpha`, or `undefined` if not hex. */
+function parseHexColor(value: string): { rgb: string; alpha: string } | undefined {
+  const hex = value.startsWith("#") ? value.slice(1) : value;
+  // Candidate values are `#RRGGBBAA` (alpha last, from `argbToCssHex`); the
+  // reference spec is typically `#RRGGBB`. Treat a 6-digit value as opaque.
+  if (/^[0-9a-fA-F]{6}$/.test(hex)) return { rgb: hex.toLowerCase(), alpha: "ff" };
+  if (/^[0-9a-fA-F]{8}$/.test(hex)) {
+    return { rgb: hex.slice(0, 6).toLowerCase(), alpha: hex.slice(6, 8).toLowerCase() };
+  }
+  return undefined;
+}
+
+/** Compare two colours, treating `#RRGGBB` and full-alpha `#RRGGBBAA` as equal. */
+function colorsEqual(a: string, b: string): boolean {
+  const pa = parseHexColor(a);
+  const pb = parseHexColor(b);
+  if (!pa || !pb) return a.toLowerCase() === b.toLowerCase();
+  return pa.rgb === pb.rgb && pa.alpha === pb.alpha;
 }
 
 function missing(group: string, name: string, want: string): Finding {
