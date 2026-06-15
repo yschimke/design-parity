@@ -115,4 +115,38 @@ describe("diffTokens", () => {
       detail: { token: "colors.onSurface", actual: null },
     });
   });
+
+  it("satisfies a named spec spacing token from a within-tolerance value match (#1897)", () => {
+    // The candidate carries resolved padding under generic keys, not the
+    // reference's `screenPadding` name — a value match still satisfies the spec.
+    const padSpec: DesignTokens = { spacing: { screenPadding: 16 } };
+    expect(
+      diffTokens(
+        padSpec,
+        { spacing: { paddingStart: 16, padding: 16 } },
+        defaultDiffConfig,
+      ),
+    ).toEqual([]);
+  });
+
+  it("satisfies a named spec radius token from a value match (#1897)", () => {
+    const radSpec: DesignTokens = { radius: { card: 12 } };
+    expect(
+      diffTokens(radSpec, { radius: { corner: 12 } }, defaultDiffConfig),
+    ).toEqual([]);
+  });
+
+  it("reports a numeric token missing when no candidate value is within tolerance (#1897)", () => {
+    const padSpec: DesignTokens = { spacing: { screenPadding: 16 } };
+    const findings = diffTokens(
+      padSpec,
+      { spacing: { padding: 4 } },
+      defaultDiffConfig,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "error",
+      detail: { token: "spacing.screenPadding", actual: null },
+    });
+  });
 });
