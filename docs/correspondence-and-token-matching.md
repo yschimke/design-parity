@@ -161,11 +161,22 @@ spec **by token name**: numeric tokens honour a tolerance, typography is exact,
 colours match modulo a full-alpha suffix and — when the candidate couldn't
 *name* a colour — fall back to a same-role value match (issue #74).
 
+Colours are matched in three tiers, most precise first: (1) **exact name** —
+the explicit alias map has already canonicalised design names to code names
+(§4.4, issue #78); (2) **Material role** — a reference token *named in
+design-system vocabulary* (`color/on-surface`) is recognised as the Material 3
+role it denotes (`onSurface`) via `@design-parity/core`'s `materialColorRole`
+and matched against the candidate's resolved role (compose-ai-tools#1897, issue
+#87); (3) the #74 **same-role value** fallback (`fg`/`bg`). The role tier is a
+low-confidence *name* match, so a mismatch found that way is flagged
+`via: "role-heuristic"` in the finding detail. Typography gets the analogous
+type-scale heuristic (`type/body/large` → `bodyLarge`).
+
 The #74 fallback is the tell that the **naming** is the weak link: when the
 code's theme can't name a value, the colour lands under a generic role key
 (`fg`/`bg`) instead of `onSurface`, and a name-keyed comparison misses it. The
-fallback papers over this per value; it does not give us a real
-*design-name ↔ code-name* correspondence.
+role heuristic and the explicit alias close most of this gap; the value fallback
+remains for the unresolved-theme case.
 
 ### 4.4 Gaps
 

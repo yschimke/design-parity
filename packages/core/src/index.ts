@@ -59,6 +59,20 @@ export {
   loadDtcgTokens,
 } from "./dtcg.js";
 
+export type {
+  MaterialColorRole,
+  MaterialTypeRole,
+  MaterialShapeRole,
+} from "./material-roles.js";
+export {
+  MATERIAL_COLOR_ROLES,
+  MATERIAL_TYPE_ROLES,
+  MATERIAL_SHAPE_ROLES,
+  materialColorRole,
+  materialTypeRole,
+  materialShapeRole,
+} from "./material-roles.js";
+
 export type { CanonicalSize } from "./size.js";
 export {
   CANONICAL_SIZES,
