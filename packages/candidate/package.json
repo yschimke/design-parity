@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/candidate",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Pluggable candidate sources: a static compose-ai-tools preview-bundle reader, a wrapper over the upstream compose-preview CLI, and stubs for local Compose-for-Web and daemon rendering — all normalizing into a CandidateRender.",
   "license": "Apache-2.0",
   "type": "module",
@@ -17,11 +17,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.5",
+    "@design-parity/core": "^0.1.6",
     "fflate": "^0.8.2"
   },
   "devDependencies": {
-    "@design-parity/diff": "^0.1.5"
+    "@design-parity/diff": "^0.1.6"
   },
   "repository": {
     "type": "git",
