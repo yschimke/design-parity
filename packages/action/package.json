@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/action",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Integration layer: wires resolver, adapters, candidate, checks, diff, and policy into a parity run, and surfaces the verdict (CLI now; GitHub Action surface to follow).",
   "license": "Apache-2.0",
   "type": "module",
@@ -19,17 +19,17 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.6",
-    "@design-parity/resolver": "^0.1.6",
-    "@design-parity/policy": "^0.1.6",
-    "@design-parity/diff": "^0.1.6",
-    "@design-parity/report-html": "^0.1.6",
-    "@design-parity/checks": "^0.1.6",
-    "@design-parity/candidate": "^0.1.6",
-    "@design-parity/adapter-figma": "^0.1.6",
-    "@design-parity/adapter-stitch": "^0.1.6",
-    "@design-parity/adapter-claude-design": "^0.1.6",
-    "@design-parity/adapter-bundle": "^0.1.6"
+    "@design-parity/core": "^0.1.7",
+    "@design-parity/resolver": "^0.1.7",
+    "@design-parity/policy": "^0.1.7",
+    "@design-parity/diff": "^0.1.7",
+    "@design-parity/report-html": "^0.1.7",
+    "@design-parity/checks": "^0.1.7",
+    "@design-parity/candidate": "^0.1.7",
+    "@design-parity/adapter-figma": "^0.1.7",
+    "@design-parity/adapter-stitch": "^0.1.7",
+    "@design-parity/adapter-claude-design": "^0.1.7",
+    "@design-parity/adapter-bundle": "^0.1.7"
   },
   "repository": {
     "type": "git",
