@@ -97,6 +97,25 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain("actual 12");
   });
 
+  it("lays the variants out as a matrix with light/dark theme columns and a candidate preview per intersection", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+
+    // A matrix table with the themes as columns (light before dark).
+    expect(html).toContain('<table class="matrix">');
+    const lightCol = html.indexOf(">Light<");
+    const darkCol = html.indexOf(">Dark<");
+    expect(lightCol).toBeGreaterThan(-1);
+    expect(darkCol).toBeGreaterThan(lightCol);
+    // A row header keyed by state (· size).
+    expect(html).toContain('class="matrix-row"');
+    expect(html).toContain("default · compact");
+    // Each intersection shows a candidate preview that anchors to its detail.
+    expect(html).toContain('class="matrix-img"');
+    expect(html).toMatch(/<a class="matrix-link" href="#v-default-dark-compact">/);
+    expect(html).toContain('id="v-default-dark-compact"');
+  });
+
   it("inlines images as data URIs and references no external assets", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     const html = renderHtmlReport({

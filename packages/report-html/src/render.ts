@@ -41,6 +41,100 @@ function inlineFromDisk(root: string, img: Image | undefined): string | undefine
   return pngDataUri(bytes);
 }
 
+/** Column order for the theme matrix: light first, then dark, then any extras. */
+const THEME_ORDER: Record<string, number> = { light: 0, dark: 1 };
+
+interface Rendered {
+  variant: Variant;
+  index: number;
+  refSrc?: string;
+  candSrc?: string;
+  diffSrc?: string;
+}
+
+/** Stable DOM id for a variant's detail section — matrix cells anchor to it. */
+function variantId(key: string): string {
+  const slug = key
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return `v-${slug}`;
+}
+
+/** Column header for a theme, or "Default" for the theme-less column. */
+function themeLabel(theme?: string): string {
+  if (!theme) return "Default";
+  return theme.charAt(0).toUpperCase() + theme.slice(1);
+}
+
+/** Row key for the matrix: the variant's state, plus its size when present. */
+function rowKey(variant: Variant): string {
+  return [variant.state, variant.size].filter(Boolean).join(" · ");
+}
+
+/**
+ * The candidate-render matrix: one row per `state (· size)`, one column per
+ * theme (light, then dark, then any other theme, then a theme-less column when
+ * some variant omits it). Each intersection shows that variant's candidate
+ * render, linking down to its full reference|candidate|diff detail. Themes are
+ * the columns so light/dark sit side by side at a glance.
+ */
+function matrixMarkup(rendered: Rendered[]): string {
+  // Columns: distinct themes in light→dark→… order, then a theme-less column.
+  const themed = new Set<string>();
+  let hasUntyped = false;
+  for (const r of rendered) {
+    if (r.variant.theme === undefined) hasUntyped = true;
+    else themed.add(r.variant.theme);
+  }
+  const columns: (string | undefined)[] = [...themed].sort(
+    (a, b) =>
+      (THEME_ORDER[a] ?? 99) - (THEME_ORDER[b] ?? 99) || a.localeCompare(b),
+  );
+  if (hasUntyped) columns.push(undefined);
+
+  // Rows in first-appearance order (pairVariants is already stable).
+  const rowOrder: string[] = [];
+  const rowsByKey = new Map<string, Rendered[]>();
+  for (const r of rendered) {
+    const k = rowKey(r.variant);
+    const bucket = rowsByKey.get(k);
+    if (bucket) bucket.push(r);
+    else {
+      rowsByKey.set(k, [r]);
+      rowOrder.push(k);
+    }
+  }
+
+  const head = `<tr><th class="matrix-corner">state</th>${columns
+    .map((t) => `<th scope="col">${escapeHtml(themeLabel(t))}</th>`)
+    .join("")}</tr>`;
+
+  const body = rowOrder
+    .map((k) => {
+      const cells = columns
+        .map((theme) => {
+          const r = rowsByKey.get(k)?.find((x) => x.variant.theme === theme);
+          if (!r)
+            return `<td class="matrix-cell"><span class="panel-empty">—</span></td>`;
+          const inner = r.candSrc
+            ? `<a class="matrix-link" href="#${variantId(r.variant.key)}"><img class="matrix-img" src="${r.candSrc}" alt="${escapeHtml(r.variant.key)} candidate render" loading="lazy" /></a>`
+            : `<span class="panel-empty">no candidate</span>`;
+          return `<td class="matrix-cell">${inner}</td>`;
+        })
+        .join("");
+      return `<tr><th class="matrix-row" scope="row">${escapeHtml(k)}</th>${cells}</tr>`;
+    })
+    .join("\n");
+
+  return `<section class="matrix-wrap">
+            <table class="matrix">
+              <thead>${head}</thead>
+              <tbody>${body}</tbody>
+            </table>
+          </section>`;
+}
+
 interface Panel {
   label: string;
   src?: string;
@@ -91,7 +185,7 @@ function variantMarkup(
          </div>`
       : "";
 
-  return `<section class="variant" data-variant="${escapeHtml(variant.key)}">
+  return `<section class="variant" id="${variantId(variant.key)}" data-variant="${escapeHtml(variant.key)}">
             <header class="variant-head">
               <h3>${escapeHtml(variant.key)}</h3>
               <div class="variant-meta">${meta}</div>
@@ -175,6 +269,18 @@ main{padding:20px 28px;display:grid;gap:24px;max-width:1200px}
 .variant-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .variant-head h3{margin:0;font-size:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .chip{display:inline-block;padding:1px 8px;border-radius:6px;background:#222230;color:#b8b8cc;font-size:11px;margin-left:4px}
+.section-title{margin:0 0 -8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#9a9ab0}
+.matrix-wrap{overflow-x:auto;border:1px solid #26262f;border-radius:10px;background:#15151c}
+table.matrix{border-collapse:collapse;width:100%}
+table.matrix th,table.matrix td{padding:10px;border-bottom:1px solid #26262f;text-align:center;vertical-align:middle}
+table.matrix th+th,table.matrix td{border-left:1px solid #26262f}
+table.matrix tbody tr:last-child th,table.matrix tbody tr:last-child td{border-bottom:none}
+table.matrix thead th{background:#191921;color:#9a9ab0;font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+th.matrix-corner{text-align:left;color:#9a9ab0;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9c9dd;font-weight:600}
+.matrix-cell{background:#0c0c11}
+.matrix-link{display:inline-block;line-height:0}
+.matrix-img{display:block;max-width:220px;max-height:200px;width:auto;height:auto;margin:0 auto;border-radius:6px;image-rendering:pixelated}
 .triptych{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .panel{margin:0;border:1px solid #26262f;border-radius:8px;overflow:hidden;background:#0c0c11}
 .panel figcaption{padding:6px 10px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#9a9ab0;border-bottom:1px solid #26262f}
@@ -234,19 +340,25 @@ export function renderHtmlReport(input: ReportInput): string {
 
   const variants = pairVariants(reference.referenceImages, candidate.images);
 
-  const variantsHtml = variants
-    .map((variant, index) => {
-      const refSrc = inlineFromDisk(root, variant.reference);
-      const candSrc = inlineFromDisk(root, variant.candidate);
-      const diff = diffByKey.get(variant.key);
-      const diffSrc = diff ? pngDataUri(diff.png) : undefined;
-      return variantMarkup(variant, index, refSrc, candSrc, diffSrc);
-    })
+  // Inline each variant's images once, then reuse for both the candidate matrix
+  // (overview) and the per-variant reference|candidate|diff detail below.
+  const rendered: Rendered[] = variants.map((variant, index) => {
+    const refSrc = inlineFromDisk(root, variant.reference);
+    const candSrc = inlineFromDisk(root, variant.candidate);
+    const diff = diffByKey.get(variant.key);
+    const diffSrc = diff ? pngDataUri(diff.png) : undefined;
+    return { variant, index, refSrc, candSrc, diffSrc };
+  });
+
+  const detailsHtml = rendered
+    .map((r) => variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc))
     .join("\n");
 
-  const hasVariants = variants.length > 0;
+  const hasVariants = rendered.length > 0;
   const variantsSection = hasVariants
-    ? variantsHtml
+    ? `${matrixMarkup(rendered)}
+<h2 class="section-title">Variant detail</h2>
+${detailsHtml}`
     : `<section class="variant"><p class="panel-empty">No images for this verdict — findings only.</p></section>`;
 
   const status = verdict.status;
