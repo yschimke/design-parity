@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.7](https://github.com/yschimke/design-parity/compare/v0.1.6...v0.1.7) (2026-06-16)
+
+
+### Bug Fixes
+
+* **checks:** don't flag measurement values as locale-grouped numbers ([64a7050](https://github.com/yschimke/design-parity/commit/64a705042e4bc709bcab9e8da99a7b2aa7d50dcf))
+* **checks:** don't flag measurement values as locale-grouped numbers ([0799c0b](https://github.com/yschimke/design-parity/commit/0799c0b6637153aa30d7bca5c0f47a342e1d0445))
+* **diff:** allow 1dp density-rounding slack on spacing/radius tokens ([55a3ef5](https://github.com/yschimke/design-parity/commit/55a3ef5da76b46155caf7225986344f7d707c0cc))
+* **diff:** assert a11y coverage tree-wide, not on the root node ([7bd3a7d](https://github.com/yschimke/design-parity/commit/7bd3a7d761df890eb9c44aad25798f8011765b8b))
+* **diff:** match M3 accent base roles against either ground ([aa4b135](https://github.com/yschimke/design-parity/commit/aa4b135da7b5f174968fc63e62e5d91e6c35380a))
+* **diff:** preserve distinct candidate token values when flattening ([2fb8a55](https://github.com/yschimke/design-parity/commit/2fb8a5551861c7b589eec273d1d7ef9c1582075f))
+* **diff:** stop false token/a11y findings against real bundle candidates ([63aabaa](https://github.com/yschimke/design-parity/commit/63aabaa4b4463f25c384ba3f5678e037c3f83922))
+
 ## [0.1.6](https://github.com/yschimke/design-parity/compare/v0.1.5...v0.1.6) (2026-06-16)
 
 
