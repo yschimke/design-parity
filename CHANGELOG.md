@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6](https://github.com/yschimke/design-parity/compare/v0.1.5...v0.1.6) (2026-06-16)
+
+
+### Features
+
+* **report-html:** lay variants out as a light/dark theme matrix ([8a56e97](https://github.com/yschimke/design-parity/commit/8a56e972210eec201491ff744c848daca0cc10ff))
+* **report-html:** lay variants out as a light/dark theme matrix ([1bb3f28](https://github.com/yschimke/design-parity/commit/1bb3f28f56d1f1116615f1cbccd123b9911612b5))
+
 ## [0.1.5](https://github.com/yschimke/design-parity/compare/v0.1.4...v0.1.5) (2026-06-16)
 
 
