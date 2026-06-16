@@ -151,6 +151,18 @@ describe("diffTokens", () => {
     });
   });
 
+  it("matches an accent base role (primary) against either-ground candidate value", () => {
+    // `primary` is an M3 accent used as a fill *and* as accent text/icon, so the
+    // candidate may resolve it under `fg` or `bg`; either satisfies the spec.
+    const accent: DesignTokens = { colors: { primary: "#006A60" } };
+    expect(
+      diffTokens(accent, { colors: { fg: "#006a60ff", bg: "#ffffffff" } }, defaultDiffConfig),
+    ).toEqual([]);
+    expect(
+      diffTokens(accent, { colors: { bg: "#006a60ff" } }, defaultDiffConfig),
+    ).toEqual([]);
+  });
+
   it("satisfies a named spec spacing token from a within-tolerance value match (#1897)", () => {
     // The candidate carries resolved padding under generic keys, not the
     // reference's `screenPadding` name — a value match still satisfies the spec.

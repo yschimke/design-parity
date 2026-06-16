@@ -282,17 +282,25 @@ function numericValueMatch(
   return best;
 }
 
-/** A token name carries a foreground (text/icon) colour: `onPrimary`, `fg`, `fg#2`. */
-function isForegroundToken(name: string): boolean {
-  return baseKey(name) === "fg" || /^on[A-Z]/.test(name);
+/**
+ * Which "ground" a colour role paints on: `fg` (text/icon — `onPrimary`, `fg`),
+ * `bg` (a fill — `surface`, `bg`, a container), or `any` for an M3 **accent**
+ * base role (`primary`/`secondary`/`tertiary`/`error`) used both as a fill *and*
+ * as accent text/icon, so it may legitimately surface under either ground.
+ */
+function colorGround(name: string): "fg" | "bg" | "any" {
+  if (baseKey(name) === "fg" || /^on[A-Z]/.test(name)) return "fg";
+  if (/^(primary|secondary|tertiary|error)$/i.test(baseKey(name))) return "any";
+  return "bg";
 }
 
 /**
- * Find a candidate colour matching `want` under the same role as the spec
+ * Find a candidate colour matching `want` under the same ground as the spec
  * token `name`. The candidate's per-node colours collapse onto generic role
- * keys (`fg`/`bg`) when its theme can't name them, so a foreground spec token
- * is satisfied by any foreground candidate value of the same colour (and a
- * background token likewise). Returns the matching value, or `undefined`.
+ * keys (`fg`/`bg`) when its theme can't name them, so a foreground spec token is
+ * satisfied by any foreground candidate value of the same colour (and a
+ * background token likewise); an accent base role matches either. Returns the
+ * matching value, or `undefined`.
  */
 function roleMatch(
   name: string,
@@ -300,11 +308,12 @@ function roleMatch(
   candidate?: Record<string, string>,
 ): string | undefined {
   if (!candidate) return undefined;
-  const wantForeground = isForegroundToken(name);
+  const wantGround = colorGround(name);
   for (const [key, value] of Object.entries(candidate)) {
-    if (isForegroundToken(key) === wantForeground && colorsEqual(value, want)) {
-      return value;
-    }
+    const candGround = colorGround(key);
+    const groundsAgree =
+      wantGround === "any" || candGround === "any" || candGround === wantGround;
+    if (groundsAgree && colorsEqual(value, want)) return value;
   }
   return undefined;
 }
