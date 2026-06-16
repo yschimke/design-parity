@@ -14,7 +14,7 @@ references (and Figma / image bundles too). Where a step differs, both are shown
 ```
 @Preview (CMP module)                          design reference
         │ compose-preview (Desktop/JVM render)         │ claude-design HTML export
-        ▼                                              ▼  or stitch:<id>
+        ▼                                              ▼  or stitch:<proj>/<screen>
   preview bundle (PNG+zip)  ──▶  design-parity diff  ◀──  DesignReference
                                        │
                                        ▼
@@ -99,7 +99,32 @@ Pick one source and commit/point at the references:
 - **Claude Design** — commit the **HTML export** of each screen into the repo
   (e.g. `design/Home.html`); the `claude-design` adapter rasterizes it. No API
   token, fully offline, deterministic. Best fit for a first adoption.
-- **Stitch** — reference each screen as `stitch:<designId>`.
+- **Stitch** — reference each screen as `stitch:<projectId>/<screenId>` (two
+  parts, separated by `/` — this is what `stitch-ref.ts` parses; a single-part
+  `stitch:<id>` is rejected as `StitchBadRefError`). Needs auth, the SDK, and a
+  headless Chrome — see **Stitch setup** below before you run.
+
+### Stitch setup
+
+The `claude-design` path is fully offline, but Stitch resolves references through
+the Stitch SDK and rasterizes them in a real browser, so it has three
+prerequisites the guide above doesn't (all enforced by the adapter at runtime —
+see [`packages/adapters/stitch/README.md`](../packages/adapters/stitch/README.md)):
+
+1. **A credential.** The adapter reads one env var, in this order — the first set
+   wins: `STITCH_API_KEY` → `STITCH_TOKEN` → `STITCH_ACCESS_TOKEN` →
+   `GOOGLE_STITCH_TOKEN`. None set → `StitchAuthError`; a rejected one is mapped
+   from the SDK.
+2. **The `@google/stitch-sdk` peer dep.** It's deliberately kept out of
+   design-parity's hard dependencies so installs stay clean, so install it
+   yourself in the project you run from (`npm i @google/stitch-sdk`). Absence →
+   `StitchSdkError`.
+3. **A headless Chrome/Chromium** on `PATH` (or pointed at by `CHROME_PATH`) for
+   rasterization — no browser is bundled, mirroring the candidate renderer.
+
+`claude-design` needs none of these; if a first Stitch adoption is fighting all
+three at once, prove the pipeline on a `claude-design` HTML export first, then
+switch the source.
 
 ## Step 3 — Map code ↔ design
 
@@ -115,7 +140,8 @@ the two namespaces ([#44](https://github.com/yschimke/design-parity/issues/44)):
 ]}
 ```
 
-For Stitch use `"source": "stitch", "ref": "stitch:abc123"`. Optionally add
+For Stitch use `"source": "stitch", "ref": "stitch:<projectId>/<screenId>"`
+(e.g. `stitch:design/abc123`). Optionally add
 `.design-parity.json` to set the parity **direction** (`design-led` blocks PRs on
 a failure; `code-led` is advisory).
 
