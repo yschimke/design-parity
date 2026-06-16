@@ -86,17 +86,33 @@ export function expansionFactor(length: number): number {
 export const AVG_GLYPH_ADVANCE = 0.55;
 
 /**
+ * Units that mark a number as a physical measurement (frequency, data rate,
+ * time, distance, electrical, screen, temperature, percentage) rather than a
+ * locale-grouped count. Matched immediately after a number so a decimal like
+ * `869.525 MHz` is not mistaken for thousands grouping (`.` read as a separator).
+ */
+const MEASUREMENT_UNIT = String.raw`(?:[kMGT]?Hz|d[Bb][miu]?|[kMG]?bps|[KMGT]i?B|mAh|m?A|[mkµ]?V|k?Wh?|[mµnp]?s|min|h|°[CF]?|%|px|dp|sp|pt|fps|[kcnmµ]?m|[mµ]?g|kg)\b`;
+
+/**
  * Patterns that look like hardcoded, locale-specific value formatting embedded
- * in a user-facing string. These should go through locale-aware formatters.
+ * in a user-facing string. These should go through locale-aware formatters. The
+ * grouped-number pattern excludes a value immediately followed by a measurement
+ * unit, which is a physical quantity (e.g. `125 kHz`), not a formatted count.
  */
 export const LOCALE_FORMAT_PATTERNS: { readonly id: string; readonly re: RegExp }[] = [
   // $1,234  £9.99  €1 234,50  ¥980
   { id: "currency", re: /[$£€¥₹]\s?\d/u },
   // 12/06/2026  2026-06-12  6.12.26
   { id: "date", re: /\b\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}\b/u },
-  // 1,234,567  1.234,56  (grouped / fractional numbers)
-  { id: "number", re: /\b\d{1,3}([.,]\d{3})+([.,]\d+)?\b/u },
-] as const;
+  // 1,234,567  1.234,56  (grouped / fractional numbers) — but not `869.525 MHz`
+  {
+    id: "number",
+    re: new RegExp(
+      String.raw`\b\d{1,3}([.,]\d{3})+([.,]\d+)?\b(?!\s?${MEASUREMENT_UNIT})`,
+      "u",
+    ),
+  },
+];
 
 /**
  * Label hints for directional iconography that must mirror under RTL. A `back`

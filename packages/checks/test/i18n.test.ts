@@ -50,6 +50,21 @@ describe("checkLocaleFormatting", () => {
       checkLocaleFormatting(candidateOf({ role: "text", label: "Continue" }), cfg),
     ).toEqual([]);
   });
+
+  it.each([
+    "869.525 MHz · BW 125 kHz · SF 10 · CR 5",
+    "12.5 dBm",
+    "1.024 GB",
+  ])("does not flag a measurement value: %s", (label) => {
+    expect(
+      checkLocaleFormatting(candidateOf({ role: "text", label }), cfg),
+    ).toEqual([]);
+  });
+
+  it("still flags a grouped count with no unit", () => {
+    const f = checkLocaleFormatting(candidateOf({ role: "text", label: "1,234 sales" }), cfg);
+    expect(f[0]?.detail?.format).toBe("number");
+  });
 });
 
 describe("checkRtlMirroring", () => {
