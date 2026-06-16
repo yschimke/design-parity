@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.5](https://github.com/yschimke/design-parity/compare/v0.1.4...v0.1.5) (2026-06-16)
+
+
+### Features
+
+* **action:** let a component declare DTCG spec tokens via design-map tokensFile ([bda4601](https://github.com/yschimke/design-parity/commit/bda4601bc4a961cdbd383a065c8ce083167988bf))
+* **action:** let a component declare DTCG spec tokens via design-map tokensFile ([#89](https://github.com/yschimke/design-parity/issues/89)) ([d9aeb88](https://github.com/yschimke/design-parity/commit/d9aeb887437aa6c1340b41980342f7b5349af4c2))
+
+
+### Bug Fixes
+
+* **diff:** report unmappable colour/typography tokens as advisory, not missing ([2650399](https://github.com/yschimke/design-parity/commit/26503990b4f9de630f9402d95130aa4bf42da984))
+* **diff:** report unmappable colour/typography tokens as advisory, not missing ([#102](https://github.com/yschimke/design-parity/issues/102)) ([ff9ecbc](https://github.com/yschimke/design-parity/commit/ff9ecbc117944a1b35b4bcf057385111ca3f80ec))
+
 ## [0.1.4](https://github.com/yschimke/design-parity/compare/v0.1.3...v0.1.4) (2026-06-15)
 
 
