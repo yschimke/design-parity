@@ -3,14 +3,18 @@
  *
  * A {@link DesignReference} carries images + tokens but no semantic tree, so the
  * deltas we can assert deterministically are coverage-shaped: does the candidate
- * render every theme the reference exposes, and is its root node a labelled,
- * roled element (the minimum an a11y tree needs)? Deeper a11y lives in the
- * checks provider (issue #10).
+ * render every theme the reference exposes, and does its tree expose accessible
+ * content at all (any roled node, any labelled node — the minimum an a11y tree
+ * needs)? We check the whole tree, not the root node: a screen's root is a
+ * layout container that legitimately carries no role/label of its own, with the
+ * real semantics on its descendants. Deeper a11y lives in the checks provider
+ * (issue #10).
  */
 import type {
   CandidateRender,
   DesignReference,
   Finding,
+  SemanticNode,
   Theme,
 } from "@design-parity/core";
 
@@ -32,6 +36,12 @@ function uniqueThemes(themes: Array<Theme | undefined>): Theme[] {
   return out;
 }
 
+/** Whether any node in the subtree satisfies `pred`. */
+function someNode(node: SemanticNode, pred: (n: SemanticNode) => boolean): boolean {
+  if (pred(node)) return true;
+  return (node.children ?? []).some((child) => someNode(child, pred));
+}
+
 export function diffSemantics(
   reference: DesignReference,
   candidate: CandidateRender,
@@ -50,21 +60,24 @@ export function diffSemantics(
     }
   }
 
+  // Coverage, tree-wide: a candidate that produced no roles / no labels anywhere
+  // is missing its a11y tree. The root itself is a layout container and is
+  // expected to carry neither — assert on the subtree, not the root node.
   const root = candidate.semantics.root;
-  if (!root.role) {
+  if (!someNode(root, (n) => !!n.role)) {
     findings.push({
       kind: "semantic",
       severity: "warn",
-      message: "candidate root node has no accessibility role",
-      detail: { node: "root", field: "role" },
+      message: "candidate exposes no accessibility roles",
+      detail: { node: "tree", field: "role" },
     });
   }
-  if (!root.label) {
+  if (!someNode(root, (n) => !!n.label)) {
     findings.push({
       kind: "semantic",
       severity: "warn",
-      message: "candidate root node has no accessible label",
-      detail: { node: "root", field: "label" },
+      message: "candidate exposes no accessible labels",
+      detail: { node: "tree", field: "label" },
     });
   }
 

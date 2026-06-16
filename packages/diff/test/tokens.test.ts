@@ -6,7 +6,7 @@ import { defaultDiffConfig } from "../src/config.js";
 import { collectTokens, diffTokens } from "../src/tokens.js";
 
 describe("collectTokens", () => {
-  it("flattens a tree, with children overriding parents", () => {
+  it("flattens a tree, merging distinctly-keyed tokens from every node", () => {
     const root: SemanticNode = {
       role: "button",
       tokens: {
@@ -28,6 +28,37 @@ describe("collectTokens", () => {
       colors: { container: "#000000", label: "#FFFFFF" },
       typography: { label: { fontSize: 14 } },
     });
+  });
+
+  it("preserves distinct same-role values across nodes, deduping repeats", () => {
+    // Every node resolves its colour/radius/spacing under the same generic role
+    // keys; a plain spread would let the last node win and the rest vanish. Keep
+    // each distinct value (newcomers under `<key>#<n>`); drop an exact repeat.
+    const root: SemanticNode = {
+      tokens: { colors: { bg: "#111111" }, radius: { corner: 8 }, spacing: { gap: 8 } },
+      children: [
+        {
+          tokens: { colors: { bg: "#222222" }, radius: { corner: 12 }, spacing: { gap: 12 } },
+        },
+        { tokens: { colors: { bg: "#111111" } } }, // exact repeat → deduped
+      ],
+    };
+    const out = collectTokens(root);
+    expect(new Set(Object.values(out.colors ?? {}))).toEqual(new Set(["#111111", "#222222"]));
+    expect(new Set(Object.values(out.radius ?? {}))).toEqual(new Set([8, 12]));
+    expect(new Set(Object.values(out.spacing ?? {}))).toEqual(new Set([8, 12]));
+  });
+
+  it("lets a named spec colour match a value carried by a non-last node (#1908)", () => {
+    // The surface colour is on the parent; a child re-uses `bg` for white. Before
+    // distinct-value preservation the child clobbered it and `surface` reported
+    // missing — now the parent value survives under `bg` and matches by role.
+    const root: SemanticNode = {
+      tokens: { colors: { bg: "#F4FBF8" } },
+      children: [{ tokens: { colors: { bg: "#FFFFFF" } } }],
+    };
+    const cand = collectTokens(root);
+    expect(diffTokens({ colors: { surface: "#F4FBF8" } }, cand, defaultDiffConfig)).toEqual([]);
   });
 });
 
@@ -118,6 +149,18 @@ describe("diffTokens", () => {
       severity: "error",
       detail: { token: "colors.onSurface", actual: null },
     });
+  });
+
+  it("matches an accent base role (primary) against either-ground candidate value", () => {
+    // `primary` is an M3 accent used as a fill *and* as accent text/icon, so the
+    // candidate may resolve it under `fg` or `bg`; either satisfies the spec.
+    const accent: DesignTokens = { colors: { primary: "#006A60" } };
+    expect(
+      diffTokens(accent, { colors: { fg: "#006a60ff", bg: "#ffffffff" } }, defaultDiffConfig),
+    ).toEqual([]);
+    expect(
+      diffTokens(accent, { colors: { bg: "#006a60ff" } }, defaultDiffConfig),
+    ).toEqual([]);
   });
 
   it("satisfies a named spec spacing token from a within-tolerance value match (#1897)", () => {

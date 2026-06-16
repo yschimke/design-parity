@@ -23,7 +23,18 @@ import {
 
 import type { DiffConfig } from "./config.js";
 
-/** Deep-merge every node's tokens into one flat bag (children override parents). */
+/**
+ * Flatten every node's tokens into one bag, keeping every *distinct* value.
+ *
+ * A candidate's tree carries one resolved colour/spacing/radius per node, all
+ * under the same generic role keys (`bg`/`fg`/`corner`/`gap`) — a plain spread
+ * would let each node clobber the last, leaving a single value to match the
+ * reference's many named tokens (so a screen with a dozen colours collapses to
+ * one `bg` + one `fg`, and everything else falsely reports "missing"). Instead,
+ * on a key collision with a *different* value we keep both: the newcomer lands
+ * under a derived key (`bg#2`, …) so the value/role matchers below can still find
+ * it. Repeats of a value already present (modulo colour alpha) are deduped.
+ */
 export function collectTokens(root: SemanticNode): DesignTokens {
   const out: DesignTokens = {};
   const visit = (node: SemanticNode): void => {
@@ -36,11 +47,44 @@ export function collectTokens(root: SemanticNode): DesignTokens {
 
 function mergeInto(target: DesignTokens, src?: DesignTokens): void {
   if (!src) return;
-  if (src.spacing) target.spacing = { ...target.spacing, ...src.spacing };
-  if (src.radius) target.radius = { ...target.radius, ...src.radius };
-  if (src.colors) target.colors = { ...target.colors, ...src.colors };
+  if (src.spacing)
+    target.spacing = preserveDistinct(target.spacing, src.spacing, (a, b) => a === b);
+  if (src.radius)
+    target.radius = preserveDistinct(target.radius, src.radius, (a, b) => a === b);
+  if (src.colors)
+    target.colors = preserveDistinct(target.colors, src.colors, colorsEqual);
   if (src.typography)
-    target.typography = { ...target.typography, ...src.typography };
+    target.typography = preserveDistinct(target.typography, src.typography, typographyEqual);
+}
+
+/** Drop the `#<n>` disambiguation suffix to recover a key's role family. */
+function baseKey(key: string): string {
+  return key.replace(/#\d+$/, "");
+}
+
+/**
+ * Merge `src` into `base`, preserving distinct values within each role family.
+ * A value equal (per `eq`) to one already present under the same base key is
+ * dropped; a genuinely new value for an occupied key is kept under `<key>#<n>`.
+ */
+function preserveDistinct<T>(
+  base: Record<string, T> | undefined,
+  src: Record<string, T>,
+  eq: (a: T, b: T) => boolean,
+): Record<string, T> {
+  const out: Record<string, T> = { ...base };
+  for (const [key, value] of Object.entries(src)) {
+    const family = Object.entries(out).filter(([k]) => baseKey(k) === key);
+    if (family.length === 0) {
+      out[key] = value;
+      continue;
+    }
+    if (family.some(([, existing]) => eq(existing, value))) continue;
+    let n = 2;
+    while (`${key}#${n}` in out) n++;
+    out[`${key}#${n}`] = value;
+  }
+  return out;
 }
 
 function typographyEqual(a: TypographyToken, b: TypographyToken): boolean {
@@ -238,17 +282,25 @@ function numericValueMatch(
   return best;
 }
 
-/** A token name carries a foreground (text/icon) colour: `onPrimary`, `fg`. */
-function isForegroundToken(name: string): boolean {
-  return name === "fg" || /^on[A-Z]/.test(name);
+/**
+ * Which "ground" a colour role paints on: `fg` (text/icon — `onPrimary`, `fg`),
+ * `bg` (a fill — `surface`, `bg`, a container), or `any` for an M3 **accent**
+ * base role (`primary`/`secondary`/`tertiary`/`error`) used both as a fill *and*
+ * as accent text/icon, so it may legitimately surface under either ground.
+ */
+function colorGround(name: string): "fg" | "bg" | "any" {
+  if (baseKey(name) === "fg" || /^on[A-Z]/.test(name)) return "fg";
+  if (/^(primary|secondary|tertiary|error)$/i.test(baseKey(name))) return "any";
+  return "bg";
 }
 
 /**
- * Find a candidate colour matching `want` under the same role as the spec
+ * Find a candidate colour matching `want` under the same ground as the spec
  * token `name`. The candidate's per-node colours collapse onto generic role
- * keys (`fg`/`bg`) when its theme can't name them, so a foreground spec token
- * is satisfied by any foreground candidate value of the same colour (and a
- * background token likewise). Returns the matching value, or `undefined`.
+ * keys (`fg`/`bg`) when its theme can't name them, so a foreground spec token is
+ * satisfied by any foreground candidate value of the same colour (and a
+ * background token likewise); an accent base role matches either. Returns the
+ * matching value, or `undefined`.
  */
 function roleMatch(
   name: string,
@@ -256,11 +308,12 @@ function roleMatch(
   candidate?: Record<string, string>,
 ): string | undefined {
   if (!candidate) return undefined;
-  const wantForeground = isForegroundToken(name);
+  const wantGround = colorGround(name);
   for (const [key, value] of Object.entries(candidate)) {
-    if (isForegroundToken(key) === wantForeground && colorsEqual(value, want)) {
-      return value;
-    }
+    const candGround = colorGround(key);
+    const groundsAgree =
+      wantGround === "any" || candGround === "any" || candGround === wantGround;
+    if (groundsAgree && colorsEqual(value, want)) return value;
   }
   return undefined;
 }

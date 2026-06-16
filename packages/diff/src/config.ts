@@ -39,10 +39,19 @@ export interface DiffConfig {
   visualDimTolerancePx: number;
 }
 
-/** The committed defaults: exact-match tokens, sensitive visual diff. */
+/**
+ * The committed defaults: near-exact tokens, sensitive visual diff.
+ *
+ * Spacing/radius carry a **1dp** allowance because a candidate's token values are
+ * measured back from pixel bounds, so they inherit the renderer's density
+ * rounding — an 18dp circle radius captured at 2.625× comes back as `18.1dp`, a
+ * 16dp gap may land a fraction off. This mirrors {@link visualDimTolerancePx}'s
+ * rationale on the visual side; 1dp absorbs that snap while still failing real
+ * drift (design tokens snap to a ≥2dp grid, so a true difference clears it).
+ */
 export const defaultDiffConfig: DiffConfig = {
-  spacingTolerance: 0,
-  radiusTolerance: 0,
+  spacingTolerance: 1,
+  radiusTolerance: 1,
   pixelThreshold: 0.05,
   visualWarnRatio: 0,
   visualDimTolerancePx: 8,
