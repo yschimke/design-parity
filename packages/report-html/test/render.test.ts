@@ -116,6 +116,34 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain('id="v-default-dark-compact"');
   });
 
+  it("overlays toggleable annotation layers driven by the candidate semantics", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+
+    // The toggle bar with both layers.
+    expect(html).toContain('data-anno-layer="spacing"');
+    expect(html).toContain('data-anno-layer="typography"');
+    // The candidate panel carries an SVG overlay with both layer groups.
+    expect(html).toContain('<svg class="anno"');
+    expect(html).toContain('<g data-layer="spacing">');
+    expect(html).toContain('<g data-layer="typography">');
+    // Box-model detail (the fixture button is 160×48, r8, p12) and the type callout.
+    expect(html).toContain("160×48 r8 p12");
+    expect(html).toContain("Roboto · 14sp · 500");
+    // Layers ship hidden; the inline script toggles them on.
+    expect(html).toContain(".anno g[data-layer]{display:none}");
+    expect(html).toContain("data-anno-layer");
+  });
+
+  it("omits the annotation controls when no panel can draw them", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    // A candidate whose semantics carry no bounds ⇒ nothing to annotate.
+    const bare = { ...candidate, semantics: { root: { role: "group" } } };
+    const html = renderHtmlReport({ reference: { ...reference, layout: undefined }, candidate: bare, verdict, repoRoot });
+    expect(html).not.toContain('data-anno-layer="spacing"');
+    expect(html).not.toContain('<svg class="anno"');
+  });
+
   it("inlines images as data URIs and references no external assets", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     const html = renderHtmlReport({
