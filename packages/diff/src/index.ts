@@ -19,6 +19,8 @@ export { collectTokens, diffTokens } from "./tokens.js";
 export { diffDesignSystem } from "./design-system.js";
 export type { DesignSystemOptions } from "./design-system.js";
 export { diffSemantics, referenceThemes, candidateThemes } from "./semantic.js";
+export { diffLayout, flattenPlaced } from "./layout.js";
+export type { PlacedElement } from "./layout.js";
 export { diffImagePair, imageKey } from "./visual.js";
 export type { VisualResult } from "./visual.js";
 export { renderSummary } from "./summary.js";
