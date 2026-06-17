@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.11](https://github.com/yschimke/design-parity/compare/v0.1.10...v0.1.11) (2026-06-17)
+
+
+### Features
+
+* **claude-design:** capture computed style for reference spec overlays ([0a3120f](https://github.com/yschimke/design-parity/commit/0a3120fde326cd9f4c131963e0f1758aed74359b))
+* **claude-design:** capture computed style for reference spec overlays ([17f07e1](https://github.com/yschimke/design-parity/commit/17f07e16e4a9126a3958a0e198486d0486d1e3e0))
+* **report:** layout-delta annotation layer ([c46248e](https://github.com/yschimke/design-parity/commit/c46248ec0c4a5f40d9797132288ca5e85dfa7c32))
+* **report:** layout-delta annotation layer ([4983ae5](https://github.com/yschimke/design-parity/commit/4983ae5d7309d9c633ab8dfe45dfa3ef8d099ddb))
+* **report:** toggleable annotation overlays (box model + typography) ([7104cf4](https://github.com/yschimke/design-parity/commit/7104cf4dc311a17f792d97c5a6247aa9135864dd))
+* **report:** toggleable annotation overlays on report panels ([8f6cad7](https://github.com/yschimke/design-parity/commit/8f6cad76aa82247d146308f153c15c2cb384e084))
+
 ## [0.1.10](https://github.com/yschimke/design-parity/compare/v0.1.9...v0.1.10) (2026-06-17)
 
 
