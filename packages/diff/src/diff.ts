@@ -27,6 +27,7 @@ import {
 } from "./checks.js";
 import { resolveConfig, type DiffConfig } from "./config.js";
 import { diffDesignSystem } from "./design-system.js";
+import { diffLayout } from "./layout.js";
 import { diffSemantics } from "./semantic.js";
 import { renderSummary } from "./summary.js";
 import { collectTokens, diffTokens } from "./tokens.js";
@@ -193,7 +194,11 @@ export async function diff(
     });
   }
 
-  // 4. visual diff (table stakes).
+  // 4. structural layout: per-element position/size drift vs the reference's
+  // captured geometry (advisory; a no-op when the reference has no layout).
+  const layout = diffLayout(reference.layout, candidate.semantics, config);
+
+  // 5. visual diff (table stakes).
   const visuals: VisualResult[] = [];
   for (const pair of pairs) {
     visuals.push(
@@ -224,7 +229,7 @@ export async function diff(
     }
   }
 
-  const findings = [...a11y, ...tokens, ...designSystem, ...semantic, ...visualFindings];
+  const findings = [...a11y, ...tokens, ...designSystem, ...semantic, ...layout, ...visualFindings];
   const verdict: Verdict = {
     componentId: candidate.componentId,
     status: statusFor(findings),

@@ -8,11 +8,17 @@
  * element to its candidate counterpart by label and report the per-element
  * position/size delta, so a padding/spacer/size mismatch is a named finding.
  *
- * Both sides are {@link SemanticTree}s of bounded, labelled nodes in the **same
- * coordinate space** — the candidate's from its render's semantics, the
- * reference's captured from its own render (the caller normalises units/density
- * so they line up). When the reference carries no bounds (not captured), the
- * diff is a no-op.
+ * The two sides arrive in **different coordinate spaces**: the candidate's
+ * bounds come from its render in device pixels, the reference's from its own
+ * capture in dp. When *both* trees declare their render frame on the root
+ * (`root.bounds`), {@link diffLayout} normalises before matching — it scales the
+ * candidate into the reference's space by the ratio of the two frame widths,
+ * which recovers the density factor and leaves deltas in designer-meaningful dp.
+ * A *uniform* scale is exactly what a density/zoom difference is, so removing it
+ * surfaces the *relative* drift (a shifted row, a fatter spacer) that a defect
+ * actually is. Absent a frame on either side the trees are assumed to already
+ * share a space (scale 1). When the reference carries no bounds (not captured),
+ * the diff is a no-op.
  */
 import type { Bounds, Finding, SemanticNode, SemanticTree } from "@design-parity/core";
 
@@ -44,6 +50,29 @@ function centerOf(b: Bounds): { x: number; y: number } {
 }
 
 /**
+ * The tree's declared render-frame width (`root.bounds.width`), or `undefined`
+ * when the root carries no frame. Used to derive the candidate→reference scale;
+ * a missing frame means "assume the trees already share a space".
+ */
+function frameWidth(tree: SemanticTree | undefined): number | undefined {
+  const w = tree?.root.bounds?.width;
+  return w && w > 0 ? w : undefined;
+}
+
+/** Scale an element's bounds by `s` (mapping it into the reference's space). */
+function scaleElement(e: PlacedElement, s: number): PlacedElement {
+  return {
+    ...e,
+    bounds: {
+      x: e.bounds.x * s,
+      y: e.bounds.y * s,
+      width: e.bounds.width * s,
+      height: e.bounds.height * s,
+    },
+  };
+}
+
+/**
  * Match each reference element to the nearest still-unmatched candidate element
  * with the same label, and raise a `layout` finding when their top-left position
  * or size differs by more than `layoutTolerance` on any axis. Findings are
@@ -59,7 +88,16 @@ export function diffLayout(
   const findings: Finding[] = [];
   const refs = flattenPlaced(reference);
   if (refs.length === 0) return findings; // no reference geometry captured
-  const cands = flattenPlaced(candidate);
+  // Normalise the candidate's device-pixel geometry into the reference's dp
+  // space: a uniform scale by the frame-width ratio recovers the density factor
+  // so the per-element deltas below read in dp. A scale of 1 (same space, or no
+  // frame info) leaves the candidate untouched.
+  const candsRaw = flattenPlaced(candidate);
+  const refWidth = frameWidth(reference);
+  const candWidth = frameWidth(candidate);
+  const scale =
+    refWidth !== undefined && candWidth !== undefined ? refWidth / candWidth : 1;
+  const cands = scale === 1 ? candsRaw : candsRaw.map((c) => scaleElement(c, scale));
   const used = new Set<number>();
   const tol = config.layoutTolerance;
 

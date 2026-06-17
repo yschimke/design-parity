@@ -221,4 +221,19 @@ describe("treeFromRects", () => {
       { label: "B", bounds: { x: 0, y: 0, width: 5, height: 5 } },
     ]);
   });
+
+  it("stamps the capture frame on the root so the diff can recover density", async () => {
+    const { treeFromRects } = await import("../src/index.js");
+    const tree = treeFromRects([{ label: "A", role: null, x: 0, y: 0, w: 5, h: 5 }], {
+      width: 411,
+      height: 914,
+    });
+    expect(tree.root.bounds).toEqual({ x: 0, y: 0, width: 411, height: 914 });
+  });
+
+  it("leaves the root unbounded when no frame is given", async () => {
+    const { treeFromRects } = await import("../src/index.js");
+    const tree = treeFromRects([{ label: "A", role: null, x: 0, y: 0, w: 5, h: 5 }]);
+    expect(tree.root.bounds).toBeUndefined();
+  });
 });

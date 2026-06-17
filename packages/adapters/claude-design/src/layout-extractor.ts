@@ -115,7 +115,10 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
         }
         return out;
       })) as RawRect[];
-      return treeFromRects(rects);
+      return treeFromRects(rects, {
+        width: req.widthDp ?? 411,
+        height: req.heightDp ?? 914,
+      });
     } finally {
       await browser.close();
     }
@@ -123,8 +126,18 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
   return undefined;
 };
 
-/** Build a flat {@link SemanticTree} from raw element rects (rounded to dp). */
-export function treeFromRects(rects: RawRect[]): SemanticTree {
+/**
+ * Build a flat {@link SemanticTree} from raw element rects (rounded to dp). When
+ * the capture `frame` (the render viewport, in dp) is supplied it is stamped on
+ * the root as `bounds`, so the diff engine can read the reference's coordinate
+ * extent and normalise the candidate's render-pixel geometry into this dp space
+ * (the two sides render at different densities). Omitting it leaves the root
+ * unbounded, so the diff treats the trees as already sharing a space.
+ */
+export function treeFromRects(
+  rects: RawRect[],
+  frame?: { width: number; height: number },
+): SemanticTree {
   const children: SemanticNode[] = rects.map((r) => ({
     label: r.label,
     ...(r.role ? { role: r.role } : {}),
@@ -135,5 +148,7 @@ export function treeFromRects(rects: RawRect[]): SemanticTree {
       height: Math.round(r.h),
     },
   }));
-  return { root: { children } };
+  const root: SemanticNode = { children };
+  if (frame) root.bounds = { x: 0, y: 0, width: frame.width, height: frame.height };
+  return { root };
 }
