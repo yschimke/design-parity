@@ -185,6 +185,68 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     expect(text?.tokens?.typography?.["text"]?.fontSize).toBe(16);
   });
 
+  it("maps the v6 typography + textColor objects into tokens (compose-ai-tools#1934, #1903)", () => {
+    const tree = semanticsToSemanticTree(
+      {
+        root: {
+          boundsInRoot: "0,0,360,640",
+          children: [
+            {
+              text: "Heading",
+              boundsInRoot: "0,0,360,48",
+              typography: {
+                fontSize: "22.0sp",
+                fontFamily: "res/font/orbitron",
+                fontWeight: 700,
+                fontStyle: "italic",
+                fontVariationSettings: "opsz 18.0, wght 700.0",
+                letterSpacing: "0.5sp",
+                lineHeight: "28.0sp",
+              },
+              textColor: { foreground: "#FF112233" },
+            },
+          ],
+        },
+      },
+      "light",
+    );
+    const text = tree?.root.children?.[0];
+    expect(text?.tokens?.typography?.["text"]).toEqual({
+      fontSize: 22,
+      fontFamily: "res/font/orbitron",
+      fontWeight: 700,
+      fontStyle: "italic",
+      fontVariationSettings: "opsz 18.0, wght 700.0",
+      letterSpacing: 0.5,
+      lineHeight: 28,
+    });
+    expect(text?.tokens?.colors).toEqual({ fg: "#112233ff" });
+  });
+
+  it("falls back to pre-v6 flat fields for older renders (compose-ai-tools#1903)", () => {
+    // A render from a compose-preview before the v6 reshape still carries the flat
+    // `layoutFontSize` / `layoutForegroundColor`; the reader must honour them.
+    const tree = semanticsToSemanticTree(
+      {
+        root: {
+          boundsInRoot: "0,0,360,640",
+          children: [
+            {
+              text: "Legacy",
+              boundsInRoot: "0,0,360,48",
+              layoutFontSize: "16.0sp",
+              layoutForegroundColor: "#FF445566",
+            },
+          ],
+        },
+      },
+      "light",
+    );
+    const text = tree?.root.children?.[0];
+    expect(text?.tokens?.typography?.["text"]).toEqual({ fontSize: 16 });
+    expect(text?.tokens?.colors).toEqual({ fg: "#445566ff" });
+  });
+
   it("maps RadioButton → radio and falls back label ← text ← layoutText", () => {
     const tree = semanticsToSemanticTree({
       root: {
