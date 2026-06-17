@@ -15,6 +15,7 @@ export const SECTIONS: FindingSection[] = [
   { title: "Accessibility & i18n", kinds: ["contrast", "a11y", "i18n"] },
   { title: "Token compliance", kinds: ["token"] },
   { title: "Semantics", kinds: ["semantic"] },
+  { title: "Layout", kinds: ["layout"] },
   { title: "Visual", kinds: ["visual"] },
 ];
 

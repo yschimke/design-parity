@@ -135,3 +135,47 @@ describe("diff engine on the figma button fixtures", () => {
     expect(summary).toContain("spacing.padding");
   });
 });
+
+describe("diff engine wires the structural layout diff", () => {
+  const reference: DesignReference = {
+    componentId: "ui/Tile.kt#Tile",
+    source: "claude-design",
+    linkMethod: "manifest",
+    referenceImages: [],
+    // Captured at 411dp; the title sits 16dp from the top.
+    layout: {
+      root: {
+        bounds: { x: 0, y: 0, width: 411, height: 200 },
+        children: [{ label: "Title", bounds: { x: 16, y: 16, width: 100, height: 24 } }],
+      },
+    },
+  };
+  // Candidate rendered at 2× density (822px frame); the title is 24dp too low.
+  const candidate: CandidateRender = {
+    componentId: "ui/Tile.kt#Tile",
+    images: [],
+    semantics: {
+      root: {
+        bounds: { x: 0, y: 0, width: 822, height: 400 },
+        children: [{ label: "Title", bounds: { x: 32, y: 80, width: 200, height: 48 } }],
+      },
+    },
+  };
+
+  it("raises a density-normalised layout finding and renders it under Layout", async () => {
+    const { verdict, summary } = await diff(reference, candidate, { repoRoot });
+
+    const layout = verdict.findings.find((f) => f.kind === "layout");
+    expect(layout).toBeDefined();
+    // 822→411 halves the candidate: title at y=80px ⇒ 40dp, vs ref 16dp ⇒ dy=-24.
+    expect(layout!.severity).toBe("warn");
+    expect(layout!.detail).toMatchObject({ label: "Title", dy: -24 });
+    expect(summary).toContain("**Layout**");
+  });
+
+  it("is a no-op when the reference has no captured layout", async () => {
+    const noLayout: DesignReference = { ...reference, layout: undefined };
+    const { verdict } = await diff(noLayout, candidate, { repoRoot });
+    expect(verdict.findings.some((f) => f.kind === "layout")).toBe(false);
+  });
+});

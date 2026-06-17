@@ -67,4 +67,40 @@ describe("diffLayout", () => {
     const r = tree(["Title", 16, 16, 100, 24], ["Ghost", 0, 500, 40, 40]);
     expect(diffLayout(r, cand, defaultDiffConfig)).toEqual([]);
   });
+
+  it("normalises a denser candidate into the reference's dp space via frame width", () => {
+    // Reference captured at 411dp; candidate rendered at 2× density (822px wide).
+    // Scaling the candidate back by 411/822 = 0.5 makes the geometry line up, so
+    // an exact-but-denser render produces no findings.
+    const ref: SemanticTree = {
+      root: { bounds: { x: 0, y: 0, width: 411, height: 200 }, children: [{ label: "Go", bounds: { x: 20, y: 30, width: 100, height: 40 } }] },
+    };
+    const denser: SemanticTree = {
+      root: { bounds: { x: 0, y: 0, width: 822, height: 400 }, children: [{ label: "Go", bounds: { x: 40, y: 60, width: 200, height: 80 } }] },
+    };
+    expect(diffLayout(ref, denser, defaultDiffConfig)).toEqual([]);
+  });
+
+  it("flags drift that survives the density normalisation", () => {
+    const ref: SemanticTree = {
+      root: { bounds: { x: 0, y: 0, width: 411, height: 200 }, children: [{ label: "Go", bounds: { x: 20, y: 30, width: 100, height: 40 } }] },
+    };
+    // Same 2× frame, but the element sits 40px (=20dp) lower than it should.
+    const drifted: SemanticTree = {
+      root: { bounds: { x: 0, y: 0, width: 822, height: 400 }, children: [{ label: "Go", bounds: { x: 40, y: 100, width: 200, height: 80 } }] },
+    };
+    const f = diffLayout(ref, drifted, defaultDiffConfig);
+    expect(f).toHaveLength(1);
+    expect(f[0]?.detail).toMatchObject({ label: "Go", dy: -20 });
+  });
+
+  it("does not scale when a frame is absent on either side", () => {
+    // No root bounds ⇒ assume a shared space; a uniformly 2× candidate is NOT
+    // normalised away, so its drift is reported (we only de-densify with frames).
+    const ref = tree(["A", 0, 0, 100, 20]);
+    const big = tree(["A", 0, 0, 200, 40]);
+    const f = diffLayout(ref, big, defaultDiffConfig);
+    expect(f).toHaveLength(1);
+    expect(f[0]?.detail).toMatchObject({ label: "A", dw: -100, dh: -20 });
+  });
 });
