@@ -13,10 +13,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cwd } from "node:process";
 
-import type { Image, Verdict } from "@design-parity/core";
+import type { Image, SemanticTree, Verdict } from "@design-parity/core";
 
 import { groupFindings, tokenDelta } from "./findings.js";
 import { escapeHtml, pngDataUri } from "./html.js";
+import { annotationSvg } from "./overlay.js";
 import type { DiffImage, ReportInput } from "./types.js";
 import { pairVariants, type Variant } from "./variants.js";
 
@@ -142,14 +143,30 @@ interface Panel {
   height?: number;
 }
 
-function panelMarkup(panel: Panel, role: string): string {
-  const inner = panel.src
-    ? `<img class="panel-img" data-role="${role}" src="${panel.src}" alt="${escapeHtml(panel.label)}" />`
-    : `<div class="panel-empty">no image</div>`;
+function panelMarkup(panel: Panel, role: string, tree?: SemanticTree): string {
+  let inner: string;
+  if (panel.src) {
+    const img = `<img class="panel-img" data-role="${role}" src="${panel.src}" alt="${escapeHtml(panel.label)}" />`;
+    // When the panel has a semantic tree, overlay its annotation layers. The
+    // image defines the box; the SVG is stretched over it (see .panel-figure).
+    const anno = annotationSvg(tree);
+    inner = anno ? `<div class="panel-figure">${img}${anno}</div>` : img;
+  } else {
+    inner = `<div class="panel-empty">no image</div>`;
+  }
   return `<figure class="panel" data-role="${role}">
             <figcaption>${escapeHtml(panel.label)}</figcaption>
             <div class="panel-body">${inner}</div>
           </figure>`;
+}
+
+/** Toggle bar for the per-panel annotation layers (spacing, typography). */
+function annotationControls(): string {
+  return `<div class="anno-controls">
+            <span class="anno-controls-label">Annotations</span>
+            <label class="anno-toggle"><input type="checkbox" data-anno-layer="spacing" /> Box model (size · padding · radius)</label>
+            <label class="anno-toggle"><input type="checkbox" data-anno-layer="typography" /> Typography</label>
+          </div>`;
 }
 
 function variantMarkup(
@@ -158,6 +175,8 @@ function variantMarkup(
   refSrc: string | undefined,
   candSrc: string | undefined,
   diffSrc: string | undefined,
+  refTree: SemanticTree | undefined,
+  candTree: SemanticTree | undefined,
 ): string {
   const meta = [variant.state, variant.theme, variant.size]
     .filter(Boolean)
@@ -191,8 +210,8 @@ function variantMarkup(
               <div class="variant-meta">${meta}</div>
             </header>
             <div class="triptych">
-              ${panelMarkup(ref, "reference")}
-              ${panelMarkup(cand, "candidate")}
+              ${panelMarkup(ref, "reference", refTree)}
+              ${panelMarkup(cand, "candidate", candTree)}
               ${panelMarkup(diff, "diff")}
             </div>
             ${overlay}
@@ -287,6 +306,14 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .panel-body{display:flex;align-items:center;justify-content:center;min-height:64px;padding:10px}
 .panel-img{max-width:100%;height:auto;image-rendering:pixelated}
 .panel-empty{color:#666;font-size:12px;padding:20px}
+.panel-figure{position:relative;display:inline-block;line-height:0;max-width:100%}
+.panel-figure .panel-img{display:block}
+.anno{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.anno g[data-layer]{display:none}
+.anno g[data-layer].on{display:inline}
+.anno-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 14px;border:1px solid #26262f;border-radius:10px;background:#15151c}
+.anno-controls-label{color:#9a9ab0;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
+.anno-toggle{display:flex;align-items:center;gap:6px;color:#c9c9dd;font-size:13px;cursor:pointer}
 .overlay{margin-top:14px}
 .overlay-stack{position:relative;display:inline-block;border:1px solid #26262f;border-radius:8px;overflow:hidden;background:#0c0c11}
 .overlay-stack img{display:block;max-width:100%}
@@ -324,6 +351,18 @@ const SCRIPT = `(function(){
       apply();
     })(sliders[i]);
   }
+  var toggles=document.querySelectorAll('input[data-anno-layer]');
+  for(var j=0;j<toggles.length;j++){
+    (function(box){
+      var layer=box.getAttribute('data-anno-layer');
+      function apply(){
+        var gs=document.querySelectorAll('.anno g[data-layer="'+layer+'"]');
+        for(var k=0;k<gs.length;k++){ gs[k].classList[box.checked?'add':'remove']('on'); }
+      }
+      box.addEventListener('change',apply);
+      apply();
+    })(toggles[j]);
+  }
 })();`;
 
 /**
@@ -350,13 +389,24 @@ export function renderHtmlReport(input: ReportInput): string {
     return { variant, index, refSrc, candSrc, diffSrc };
   });
 
+  // One semantic tree per side for the whole component (geometry is theme-
+  // invariant), reused across every variant's candidate/reference panel.
+  const candTree = candidate.semantics;
+  const refTree = reference.layout;
+
   const detailsHtml = rendered
-    .map((r) => variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc))
+    .map((r) =>
+      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree),
+    )
     .join("\n");
 
   const hasVariants = rendered.length > 0;
+  // Show the annotation toggles only when at least one panel can draw them.
+  const hasAnnotations = !!annotationSvg(candTree) || !!annotationSvg(refTree);
+  const controls = hasVariants && hasAnnotations ? annotationControls() : "";
   const variantsSection = hasVariants
-    ? `${matrixMarkup(rendered)}
+    ? `${controls}
+${matrixMarkup(rendered)}
 <h2 class="section-title">Variant detail</h2>
 ${detailsHtml}`
     : `<section class="variant"><p class="panel-empty">No images for this verdict — findings only.</p></section>`;
