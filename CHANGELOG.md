@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/yschimke/design-parity/compare/v0.1.7...v0.1.8) (2026-06-17)
+
+
+### Features
+
+* **cli:** expose landing-page link context (repo-slug/branch) on `run` ([812fb88](https://github.com/yschimke/design-parity/commit/812fb887fac2f964cc4c2ec30e6e7c0245271470))
+* **cli:** expose landing-page link context on `run` ([ddf2c11](https://github.com/yschimke/design-parity/commit/ddf2c11edd41342e88c1401eb451169a74def45d))
+
 ## [0.1.7](https://github.com/yschimke/design-parity/compare/v0.1.6...v0.1.7) (2026-06-16)
 
 
