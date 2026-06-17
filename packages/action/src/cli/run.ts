@@ -107,7 +107,7 @@ export function indexOptions(args: Args): NonNullable<Parameters<typeof orchestr
   return Object.keys(index).length > 0 ? index : undefined;
 }
 
-async function main(): Promise<number> {
+export async function main(): Promise<number> {
   const args = parseArgs(argv.slice(2));
   if (args.components.length === 0) {
     stdout.write(
@@ -192,7 +192,11 @@ async function main(): Promise<number> {
   return report.blocked ? 1 : 0;
 }
 
-// Run as a CLI; guarded so tests can import the arg helpers without executing.
+// Self-execute when invoked directly (`node dist/cli/run.js …`), guarded so
+// tests can import the arg helpers without running the orchestrator. The
+// published `design-parity` bin reaches `main` a different way: it *imports*
+// this module (so the guard is false) and calls the exported `main()` itself —
+// see packages/cli/bin/design-parity.mjs. Both paths run `main` exactly once.
 if (import.meta.url === pathToFileURL(argv[1] ?? "").href) {
   exit(await main());
 }
