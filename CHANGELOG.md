@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.10](https://github.com/yschimke/design-parity/compare/v0.1.9...v0.1.10) (2026-06-17)
+
+
+### Bug Fixes
+
+* **cli:** run main via the launcher so `design-parity run` isn't a no-op ([4aead49](https://github.com/yschimke/design-parity/commit/4aead497364afb7ac4499ce062f9455a1665b193))
+* **cli:** run main via the launcher so `design-parity run` isn't a no-op ([70545fa](https://github.com/yschimke/design-parity/commit/70545fa8803c023ce29cb6d5f5d7b7bf8f4d0803))
+
 ## [0.1.9](https://github.com/yschimke/design-parity/compare/v0.1.8...v0.1.9) (2026-06-17)
 
 
