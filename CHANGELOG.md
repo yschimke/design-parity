@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.9](https://github.com/yschimke/design-parity/compare/v0.1.8...v0.1.9) (2026-06-17)
+
+
+### Features
+
+* **candidate,diff:** consume per-node typography for real font parity ([8779e77](https://github.com/yschimke/design-parity/commit/8779e774b053dfb39d70a3aa92bcfec4e9c98d2f))
+* **candidate,diff:** consume per-node typography for real font parity ([f349405](https://github.com/yschimke/design-parity/commit/f34940571a1e15a620201448d2bd7e669659dd23))
+* **candidate:** read v6 textColor / typography.fontSize with flat fallback ([8449ed3](https://github.com/yschimke/design-parity/commit/8449ed374de7289cc8ca63b9deffeb8077b49b54))
+* **claude-design:** capture reference layout geometry (layout diff, increment 2) ([b333eb7](https://github.com/yschimke/design-parity/commit/b333eb7f91f3c8679cb39b4f13f7834179a00c7d))
+* **claude-design:** capture reference layout geometry for the layout diff ([4f01c2c](https://github.com/yschimke/design-parity/commit/4f01c2c0ae9a876f5025848ba63ed0482f92d597))
+* **diff:** structural layout diff — flag per-element position/size deltas ([4a81c24](https://github.com/yschimke/design-parity/commit/4a81c2447a8b9d2fcff14849e9564947f366d14f))
+* **diff:** structural layout diff — per-element position/size deltas (increment 1) ([1aec9a6](https://github.com/yschimke/design-parity/commit/1aec9a6614f0fa9f4d33feb80aad686a6431003a))
+* **diff:** wire structural layout diff into the engine and report ([d4849c0](https://github.com/yschimke/design-parity/commit/d4849c0b614680ac58dddaf4777ab69683e4bb43))
+* **diff:** wire structural layout diff into the engine and report ([2da16e8](https://github.com/yschimke/design-parity/commit/2da16e84f41388413a8f96f129874dfd32dd2b66))
+
 ## [0.1.8](https://github.com/yschimke/design-parity/compare/v0.1.7...v0.1.8) (2026-06-17)
 
 
