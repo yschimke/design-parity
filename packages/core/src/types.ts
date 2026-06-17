@@ -117,6 +117,13 @@ export interface DesignReference {
    */
   themeTokens?: DesignTokens;
   linkMethod: LinkMethod;
+  /**
+   * Layout geometry captured from the reference's own render — a tree of
+   * labelled, bounded elements (positions/sizes in dp). Lets the structural
+   * layout diff compare element placement against the candidate's semantics,
+   * element by element. Absent for sources that don't capture geometry.
+   */
+  layout?: SemanticTree;
   /** Raw source handle (Figma node-id, html path, …) kept for trace/debug. */
   ref?: string;
 }
