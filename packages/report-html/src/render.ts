@@ -17,7 +17,7 @@ import type { Image, SemanticTree, Verdict } from "@design-parity/core";
 
 import { groupFindings, tokenDelta } from "./findings.js";
 import { escapeHtml, pngDataUri } from "./html.js";
-import { annotationSvg } from "./overlay.js";
+import { annotationSvg, type LayoutDelta } from "./overlay.js";
 import type { DiffImage, ReportInput } from "./types.js";
 import { pairVariants, type Variant } from "./variants.js";
 
@@ -143,13 +143,18 @@ interface Panel {
   height?: number;
 }
 
-function panelMarkup(panel: Panel, role: string, tree?: SemanticTree): string {
+function panelMarkup(
+  panel: Panel,
+  role: string,
+  tree?: SemanticTree,
+  deltas?: readonly LayoutDelta[],
+): string {
   let inner: string;
   if (panel.src) {
     const img = `<img class="panel-img" data-role="${role}" src="${panel.src}" alt="${escapeHtml(panel.label)}" />`;
     // When the panel has a semantic tree, overlay its annotation layers. The
     // image defines the box; the SVG is stretched over it (see .panel-figure).
-    const anno = annotationSvg(tree);
+    const anno = annotationSvg(tree, deltas);
     inner = anno ? `<div class="panel-figure">${img}${anno}</div>` : img;
   } else {
     inner = `<div class="panel-empty">no image</div>`;
@@ -160,13 +165,35 @@ function panelMarkup(panel: Panel, role: string, tree?: SemanticTree): string {
           </figure>`;
 }
 
-/** Toggle bar for the per-panel annotation layers (spacing, typography). */
-function annotationControls(): string {
+/** Toggle bar for the per-panel annotation layers (box model, typography, layout). */
+function annotationControls(hasLayout: boolean): string {
+  const layoutToggle = hasLayout
+    ? `\n            <label class="anno-toggle"><input type="checkbox" data-anno-layer="layout" /> Layout deltas</label>`
+    : "";
   return `<div class="anno-controls">
             <span class="anno-controls-label">Annotations</span>
             <label class="anno-toggle"><input type="checkbox" data-anno-layer="spacing" /> Box model (size · padding · radius)</label>
-            <label class="anno-toggle"><input type="checkbox" data-anno-layer="typography" /> Typography</label>
+            <label class="anno-toggle"><input type="checkbox" data-anno-layer="typography" /> Typography</label>${layoutToggle}
           </div>`;
+}
+
+/** The structural layout diff's per-element geometry findings, for the layout layer. */
+function layoutDeltas(verdict: Verdict): LayoutDelta[] {
+  const out: LayoutDelta[] = [];
+  for (const f of verdict.findings) {
+    if (f.kind !== "layout" || !f.detail) continue;
+    const { label, dx, dy, dw, dh } = f.detail as Record<string, unknown>;
+    if (
+      typeof label === "string" &&
+      typeof dx === "number" &&
+      typeof dy === "number" &&
+      typeof dw === "number" &&
+      typeof dh === "number"
+    ) {
+      out.push({ label, dx, dy, dw, dh });
+    }
+  }
+  return out;
 }
 
 function variantMarkup(
@@ -177,6 +204,7 @@ function variantMarkup(
   diffSrc: string | undefined,
   refTree: SemanticTree | undefined,
   candTree: SemanticTree | undefined,
+  deltas: readonly LayoutDelta[],
 ): string {
   const meta = [variant.state, variant.theme, variant.size]
     .filter(Boolean)
@@ -210,8 +238,8 @@ function variantMarkup(
               <div class="variant-meta">${meta}</div>
             </header>
             <div class="triptych">
-              ${panelMarkup(ref, "reference", refTree)}
-              ${panelMarkup(cand, "candidate", candTree)}
+              ${panelMarkup(ref, "reference", refTree, deltas)}
+              ${panelMarkup(cand, "candidate", candTree, deltas)}
               ${panelMarkup(diff, "diff")}
             </div>
             ${overlay}
@@ -393,17 +421,19 @@ export function renderHtmlReport(input: ReportInput): string {
   // invariant), reused across every variant's candidate/reference panel.
   const candTree = candidate.semantics;
   const refTree = reference.layout;
+  const deltas = layoutDeltas(verdict);
 
   const detailsHtml = rendered
     .map((r) =>
-      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree),
+      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree, deltas),
     )
     .join("\n");
 
   const hasVariants = rendered.length > 0;
   // Show the annotation toggles only when at least one panel can draw them.
-  const hasAnnotations = !!annotationSvg(candTree) || !!annotationSvg(refTree);
-  const controls = hasVariants && hasAnnotations ? annotationControls() : "";
+  const hasAnnotations =
+    !!annotationSvg(candTree, deltas) || !!annotationSvg(refTree, deltas);
+  const controls = hasVariants && hasAnnotations ? annotationControls(deltas.length > 0) : "";
   const variantsSection = hasVariants
     ? `${controls}
 ${matrixMarkup(rendered)}
