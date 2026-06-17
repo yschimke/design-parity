@@ -29,8 +29,10 @@ export {
 export {
   puppeteerLayoutExtractor,
   treeFromRects,
+  tokensFromStyle,
   type LayoutExtractor,
   type LayoutRequest,
+  type RawStyle,
 } from "./layout-extractor.js";
 
 export { readPngSize, parsePngSize, type PngSize } from "./png.js";

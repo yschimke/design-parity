@@ -4,15 +4,23 @@
  * The adapter's image rasterizer uses CLI Chrome `--screenshot`, which has no
  * DOM access, so geometry is read in a separate pass: drive Chrome on PATH via
  * `puppeteer-core` (which bundles **no** browser) and read each labelled leaf
- * element's `getBoundingClientRect` into a flat {@link SemanticTree} (bounds in
- * dp / CSS px). `puppeteer-core` is imported lazily and kept out of the
+ * element's `getBoundingClientRect` — plus its resolved `getComputedStyle`
+ * (padding, corner radius, font face/size/weight/line-height, colour) — into a
+ * flat {@link SemanticTree} (bounds in dp / CSS px). The style becomes each
+ * node's spec `tokens`, so the report's annotation overlays render on the
+ * reference panel too. `puppeteer-core` is imported lazily and kept out of the
  * package's hard dependencies — a consumer that doesn't need the structural
  * layout diff never pays for it, and if it (or Chrome) is absent the extractor
  * returns `undefined` and the layout diff simply doesn't run.
  */
 import { pathToFileURL } from "node:url";
 
-import type { SemanticNode, SemanticTree } from "@design-parity/core";
+import type {
+  DesignTokens,
+  SemanticNode,
+  SemanticTree,
+  TypographyToken,
+} from "@design-parity/core";
 
 /** A request to capture one HTML export's layout. */
 export interface LayoutRequest {
@@ -38,6 +46,24 @@ const CHROME_CANDIDATES = [
   "chrome",
 ].filter((c): c is string => typeof c === "string" && c.length > 0);
 
+/**
+ * The element's resolved CSS that maps to design spec — read from
+ * `getComputedStyle` in the page, carried out as raw strings and parsed in
+ * {@link treeFromRects} (so the parsing is unit-testable without a browser).
+ */
+export interface RawStyle {
+  paddingTop: string;
+  paddingRight: string;
+  paddingBottom: string;
+  paddingLeft: string;
+  borderRadius: string;
+  fontFamily: string;
+  fontSize: string;
+  fontWeight: string;
+  lineHeight: string;
+  color: string;
+}
+
 /** The raw per-element record pulled out of the page. */
 interface RawRect {
   label: string;
@@ -46,6 +72,8 @@ interface RawRect {
   y: number;
   w: number;
   h: number;
+  /** Resolved computed style for the spec overlays (absent in older captures). */
+  style?: RawStyle;
 }
 
 /**
@@ -89,7 +117,11 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
         await doc?.fonts?.ready;
       });
       const rects = (await page.evaluate(() => {
-        const doc = (globalThis as { document?: unknown }).document as {
+        const win = globalThis as {
+          document?: unknown;
+          getComputedStyle?: (e: unknown) => Record<string, string>;
+        };
+        const doc = win.document as {
           querySelectorAll(s: string): ArrayLike<Record<string, unknown>>;
         };
         const out: RawRect[] = [];
@@ -102,6 +134,22 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
           if (el.children.length === 0 && (el.textContent ?? "").trim()) {
             const r = el.getBoundingClientRect();
             if (r.width > 0 && r.height > 0) {
+              // Resolved style for the spec overlays (padding/radius/type/colour).
+              const cs = win.getComputedStyle?.(el);
+              const style = cs
+                ? {
+                    paddingTop: cs["paddingTop"] ?? "",
+                    paddingRight: cs["paddingRight"] ?? "",
+                    paddingBottom: cs["paddingBottom"] ?? "",
+                    paddingLeft: cs["paddingLeft"] ?? "",
+                    borderRadius: cs["borderTopLeftRadius"] ?? "",
+                    fontFamily: cs["fontFamily"] ?? "",
+                    fontSize: cs["fontSize"] ?? "",
+                    fontWeight: cs["fontWeight"] ?? "",
+                    lineHeight: cs["lineHeight"] ?? "",
+                    color: cs["color"] ?? "",
+                  }
+                : undefined;
               out.push({
                 label: (el.textContent ?? "").trim(),
                 role: el.getAttribute("role"),
@@ -109,6 +157,7 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
                 y: r.y,
                 w: r.width,
                 h: r.height,
+                ...(style ? { style } : {}),
               });
             }
           }
@@ -126,6 +175,93 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
   return undefined;
 };
 
+/** Parse a CSS length (`"14px"`) to its number, or `undefined` when not finite. */
+function px(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** The single value of a four-sided box only when all sides agree (else `undefined`). */
+function uniform(style: RawStyle): number | undefined {
+  const t = px(style.paddingTop);
+  const r = px(style.paddingRight);
+  const b = px(style.paddingBottom);
+  const l = px(style.paddingLeft);
+  if (t === undefined || t !== r || r !== b || b !== l) return undefined;
+  return t;
+}
+
+/** First concrete font family from a CSS stack, unquoted. */
+function firstFamily(stack: string | undefined): string | undefined {
+  const first = stack?.split(",")[0]?.trim().replace(/^["']|["']$/g, "");
+  return first || undefined;
+}
+
+/** CSS `font-weight` to a number (`"bold"`/`"normal"` mapped), else the raw token. */
+function weight(value: string | undefined): number | string | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  if (Number.isFinite(n)) return n;
+  if (value === "bold") return 700;
+  if (value === "normal") return 400;
+  return value;
+}
+
+/** `rgb()/rgba()` to a CSS hex string (`#rrggbb` or `#rrggbbaa`). */
+function colorToHex(value: string | undefined): string | undefined {
+  const m = value?.match(/rgba?\(([^)]+)\)/i);
+  if (!m) return undefined;
+  const parts = m[1]!.split(",").map((p) => p.trim());
+  const [r, g, b] = parts.map(Number);
+  if (r === undefined || g === undefined || b === undefined) return undefined;
+  if (![r, g, b].every((v) => Number.isFinite(v))) return undefined;
+  const hex = (v: number): string => Math.round(v).toString(16).padStart(2, "0");
+  let out = `#${hex(r)}${hex(g)}${hex(b)}`;
+  const a = parts[3] !== undefined ? Number(parts[3]) : 1;
+  if (Number.isFinite(a) && a < 1) out += hex(a * 255);
+  return out;
+}
+
+/** Round to 1dp (keeps token values compact and stable). */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * Map an element's resolved style to the spec {@link DesignTokens} the report's
+ * overlays read — typography (face/size/weight/line-height), foreground colour,
+ * uniform padding, and corner radius. Values are in CSS px, i.e. dp at the
+ * extractor's `deviceScaleFactor: 1`, so they share the reference bounds' unit.
+ * Returns `undefined` when the style yields nothing usable.
+ */
+export function tokensFromStyle(style: RawStyle | undefined): DesignTokens | undefined {
+  if (!style) return undefined;
+  const tokens: DesignTokens = {};
+
+  const typography: TypographyToken = {};
+  const family = firstFamily(style.fontFamily);
+  if (family) typography.fontFamily = family;
+  const size = px(style.fontSize);
+  if (size !== undefined) typography.fontSize = round1(size);
+  const w = weight(style.fontWeight);
+  if (w !== undefined) typography.fontWeight = w;
+  const lh = px(style.lineHeight); // "normal" → undefined (skipped)
+  if (lh !== undefined) typography.lineHeight = round1(lh);
+  if (Object.keys(typography).length > 0) tokens.typography = { text: typography };
+
+  const fg = colorToHex(style.color);
+  if (fg) tokens.colors = { text: fg };
+
+  const pad = uniform(style);
+  if (pad !== undefined && pad > 0) tokens.spacing = { padding: Math.round(pad) };
+
+  const radius = px(style.borderRadius);
+  if (radius !== undefined && radius > 0) tokens.radius = { corner: Math.round(radius) };
+
+  return Object.keys(tokens).length > 0 ? tokens : undefined;
+}
+
 /**
  * Build a flat {@link SemanticTree} from raw element rects (rounded to dp). When
  * the capture `frame` (the render viewport, in dp) is supplied it is stamped on
@@ -133,21 +269,30 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
  * extent and normalise the candidate's render-pixel geometry into this dp space
  * (the two sides render at different densities). Omitting it leaves the root
  * unbounded, so the diff treats the trees as already sharing a space.
+ *
+ * Each rect's resolved {@link RawStyle} (when captured) becomes the node's spec
+ * `tokens` — padding/radius/typography/colour — so the report's annotation
+ * overlays light up on the reference panel, not just the candidate.
  */
 export function treeFromRects(
   rects: RawRect[],
   frame?: { width: number; height: number },
 ): SemanticTree {
-  const children: SemanticNode[] = rects.map((r) => ({
-    label: r.label,
-    ...(r.role ? { role: r.role } : {}),
-    bounds: {
-      x: Math.round(r.x),
-      y: Math.round(r.y),
-      width: Math.round(r.w),
-      height: Math.round(r.h),
-    },
-  }));
+  const children: SemanticNode[] = rects.map((r) => {
+    const node: SemanticNode = {
+      label: r.label,
+      ...(r.role ? { role: r.role } : {}),
+      bounds: {
+        x: Math.round(r.x),
+        y: Math.round(r.y),
+        width: Math.round(r.w),
+        height: Math.round(r.h),
+      },
+    };
+    const tokens = tokensFromStyle(r.style);
+    if (tokens) node.tokens = tokens;
+    return node;
+  });
   const root: SemanticNode = { children };
   if (frame) root.bounds = { x: 0, y: 0, width: frame.width, height: frame.height };
   return { root };
