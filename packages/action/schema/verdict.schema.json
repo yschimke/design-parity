@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/verdict.schema.json",
+  "title": "verdict",
+  "description": "The machine-readable parity roll-up published as `verdict.json` to the permanent artifact branch (default `design-parity/main`). One per run; the PR run loads it as the baseline to diff its candidate against `main`. Source of truth is the `BaselineSummary` TypeScript interface in `packages/action/src/baseline.ts`. Aligned with the compose-ai-tools reporting-branch contract (compose-ai-tools#1866); see `docs/report-format.md`.",
+  "x-design-parity": {
+    "kind": "design-parity/verdict",
+    "formatVersion": 1,
+    "tsType": "BaselineSummary",
+    "tsConst": "VERDICT_FORMAT_VERSION",
+    "alignedWith": "compose-ai-tools reporting-branch manifest.json (formatVersion) + data-product envelope (schemaVersion)"
+  },
+  "type": "object",
+  "required": ["formatVersion", "generatedAt", "direction", "status", "blocked", "components", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Versions the verdict.json layout. Bumped only on an incompatible change (a renamed/removed field, a changed type, a tightened `required`); additive optional fields do not bump it, so consumers must ignore unknown fields. Mirrors the `formatVersion` the compose-ai-tools reporting-branch `manifest.json` carries."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO timestamp the baseline was assembled."
+    },
+    "commit": {
+      "type": "string",
+      "description": "The source commit the baseline was rendered from, when known (`GITHUB_SHA`)."
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["design-led", "code-led"],
+      "description": "Which side was authoritative for this run (resolved; never `auto` here)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail"],
+      "description": "Worst verdict status across components (errors do not escalate it)."
+    },
+    "blocked": {
+      "type": "boolean",
+      "description": "True only when the direction blocks PRs and at least one verdict failed."
+    },
+    "components": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/component" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Run-level warnings (unresolved components, fail-soft errors) that did not escalate `status`."
+    }
+  },
+  "definitions": {
+    "component": {
+      "type": "object",
+      "required": ["code", "status"],
+      "additionalProperties": false,
+      "description": "One component's roll-up entry. Carries the verdict status and finding count, not the full Finding objects — those live in the component's `report.html`. The finding/verdict vocabulary is documented in `docs/report-format.md`.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Code handle, e.g. `ui/Button.kt#PrimaryButton`."
+        },
+        "source": {
+          "type": "string",
+          "description": "Design source the reference came from (`figma`, `stitch`, `claude-design`, `bundle`)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "skipped", "error"],
+          "description": "Whether the component produced a verdict (`ok`), had no candidate/reference (`skipped`), or failed soft (`error`)."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail"],
+          "description": "The component's verdict status; present only when `status` is `ok`."
+        },
+        "findings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of findings the verdict produced; present only when a verdict was produced."
+        },
+        "report": {
+          "type": "string",
+          "description": "Path to the component's `report.html`, relative to the artifact root."
+        },
+        "note": {
+          "type": "string",
+          "description": "Human-readable detail, e.g. why a component was skipped."
+        }
+      }
+    }
+  }
+}

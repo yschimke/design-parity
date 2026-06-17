@@ -1,0 +1,40 @@
+{
+  "$schema": "https://github.com/yschimke/design-parity/schema/verdict.schema.json",
+  "formatVersion": 1,
+  "generatedAt": "2026-06-14T00:00:00.000Z",
+  "commit": "abcdef1234567890",
+  "direction": "design-led",
+  "status": "warn",
+  "blocked": false,
+  "components": [
+    {
+      "code": "ui/Button.kt#PrimaryButton",
+      "source": "figma",
+      "status": "ok",
+      "verdict": "pass",
+      "findings": 0,
+      "report": "ui-Button-kt-PrimaryButton/report.html"
+    },
+    {
+      "code": "ui/Card.kt#Hero",
+      "source": "figma",
+      "status": "ok",
+      "verdict": "warn",
+      "findings": 1,
+      "report": "ui-Card-kt-Hero/report.html"
+    },
+    {
+      "code": "ui/Lost.kt#Missing",
+      "source": "figma",
+      "status": "skipped",
+      "note": "no candidate render available"
+    },
+    {
+      "code": "ui/Broken.kt#Boom",
+      "source": "stitch",
+      "status": "error",
+      "note": "adapter threw: reference unreachable"
+    }
+  ],
+  "warnings": ["unresolved (no source matched): ui/Stale.kt#Gone"]
+}

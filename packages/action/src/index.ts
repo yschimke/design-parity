@@ -61,12 +61,17 @@ export {
   baselineSummary,
   renderBaselineIndex,
   writeBaselineArtifacts,
+  validateVerdict,
+  verdictSchema,
+  verdictSchemaPath,
+  VERDICT_FORMAT_VERSION,
 } from "./baseline.js";
 export type {
   BaselineArtifacts,
   BaselineComponent,
   BaselineMeta,
   BaselineSummary,
+  VerdictValidationResult,
 } from "./baseline.js";
 
 // GitHub surface

@@ -48,7 +48,10 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   browsable artifacts** — a top-level `README.md` + `index.html` landing page
   (linking each component's report, with a "generated, do not edit" banner),
   each component's self-contained `report.html` triptych, and a machine-readable
-  `verdict.json` —
+  `verdict.json` (a versioned `BaselineSummary` — carries `formatVersion` +
+  `$schema`, validated against
+  [`schema/verdict.schema.json`](./schema/verdict.schema.json); see
+  [`docs/report-format.md`](../../docs/report-format.md)) —
   to a permanent **`artifact_branch`** (default `design-parity/<dev-branch>`).
   This gives a stable, always-current view of `main`'s parity state without
   committing generated PNGs/HTML onto `main`, and a real baseline a PR can diff

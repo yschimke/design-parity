@@ -9,16 +9,19 @@
   "exports": {
     ".": "./dist/index.js",
     "./run": "./dist/cli/run.js",
-    "./reverse": "./dist/cli/reverse.js"
+    "./reverse": "./dist/cli/reverse.js",
+    "./schema/verdict.schema.json": "./schema/verdict.schema.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "schema"
   ],
   "scripts": {
     "build": "tsc --build",
     "test": "vitest run"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
     "@design-parity/core": "^0.1.11",
     "@design-parity/resolver": "^0.1.11",
     "@design-parity/policy": "^0.1.11",
