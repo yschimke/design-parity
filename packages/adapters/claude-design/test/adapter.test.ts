@@ -26,7 +26,7 @@ async function tempExport(
 
 describe("ClaudeDesignAdapter.resolve", () => {
   it("round-trips the committed export to the golden DesignReference", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     const ref = await adapter.resolve(
       "ui/Card.kt#OfferCard",
       "design/reference/offer-card.html",
@@ -47,7 +47,7 @@ describe("ClaudeDesignAdapter.resolve", () => {
   });
 
   it("derives image dimensions from the committed PNG, not the manifest", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     const ref = await adapter.resolve(
       "ui/Card.kt#OfferCard",
       "design/reference/offer-card.html",
@@ -57,14 +57,14 @@ describe("ClaudeDesignAdapter.resolve", () => {
   });
 
   it("throws a readable error when the export is missing", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     await expect(
       adapter.resolve("ui/Card.kt#OfferCard", "design/reference/nope.html", ctx),
     ).rejects.toThrow(/cannot read HTML export/);
   });
 
   it("throws when the handoff block is not valid JSON", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     const { ref } = await tempExport(
       "bad.html",
       `<script type="application/design-parity+json">{ not json }</script>`,
@@ -75,7 +75,7 @@ describe("ClaudeDesignAdapter.resolve", () => {
   });
 
   it("throws when a declared image src is missing", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     const { ref } = await tempExport(
       "missing-img.html",
       `<script type="application/design-parity+json">
@@ -88,7 +88,7 @@ describe("ClaudeDesignAdapter.resolve", () => {
   });
 
   it("throws when the export's componentId contradicts the resolver", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     const { ref } = await tempExport(
       "mismatch.html",
       `<script type="application/design-parity+json">
@@ -101,7 +101,7 @@ describe("ClaudeDesignAdapter.resolve", () => {
   });
 
   it("loads tokens from a referenced handoff token file", async () => {
-    const adapter = new ClaudeDesignAdapter();
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
     const { dir, ref } = await tempExport(
       "tokens-file.html",
       `<script type="application/design-parity+json">
@@ -126,7 +126,7 @@ describe("ClaudeDesignAdapter.resolve", () => {
       calls.push({ state: req.state, theme: req.theme });
       return { pngPath: fixturePng, width: 240, height: 160 };
     };
-    const adapter = new ClaudeDesignAdapter({ rasterizer: stub });
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null, rasterizer: stub });
     const { ref } = await tempExport(
       "raw-variant.html",
       `<script type="application/design-parity+json">
@@ -150,7 +150,7 @@ describe("ClaudeDesignAdapter.resolve", () => {
       count += 1;
       return { pngPath: fixturePng, width: 240, height: 160 };
     };
-    const adapter = new ClaudeDesignAdapter({ rasterizer: stub });
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null, rasterizer: stub });
     const { ref } = await tempExport(
       "no-images.html",
       `<div class="card">no handoff images</div>`,
@@ -160,5 +160,65 @@ describe("ClaudeDesignAdapter.resolve", () => {
     expect(count).toBe(1);
     expect(result.referenceImages).toHaveLength(1);
     expect(result.referenceImages[0]?.state).toBe("default");
+  });
+});
+
+describe("ClaudeDesignAdapter layout capture", () => {
+  const html =
+    `<script type="application/design-parity+json">` +
+    `{"componentId":"a#b","images":[{"state":"default","src":${JSON.stringify(fixturePng)}}]}` +
+    `</script>`;
+
+  it("attaches the captured layout tree to the reference", async () => {
+    const fake = async () => ({ root: { children: [{ label: "Hi", bounds: { x: 1, y: 2, width: 3, height: 4 } }] } });
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: fake });
+    const { ref } = await tempExport("c.html", html);
+    const result = await adapter.resolve("a#b", ref, { repoRoot, env: {} });
+    expect(result.layout?.root.children?.[0]).toMatchObject({ label: "Hi", bounds: { x: 1, height: 4 } });
+  });
+
+  it("passes the export path to the extractor", async () => {
+    let seen: string | undefined;
+    const fake = async (req: { htmlPath: string }) => {
+      seen = req.htmlPath;
+      return undefined;
+    };
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: fake });
+    const { ref } = await tempExport("c.html", html);
+    await adapter.resolve("a#b", ref, { repoRoot, env: {} });
+    expect(seen).toBe(ref);
+  });
+
+  it("never fails resolve when the extractor throws", async () => {
+    const adapter = new ClaudeDesignAdapter({
+      layoutExtractor: async () => {
+        throw new Error("no chrome");
+      },
+    });
+    const { ref } = await tempExport("c.html", html);
+    const result = await adapter.resolve("a#b", ref, { repoRoot, env: {} });
+    expect(result.layout).toBeUndefined();
+    expect(result.componentId).toBe("a#b");
+  });
+
+  it("omits layout when disabled with null", async () => {
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
+    const { ref } = await tempExport("c.html", html);
+    const result = await adapter.resolve("a#b", ref, { repoRoot, env: {} });
+    expect(result.layout).toBeUndefined();
+  });
+});
+
+describe("treeFromRects", () => {
+  it("rounds rects into a flat bounded tree", async () => {
+    const { treeFromRects } = await import("../src/index.js");
+    const tree = treeFromRects([
+      { label: "A", role: "button", x: 1.4, y: 2.6, w: 10.2, h: 4.9 },
+      { label: "B", role: null, x: 0, y: 0, w: 5, h: 5 },
+    ]);
+    expect(tree.root.children).toEqual([
+      { label: "A", role: "button", bounds: { x: 1, y: 3, width: 10, height: 5 } },
+      { label: "B", bounds: { x: 0, y: 0, width: 5, height: 5 } },
+    ]);
   });
 });
