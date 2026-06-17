@@ -27,6 +27,10 @@ import type {
 import { parseHandoff, type HandoffManifest } from "./html-export.js";
 import { readPngSize } from "./png.js";
 import { browserRasterizer, type Rasterizer } from "./rasterizer.js";
+import {
+  puppeteerLayoutExtractor,
+  type LayoutExtractor,
+} from "./layout-extractor.js";
 
 export interface ClaudeDesignAdapterOptions {
   /**
@@ -35,6 +39,13 @@ export interface ClaudeDesignAdapterOptions {
    * never invoke it.
    */
   rasterizer?: Rasterizer;
+  /**
+   * How to capture the reference's layout geometry for the structural layout
+   * diff. Defaults to {@link puppeteerLayoutExtractor}; runs for every export
+   * (independent of the image source) and is a no-op when it returns
+   * `undefined` (no Chrome / `puppeteer-core`). Pass `null` to disable.
+   */
+  layoutExtractor?: LayoutExtractor | null;
 }
 
 /** Express an absolute path as a repo-relative, forward-slash URI. */
@@ -45,9 +56,14 @@ function repoRelative(repoRoot: string, abs: string): string {
 export class ClaudeDesignAdapter implements ReferenceAdapter {
   readonly source = "claude-design" as const;
   readonly #rasterize: Rasterizer;
+  readonly #extractLayout: LayoutExtractor | null;
 
   constructor(options: ClaudeDesignAdapterOptions = {}) {
     this.#rasterize = options.rasterizer ?? browserRasterizer;
+    this.#extractLayout =
+      options.layoutExtractor === undefined
+        ? puppeteerLayoutExtractor
+        : options.layoutExtractor;
   }
 
   /**
@@ -102,6 +118,18 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
       referenceImages,
     };
     if (tokens) reference.tokens = tokens;
+
+    // Capture the reference's layout geometry for the structural layout diff.
+    // Best-effort and isolated: a capture failure must never fail the resolve
+    // (the layout diff is advisory and simply doesn't run without it).
+    if (this.#extractLayout) {
+      try {
+        const layout = await this.#extractLayout({ htmlPath });
+        if (layout) reference.layout = layout;
+      } catch {
+        // ignore — no layout geometry this run
+      }
+    }
     return reference;
   }
 

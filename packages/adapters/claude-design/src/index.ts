@@ -26,4 +26,11 @@ export {
   type RasterResult,
 } from "./rasterizer.js";
 
+export {
+  puppeteerLayoutExtractor,
+  treeFromRects,
+  type LayoutExtractor,
+  type LayoutRequest,
+} from "./layout-extractor.js";
+
 export { readPngSize, parsePngSize, type PngSize } from "./png.js";
