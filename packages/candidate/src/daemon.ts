@@ -101,6 +101,8 @@ export interface ComposeSemanticsNode {
   layoutText?: string;
   /** e.g. `"22.0sp"` — the resolved text size, sp. */
   layoutFontSize?: string;
+  /** Resolved typographic identity of the drawn text (compose-ai-tools#1934). */
+  typography?: ComposeSemanticsTypography;
   /** Text foreground, `#AARRGGBB` (ARGB, alpha-first). */
   layoutForegroundColor?: string;
   /** Text background, `#AARRGGBB`; usually unset (the surface supplies it). */
@@ -108,6 +110,23 @@ export interface ComposeSemanticsNode {
   role?: string | null;
   testTag?: string;
   children?: ComposeSemanticsNode[];
+}
+
+/**
+ * `compose/semantics` v5 per-node `typography` object (compose-ai-tools#1934):
+ * the resolved face/weight/style/axes of the drawn text, read from the node's
+ * `TextLayoutResult`. Each field is present only when every drawn range agrees
+ * on it. `letterSpacing` / `lineHeight` are sp/em strings (e.g. `"0.5sp"`);
+ * `fontWeight` is a bare number.
+ */
+export interface ComposeSemanticsTypography {
+  fontFamily?: string;
+  fontWeight?: number;
+  fontStyle?: string;
+  fontVariationSettings?: string;
+  fontFeatureSettings?: string;
+  letterSpacing?: string;
+  lineHeight?: string;
 }
 export interface ComposeSemanticsPayload {
   root?: ComposeSemanticsNode;
@@ -213,6 +232,32 @@ export function parseFontSizeSp(spec: string | undefined): number | undefined {
   if (!m) return undefined;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Build a node's text {@link TypographyToken} from `layoutFontSize` plus the v5
+ * `typography` object (compose-ai-tools#1934) — the resolved face/weight/style/
+ * axes of the drawn text. Lets the token diff compare *which face* the candidate
+ * resolved against the reference spec, not just its size. Returns undefined when
+ * the node carries nothing typographic.
+ */
+export function textTypography(
+  node: ComposeSemanticsNode,
+  fontSize: number | undefined,
+): TypographyToken | undefined {
+  const typo = node.typography;
+  const out: TypographyToken = {};
+  if (fontSize !== undefined) out.fontSize = fontSize;
+  if (typo?.fontFamily) out.fontFamily = typo.fontFamily;
+  if (typo?.fontWeight !== undefined) out.fontWeight = typo.fontWeight;
+  if (typo?.fontStyle) out.fontStyle = typo.fontStyle;
+  if (typo?.fontVariationSettings) out.fontVariationSettings = typo.fontVariationSettings;
+  if (typo?.fontFeatureSettings) out.fontFeatureSettings = typo.fontFeatureSettings;
+  const letterSpacing = parseFontSizeSp(typo?.letterSpacing);
+  if (letterSpacing !== undefined) out.letterSpacing = letterSpacing;
+  const lineHeight = parseFontSizeSp(typo?.lineHeight);
+  if (lineHeight !== undefined) out.lineHeight = lineHeight;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Map an ATF `level` to a finding {@link Severity}. */
@@ -467,11 +512,11 @@ function semanticsNode(
   if (fg) colors[colorTokenKey(fg, "fg", themeTokens, consumerTokens)] = fg;
   const bg = argbToCssHex(node.layoutBackgroundColor);
   if (bg) colors[colorTokenKey(bg, "bg", themeTokens, consumerTokens)] = bg;
-  const fontSize = parseFontSizeSp(node.layoutFontSize);
-  if (Object.keys(colors).length || fontSize !== undefined) {
+  const text = textTypography(node, parseFontSizeSp(node.layoutFontSize));
+  if (Object.keys(colors).length || text) {
     out.tokens = {};
     if (Object.keys(colors).length) out.tokens.colors = colors;
-    if (fontSize !== undefined) out.tokens.typography = { text: { fontSize } };
+    if (text) out.tokens.typography = { text };
   }
 
   const children = (node.children ?? []).map((c) =>

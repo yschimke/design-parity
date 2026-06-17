@@ -60,6 +60,19 @@ describe("collectTokens", () => {
     const cand = collectTokens(root);
     expect(diffTokens({ colors: { surface: "#F4FBF8" } }, cand, defaultDiffConfig)).toEqual([]);
   });
+
+  it("keeps typography tokens that differ only by a #1934 field distinct", () => {
+    // Two `text` nodes that agree on size but draw different faces (one italic)
+    // must both survive the merge, not dedupe to one.
+    const root: SemanticNode = {
+      tokens: { typography: { text: { fontSize: 14 } } },
+      children: [{ tokens: { typography: { text: { fontSize: 14, fontStyle: "italic" } } } }],
+    };
+    expect(collectTokens(root).typography).toEqual({
+      text: { fontSize: 14 },
+      "text#2": { fontSize: 14, fontStyle: "italic" },
+    });
+  });
 });
 
 describe("diffTokens", () => {
@@ -307,6 +320,44 @@ describe("diffTokens", () => {
       const candidate: DesignTokens = { colors: { brandFg: "#161d1b" } };
       const alias = { colors: { brandFg: "color/on-surface" } };
       expect(diffTokens(designSpec, candidate, defaultDiffConfig, alias)).toEqual([]);
+    });
+  });
+
+  describe("resolved typography (compose-ai-tools#1934)", () => {
+    it("ignores candidate typography the spec doesn't declare", () => {
+      // The candidate now resolves fontStyle / variation axes per #1934; a
+      // reference that only pins family + size must not flag those extras as drift.
+      const spec: DesignTokens = {
+        typography: { bodyLarge: { fontFamily: "Orbitron", fontSize: 16 } },
+      };
+      const candidate: DesignTokens = {
+        typography: {
+          bodyLarge: {
+            fontFamily: "Orbitron",
+            fontSize: 16,
+            fontStyle: "normal",
+            fontVariationSettings: "wght 400.0",
+          },
+        },
+      };
+      expect(diffTokens(spec, candidate, defaultDiffConfig)).toEqual([]);
+    });
+
+    it("flags a resolved font family that fell back from the spec", () => {
+      // The headline #1934 case: the candidate silently rendered a different face
+      // than the spec declared — now detectable from the data, not just the eye.
+      const spec: DesignTokens = {
+        typography: { bodyLarge: { fontFamily: "Orbitron", fontSize: 16 } },
+      };
+      const candidate: DesignTokens = {
+        typography: { bodyLarge: { fontFamily: "sans-serif", fontSize: 16 } },
+      };
+      const findings = diffTokens(spec, candidate, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "warn",
+        detail: { token: "typography.bodyLarge" },
+      });
     });
   });
 });

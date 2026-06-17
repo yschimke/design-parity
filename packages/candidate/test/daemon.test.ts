@@ -185,6 +185,42 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     expect(text?.tokens?.typography?.["text"]?.fontSize).toBe(16);
   });
 
+  it("maps the v5 typography object into the text token (compose-ai-tools#1934)", () => {
+    const tree = semanticsToSemanticTree(
+      {
+        root: {
+          boundsInRoot: "0,0,360,640",
+          children: [
+            {
+              text: "Heading",
+              boundsInRoot: "0,0,360,48",
+              layoutFontSize: "22.0sp",
+              typography: {
+                fontFamily: "res/font/orbitron",
+                fontWeight: 700,
+                fontStyle: "italic",
+                fontVariationSettings: "opsz 18.0, wght 700.0",
+                letterSpacing: "0.5sp",
+                lineHeight: "28.0sp",
+              },
+            },
+          ],
+        },
+      },
+      "light",
+    );
+    const text = tree?.root.children?.[0];
+    expect(text?.tokens?.typography?.["text"]).toEqual({
+      fontSize: 22,
+      fontFamily: "res/font/orbitron",
+      fontWeight: 700,
+      fontStyle: "italic",
+      fontVariationSettings: "opsz 18.0, wght 700.0",
+      letterSpacing: 0.5,
+      lineHeight: 28,
+    });
+  });
+
   it("maps RadioButton → radio and falls back label ← text ← layoutText", () => {
     const tree = semanticsToSemanticTree({
       root: {

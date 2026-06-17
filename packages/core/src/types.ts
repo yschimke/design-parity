@@ -44,6 +44,16 @@ export interface TypographyToken {
   fontFamily?: string;
   fontSize?: number;
   fontWeight?: number | string;
+  /** `"normal"` / `"italic"` (compose-ai-tools#1934). */
+  fontStyle?: string;
+  /**
+   * The variable-font axes actually applied, as `"<axis> <value>"` pairs sorted
+   * by tag (e.g. `"opsz 18.0, wght 700.0"`). For a variable font these pin the
+   * rendered instance where `fontWeight` alone can't (compose-ai-tools#1934).
+   */
+  fontVariationSettings?: string;
+  /** OpenType feature settings (compose-ai-tools#1934). */
+  fontFeatureSettings?: string;
   lineHeight?: number;
   letterSpacing?: number;
 }

@@ -5,7 +5,9 @@
  * {@link CandidateRender} scatters tokens across its semantic tree. We flatten
  * the candidate's tree into the same shape, then compare key-by-key against the
  * reference spec. Numeric tokens honour a committed tolerance; typography must
- * match exactly; colours match modulo a full-alpha suffix (`#RRGGBB` ==
+ * match exactly on every field the spec declares (the candidate may resolve
+ * more — e.g. `fontStyle` / variation axes — without that counting as drift);
+ * colours match modulo a full-alpha suffix (`#RRGGBB` ==
  * `#RRGGBBAA`). A spec token the candidate couldn't name falls back to a value
  * match before being reported missing — same-role for colours, within-tolerance
  * for spacing/radius — since the candidate carries resolved values under generic
@@ -87,13 +89,41 @@ function preserveDistinct<T>(
   return out;
 }
 
+/** Full equality — two tokens are the same value only if every field matches. */
 function typographyEqual(a: TypographyToken, b: TypographyToken): boolean {
   return (
     a.fontFamily === b.fontFamily &&
     a.fontSize === b.fontSize &&
     a.fontWeight === b.fontWeight &&
+    a.fontStyle === b.fontStyle &&
+    a.fontVariationSettings === b.fontVariationSettings &&
+    a.fontFeatureSettings === b.fontFeatureSettings &&
     a.lineHeight === b.lineHeight &&
     a.letterSpacing === b.letterSpacing
+  );
+}
+
+/**
+ * Does the candidate token [got] satisfy the [spec]? Spec-driven: only the
+ * fields the reference actually declares are checked, so a candidate that
+ * resolves *more* than the spec asks for (e.g. it now surfaces `fontStyle` /
+ * `fontVariationSettings` per compose-ai-tools#1934, which most references don't
+ * declare) isn't reported as drift. A field the spec declares but the candidate
+ * couldn't resolve (e.g. `fontFamily` fell back) does mismatch — which is the
+ * whole point of comparing the resolved face.
+ */
+function typographySatisfies(spec: TypographyToken, got: TypographyToken): boolean {
+  const fieldOk = <K extends keyof TypographyToken>(key: K): boolean =>
+    spec[key] === undefined || spec[key] === got[key];
+  return (
+    fieldOk("fontFamily") &&
+    fieldOk("fontSize") &&
+    fieldOk("fontWeight") &&
+    fieldOk("fontStyle") &&
+    fieldOk("fontVariationSettings") &&
+    fieldOk("fontFeatureSettings") &&
+    fieldOk("lineHeight") &&
+    fieldOk("letterSpacing")
   );
 }
 
@@ -222,7 +252,7 @@ export function diffTokens(
           ? missing("typography", name, JSON.stringify(want))
           : advisory("typography", name, JSON.stringify(want)),
       );
-    } else if (!typographyEqual(want, got)) {
+    } else if (!typographySatisfies(want, got)) {
       findings.push({
         kind: "token",
         severity: "warn",
