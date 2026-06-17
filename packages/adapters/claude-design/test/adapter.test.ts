@@ -236,4 +236,74 @@ describe("treeFromRects", () => {
     const tree = treeFromRects([{ label: "A", role: null, x: 0, y: 0, w: 5, h: 5 }]);
     expect(tree.root.bounds).toBeUndefined();
   });
+
+  it("maps a captured computed style into the node's spec tokens", async () => {
+    const { treeFromRects } = await import("../src/index.js");
+    const tree = treeFromRects([
+      {
+        label: "Go",
+        role: "button",
+        x: 0,
+        y: 0,
+        w: 100,
+        h: 40,
+        style: {
+          paddingTop: "12px",
+          paddingRight: "12px",
+          paddingBottom: "12px",
+          paddingLeft: "12px",
+          borderRadius: "8px",
+          fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: "16px",
+          fontWeight: "700",
+          lineHeight: "20px",
+          color: "rgb(255, 255, 255)",
+        },
+      },
+    ]);
+    expect(tree.root.children?.[0]?.tokens).toEqual({
+      typography: { text: { fontFamily: "Space Grotesk", fontSize: 16, fontWeight: 700, lineHeight: 20 } },
+      colors: { text: "#ffffff" },
+      spacing: { padding: 12 },
+      radius: { corner: 8 },
+    });
+  });
+});
+
+describe("tokensFromStyle", () => {
+  const base = {
+    paddingTop: "0px",
+    paddingRight: "0px",
+    paddingBottom: "0px",
+    paddingLeft: "0px",
+    borderRadius: "0px",
+    fontFamily: "",
+    fontSize: "",
+    fontWeight: "",
+    lineHeight: "",
+    color: "",
+  };
+
+  it("returns undefined when nothing usable is present", async () => {
+    const { tokensFromStyle } = await import("../src/index.js");
+    expect(tokensFromStyle(undefined)).toBeUndefined();
+    expect(tokensFromStyle(base)).toBeUndefined();
+  });
+
+  it("only records padding when all four sides agree", async () => {
+    const { tokensFromStyle } = await import("../src/index.js");
+    const asymmetric = tokensFromStyle({ ...base, paddingTop: "12px", paddingRight: "8px", paddingBottom: "12px", paddingLeft: "8px" });
+    expect(asymmetric).toBeUndefined();
+    const uniform = tokensFromStyle({ ...base, paddingTop: "10px", paddingRight: "10px", paddingBottom: "10px", paddingLeft: "10px" });
+    expect(uniform).toEqual({ spacing: { padding: 10 } });
+  });
+
+  it("skips a 'normal' line-height and maps a bold weight / rgba colour", async () => {
+    const { tokensFromStyle } = await import("../src/index.js");
+    const t = tokensFromStyle({ ...base, fontFamily: "Roboto", fontSize: "14px", fontWeight: "bold", lineHeight: "normal", color: "rgba(0, 0, 0, 0.5)" });
+    expect(t).toEqual({
+      typography: { text: { fontFamily: "Roboto", fontSize: 14, fontWeight: 700 } },
+      colors: { text: "#00000080" },
+    });
+  });
 });
