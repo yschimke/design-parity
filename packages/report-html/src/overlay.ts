@@ -16,6 +16,9 @@
  * - **typography** — per text node, a callout with `family · size · weight`
  *   (line-height when present) and the resolved text colour. Candidate-side
  *   today; the reference capture is geometry-only.
+ * - **layout** — elements the structural layout diff flagged as shifted/resized,
+ *   highlighted with their position/size drift read out. Driven by the verdict's
+ *   `layout` findings, matched to a node by label.
  *
  * The SVG's `viewBox` is the tree's own frame (`root.bounds` — candidate device
  * pixels, reference dp), so when it's stretched over the panel image both scale
@@ -160,11 +163,50 @@ function typographyMark(n: Placed, u: number): string {
 }
 
 /**
+ * One matched-element geometry delta from the structural layout diff — the
+ * `detail` of a `layout` finding (`reference − candidate`, in the reference's
+ * dp space). Shown numerically; sign convention follows the finding.
+ */
+export interface LayoutDelta {
+  label: string;
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+}
+
+/** `+8` / `-8` / `0` — a signed delta for the readout. */
+function signed(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
+/**
+ * Highlight + readout for an element the layout diff flagged as shifted/resized.
+ * The box is the element's own bounds on this panel; the tag (placed below, so
+ * it clears the box-model tag at top-left) carries the numeric drift.
+ */
+function layoutMark(n: Placed, d: LayoutDelta, u: number): string {
+  const { x, y, width, height } = n.bounds;
+  const stroke = 0.45 * u;
+  const text = `Δpos ${signed(d.dx)},${signed(d.dy)} · Δsize ${signed(d.dw)},${signed(d.dh)}`;
+  return (
+    `<g class="anno-delta">` +
+    `<rect x="${r(x)}" y="${r(y)}" width="${r(width)}" height="${r(height)}" fill="#e8a23a" fill-opacity="0.12" stroke="#e8a23a" stroke-width="${r(stroke)}"/>` +
+    tag(x, y + height, text, u, "#3a2a10", "#ffd98a") +
+    `</g>`
+  );
+}
+
+/**
  * Build the annotation `<svg>` for a panel from its semantic tree, or `""` when
  * there's nothing to draw. Layers are hidden by default (CSS) and toggled by the
- * report's controls.
+ * report's controls. `deltas` are the structural layout diff's per-element
+ * geometry findings — matched to a node by label, they drive the layout layer.
  */
-export function annotationSvg(tree: SemanticTree | undefined): string {
+export function annotationSvg(
+  tree: SemanticTree | undefined,
+  deltas?: readonly LayoutDelta[],
+): string {
   if (!tree) return "";
   const nodes = flatten(tree);
   if (nodes.length === 0) return "";
@@ -180,12 +222,30 @@ export function annotationSvg(tree: SemanticTree | undefined): string {
     .filter((n) => n.typography)
     .map((n) => typographyMark(n, u))
     .join("");
-  if (!boxes && !typography) return "";
+  // Layout deltas: match each finding to the first node with the same label and
+  // highlight it (the element's own box on this panel, with the numeric drift).
+  let layout = "";
+  if (deltas && deltas.length > 0) {
+    const byLabel = new Map<string, Placed>();
+    for (const n of nodes) {
+      if (n.label === undefined) continue;
+      const k = n.label.trim().toLowerCase();
+      if (!byLabel.has(k)) byLabel.set(k, n);
+    }
+    layout = deltas
+      .map((d) => {
+        const n = byLabel.get(d.label.trim().toLowerCase());
+        return n ? layoutMark(n, d, u) : "";
+      })
+      .join("");
+  }
+  if (!boxes && !typography && !layout) return "";
 
   return (
     `<svg class="anno" viewBox="${r(frame.x)} ${r(frame.y)} ${r(frame.width)} ${r(frame.height)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">` +
     `<g data-layer="spacing">${boxes}</g>` +
     `<g data-layer="typography">${typography}</g>` +
+    `<g data-layer="layout">${layout}</g>` +
     `</svg>`
   );
 }

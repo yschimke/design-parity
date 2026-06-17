@@ -135,6 +135,32 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain("data-anno-layer");
   });
 
+  it("adds a layout-delta layer + toggle when the verdict carries layout findings", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    // The fixture's candidate has a 'Continue' text node; flag it as shifted.
+    const withLayout: Verdict = {
+      ...verdict,
+      findings: [
+        ...verdict.findings,
+        { kind: "layout", severity: "warn", message: 'layout "Continue": offset (0, 2)', detail: { label: "Continue", dx: 0, dy: 2, dw: 0, dh: 0 } },
+      ],
+    };
+    const html = renderHtmlReport({ reference, candidate, verdict: withLayout, repoRoot });
+    expect(html).toContain('data-anno-layer="layout"');
+    expect(html).toContain('<g data-layer="layout">');
+    expect(html).toContain("Δpos 0,+2");
+  });
+
+  it("omits the layout toggle when there are no layout findings", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+    // Box-model/typography toggles present, but no layout toggle.
+    expect(html).toContain('data-anno-layer="spacing"');
+    expect(html).not.toContain('data-anno-layer="layout"');
+    // The (empty) layout group still ships in the SVG; the toggle just isn't offered.
+    expect(html).toContain('<g data-layer="layout"></g>');
+  });
+
   it("omits the annotation controls when no panel can draw them", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     // A candidate whose semantics carry no bounds ⇒ nothing to annotate.

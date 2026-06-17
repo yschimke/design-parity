@@ -71,6 +71,32 @@ describe("annotationSvg", () => {
     expect(svg).toContain('<g data-layer="typography"></g>');
   });
 
+  it("draws a layout-delta layer for a finding matched to a node by label", () => {
+    const tree: SemanticTree = {
+      root: {
+        role: "group",
+        bounds: { x: 0, y: 0, width: 200, height: 80 },
+        children: [{ role: "text", label: "Title", bounds: { x: 10, y: 10, width: 80, height: 20 } }],
+      },
+    };
+    const svg = annotationSvg(tree, [{ label: "Title", dx: 0, dy: -8, dw: 0, dh: 0 }]);
+    expect(svg).toContain('<g data-layer="layout">');
+    expect(svg).toContain("Δpos 0,-8 · Δsize 0,0");
+    expect(svg).toContain('stroke="#e8a23a"');
+  });
+
+  it("leaves the layout layer empty when no finding matches a node", () => {
+    const tree: SemanticTree = {
+      root: {
+        role: "group",
+        bounds: { x: 0, y: 0, width: 100, height: 40 },
+        children: [{ role: "text", label: "Here", bounds: { x: 0, y: 0, width: 40, height: 12 } }],
+      },
+    };
+    const svg = annotationSvg(tree, [{ label: "Elsewhere", dx: 5, dy: 5, dw: 0, dh: 0 }]);
+    expect(svg).toContain('<g data-layer="layout"></g>');
+  });
+
   it("is deterministic for the same tree", () => {
     const tree: SemanticTree = {
       root: { role: "button", bounds: { x: 0, y: 0, width: 160, height: 48 }, tokens: { radius: { corner: 8 } } },
