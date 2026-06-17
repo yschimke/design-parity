@@ -18,6 +18,7 @@
  */
 import { argv, cwd, env, exit, stdout } from "node:process";
 import { resolve as resolvePath } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { resolve as resolveCorrespondences } from "@design-parity/resolver";
 import { FigmaCanvasWriter } from "@design-parity/adapter-figma";
@@ -38,9 +39,13 @@ interface Args {
   outDir?: string;
   pushBack: boolean;
   canvasEndpoint?: string;
+  repoSlug?: string;
+  branch?: string;
+  sourceCommit?: string;
+  bundleImage?: string;
 }
 
-function parseArgs(args: string[]): Args {
+export function parseArgs(args: string[]): Args {
   const out: Args = { repoRoot: cwd(), components: [], bundlePaths: [], pushBack: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -69,11 +74,37 @@ function parseArgs(args: string[]): Args {
       case "--canvas-endpoint":
         out.canvasEndpoint = next();
         break;
+      // Landing-page link context: when the index is published to a GitHub
+      // branch (where GitHub serves .html as source), passing the repo + branch
+      // makes the README's report links render on click (htmlpreview), instead
+      // of falling back to relative links. Consumers no longer post-process.
+      case "--repo-slug":
+        out.repoSlug = next();
+        break;
+      case "--branch":
+        out.branch = next();
+        break;
+      case "--source-commit":
+        out.sourceCommit = next();
+        break;
+      case "--bundle-image":
+        out.bundleImage = next();
+        break;
       default:
         if (a && !a.startsWith("--")) out.components.push(a);
     }
   }
   return out;
+}
+
+/** Landing-page link context from the CLI flags, or `undefined` when none set. */
+export function indexOptions(args: Args): NonNullable<Parameters<typeof orchestrate>[0]["index"]> | undefined {
+  const index: NonNullable<Parameters<typeof orchestrate>[0]["index"]> = {};
+  if (args.repoSlug) index.repoSlug = args.repoSlug;
+  if (args.branch) index.branch = args.branch;
+  if (args.sourceCommit) index.sourceCommit = args.sourceCommit;
+  if (args.bundleImage) index.bundleImage = args.bundleImage;
+  return Object.keys(index).length > 0 ? index : undefined;
 }
 
 async function main(): Promise<number> {
@@ -82,6 +113,7 @@ async function main(): Promise<number> {
     stdout.write(
       "design-parity run --components <code#Member,...> [--repo .] " +
         "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir] " +
+        "[--repo-slug owner/repo --branch <branch> --source-commit <sha> --bundle-image <file>] " +
         "[--push-back [--canvas-endpoint <url>]]\n",
     );
     return 2;
@@ -104,6 +136,7 @@ async function main(): Promise<number> {
   const { provider, warnings: candidateWarnings } =
     await buildCandidateProvider(candidateOpts);
 
+  const index = indexOptions(args);
   const report = await orchestrate({
     repoRoot: args.repoRoot,
     env,
@@ -114,6 +147,7 @@ async function main(): Promise<number> {
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(spec.byCode.size > 0 ? { referenceTokens: spec.byCode } : {}),
     ...(args.outDir ? { outDir: args.outDir } : {}),
+    ...(index ? { index } : {}),
   });
 
   report.warnings.unshift(
@@ -158,4 +192,7 @@ async function main(): Promise<number> {
   return report.blocked ? 1 : 0;
 }
 
-exit(await main());
+// Run as a CLI; guarded so tests can import the arg helpers without executing.
+if (import.meta.url === pathToFileURL(argv[1] ?? "").href) {
+  exit(await main());
+}
