@@ -239,7 +239,8 @@ export type FindingKind =
   | "token"
   | "contrast"
   | "a11y"
-  | "i18n";
+  | "i18n"
+  | "layout";
 
 export type Severity = "info" | "warn" | "error";
 

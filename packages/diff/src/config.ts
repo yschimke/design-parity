@@ -37,6 +37,15 @@ export interface DiffConfig {
    * beyond this on either axis is a genuine total mismatch.
    */
   visualDimTolerancePx: number;
+  /**
+   * Max allowed per-axis position/size delta (dp) between a reference element
+   * and its matched candidate element before the layout diff flags it. Surfaces
+   * padding/spacer/size mismatches structurally — element by element — rather
+   * than leaving them to the pixel heatmap. Bounds are measured back from a
+   * render on each side, so a small allowance absorbs sub-pixel/density rounding
+   * like {@link visualDimTolerancePx}; a real spacer error (≥ a few dp) clears it.
+   */
+  layoutTolerance: number;
 }
 
 /**
@@ -55,6 +64,7 @@ export const defaultDiffConfig: DiffConfig = {
   pixelThreshold: 0.05,
   visualWarnRatio: 0,
   visualDimTolerancePx: 8,
+  layoutTolerance: 4,
 };
 
 /** Merge a partial override over the committed defaults. */
