@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/adapter-claude-design",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Claude Design reference adapter: resolves a committed HTML export via design-map.json, rasterizes it headlessly, and normalizes to a DesignReference. Claude Design has no read API and no Figma export.",
   "license": "Apache-2.0",
   "type": "module",
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.10"
+    "@design-parity/core": "^0.1.11"
   },
   "repository": {
     "type": "git",

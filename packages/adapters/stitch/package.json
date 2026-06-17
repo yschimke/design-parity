@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/adapter-stitch",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Google Stitch ReferenceAdapter: resolves a component to a Stitch design via design-map.json, fetches HTML+Tailwind through the Stitch SDK, rasterizes a reference image, and normalizes to a DesignReference.",
   "license": "Apache-2.0",
   "type": "module",
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.10"
+    "@design-parity/core": "^0.1.11"
   },
   "repository": {
     "type": "git",
