@@ -228,9 +228,11 @@ export interface RawSemanticsNode {
     right?: number;
     bottom?: number;
   };
-  /** Resolved text foreground colour, ARGB `#AARRGGBB` (compose/semantics). */
+  /** Resolved text colours, ARGB `#AARRGGBB` (compose/semantics v6, #1903). */
+  textColor?: { foreground?: string; background?: string };
+  /** Pre-v6 flat text foreground colour, ARGB `#AARRGGBB` — read as a fallback. */
   layoutForegroundColor?: string;
-  /** Resolved text background colour, ARGB `#AARRGGBB`; usually unset. */
+  /** Pre-v6 flat text background colour, ARGB `#AARRGGBB` — read as a fallback. */
   layoutBackgroundColor?: string;
   /**
    * Either the core {@link DesignTokens} bag (the a11y/hierarchy product) or the
@@ -356,9 +358,10 @@ function composeTokensToDesign(t: RawComposeTokens): DesignTokens {
 function nodeTokens(n: RawSemanticsNode): DesignTokens | undefined {
   const out: DesignTokens = {};
   const colors: Record<string, string> = {};
-  const fg = argbToCss(n.layoutForegroundColor);
+  // v6 (#1903) moved these into `textColor`; fall back to the flat fields for older renders.
+  const fg = argbToCss(n.textColor?.foreground ?? n.layoutForegroundColor);
   if (fg) colors["fg"] = fg;
-  const bg = argbToCss(n.layoutBackgroundColor);
+  const bg = argbToCss(n.textColor?.background ?? n.layoutBackgroundColor);
   if (bg) colors["bg"] = bg;
 
   if (n.tokens) {

@@ -99,13 +99,15 @@ export interface ComposeSemanticsNode {
   label?: string;
   text?: string;
   layoutText?: string;
-  /** e.g. `"22.0sp"` — the resolved text size, sp. */
-  layoutFontSize?: string;
-  /** Resolved typographic identity of the drawn text (compose-ai-tools#1934). */
+  /** Resolved typographic identity of the drawn text (compose-ai-tools#1934, #1903). */
   typography?: ComposeSemanticsTypography;
-  /** Text foreground, `#AARRGGBB` (ARGB, alpha-first). */
+  /** Resolved text colours (compose-ai-tools#1903). */
+  textColor?: ComposeSemanticsTextColor;
+  /** Pre-v6 flat text size, `"22.0sp"` — read as a fallback for older renders. */
+  layoutFontSize?: string;
+  /** Pre-v6 flat text foreground, `#AARRGGBB` — read as a fallback for older renders. */
   layoutForegroundColor?: string;
-  /** Text background, `#AARRGGBB`; usually unset (the surface supplies it). */
+  /** Pre-v6 flat text background, `#AARRGGBB` — read as a fallback for older renders. */
   layoutBackgroundColor?: string;
   role?: string | null;
   testTag?: string;
@@ -113,13 +115,14 @@ export interface ComposeSemanticsNode {
 }
 
 /**
- * `compose/semantics` v5 per-node `typography` object (compose-ai-tools#1934):
- * the resolved face/weight/style/axes of the drawn text, read from the node's
- * `TextLayoutResult`. Each field is present only when every drawn range agrees
- * on it. `letterSpacing` / `lineHeight` are sp/em strings (e.g. `"0.5sp"`);
- * `fontWeight` is a bare number.
+ * `compose/semantics` per-node `typography` object (compose-ai-tools#1934, #1903):
+ * the resolved size/face/weight/style/axes of the drawn text, read from the node's
+ * `TextLayoutResult`. Each field is present only when every drawn range agrees on
+ * it. `fontSize` / `letterSpacing` / `lineHeight` are sp/em strings (e.g. `"0.5sp"`);
+ * `fontWeight` is a bare number. `fontSize` was the flat `layoutFontSize` before v6.
  */
 export interface ComposeSemanticsTypography {
+  fontSize?: string;
   fontFamily?: string;
   fontWeight?: number;
   fontStyle?: string;
@@ -127,6 +130,12 @@ export interface ComposeSemanticsTypography {
   fontFeatureSettings?: string;
   letterSpacing?: string;
   lineHeight?: string;
+}
+
+/** `compose/semantics` v6 per-node text colours (compose-ai-tools#1903), ARGB `#AARRGGBB`. */
+export interface ComposeSemanticsTextColor {
+  foreground?: string;
+  background?: string;
 }
 export interface ComposeSemanticsPayload {
   root?: ComposeSemanticsNode;
@@ -235,11 +244,11 @@ export function parseFontSizeSp(spec: string | undefined): number | undefined {
 }
 
 /**
- * Build a node's text {@link TypographyToken} from `layoutFontSize` plus the v5
- * `typography` object (compose-ai-tools#1934) — the resolved face/weight/style/
- * axes of the drawn text. Lets the token diff compare *which face* the candidate
- * resolved against the reference spec, not just its size. Returns undefined when
- * the node carries nothing typographic.
+ * Build a node's text {@link TypographyToken} from the resolved [fontSize] plus the
+ * `typography` object (compose-ai-tools#1934, #1903) — the resolved face/weight/
+ * style/axes of the drawn text. Lets the token diff compare *which face* the
+ * candidate resolved against the reference spec, not just its size. Returns
+ * undefined when the node carries nothing typographic.
  */
 export function textTypography(
   node: ComposeSemanticsNode,
@@ -508,11 +517,12 @@ function semanticsNode(
 
   const consumerTokens = node.nodeId ? consumersByNode.get(node.nodeId) : undefined;
   const colors: Record<string, string> = {};
-  const fg = argbToCssHex(node.layoutForegroundColor);
+  // v6 (#1903) moved these into sub-objects; fall back to the flat fields for older renders.
+  const fg = argbToCssHex(node.textColor?.foreground ?? node.layoutForegroundColor);
   if (fg) colors[colorTokenKey(fg, "fg", themeTokens, consumerTokens)] = fg;
-  const bg = argbToCssHex(node.layoutBackgroundColor);
+  const bg = argbToCssHex(node.textColor?.background ?? node.layoutBackgroundColor);
   if (bg) colors[colorTokenKey(bg, "bg", themeTokens, consumerTokens)] = bg;
-  const text = textTypography(node, parseFontSizeSp(node.layoutFontSize));
+  const text = textTypography(node, parseFontSizeSp(node.typography?.fontSize ?? node.layoutFontSize));
   if (Object.keys(colors).length || text) {
     out.tokens = {};
     if (Object.keys(colors).length) out.tokens.colors = colors;
