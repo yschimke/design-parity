@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/report-html",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Self-contained HTML comparison page per parity run: reference | candidate | diff side by side with the verdict findings, inlined to one offline .html file (data-URI PNGs + inline CSS/JS, no external assets).",
   "license": "Apache-2.0",
   "type": "module",
@@ -20,7 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.14"
+    "@design-parity/core": "^0.1.15"
   },
   "repository": {
     "type": "git",
