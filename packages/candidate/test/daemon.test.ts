@@ -18,6 +18,7 @@ import {
   argbToCssHex,
   parseFontSizeSp,
   parseScreenBounds,
+  normalizeFontFamily,
   daemonSource,
   type DaemonDataClient,
 } from "../src/index.js";
@@ -148,6 +149,18 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     expect(parseFontSizeSp("auto")).toBeUndefined();
   });
 
+  it("normalizeFontFamily resolves face paths to the reference's family name", () => {
+    // Desktop resolves a FontListFontFamily to its face file; Android to a
+    // resource path. Both should read like the HTML reference's CSS family.
+    expect(normalizeFontFamily("fonts/SpaceGrotesk.ttf")).toBe("Space Grotesk");
+    expect(normalizeFontFamily("res/font/orbitron")).toBe("Orbitron");
+    expect(normalizeFontFamily("C:\\Windows\\Fonts\\Roboto.ttf")).toBe("Roboto");
+    // Clean CSS names (no path, no font extension) pass through untouched.
+    expect(normalizeFontFamily("Space Grotesk")).toBe("Space Grotesk");
+    expect(normalizeFontFamily("Roboto")).toBe("Roboto");
+    expect(normalizeFontFamily('"Space Grotesk", sans-serif')).toBe("Space Grotesk");
+  });
+
   it("nests nodes from the tree and resolves per-node fg + font size", () => {
     const tree = semanticsToSemanticTree(
       {
@@ -213,7 +226,7 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     const text = tree?.root.children?.[0];
     expect(text?.tokens?.typography?.["text"]).toEqual({
       fontSize: 22,
-      fontFamily: "res/font/orbitron",
+      fontFamily: "Orbitron",
       fontWeight: 700,
       fontStyle: "italic",
       fontVariationSettings: "opsz 18.0, wght 700.0",

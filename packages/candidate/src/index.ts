@@ -48,6 +48,7 @@ export {
   argbToCssHex,
   parseFontSizeSp,
   parseScreenBounds,
+  normalizeFontFamily,
 } from "./daemon.js";
 export type {
   DaemonDataClient,
