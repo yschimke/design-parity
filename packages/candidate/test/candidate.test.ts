@@ -236,6 +236,27 @@ describe("normalizeSemantics", () => {
     expect(normalizeSemantics({})).toBeUndefined();
   });
 
+  it("reads compose/semantics 'boundsInRoot' string geometry from the bundle", () => {
+    // The compose-preview bundle emits geometry as "left,top,right,bottom" px
+    // (not the object form). Without parsing it the bundle path had no bounds,
+    // so candidate overlays + the structural layout diff stayed empty.
+    const tree = normalizeSemantics({
+      root: {
+        boundsInRoot: "0,0,1078,2399",
+        children: [{ role: "Button", label: "Go", boundsInRoot: "42,44,216,149" }],
+      },
+    });
+    expect(tree?.root.bounds).toEqual({ x: 0, y: 0, width: 1078, height: 2399 });
+    expect(tree?.root.children?.[0]?.bounds).toEqual({ x: 42, y: 44, width: 174, height: 105 });
+  });
+
+  it("prefers the object bounds form over the string when both are present", () => {
+    const tree = normalizeSemantics({
+      root: { bounds: { x: 1, y: 2, width: 3, height: 4 }, boundsInRoot: "0,0,9,9" },
+    });
+    expect(tree?.root.bounds).toEqual({ x: 1, y: 2, width: 3, height: 4 });
+  });
+
   it("reads resolved fg/bg colours from layout*Color into role keys", () => {
     const tree = normalizeSemantics({
       root: {

@@ -228,6 +228,16 @@ export interface RawSemanticsNode {
     right?: number;
     bottom?: number;
   };
+  /**
+   * compose/semantics geometry as a `"left,top,right,bottom"` (px) string — what
+   * the compose-preview *bundle* emits, alongside its {@link RawComposeTokens}.
+   * Read as a fallback when the object {@link bounds} form is absent, so the
+   * bundle path captures geometry (overlays + structural layout diff), not just
+   * the daemon path.
+   */
+  boundsInRoot?: string;
+  /** Same `"l,t,r,b"` px geometry under the hierarchy product's key. */
+  boundsInScreen?: string;
   /** Resolved text colours, ARGB `#AARRGGBB` (compose/semantics v6, #1903). */
   textColor?: { foreground?: string; background?: string };
   /** Pre-v6 flat text foreground colour, ARGB `#AARRGGBB` — read as a fallback. */
@@ -270,6 +280,15 @@ function normalizeBounds(
     };
   }
   return undefined;
+}
+
+/** Parse a compose/semantics `"left,top,right,bottom"` (px) string into bounds. */
+function parseBoundsSpec(spec: string | undefined): SemanticNode["bounds"] | undefined {
+  if (!spec) return undefined;
+  const parts = spec.split(",").map((p) => Number(p.trim()));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return undefined;
+  const [left, top, right, bottom] = parts as [number, number, number, number];
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
 /** ARGB `#AARRGGBB` → CSS `#RRGGBBAA` (alpha last); 6-digit passes through; else undefined. */
@@ -384,7 +403,9 @@ function normalizeNode(n: RawSemanticsNode): SemanticNode {
   if (n.role !== undefined) node.role = n.role;
   const label = n.label ?? n.contentDescription ?? n.text;
   if (label !== undefined) node.label = label;
-  const bounds = normalizeBounds(n.bounds);
+  // Object form first (a11y/hierarchy product), else the compose/semantics
+  // `boundsInRoot`/`boundsInScreen` string the bundle emits.
+  const bounds = normalizeBounds(n.bounds) ?? parseBoundsSpec(n.boundsInRoot ?? n.boundsInScreen);
   if (bounds) node.bounds = bounds;
   const tokens = nodeTokens(n);
   if (tokens) node.tokens = tokens;
