@@ -133,6 +133,10 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     // Layers ship hidden; the inline script toggles them on.
     expect(html).toContain(".anno g[data-layer]{display:none}");
     expect(html).toContain("data-anno-layer");
+    // The toggle bar sits *below* the variant detail (after the diff panels).
+    expect(html.indexOf('class="anno-controls"')).toBeGreaterThan(
+      html.lastIndexOf('data-role="diff"'),
+    );
   });
 
   it("adds a layout-delta layer + toggle when the verdict carries layout findings", async () => {
