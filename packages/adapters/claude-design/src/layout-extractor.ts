@@ -13,6 +13,8 @@
  * layout diff never pays for it, and if it (or Chrome) is absent the extractor
  * returns `undefined` and the layout diff simply doesn't run.
  */
+import { existsSync } from "node:fs";
+import { delimiter, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type {
@@ -45,6 +47,28 @@ const CHROME_CANDIDATES = [
   "chromium",
   "chrome",
 ].filter((c): c is string => typeof c === "string" && c.length > 0);
+
+/**
+ * Resolve a Chrome candidate to an **absolute** executable path, or `undefined`
+ * when it can't be found. puppeteer-core `existsSync`s the `executablePath` it's
+ * given and rejects anything that isn't a real path — so a bare command name
+ * like `google-chrome-stable` (resolvable only via `PATH`) must be looked up
+ * here first, or every candidate throws and the layout capture silently no-ops.
+ * An absolute candidate is used as-is when it exists; a bare name is searched
+ * across `PATH`.
+ */
+export function resolveExecutable(
+  candidate: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (isAbsolute(candidate)) return existsSync(candidate) ? candidate : undefined;
+  for (const dir of (env.PATH ?? "").split(delimiter)) {
+    if (!dir) continue;
+    const full = join(dir, candidate);
+    if (existsSync(full)) return full;
+  }
+  return undefined;
+}
 
 /**
  * The element's resolved CSS that maps to design spec — read from
@@ -91,7 +115,10 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
   }
 
   const url = pathToFileURL(req.htmlPath).href;
-  for (const executablePath of CHROME_CANDIDATES) {
+  for (const candidate of CHROME_CANDIDATES) {
+    // puppeteer-core needs a real path, not a PATH-resolvable command name.
+    const executablePath = resolveExecutable(candidate);
+    if (!executablePath) continue;
     let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
     try {
       browser = await puppeteer.launch({
