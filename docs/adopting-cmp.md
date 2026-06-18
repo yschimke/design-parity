@@ -201,8 +201,10 @@ Sequencing that keeps the first adoption tractable:
    `report.html` (not just the markdown verdict), tune `pixelThreshold` /
    `visualDimTolerancePx`, then gate.
 7. **File friction back as issues, scoped per repo.** A CMP subject surfaces gaps
-   an Android trial won't — likely CMP render-path detection (#30), the
-   `localComposeWeb` stub, and desktop-vs-design DPI. One fix = one PR; be
+   an Android trial won't — the `localComposeWeb` stub and desktop-vs-design DPI.
+   (CMP render-path detection itself is handled (#30): `cliRenderSource` prefers
+   the emulator-free Desktop/JVM render for a CMP-capable module — see
+   [candidate-sources.md](./candidate-sources.md).) One fix = one PR; be
    deliberate about whether it belongs in design-parity, compose-ai-tools, or the app.
 8. **Defer other form factors.** If there are Wear/other surfaces, they're a
    different size class and render path — out of scope until the phone screens are proven.

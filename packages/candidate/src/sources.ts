@@ -26,6 +26,11 @@ import {
   type ComponentIdResolver,
   type PreviewBundle,
 } from "./bundle.js";
+import {
+  applyRenderPath,
+  chooseRenderPath,
+  type RenderPathCapability,
+} from "./render-path.js";
 import { InvalidBundleError, NotImplementedError } from "./errors.js";
 import type { CandidateSource } from "./source.js";
 
@@ -118,25 +123,54 @@ export type CliRenderOptions = Omit<
   "componentId" | "repoRoot"
 >;
 
+/** Tuning for {@link cliRenderSource} beyond the per-component request. */
+export interface CliRenderSourceOptions {
+  /**
+   * The committed CMP-capability verdict (Principle 6). When provided, the
+   * source **prefers the Desktop/JVM render path** for a CMP-capable module —
+   * faster, emulator-free — and renders on Android **unchanged** otherwise (see
+   * {@link chooseRenderPath}). Read this from `.design-parity.json`'s committed
+   * `cmpCapable` flag at run time (no re-scan, Principle 1). When omitted, the
+   * source behaves exactly as before (the Android path, requests untouched).
+   */
+  capability?: RenderPathCapability;
+}
+
 /**
  * Adapt the existing {@link renderCandidate} (the `compose-preview` CLI) to the
  * {@link CandidateSource} seam without changing its API. `optionsFor` maps a
  * `componentId` to the render request (which module/filter/id to render);
  * return `undefined` to decline a component (e.g. it is not a Compose preview).
+ *
+ * When a {@link CliRenderSourceOptions.capability} is supplied, the source
+ * **prefers the cheaper Compose Multiplatform Desktop/JVM render** for a
+ * CMP-capable module (no Android emulator; Principle 6) and falls back to the
+ * Android path unchanged otherwise. The choice is reflected in the source
+ * {@link CandidateSource.kind} (`"cli-desktop"` / `"cli-android"`) for an
+ * auditable "which renderer ran" trail; with no capability the `kind` stays
+ * `"cli"` and requests are untouched.
  */
 export function cliRenderSource(
   optionsFor: (
     componentId: string,
     ctx: AdapterContext,
   ) => CliRenderOptions | undefined,
+  options: CliRenderSourceOptions = {},
 ): CandidateSource {
+  const choice = options.capability
+    ? chooseRenderPath(options.capability)
+    : undefined;
+  const kind = choice ? `cli-${choice.path}` : "cli";
   return {
-    kind: "cli",
+    kind,
     async getCandidate(componentId, ctx) {
       const opts = optionsFor(componentId, ctx);
       if (!opts) return undefined;
+      // Prefer the chosen render path (Desktop/JVM when CMP-capable), shaping the
+      // request for it; an Android-only module renders unchanged.
+      const shaped = choice ? applyRenderPath(choice.path, opts) : opts;
       return renderCandidate({
-        ...opts,
+        ...shaped,
         componentId,
         repoRoot: ctx.repoRoot,
       });

@@ -21,8 +21,18 @@ export {
 export type {
   BundleSourceOptions,
   CliRenderOptions,
+  CliRenderSourceOptions,
   LocalComposeWebOptions,
 } from "./sources.js";
+
+// Render-path selection: prefer the emulator-free CMP Desktop/JVM render,
+// fall back to Android — never required (Principle 6, issue #30).
+export { chooseRenderPath, applyRenderPath } from "./render-path.js";
+export type {
+  RenderPath,
+  RenderPathCapability,
+  RenderPathChoice,
+} from "./render-path.js";
 
 // Live compose-ai-tools daemon source + native data-product mappers (#43).
 export {
