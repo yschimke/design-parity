@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.14](https://github.com/yschimke/design-parity/compare/v0.1.13...v0.1.14) (2026-06-18)
+
+
+### Bug Fixes
+
+* **candidate:** read text typography on the bundle path ([617dc54](https://github.com/yschimke/design-parity/commit/617dc54f55853fee9d01fbecb1c16a8f5e89e389))
+* **candidate:** read text typography on the bundle path ([e7e9b84](https://github.com/yschimke/design-parity/commit/e7e9b847cba6791420b2cb57a1361249bbb2c087))
+* **claude-design:** measure reference text at its glyph box, not the cell ([1d62bb1](https://github.com/yschimke/design-parity/commit/1d62bb11799f6d7b2469d100817db6528787a268))
+* **claude-design:** measure reference text at its glyph box, not the cell ([250307d](https://github.com/yschimke/design-parity/commit/250307dccaace9632bfd9d6e3254e506ff1b8668))
+
 ## [0.1.13](https://github.com/yschimke/design-parity/compare/v0.1.12...v0.1.13) (2026-06-18)
 
 
