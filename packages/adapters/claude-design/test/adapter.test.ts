@@ -270,6 +270,29 @@ describe("treeFromRects", () => {
   });
 });
 
+describe("resolveExecutable", () => {
+  it("returns an absolute path as-is when it exists, else undefined", async () => {
+    const { resolveExecutable } = await import("../src/index.js");
+    // node's own binary is an absolute, existing executable.
+    expect(resolveExecutable(process.execPath)).toBe(process.execPath);
+    expect(resolveExecutable("/no/such/google-chrome")).toBeUndefined();
+  });
+
+  it("resolves a bare command name across PATH (what puppeteer needs)", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { resolveExecutable } = await import("../src/index.js");
+
+    const dir = mkdtempSync(join(tmpdir(), "chrome-path-"));
+    const bin = join(dir, "google-chrome-stable");
+    writeFileSync(bin, "#!/bin/sh\n");
+    // Found when its dir is on PATH; a bare name alone (no dir) does not exist.
+    expect(resolveExecutable("google-chrome-stable", { PATH: dir } as NodeJS.ProcessEnv)).toBe(bin);
+    expect(resolveExecutable("google-chrome-stable", { PATH: "/nonexistent" } as NodeJS.ProcessEnv)).toBeUndefined();
+  });
+});
+
 describe("tokensFromStyle", () => {
   const base = {
     paddingTop: "0px",

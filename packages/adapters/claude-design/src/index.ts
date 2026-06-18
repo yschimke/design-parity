@@ -30,6 +30,7 @@ export {
   puppeteerLayoutExtractor,
   treeFromRects,
   tokensFromStyle,
+  resolveExecutable,
   type LayoutExtractor,
   type LayoutRequest,
   type RawStyle,
