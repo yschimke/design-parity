@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.12](https://github.com/yschimke/design-parity/compare/v0.1.11...v0.1.12) (2026-06-18)
+
+
+### Features
+
+* **action:** version verdict.json with formatVersion + published schema ([9867a5b](https://github.com/yschimke/design-parity/commit/9867a5b0980f36f2aaa3990424a7f19bebdeb68e))
+* **action:** version verdict.json with formatVersion + published schema ([04654f1](https://github.com/yschimke/design-parity/commit/04654f13726c5cf5e8c6ff85298d49f3ce8bb1fb)), closes [#71](https://github.com/yschimke/design-parity/issues/71)
+* **candidate:** prefer the emulator-free CMP Desktop/JVM render path ([deb9e10](https://github.com/yschimke/design-parity/commit/deb9e10f7f939f8146fef6259751c0efadd0128a))
+* **candidate:** prefer the emulator-free CMP Desktop/JVM render path ([50253f7](https://github.com/yschimke/design-parity/commit/50253f78ca529d8c3efac6ea7dedf090c10409de))
+* **design-map:** let previewId carry themed variants like ref ([3b18202](https://github.com/yschimke/design-parity/commit/3b18202518883ea8f0b453e06d96a5a70cf84667))
+* **design-map:** let previewId carry themed variants like ref ([9c38ddc](https://github.com/yschimke/design-parity/commit/9c38ddcb132ac49b0dfbace5c01db2bfa78daa49)), closes [#111](https://github.com/yschimke/design-parity/issues/111)
+* **diff,figma:** extend design-system audit to typography + numeric tokens ([6d86823](https://github.com/yschimke/design-parity/commit/6d86823b8b6bcb0b839287a54c2f92133d068903))
+* **diff,figma:** extend design-system audit to typography + numeric tokens ([b43f295](https://github.com/yschimke/design-parity/commit/b43f295250ce0cb83f9d6d8e2a2b4a1e0a81c486)), closes [#100](https://github.com/yschimke/design-parity/issues/100)
+
+
+### Bug Fixes
+
+* **claude-design:** resolve Chrome to an absolute path before launch ([c01551a](https://github.com/yschimke/design-parity/commit/c01551adb6db74cbe566710fef64880a2c20434b))
+* **claude-design:** resolve Chrome to an absolute path before launch ([e1ba7e2](https://github.com/yschimke/design-parity/commit/e1ba7e228386a12a6076db7c542e798b917c72d3))
+
 ## [0.1.11](https://github.com/yschimke/design-parity/compare/v0.1.10...v0.1.11) (2026-06-17)
 
 
