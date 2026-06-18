@@ -42,6 +42,18 @@
         "size": { "type": "string", "minLength": 1 }
       }
     },
+    "previewIdVariant": {
+      "type": "object",
+      "description": "A candidate preview id tagged with the variant slot (state/theme/size) it fills. The candidate-side mirror of refVariant: lets one code component bind several previews when each theme/state/size is authored as its own @Preview. See design-parity issue #111.",
+      "required": ["previewId"],
+      "additionalProperties": false,
+      "properties": {
+        "previewId": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "minLength": 1 },
+        "theme": { "type": "string", "enum": ["light", "dark"] },
+        "size": { "type": "string", "minLength": 1 }
+      }
+    },
     "component": {
       "type": "object",
       "required": ["code", "source", "ref"],
@@ -68,9 +80,15 @@
           ]
         },
         "previewId": {
-          "type": "string",
-          "description": "Optional compose-ai-tools preview id (e.g. 'ee.app.FooKt.Bar') this code handle renders as. Links a preview-bundle/daemon candidate (keyed by preview id) to this reference (keyed by code handle). See design-parity issue #44.",
-          "minLength": 1
+          "description": "Optional compose-ai-tools preview id this code handle renders as. A string binds a single candidate preview (e.g. 'ee.app.FooKt.Bar'); a list of variant-tagged handles binds several themes/states/sizes authored as separate @Previews, each re-tagged onto its variant slot and merged into one candidate (issue #111). Links a preview-bundle/daemon candidate (keyed by preview id) to this reference (keyed by code handle). See design-parity issues #44 and #111.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/definitions/previewIdVariant" }
+            }
+          ]
         },
         "tokensFile": {
           "type": "string",

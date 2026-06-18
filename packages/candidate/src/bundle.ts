@@ -35,6 +35,7 @@ import {
   type CandidateRender,
   type Image,
   type SemanticTree,
+  type Theme,
 } from "@design-parity/core";
 
 import {
@@ -249,18 +250,34 @@ function toImage(
 }
 
 /**
+ * A bundle preview reconciled to its code handle, optionally carrying the
+ * variant slot a `design-map` `previewId` list tagged it with (issue #111).
+ * When `variant` is present, {@link previewToCandidate} re-tags the preview's
+ * image(s) onto that slot — the candidate-side mirror of how the reference
+ * resolver re-tags themed frames — so a per-theme `@Preview` keys against its
+ * matching reference variant.
+ */
+export interface ResolvedComponentId {
+  /** The code handle, e.g. `"ui/Foo.kt#Bar"`. */
+  code: string;
+  /** Variant slot to re-tag the preview's images onto, when tagged. */
+  variant?: { state?: string; theme?: Theme; size?: string };
+}
+
+/**
  * Reconcile a bundle preview to the code handle the orchestrator pairs on
  * (issue #44). Given the preview's identifying bits, return its code handle
- * (`path#Member`) or `undefined` to leave the candidate keyed by its raw
- * preview id. Kept structural so this package depends only on
- * `@design-parity/core` — the action wires `@design-parity/resolver` in.
+ * (`path#Member`) — as a bare string, or a {@link ResolvedComponentId} when the
+ * link also tags a variant slot (issue #111) — or `undefined` to leave the
+ * candidate keyed by its raw preview id. Kept structural so this package depends
+ * only on `@design-parity/core` — the action wires `@design-parity/resolver` in.
  */
 export type ComponentIdResolver = (preview: {
   id: string;
   sourceFile?: string;
   functionName?: string;
   className?: string;
-}) => string | undefined;
+}) => string | ResolvedComponentId | undefined;
 
 /**
  * Build the {@link CandidateRender} for one preview. A preview with no explicit
@@ -321,7 +338,7 @@ export function previewToCandidate(
     }
   }
 
-  const code = resolveComponentId?.({
+  const resolved = resolveComponentId?.({
     id: entry.id,
     ...(entry.sourceFile !== undefined ? { sourceFile: entry.sourceFile } : {}),
     ...(entry.functionName !== undefined
@@ -329,10 +346,18 @@ export function previewToCandidate(
       : {}),
     ...(entry.className !== undefined ? { className: entry.className } : {}),
   });
+  const code = typeof resolved === "string" ? resolved : resolved?.code;
+  const variant = typeof resolved === "string" ? undefined : resolved?.variant;
+
+  // A `design-map` previewId variant re-tags this preview's image(s) onto its
+  // declared slot (issue #111) — the candidate mirror of the reference
+  // resolver's `applyVariant`. The single-preview-per-theme case carries the
+  // theme tag here even when the preview params couldn't imply it.
+  const tagged = variant ? images.map((img) => applyVariantTag(img, variant)) : images;
 
   const candidate: CandidateRender = {
     componentId: code ?? entry.id,
-    images,
+    images: tagged,
     // Prefer the light capture's tree (the diff engine keys tokens off one),
     // else the first available, else an empty tree.
     semantics: lightSemantics ?? semantics ?? { root: {} },
@@ -341,6 +366,47 @@ export function previewToCandidate(
   // code-handle componentId (issue #44).
   if (resolveComponentId) candidate.previewId = entry.id;
   return candidate;
+}
+
+/** Re-tag an image with the variant slot a previewId link assigned, if any. */
+function applyVariantTag(
+  image: Image,
+  variant: { state?: string; theme?: Theme; size?: string },
+): Image {
+  const out: Image = { ...image };
+  if (variant.state !== undefined) out.state = variant.state;
+  if (variant.theme !== undefined) out.theme = variant.theme;
+  if (variant.size !== undefined) out.size = variant.size;
+  return out;
+}
+
+/**
+ * Merge two candidate renders that resolved to the **same** code handle — a
+ * component whose themes/states are authored as separate `@Preview`s and bound
+ * by a `design-map` previewId variant list (issue #111). Their images are
+ * concatenated (each already re-tagged onto its variant slot), so the report's
+ * theme matrix fills every column for one component. The merged semantics prefer
+ * a light-themed tree (the diff keys tokens off one), then `a`'s; `previewId`
+ * keeps `a`'s, which still pairs the merged render back to a source preview.
+ */
+export function mergeCandidateRenders(
+  a: CandidateRender,
+  b: CandidateRender,
+): CandidateRender {
+  const semantics =
+    a.semantics.theme === "light"
+      ? a.semantics
+      : b.semantics.theme === "light"
+        ? b.semantics
+        : a.semantics;
+  const merged: CandidateRender = {
+    componentId: a.componentId,
+    images: [...a.images, ...b.images],
+    semantics,
+  };
+  const previewId = a.previewId ?? b.previewId;
+  if (previewId !== undefined) merged.previewId = previewId;
+  return merged;
 }
 
 /** Map every preview in a bundle to a {@link CandidateRender}. */

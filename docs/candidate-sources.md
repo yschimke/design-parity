@@ -244,6 +244,36 @@ pairs with its reference, while the raw preview id is preserved on
 `CandidateRender.previewId`. A preview id that maps to neither surfaces a
 **warning** in the run report rather than silently failing to pair.
 
+#### Multiple previews → one component (#111)
+
+`previewId` mirrors `ref`: it may be a **single string** (above) or a **list of
+variant-tagged handles** when each theme/state/size is authored as its own
+`@Preview` (e.g. `FooPreview` + `FooDarkPreview`) rather than one multi-capture
+preview. Every tagged id resolves to the same code handle; the bundle re-tags
+each preview's image(s) onto the declared slot and **merges** the renders into
+one `CandidateRender`, so the report's theme matrix fills both columns for one
+component instead of producing a single-column report per theme:
+
+```json
+{
+  "code": "ui/Device.kt#DeviceBody",
+  "source": "claude-design",
+  "ref": [
+    { "ref": "design/Device.light.html", "theme": "light" },
+    { "ref": "design/Device.dark.html",  "theme": "dark"  }
+  ],
+  "previewId": [
+    { "previewId": "app.DeviceKt.DeviceBodyPreview",     "theme": "light" },
+    { "previewId": "app.DeviceKt.DeviceBodyDarkPreview", "theme": "dark"  }
+  ]
+}
+```
+
+The variant slot is re-applied to the resolved image(s) the same way the
+reference resolver re-tags themed frames, so a per-theme preview keys correctly
+even when its `@Preview` params couldn't imply the theme. The single-string form
+stays valid for the common one-preview case.
+
 ### Deriving an image's theme (#48)
 
 Pairing keys on `state/theme/size`, so a candidate image needs a `theme` to line

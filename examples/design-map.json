@@ -24,6 +24,18 @@
         { "ref": "figma:AbCdEf123456/10:8", "state": "error" },
         { "ref": "figma:AbCdEf123456/10:9", "theme": "dark" }
       ]
+    },
+    {
+      "code": "ui/Device.kt#DeviceBody",
+      "source": "claude-design",
+      "ref": [
+        { "ref": "design/Device.light.html", "theme": "light" },
+        { "ref": "design/Device.dark.html", "theme": "dark" }
+      ],
+      "previewId": [
+        { "previewId": "app.DeviceKt.DeviceBodyPreview", "theme": "light" },
+        { "previewId": "app.DeviceKt.DeviceBodyDarkPreview", "theme": "dark" }
+      ]
     }
   ],
   "tokens": {

@@ -62,6 +62,12 @@ precedence:
 Unmatched previews are reported (not silently dropped) so a missing link is
 visible.
 
+`previewId` mirrors `ref`: it accepts a single string **or** a list of
+variant-tagged handles (`{ previewId, state?, theme?, size? }`), so a component
+whose themes are authored as separate `@Preview`s binds them all to one code
+handle. Each tagged preview's render is re-tagged onto its slot and merged, so
+the report's theme matrix fills every column for one component (issue #111).
+
 ### 2.2 Code handle ↔ design ref (`packages/resolver/src/resolver.ts`)
 
 `resolveComponent` picks `(source, ref)` in a fixed precedence; first hit wins:

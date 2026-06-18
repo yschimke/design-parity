@@ -80,6 +80,7 @@ export {
   parsePreviewBundle,
   bundleToCandidates,
   previewToCandidate,
+  mergeCandidateRenders,
   loadPreviewBundle,
 } from "./bundle.js";
 export type {
@@ -89,6 +90,7 @@ export type {
   PreviewEntry,
   PreviewCapture,
   ComponentIdResolver,
+  ResolvedComponentId,
 } from "./bundle.js";
 
 export { renderCandidate, toCandidateRender } from "./candidate.js";

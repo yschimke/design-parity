@@ -65,6 +65,30 @@ describe("buildCandidateProvider", () => {
     expect(candidate?.semantics.root.role).toBe("button");
   });
 
+  it("accepts a previewId variant list as the candidate link (#111)", async () => {
+    // The list form resolves like the string form for a single (untagged) entry:
+    // the preview keys on the code handle and the raw id is preserved.
+    const designMap: DesignMap = {
+      components: [
+        {
+          code: "ui/Button.kt#Primary",
+          source: "bundle",
+          ref: "design/button",
+          previewId: [{ previewId: "ui.Button.PrimaryButton" }],
+        },
+      ],
+    };
+    const { provider, warnings } = await buildCandidateProvider({
+      repoRoot,
+      bundlePaths: ["packages/candidate/test/fixtures/preview-bundle.png"],
+      designMap,
+    });
+    expect(warnings).toEqual([]);
+    const candidate = await provider!("ui/Button.kt#Primary", ctx);
+    expect(candidate?.componentId).toBe("ui/Button.kt#Primary");
+    expect(candidate?.previewId).toBe("ui.Button.PrimaryButton");
+  });
+
   it("returns no provider when no candidate input is configured", async () => {
     const { provider, warnings } = await buildCandidateProvider({ repoRoot });
     expect(provider).toBeUndefined();

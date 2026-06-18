@@ -208,6 +208,25 @@ export interface RefVariant {
   size?: string;
 }
 
+/**
+ * One candidate preview id tagged with the variant slot it fills — the
+ * candidate-side mirror of {@link RefVariant} (design-parity issue #111). Lets a
+ * single code component bind several candidate previews when each theme/state/
+ * size is authored as its own `@Preview` (e.g. `FooPreview` + `FooDarkPreview`),
+ * rather than one multi-capture preview. The tags re-tag the resolved preview's
+ * image(s) onto this slot, keying them against the matching reference variant in
+ * `pairImages` so the report's theme matrix fills every column for one component.
+ */
+export interface PreviewIdVariant {
+  /** compose-ai-tools preview id, e.g. `"ee.app.FooKt.FooDarkPreview"`. */
+  previewId: string;
+  /** Variant state this preview represents, e.g. `"default"`, `"error"`. */
+  state?: string;
+  theme?: Theme;
+  /** Breakpoint label, e.g. `"compact"`. */
+  size?: string;
+}
+
 /** Resolved link between a code component and its design reference. */
 export interface Correspondence {
   /** Code handle, e.g. `"ui/Button.kt#PrimaryButton"`. */

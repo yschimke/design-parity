@@ -20,6 +20,7 @@ export type {
   ReferenceAdapter,
   Correspondence,
   RefVariant,
+  PreviewIdVariant,
   VerdictStatus,
   FindingKind,
   Severity,
@@ -48,6 +49,7 @@ export {
   loadDesignMap,
   findByCode,
   entryRefs,
+  entryPreviewIds,
 } from "./design-map.js";
 
 export type { DtcgReadResult } from "./dtcg.js";

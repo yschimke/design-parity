@@ -97,4 +97,61 @@ describe("resolvePreviewIds", () => {
     expect(matches.get("p.Dup")?.code).toBe("a/B.kt#One");
     expect(warnings.some((w) => w.includes("mapped to both"))).toBe(true);
   });
+
+  it("binds a previewId variant list to one code handle, carrying each slot (#111)", () => {
+    const themed: DesignMap = {
+      components: [
+        {
+          code: "ui/Device.kt#DeviceBody",
+          source: "claude-design",
+          ref: "design/Device.html",
+          previewId: [
+            { previewId: "app.DeviceKt.DeviceBodyPreview", theme: "light" },
+            { previewId: "app.DeviceKt.DeviceBodyDarkPreview", theme: "dark" },
+          ],
+        },
+      ],
+    };
+    const { matches, unmatched, warnings } = resolvePreviewIds(
+      [
+        { id: "app.DeviceKt.DeviceBodyPreview" },
+        { id: "app.DeviceKt.DeviceBodyDarkPreview" },
+      ],
+      themed,
+    );
+    // Both previews resolve to the one code handle, each tagged with its theme.
+    expect(matches.get("app.DeviceKt.DeviceBodyPreview")).toEqual({
+      code: "ui/Device.kt#DeviceBody",
+      linkMethod: "manifest",
+      confidence: "high",
+      variant: { theme: "light" },
+    });
+    expect(matches.get("app.DeviceKt.DeviceBodyDarkPreview")).toEqual({
+      code: "ui/Device.kt#DeviceBody",
+      linkMethod: "manifest",
+      confidence: "high",
+      variant: { theme: "dark" },
+    });
+    expect(unmatched).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it("omits the variant slot when a variant carries no tags (#111)", () => {
+    const untagged: DesignMap = {
+      components: [
+        {
+          code: "ui/Foo.kt#Bar",
+          source: "bundle",
+          ref: "r",
+          previewId: [{ previewId: "app.FooKt.Bar" }],
+        },
+      ],
+    };
+    const { matches } = resolvePreviewIds([{ id: "app.FooKt.Bar" }], untagged);
+    expect(matches.get("app.FooKt.Bar")).toEqual({
+      code: "ui/Foo.kt#Bar",
+      linkMethod: "manifest",
+      confidence: "high",
+    });
+  });
 });
