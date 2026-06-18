@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 import {
   baselineSummary,
   renderBaselineIndex,
   writeBaselineArtifacts,
+  validateVerdict,
+  VERDICT_FORMAT_VERSION,
   type ParityReport,
 } from "../src/index.js";
 
@@ -55,6 +58,8 @@ describe("baselineSummary", () => {
       now: new Date("2026-06-13T00:00:00Z"),
     });
 
+    expect(s.formatVersion).toBe(VERDICT_FORMAT_VERSION);
+    expect(s.$schema).toContain("verdict.schema.json");
     expect(s.status).toBe("warn");
     expect(s.direction).toBe("code-led");
     expect(s.commit).toBe("abcdef1234567890");
@@ -92,6 +97,7 @@ describe("renderBaselineIndex", () => {
 
   it("escapes component names", () => {
     const html = renderBaselineIndex({
+      formatVersion: VERDICT_FORMAT_VERSION,
       generatedAt: "now",
       direction: "code-led",
       status: "pass",
@@ -129,5 +135,42 @@ describe("writeBaselineArtifacts", () => {
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("validateVerdict", () => {
+  it("accepts a freshly assembled summary", () => {
+    const summary = baselineSummary(report("/tmp/out"), "/tmp/out", {
+      commit: "abcdef1234567890",
+      now: new Date("2026-06-14T00:00:00Z"),
+    });
+    expect(validateVerdict(summary)).toEqual({ valid: true, errors: [] });
+  });
+
+  it("accepts the committed verdict.json fixture", async () => {
+    const fixture = fileURLToPath(
+      new URL("./fixtures/verdict.json", import.meta.url),
+    );
+    const parsed = JSON.parse(await readFile(fixture, "utf8"));
+    const result = validateVerdict(parsed);
+    expect(result).toEqual({ valid: true, errors: [] });
+    expect(parsed.formatVersion).toBe(VERDICT_FORMAT_VERSION);
+  });
+
+  it("rejects a document missing formatVersion", () => {
+    const summary = baselineSummary(report("/tmp/out"), "/tmp/out") as Record<
+      string,
+      unknown
+    >;
+    delete summary.formatVersion;
+    const result = validateVerdict(summary);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toContain("formatVersion");
+  });
+
+  it("rejects an unknown verdict status", () => {
+    const summary = baselineSummary(report("/tmp/out"), "/tmp/out");
+    summary.status = "bogus" as never;
+    expect(validateVerdict(summary).valid).toBe(false);
   });
 });

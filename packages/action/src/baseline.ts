@@ -16,11 +16,39 @@
  * {@link writeBaselineArtifacts} touches disk.
  */
 import { mkdir, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
+import AjvModule, { type ValidateFunction } from "ajv";
 
 import type { VerdictStatus } from "@design-parity/core";
 
 import type { ParityReport, ComponentResult } from "./orchestrate.js";
+import schema from "../schema/verdict.schema.json" with { type: "json" };
+
+// ajv ships CJS; under NodeNext the constructable class can land on `.default`.
+type AjvCtor = new (opts?: Record<string, unknown>) => {
+  compile: <T>(schema: unknown) => ValidateFunction<T>;
+  addKeyword: (def: Record<string, unknown>) => unknown;
+};
+const Ajv = ((AjvModule as unknown as { default?: AjvCtor }).default ??
+  (AjvModule as unknown as AjvCtor)) as AjvCtor;
+
+/**
+ * The `verdict.json` layout version. Bumped only on an **incompatible** change
+ * to {@link BaselineSummary} (a renamed/removed field, a changed type, a
+ * tightened required set); additive optional fields do not bump it, so a reader
+ * must ignore unknown fields. A PR run loads a baseline written by `main` and
+ * checks this against the version it understands before diffing against it —
+ * without it the on-branch history can't evolve safely as it accumulates.
+ *
+ * Mirrors the `formatVersion` the compose-ai-tools reporting-branch
+ * `manifest.json` carries (compose-ai-tools#1866); see `docs/report-format.md`.
+ */
+export const VERDICT_FORMAT_VERSION = 1;
+
+/** Public URL of the published verdict schema, emitted as `$schema`. */
+const VERDICT_SCHEMA_REF =
+  "https://github.com/yschimke/design-parity/schema/verdict.schema.json";
 
 const STATUS_ICON: Record<VerdictStatus, string> = {
   pass: "✅",
@@ -41,6 +69,14 @@ export interface BaselineComponent {
 }
 
 export interface BaselineSummary {
+  /** URL of the published schema this document conforms to. */
+  $schema?: string;
+  /**
+   * The {@link VERDICT_FORMAT_VERSION} this document was written at. Lets a
+   * reader (a PR run loading the `main` baseline to diff against) detect an
+   * incompatible on-branch format before consuming it.
+   */
+  formatVersion: number;
   /** ISO timestamp the baseline was assembled. */
   generatedAt: string;
   /** The commit the baseline was rendered from, when known. */
@@ -83,6 +119,8 @@ export function baselineSummary(
     };
   });
   return {
+    $schema: VERDICT_SCHEMA_REF,
+    formatVersion: VERDICT_FORMAT_VERSION,
     generatedAt: (meta.now ?? new Date()).toISOString(),
     ...(meta.commit ? { commit: meta.commit } : {}),
     direction: report.direction,
@@ -91,6 +129,39 @@ export function baselineSummary(
     components,
     warnings: report.warnings,
   };
+}
+
+/** The JSON Schema (draft-07) for `verdict.json`, as a plain object. */
+export const verdictSchema = schema;
+
+/** Absolute path to the bundled schema file (useful for `$schema` refs). */
+export const verdictSchemaPath = fileURLToPath(
+  new URL("../schema/verdict.schema.json", import.meta.url),
+);
+
+// `validateFormats: false` keeps the published `format: "date-time"` annotation
+// in the schema for tools that honour it, without pulling in `ajv-formats`.
+const ajv = new Ajv({ allErrors: true, validateFormats: false });
+// `x-design-parity` is a documentation annotation (kind/formatVersion/source
+// metadata), not a constraint; register it so ajv's strict mode keeps it.
+ajv.addKeyword({ keyword: "x-design-parity", metaSchema: { type: "object" } });
+const validateFn: ValidateFunction<BaselineSummary> =
+  ajv.compile<BaselineSummary>(schema);
+
+export interface VerdictValidationResult {
+  valid: boolean;
+  /** Human-readable errors, empty when valid. */
+  errors: string[];
+}
+
+/** Validate an already-parsed value against the published verdict schema. */
+export function validateVerdict(value: unknown): VerdictValidationResult {
+  const valid = validateFn(value);
+  if (valid) return { valid: true, errors: [] };
+  const errors = (validateFn.errors ?? []).map(
+    (e) => `${e.instancePath || "/"} ${e.message ?? "is invalid"}`,
+  );
+  return { valid: false, errors };
 }
 
 function escapeHtml(text: string): string {
