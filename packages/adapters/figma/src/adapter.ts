@@ -83,7 +83,8 @@ export class FigmaAdapter implements ReferenceAdapter {
 
     // Structure (tokens) comes from the primary node; fail clearly if absent.
     const nodes = await client.getFileNodes(figmaRef.fileKey, [figmaRef.nodeId]);
-    const node = nodes.nodes[figmaRef.nodeId]?.document;
+    const entry = nodes.nodes[figmaRef.nodeId];
+    const node = entry?.document;
     if (!node) {
       throw new FigmaNodeNotFoundError(figmaRef.fileKey, figmaRef.nodeId);
     }
@@ -120,6 +121,7 @@ export class FigmaAdapter implements ReferenceAdapter {
       ref: formatFigmaRef(figmaRef),
       node,
       variables,
+      ...(entry.styles ? { styles: entry.styles } : {}),
       referenceImages,
     });
   }

@@ -36,6 +36,15 @@
     "colors": {
       "container.light": "#645AFF",
       "container.dark": "#8A82FF"
+    },
+    "spacing": {
+      "space/large": 24
+    },
+    "radius": {
+      "radius/medium": 8
+    },
+    "typography": {
+      "body/large": { "fontFamily": "Roboto", "fontSize": 14, "fontWeight": 500, "lineHeight": 20 }
     }
   }
 }

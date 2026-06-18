@@ -40,9 +40,15 @@ const node = {
       type: "TEXT",
       characters: "Continue",
       style: { fontFamily: "Roboto", fontSize: 14, fontWeight: 500, lineHeightPx: 20 },
+      styles: { text: "S:body-large" },
       fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
     },
   ],
+};
+
+// File-level published-style metadata returned alongside the node.
+const styles = {
+  "S:body-large": { key: "abc", name: "Body/Large", styleType: "TEXT" },
 };
 
 // Variables endpoint — a Theme collection with Light/Dark modes.
@@ -59,6 +65,13 @@ const variables = {
         ],
         variableIds: ["V1"],
       },
+      C2: {
+        id: "C2",
+        name: "Scale",
+        defaultModeId: "m-base",
+        modes: [{ modeId: "m-base", name: "Mode 1" }],
+        variableIds: ["V2", "V3", "V4"],
+      },
     },
     variables: {
       V1: {
@@ -69,6 +82,25 @@ const variables = {
           "m-light": { r: 100 / 255, g: 90 / 255, b: 1, a: 1 },
           "m-dark": { r: 138 / 255, g: 130 / 255, b: 1, a: 1 },
         },
+      },
+      V2: {
+        id: "V2",
+        name: "radius/medium",
+        resolvedType: "FLOAT",
+        valuesByMode: { "m-base": 8 },
+      },
+      V3: {
+        id: "V3",
+        name: "space/large",
+        resolvedType: "FLOAT",
+        valuesByMode: { "m-base": 24 },
+      },
+      // Unhinted FLOAT — left out of the scale rather than mis-classified.
+      V4: {
+        id: "V4",
+        name: "elevation/raised",
+        resolvedType: "FLOAT",
+        valuesByMode: { "m-base": 3 },
       },
     },
   },
@@ -97,7 +129,7 @@ beforeAll(async () => {
 /** Happy-path fetch: structure, variables, and a light/dark image each. */
 const okFetch: FetchLike = async (url) => {
   if (url.includes("/variables/local")) return jsonRes(variables);
-  if (url.includes("/nodes?")) return jsonRes({ nodes: { "1:42": { document: node } } });
+  if (url.includes("/nodes?")) return jsonRes({ nodes: { "1:42": { document: node, styles } } });
   if (url.includes("/v1/images/") && url.includes("1%3A42"))
     return jsonRes({ err: null, images: { "1:42": "https://img.test/light.png" } });
   if (url.includes("/v1/images/") && url.includes("1%3A43"))
@@ -210,7 +242,7 @@ describe("FigmaAdapter.resolve (errors)", () => {
   it("treats a null rendered image as a missing node", async () => {
     const f: FetchLike = async (url) => {
       if (url.includes("/variables/local")) return jsonRes(variables);
-      if (url.includes("/nodes?")) return jsonRes({ nodes: { "1:42": { document: node } } });
+      if (url.includes("/nodes?")) return jsonRes({ nodes: { "1:42": { document: node, styles } } });
       if (url.includes("/v1/images/")) return jsonRes({ err: null, images: { "1:42": null } });
       return new Response("{}");
     };

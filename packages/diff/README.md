@@ -41,11 +41,15 @@ are ordered a11y → token → semantic → visual; `verdict.visualScores` maps 
   `design-map.json` `tokens` alias (code-name → design-name) canonicalises the
   reference to code names first, so e.g. design `color/on-surface` lines up with
   code `onSurface`.
-- **Design system** — a whole-palette audit: the reference's resolved token
-  table (`DesignReference.themeTokens`, e.g. the Figma Variables) vs the code's
-  resolved theme (`SemanticTree.themeTokens`), keyed through the same alias.
-  Findings carry `detail.scope: "design-system"` so the orchestrator reports
-  each drift once per run, not once per screen.
+- **Design system** — a whole-table audit: the reference's resolved token table
+  (`DesignReference.themeTokens`, e.g. the Figma Variables + type ramp) vs the
+  code's resolved theme (`SemanticTree.themeTokens`), keyed through the same
+  alias. Covers colours (mode-aware), the type ramp (exact, spec-driven), and the
+  numeric `radius`/`spacing` scale (within the committed tolerance). Typography
+  and shape/spacing names resolve through the alias first, then the Material role
+  they denote (`Body/Large` → `bodyLarge`, `radius/medium` → `medium`). Findings
+  carry `detail.scope: "design-system"` so the orchestrator reports each drift
+  once per run, not once per screen.
 - **Semantics** — theme-coverage and structural (role/label) deltas.
 - **Visual** — per-pixel diff via `pixelmatch`, plus the triptych.
 

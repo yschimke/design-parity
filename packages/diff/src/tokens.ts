@@ -112,7 +112,7 @@ function typographyEqual(a: TypographyToken, b: TypographyToken): boolean {
  * couldn't resolve (e.g. `fontFamily` fell back) does mismatch — which is the
  * whole point of comparing the resolved face.
  */
-function typographySatisfies(spec: TypographyToken, got: TypographyToken): boolean {
+export function typographySatisfies(spec: TypographyToken, got: TypographyToken): boolean {
   const fieldOk = <K extends keyof TypographyToken>(key: K): boolean =>
     spec[key] === undefined || spec[key] === got[key];
   return (
