@@ -105,8 +105,12 @@ interface RawRect {
 
 /**
  * Default extractor: render the export headlessly via `puppeteer-core` and read
- * the bounds of every labelled leaf element (an element with text and no
- * element children) into a flat tree. Returns `undefined` if `puppeteer-core`
+ * the bounds of every text leaf (an element with text and no element children)
+ * plus every "accessible object" — a control/graphic the a11y tree exposes even
+ * without text, i.e. an element carrying a `role` / `aria-label` or a native
+ * interactive/graphic tag (`button`, `a[href]`, `img`) — into a flat tree. That
+ * second class is what boxes the icon buttons / switches the candidate already
+ * reports as Compose `Role` nodes. Returns `undefined` if `puppeteer-core`
  * isn't installed or no Chrome launches.
  */
 export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
@@ -160,20 +164,42 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
         };
         const out: RawRect[] = [];
         for (const el of Array.from(doc.querySelectorAll("body *")) as Array<{
+          tagName?: string;
           children: { length: number };
           textContent: string | null;
           getAttribute(n: string): string | null;
           getBoundingClientRect(): { x: number; y: number; width: number; height: number };
         }>) {
-          if (el.children.length === 0 && (el.textContent ?? "").trim()) {
-            // Measure the rendered *text* (glyph) box, not the element's
-            // container box. A text leaf in a wide flex/grid cell has an element
-            // box the width of the cell, while the candidate (a Compose `Text`)
-            // reports the box of the text it drew — so the element box never
-            // matches. A Range over the text content gives the glyph extent,
-            // which lines up with the candidate on both position and size. Fall
-            // back to the element box when there's no measurable text range.
-            let r = el.getBoundingClientRect();
+          const ariaRole = el.getAttribute("role");
+          const ariaLabel = el.getAttribute("aria-label");
+          const tag = (el.tagName ?? "").toLowerCase();
+          // Native elements the a11y tree exposes with an implicit role.
+          const nativeRole =
+            tag === "button"
+              ? "button"
+              : tag === "a" && el.getAttribute("href")
+                ? "link"
+                : tag === "img"
+                  ? "img"
+                  : null;
+          const isTextLeaf =
+            el.children.length === 0 && (el.textContent ?? "").trim().length > 0;
+          // An "accessible object" is a control/graphic the a11y tree surfaces
+          // even with no text child — an icon button (role / aria-label) or a
+          // native interactive/graphic element. The candidate already reports
+          // these as Compose `Role` nodes, so capturing them lines the two sides
+          // up and lets the label / touch-target checks see unlabelled controls.
+          const isObject = Boolean(ariaRole || ariaLabel || nativeRole);
+          if (!isTextLeaf && !isObject) continue;
+
+          // Text leaves measure the rendered *text* (glyph) box, not the
+          // container box: a text leaf in a wide flex/grid cell has an element
+          // box the width of the cell, while the candidate (a Compose `Text`)
+          // reports the box of the text it drew. A Range over the contents gives
+          // the glyph extent, which lines up on both position and size. Objects
+          // keep their element border box — the control's own bounds.
+          let r = el.getBoundingClientRect();
+          if (isTextLeaf) {
             try {
               const range = doc.createRange();
               range.selectNodeContents(el);
@@ -182,33 +208,33 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
             } catch {
               // keep the element box
             }
-            if (r.width > 0 && r.height > 0) {
-              // Resolved style for the spec overlays (padding/radius/type/colour).
-              const cs = win.getComputedStyle?.(el);
-              const style = cs
-                ? {
-                    paddingTop: cs["paddingTop"] ?? "",
-                    paddingRight: cs["paddingRight"] ?? "",
-                    paddingBottom: cs["paddingBottom"] ?? "",
-                    paddingLeft: cs["paddingLeft"] ?? "",
-                    borderRadius: cs["borderTopLeftRadius"] ?? "",
-                    fontFamily: cs["fontFamily"] ?? "",
-                    fontSize: cs["fontSize"] ?? "",
-                    fontWeight: cs["fontWeight"] ?? "",
-                    lineHeight: cs["lineHeight"] ?? "",
-                    color: cs["color"] ?? "",
-                  }
-                : undefined;
-              out.push({
-                label: (el.textContent ?? "").trim(),
-                role: el.getAttribute("role"),
-                x: r.x,
-                y: r.y,
-                w: r.width,
-                h: r.height,
-                ...(style ? { style } : {}),
-              });
-            }
+          }
+          if (r.width > 0 && r.height > 0) {
+            // Resolved style for the spec overlays (padding/radius/type/colour).
+            const cs = win.getComputedStyle?.(el);
+            const style = cs
+              ? {
+                  paddingTop: cs["paddingTop"] ?? "",
+                  paddingRight: cs["paddingRight"] ?? "",
+                  paddingBottom: cs["paddingBottom"] ?? "",
+                  paddingLeft: cs["paddingLeft"] ?? "",
+                  borderRadius: cs["borderTopLeftRadius"] ?? "",
+                  fontFamily: cs["fontFamily"] ?? "",
+                  fontSize: cs["fontSize"] ?? "",
+                  fontWeight: cs["fontWeight"] ?? "",
+                  lineHeight: cs["lineHeight"] ?? "",
+                  color: cs["color"] ?? "",
+                }
+              : undefined;
+            out.push({
+              label: (isTextLeaf ? (el.textContent ?? "") : (ariaLabel ?? "")).trim(),
+              role: ariaRole ?? (isTextLeaf ? null : nativeRole),
+              x: r.x,
+              y: r.y,
+              w: r.width,
+              h: r.height,
+              ...(style ? { style } : {}),
+            });
           }
         }
         return out;
