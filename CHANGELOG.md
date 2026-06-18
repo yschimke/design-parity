@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.13](https://github.com/yschimke/design-parity/compare/v0.1.12...v0.1.13) (2026-06-18)
+
+
+### Features
+
+* **report:** move annotation toggles below the variant detail ([2b06051](https://github.com/yschimke/design-parity/commit/2b06051e3814e04cbd96b4226ad4d6ae59505bb4))
+* **report:** move annotation toggles below the variant detail ([deb3036](https://github.com/yschimke/design-parity/commit/deb3036be69c1ccc9e73cef0bd45e30563a343fb))
+
+
+### Bug Fixes
+
+* **candidate:** parse compose/semantics boundsInRoot on the bundle path ([69821fd](https://github.com/yschimke/design-parity/commit/69821fd9b1d6a1213c99b4b2bf3e2f1c405a5589))
+* **candidate:** parse compose/semantics boundsInRoot on the bundle path ([15629cf](https://github.com/yschimke/design-parity/commit/15629cf62e732703509eeacfb3569ec223f7ca2f))
+
 ## [0.1.12](https://github.com/yschimke/design-parity/compare/v0.1.11...v0.1.12) (2026-06-18)
 
 
