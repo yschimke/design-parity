@@ -72,6 +72,27 @@ Adapts the existing `renderCandidate` (which shells out to the published
 here. `optionsFor(componentId)` maps a component to its render request
 (module/filter/id); return `undefined` to decline a component.
 
+**Prefer the CMP render path (Principle 6, #30).** Pass the committed
+CMP-capability verdict and the source picks the **cheaper** renderer
+automatically:
+
+```ts
+cliRenderSource(optionsFor, { capability: { cmpCapable } });
+```
+
+- `cmpCapable: true` → prefer the **Desktop/JVM** render (no Android emulator):
+  the Android-only build `variant` is dropped from the request and the source
+  `kind` becomes `"cli-desktop"`.
+- `cmpCapable: false` → render on **Android** unchanged (`kind` `"cli-android"`).
+- capability omitted → behaves exactly as before (`kind` `"cli"`, request
+  untouched).
+
+The verdict is the one `@design-parity/baseline` detects at bootstrap and writes
+into `.design-parity.json` (`cmpCapable`); the candidate source reads it back at
+run time rather than re-scanning (Principle 1). The preference is **advisory and
+never a gate** — a non-CMP project just renders on Android. Selection is
+`chooseRenderPath` / `applyRenderPath` in `@design-parity/candidate`.
+
 **When to use:** no pre-generated bundles, but the JVM/Android toolchain (or the
 CLI) is available in the step to render on demand.
 
