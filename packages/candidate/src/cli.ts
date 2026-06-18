@@ -19,6 +19,7 @@ import type {
   SemanticNode,
   SemanticTree,
   Theme,
+  TypographyToken,
 } from "@design-parity/core";
 
 import { execFileRunner, isNotFound, type CommandRunner } from "./exec.js";
@@ -245,6 +246,21 @@ export interface RawSemanticsNode {
   /** Pre-v6 flat text background colour, ARGB `#AARRGGBB` — read as a fallback. */
   layoutBackgroundColor?: string;
   /**
+   * Resolved text style (compose/semantics v6, #1934/#1903) — face/weight/style
+   * and metrics of the drawn text. Maps to a {@link TypographyToken} so the
+   * report's typography overlay and the token diff see the candidate's type.
+   */
+  typography?: {
+    fontFamily?: string;
+    fontWeight?: number | string;
+    fontStyle?: string;
+    fontSize?: string;
+    lineHeight?: string;
+    letterSpacing?: string;
+  };
+  /** Pre-v6 flat text size, e.g. `"14.0sp"` — read as a fallback for the size. */
+  layoutFontSize?: string;
+  /**
    * Either the core {@link DesignTokens} bag (the a11y/hierarchy product) or the
    * compose/semantics producer's {@link RawComposeTokens} (schema v3). Detected
    * by key shape and normalized to {@link DesignTokens} in {@link normalizeNode}.
@@ -394,6 +410,21 @@ function nodeTokens(n: RawSemanticsNode): DesignTokens | undefined {
     // the text background read from `layout*Color`.
     if (design.colors) Object.assign(colors, design.colors);
   }
+  // Text typography from the v6 `typography` object (face/weight/metrics), or the
+  // flat `layoutFontSize` for older renders — what the bundle currently emits.
+  // Mirrors the daemon path so the report's typography overlay and the token
+  // diff see the candidate's type, not just the daemon's.
+  const text: TypographyToken = {};
+  const fontSize = parseDp(n.typography?.fontSize ?? n.layoutFontSize); // "14.0sp" → 14
+  if (fontSize !== undefined) text.fontSize = fontSize;
+  if (n.typography?.fontFamily) text.fontFamily = n.typography.fontFamily;
+  if (n.typography?.fontWeight !== undefined) text.fontWeight = n.typography.fontWeight;
+  if (n.typography?.fontStyle) text.fontStyle = n.typography.fontStyle;
+  const lineHeight = parseDp(n.typography?.lineHeight);
+  if (lineHeight !== undefined) text.lineHeight = lineHeight;
+  const letterSpacing = parseDp(n.typography?.letterSpacing);
+  if (letterSpacing !== undefined) text.letterSpacing = letterSpacing;
+  if (Object.keys(text).length) out.typography = { ...out.typography, text };
   if (Object.keys(colors).length) out.colors = colors;
   return Object.keys(out).length ? out : undefined;
 }
