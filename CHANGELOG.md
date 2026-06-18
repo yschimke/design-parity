@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.15](https://github.com/yschimke/design-parity/compare/v0.1.14...v0.1.15) (2026-06-18)
+
+
+### Bug Fixes
+
+* **candidate:** normalize resolved font-family to its display name ([7debb38](https://github.com/yschimke/design-parity/commit/7debb385ef4e868dc9cb8ebd7ca169c352f95439))
+* **candidate:** normalize resolved font-family to its display name ([0158f9f](https://github.com/yschimke/design-parity/commit/0158f9ff8ccb86a2416692e838c0f300ed729fa4))
+
 ## [0.1.14](https://github.com/yschimke/design-parity/compare/v0.1.13...v0.1.14) (2026-06-18)
 
 
