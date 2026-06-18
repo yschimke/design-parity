@@ -257,6 +257,29 @@ describe("normalizeSemantics", () => {
     expect(tree?.root.bounds).toEqual({ x: 1, y: 2, width: 3, height: 4 });
   });
 
+  it("reads the flat layoutFontSize into typography (the bundle's pre-v6 size)", () => {
+    const tree = normalizeSemantics({
+      root: { role: "text", label: "Hi", layoutFontSize: "14.0sp" },
+    });
+    expect(tree?.root.tokens?.typography).toEqual({ text: { fontSize: 14 } });
+  });
+
+  it("reads the v6 typography object (face/weight/size/line-height)", () => {
+    const tree = normalizeSemantics({
+      root: {
+        role: "text",
+        label: "Hi",
+        typography: { fontFamily: "Roboto", fontWeight: 500, fontSize: "16.0sp", lineHeight: "20.0sp" },
+      },
+    });
+    expect(tree?.root.tokens?.typography?.["text"]).toMatchObject({
+      fontFamily: "Roboto",
+      fontWeight: 500,
+      fontSize: 16,
+      lineHeight: 20,
+    });
+  });
+
   it("reads resolved fg/bg colours from layout*Color into role keys", () => {
     const tree = normalizeSemantics({
       root: {
