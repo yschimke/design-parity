@@ -34,12 +34,24 @@ export interface FigmaNodeDoc {
   paddingBottom?: number;
   fills?: FigmaPaint[];
   style?: FigmaTypeStyle;
+  /** Per-node references to shared styles, keyed by style type (`text`, …). */
+  styles?: Record<string, string>;
   characters?: string;
   children?: FigmaNodeDoc[];
 }
 
+/** A published style's metadata (the file-level `styles` map). */
+export interface FigmaStyleMeta {
+  key: string;
+  name: string;
+  styleType: "FILL" | "TEXT" | "EFFECT" | "GRID";
+}
+
 export interface FileNodesResponse {
-  nodes: Record<string, { document: FigmaNodeDoc } | null>;
+  nodes: Record<
+    string,
+    { document: FigmaNodeDoc; styles?: Record<string, FigmaStyleMeta> } | null
+  >;
 }
 
 export interface ImagesResponse {

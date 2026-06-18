@@ -173,7 +173,12 @@ export async function diff(
   const designSystem = diffDesignSystem(
     reference.themeTokens,
     candidate.semantics.themeTokens,
-    { ...(candidate.semantics.theme ? { theme: candidate.semantics.theme } : {}), ...(options.tokenAlias ? { alias: options.tokenAlias } : {}) },
+    {
+      ...(candidate.semantics.theme ? { theme: candidate.semantics.theme } : {}),
+      ...(options.tokenAlias ? { alias: options.tokenAlias } : {}),
+      spacingTolerance: config.spacingTolerance,
+      radiusTolerance: config.radiusTolerance,
+    },
   );
 
   // 3. semantics (+ reference variants with no candidate counterpart).

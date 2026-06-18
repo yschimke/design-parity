@@ -63,4 +63,71 @@ describe("diffDesignSystem", () => {
     const t: DesignTokens = { colors: { onSurface: "#161D1B" } };
     expect(diffDesignSystem(t, t)).toEqual([]);
   });
+
+  it("flags radius drift, mapping a shape-scale name to its Material role within tolerance", () => {
+    const design: DesignTokens = { radius: { "radius/medium": 12 } };
+    const code: DesignTokens = { radius: { medium: 8 } };
+    const findings = diffDesignSystem(design, code, { radiusTolerance: 1 });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "warn",
+      detail: {
+        scope: "design-system",
+        token: "radius.medium",
+        expected: 12,
+        actual: 8,
+        delta: 4,
+      },
+    });
+  });
+
+  it("keeps a radius within tolerance quiet", () => {
+    const design: DesignTokens = { radius: { "radius/medium": 8.4 } };
+    const code: DesignTokens = { radius: { medium: 8 } };
+    expect(diffDesignSystem(design, code, { radiusTolerance: 1 })).toEqual([]);
+  });
+
+  it("skips a design token the code theme doesn't carry (spacing, v1)", () => {
+    const design: DesignTokens = { spacing: { "space/large": 24 } };
+    const code: DesignTokens = { radius: { medium: 8 } };
+    expect(diffDesignSystem(design, code)).toEqual([]);
+  });
+
+  it("flags type-ramp drift, mapping a style name to its Material type role", () => {
+    const design: DesignTokens = {
+      typography: { "body/large": { fontSize: 16, fontWeight: 500 } },
+    };
+    const code: DesignTokens = {
+      // bodyLarge resolves more than the design declares (fontStyle) — not drift —
+      // but the weight differs, which is.
+      typography: { bodyLarge: { fontSize: 16, fontWeight: 400, fontStyle: "normal" } },
+    };
+    const findings = diffDesignSystem(design, code);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "warn",
+      message: "design-system typography.bodyLarge differs from design",
+      detail: { scope: "design-system", token: "typography.bodyLarge" },
+    });
+  });
+
+  it("treats a spec-satisfying type style as no drift (candidate may resolve more)", () => {
+    const design: DesignTokens = {
+      typography: { "body/large": { fontSize: 16, fontWeight: 400 } },
+    };
+    const code: DesignTokens = {
+      typography: { bodyLarge: { fontSize: 16, fontWeight: 400, fontStyle: "normal", lineHeight: 24 } },
+    };
+    expect(diffDesignSystem(design, code)).toEqual([]);
+  });
+
+  it("honours an explicit typography alias over the role heuristic", () => {
+    const design: DesignTokens = { typography: { "Brand/Hero": { fontSize: 40 } } };
+    const code: DesignTokens = { typography: { displayLarge: { fontSize: 36 } } };
+    const findings = diffDesignSystem(design, code, {
+      alias: { typography: { displayLarge: "Brand/Hero" } },
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.detail).toMatchObject({ token: "typography.displayLarge" });
+  });
 });
