@@ -4,11 +4,14 @@
  * The adapter's image rasterizer uses CLI Chrome `--screenshot`, which has no
  * DOM access, so geometry is read in a separate pass: drive Chrome on PATH via
  * `puppeteer-core` (which bundles **no** browser) and read each labelled leaf
- * element's `getBoundingClientRect` — plus its resolved `getComputedStyle`
- * (padding, corner radius, font face/size/weight/line-height, colour) — into a
- * flat {@link SemanticTree} (bounds in dp / CSS px). The style becomes each
- * node's spec `tokens`, so the report's annotation overlays render on the
- * reference panel too. `puppeteer-core` is imported lazily and kept out of the
+ * element's geometry — its rendered **text box** (a `Range` over the text
+ * content, the glyph extent — so it lines up with the candidate's Compose `Text`
+ * node rather than the wide flex/grid cell the text sits in), falling back to
+ * the element box — plus its resolved `getComputedStyle` (padding, corner
+ * radius, font face/size/weight/line-height, colour), into a flat
+ * {@link SemanticTree} (bounds in dp / CSS px). The style becomes each node's
+ * spec `tokens`, so the report's annotation overlays render on the reference
+ * panel too. `puppeteer-core` is imported lazily and kept out of the
  * package's hard dependencies — a consumer that doesn't need the structural
  * layout diff never pays for it, and if it (or Chrome) is absent the extractor
  * returns `undefined` and the layout diff simply doesn't run.
@@ -150,6 +153,10 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
         };
         const doc = win.document as {
           querySelectorAll(s: string): ArrayLike<Record<string, unknown>>;
+          createRange(): {
+            selectNodeContents(n: unknown): void;
+            getBoundingClientRect(): { x: number; y: number; width: number; height: number };
+          };
         };
         const out: RawRect[] = [];
         for (const el of Array.from(doc.querySelectorAll("body *")) as Array<{
@@ -159,7 +166,22 @@ export const puppeteerLayoutExtractor: LayoutExtractor = async (req) => {
           getBoundingClientRect(): { x: number; y: number; width: number; height: number };
         }>) {
           if (el.children.length === 0 && (el.textContent ?? "").trim()) {
-            const r = el.getBoundingClientRect();
+            // Measure the rendered *text* (glyph) box, not the element's
+            // container box. A text leaf in a wide flex/grid cell has an element
+            // box the width of the cell, while the candidate (a Compose `Text`)
+            // reports the box of the text it drew — so the element box never
+            // matches. A Range over the text content gives the glyph extent,
+            // which lines up with the candidate on both position and size. Fall
+            // back to the element box when there's no measurable text range.
+            let r = el.getBoundingClientRect();
+            try {
+              const range = doc.createRange();
+              range.selectNodeContents(el);
+              const tr = range.getBoundingClientRect();
+              if (tr.width > 0 && tr.height > 0) r = tr;
+            } catch {
+              // keep the element box
+            }
             if (r.width > 0 && r.height > 0) {
               // Resolved style for the spec overlays (padding/radius/type/colour).
               const cs = win.getComputedStyle?.(el);
