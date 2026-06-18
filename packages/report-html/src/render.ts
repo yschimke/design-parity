@@ -434,11 +434,13 @@ export function renderHtmlReport(input: ReportInput): string {
   const hasAnnotations =
     !!annotationSvg(candTree, deltas) || !!annotationSvg(refTree, deltas);
   const controls = hasVariants && hasAnnotations ? annotationControls(deltas.length > 0) : "";
+  // Annotation toggles sit *below* the variant detail (after the diffs), so the
+  // panels lead and the spec overlays are an opt-in you reach for afterwards.
   const variantsSection = hasVariants
-    ? `${controls}
-${matrixMarkup(rendered)}
+    ? `${matrixMarkup(rendered)}
 <h2 class="section-title">Variant detail</h2>
-${detailsHtml}`
+${detailsHtml}
+${controls}`
     : `<section class="variant"><p class="panel-empty">No images for this verdict — findings only.</p></section>`;
 
   const status = verdict.status;
