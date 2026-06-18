@@ -22,6 +22,7 @@ import {
 } from "./candidate.js";
 import {
   bundleToCandidates,
+  mergeCandidateRenders,
   parsePreviewBundle,
   type ComponentIdResolver,
   type PreviewBundle,
@@ -75,14 +76,20 @@ export function bundleCandidateSource(
     );
   }
 
-  // Lazy, memoized index: componentId → CandidateRender (last bundle wins).
+  // Lazy, memoized index: componentId → CandidateRender. Previews that resolve
+  // to the same code handle are merged (issue #111) — a component whose themes
+  // are separate `@Preview`s binds them all to one render — so their themed
+  // images sit side by side in the report matrix instead of clobbering.
   let index: Map<string, CandidateRender> | undefined;
 
   async function build(ctx: AdapterContext): Promise<Map<string, CandidateRender>> {
     if (index) return index;
     const map = new Map<string, CandidateRender>();
     const ingest = (candidates: CandidateRender[]) => {
-      for (const c of candidates) map.set(c.componentId, c);
+      for (const c of candidates) {
+        const existing = map.get(c.componentId);
+        map.set(c.componentId, existing ? mergeCandidateRenders(existing, c) : c);
+      }
     };
     const toCandidates = (bundle: PreviewBundle) =>
       bundleToCandidates(bundle, options.resolveComponentId);

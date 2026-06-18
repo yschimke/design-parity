@@ -16,7 +16,11 @@
  * function (`sourceFile#functionName`, low confidence). Pure and deterministic —
  * depends only on `@design-parity/core`.
  */
-import type { DesignMap } from "@design-parity/core";
+import type { DesignMap, PreviewIdVariant, Theme } from "@design-parity/core";
+import { entryPreviewIds } from "@design-parity/core";
+
+/** The variant slot a tagged `previewId` fills (state/theme/size, no handle). */
+export type PreviewVariantSlot = Omit<PreviewIdVariant, "previewId">;
 
 /**
  * The identifying bits of a compose-ai-tools preview, as a bundle's
@@ -40,6 +44,14 @@ export interface PreviewCodeMatch {
   linkMethod: "manifest" | "convention";
   /** `manifest` links are `"high"`; convention links are always `"low"`. */
   confidence: "high" | "low";
+  /**
+   * The variant slot (state/theme/size) this preview fills, when the explicit
+   * `design-map` link tagged it (a `previewId` variant list, issue #111). The
+   * candidate side re-tags the resolved preview's image(s) onto this slot so a
+   * per-theme `@Preview` keys against its matching reference variant. Absent for
+   * single-string links and convention matches.
+   */
+  variant?: PreviewVariantSlot;
 }
 
 /** Outcome of reconciling a batch of preview ids. */
@@ -52,24 +64,45 @@ export interface PreviewResolveResult {
   warnings: string[];
 }
 
-/** Index a design-map's explicit `previewId` fields → code handle. */
+/** The non-empty variant tags on a tagged previewId, or `undefined` if none. */
+function variantSlot(v: PreviewIdVariant): PreviewVariantSlot | undefined {
+  const slot: PreviewVariantSlot = {};
+  if (v.state !== undefined) slot.state = v.state;
+  if (v.theme !== undefined) slot.theme = v.theme as Theme;
+  if (v.size !== undefined) slot.size = v.size;
+  return Object.keys(slot).length > 0 ? slot : undefined;
+}
+
+/** One explicit `design-map` preview link: the code handle and its variant slot. */
+interface ExplicitLink {
+  code: string;
+  variant?: PreviewVariantSlot;
+}
+
+/**
+ * Index a design-map's explicit `previewId` fields → code handle. A string
+ * `previewId` binds one untagged preview; a variant list binds several tagged
+ * previews to the same code handle, each carrying its slot (issue #111).
+ */
 function explicitPreviewMap(designMap: DesignMap | undefined): {
-  map: Map<string, string>;
+  map: Map<string, ExplicitLink>;
   warnings: string[];
 } {
-  const map = new Map<string, string>();
+  const map = new Map<string, ExplicitLink>();
   const warnings: string[] = [];
   for (const entry of designMap?.components ?? []) {
-    if (!entry.previewId) continue;
-    const existing = map.get(entry.previewId);
-    if (existing && existing !== entry.code) {
-      warnings.push(
-        `design-map: previewId '${entry.previewId}' is mapped to both ` +
-          `'${existing}' and '${entry.code}'; keeping '${existing}'`,
-      );
-      continue;
+    for (const variant of entryPreviewIds(entry)) {
+      const existing = map.get(variant.previewId);
+      if (existing && existing.code !== entry.code) {
+        warnings.push(
+          `design-map: previewId '${variant.previewId}' is mapped to both ` +
+            `'${existing.code}' and '${entry.code}'; keeping '${existing.code}'`,
+        );
+        continue;
+      }
+      const slot = variantSlot(variant);
+      map.set(variant.previewId, slot ? { code: entry.code, variant: slot } : { code: entry.code });
     }
-    map.set(entry.previewId, entry.code);
   }
   return { map, warnings };
 }
@@ -91,7 +124,12 @@ export function codeHandleForPreview(
 ): PreviewCodeMatch | undefined {
   const explicit = explicitPreviewMap(designMap).map.get(preview.id);
   if (explicit !== undefined) {
-    return { code: explicit, linkMethod: "manifest", confidence: "high" };
+    return {
+      code: explicit.code,
+      linkMethod: "manifest",
+      confidence: "high",
+      ...(explicit.variant ? { variant: explicit.variant } : {}),
+    };
   }
   if (preview.sourceFile && preview.functionName) {
     const code = `${preview.sourceFile}#${preview.functionName}`;

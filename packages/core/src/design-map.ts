@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import AjvModule, { type ValidateFunction } from "ajv";
 
-import type { DesignSource, RefVariant } from "./types.js";
+import type { DesignSource, PreviewIdVariant, RefVariant } from "./types.js";
 import schema from "../schema/design-map.schema.json" with { type: "json" };
 
 // ajv ships CJS; under NodeNext the constructable class can land on `.default`.
@@ -31,13 +31,22 @@ export interface DesignMapEntry {
    */
   ref: string | RefVariant[];
   /**
-   * Optional compose-ai-tools preview id (`"a.b.C.fn"`) this code handle
-   * renders as. The authoritative link between a preview-bundle / daemon
-   * candidate (keyed by preview id) and this reference (keyed by code handle) —
-   * see issue #44. When omitted, the resolver falls back to a low-confidence
-   * convention (`sourceFile#functionName`).
+   * Optional compose-ai-tools preview id this code handle renders as — the
+   * authoritative link between a preview-bundle / daemon candidate (keyed by
+   * preview id) and this reference (keyed by code handle), see issue #44.
+   *
+   * A string binds a single candidate preview (`"a.b.C.fn"`). A list of
+   * variant-tagged handles binds several — a screen's themes/states/sizes
+   * authored as separate `@Preview`s (`FooPreview` + `FooDarkPreview`) — each
+   * re-tagged onto its variant slot, mirroring how {@link ref} carries themed
+   * reference frames (issue #111). The candidate side resolves every tagged id
+   * to this one code handle and merges their renders, so the report's theme
+   * matrix fills both columns for one component.
+   *
+   * When omitted, the resolver falls back to a low-confidence convention
+   * (`sourceFile#functionName`).
    */
-  previewId?: string;
+  previewId?: string | PreviewIdVariant[];
   /**
    * Optional repo-relative path to a committed W3C DTCG token file whose tokens
    * are this component's spec tokens (issue #89). For sources that don't expose
@@ -145,4 +154,17 @@ export function findByCode(
  */
 export function entryRefs(entry: DesignMapEntry): RefVariant[] {
   return typeof entry.ref === "string" ? [{ ref: entry.ref }] : entry.ref;
+}
+
+/**
+ * Normalize an entry's `previewId` (absent, string shorthand, or variant list)
+ * to a {@link PreviewIdVariant} list — the candidate-side mirror of
+ * {@link entryRefs}. No `previewId` yields `[]`; a bare string yields a single
+ * untagged variant (issue #111).
+ */
+export function entryPreviewIds(entry: DesignMapEntry): PreviewIdVariant[] {
+  if (entry.previewId === undefined) return [];
+  return typeof entry.previewId === "string"
+    ? [{ previewId: entry.previewId }]
+    : entry.previewId;
 }

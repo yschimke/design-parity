@@ -8,6 +8,7 @@ import {
   designMapSchema,
   findByCode,
   entryRefs,
+  entryPreviewIds,
 } from "../src/index.js";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -136,6 +137,54 @@ describe("design-map schema", () => {
       { ref: "figma:K/1:2", theme: "dark" as const },
     ];
     expect(entryRefs({ code: "a#b", source: "figma", ref: list })).toEqual(list);
+  });
+
+  it("accepts a previewId variant list (#111)", () => {
+    const r = validateDesignMap({
+      components: [
+        {
+          code: "ui/Device.kt#DeviceBody",
+          source: "claude-design",
+          ref: "design/Device.html",
+          previewId: [
+            { previewId: "app.DeviceKt.DeviceBodyPreview", theme: "light" },
+            { previewId: "app.DeviceKt.DeviceBodyDarkPreview", theme: "dark" },
+          ],
+        },
+      ],
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects a previewId variant missing its handle (#111)", () => {
+    const r = validateDesignMap({
+      components: [
+        {
+          code: "a#b",
+          source: "bundle",
+          ref: "x",
+          previewId: [{ theme: "dark" }],
+        },
+      ],
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  it("normalizes absent/string/list previewIds via entryPreviewIds (#111)", () => {
+    // Absent → empty list.
+    expect(entryPreviewIds({ code: "a#b", source: "bundle", ref: "x" })).toEqual([]);
+    // String shorthand → one untagged variant.
+    expect(
+      entryPreviewIds({ code: "a#b", source: "bundle", ref: "x", previewId: "p.Q.r" }),
+    ).toEqual([{ previewId: "p.Q.r" }]);
+    // List → passed through untouched.
+    const list = [
+      { previewId: "p.Q.light", theme: "light" as const },
+      { previewId: "p.Q.dark", theme: "dark" as const },
+    ];
+    expect(
+      entryPreviewIds({ code: "a#b", source: "bundle", ref: "x", previewId: list }),
+    ).toEqual(list);
   });
 
   it("throws a readable error for a missing file", async () => {

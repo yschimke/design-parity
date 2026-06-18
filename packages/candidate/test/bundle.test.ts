@@ -16,6 +16,7 @@ import {
   bundleToCandidates,
   loadPreviewBundle,
   previewToCandidate,
+  mergeCandidateRenders,
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
@@ -135,10 +136,88 @@ describe("readPreviewBundle", () => {
     expect(hinted.images[0]?.theme).toBe("dark");
   });
 
+  it("re-tags a preview's images onto a resolved variant slot (#111)", async () => {
+    const png = new Uint8Array(
+      await readFile(resolve(repoRoot, "fixtures/figma/button-primary.light.png")),
+    );
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [{ id: "app.DeviceKt.DeviceBodyDarkPreview" }],
+      entries: {
+        "previews/app.DeviceKt.DeviceBodyDarkPreview.png": png,
+      },
+    };
+    // The design-map link tags this per-theme preview as the dark variant; the
+    // candidate's image picks up that theme even though the params didn't imply it.
+    const candidate = previewToCandidate(bundle, bundle.previews[0]!, (p) =>
+      p.id === "app.DeviceKt.DeviceBodyDarkPreview"
+        ? { code: "ui/Device.kt#DeviceBody", variant: { theme: "dark" } }
+        : undefined,
+    );
+    expect(candidate.componentId).toBe("ui/Device.kt#DeviceBody");
+    expect(candidate.images[0]?.theme).toBe("dark");
+  });
+
   it("fails clearly on bytes with no embedded bundle", () => {
     // A bare PNG signature with no appended zip is not a bundle.
     const notABundle = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5, 6, 7, 8);
     expect(() => parsePreviewBundle(notABundle)).toThrow(InvalidBundleError);
+  });
+});
+
+describe("mergeCandidateRenders (#111)", () => {
+  it("concatenates images and prefers a light-themed semantics tree", () => {
+    const dark = {
+      componentId: "ui/Device.kt#DeviceBody",
+      previewId: "app.DeviceKt.DeviceBodyDarkPreview",
+      images: [{ state: "default", theme: "dark" as const, uri: "d", width: 1, height: 1 }],
+      semantics: { root: { role: "screen" }, theme: "dark" as const },
+    };
+    const light = {
+      componentId: "ui/Device.kt#DeviceBody",
+      previewId: "app.DeviceKt.DeviceBodyPreview",
+      images: [{ state: "default", theme: "light" as const, uri: "l", width: 1, height: 1 }],
+      semantics: { root: { role: "screen" }, theme: "light" as const },
+    };
+    const merged = mergeCandidateRenders(dark, light);
+    expect(merged.componentId).toBe("ui/Device.kt#DeviceBody");
+    expect(merged.images.map((i) => i.theme)).toEqual(["dark", "light"]);
+    // The diff keys tokens off one tree; prefer the light one regardless of order.
+    expect(merged.semantics.theme).toBe("light");
+    // previewId keeps the first render's, still reconcilable to a source preview.
+    expect(merged.previewId).toBe("app.DeviceKt.DeviceBodyDarkPreview");
+  });
+});
+
+describe("bundleCandidateSource merges per-theme previews (#111)", () => {
+  it("binds two previews to one code handle as a light+dark candidate", async () => {
+    const png = new Uint8Array(
+      await readFile(resolve(repoRoot, "fixtures/figma/button-primary.light.png")),
+    );
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [
+        { id: "app.DeviceKt.DeviceBodyPreview" },
+        { id: "app.DeviceKt.DeviceBodyDarkPreview" },
+      ],
+      entries: {
+        "previews/app.DeviceKt.DeviceBodyPreview.png": png,
+        "previews/app.DeviceKt.DeviceBodyDarkPreview.png": png,
+      },
+    };
+    const source = bundleCandidateSource({
+      bundles: [bundle],
+      resolveComponentId: (p) =>
+        p.id === "app.DeviceKt.DeviceBodyPreview"
+          ? { code: "ui/Device.kt#DeviceBody", variant: { theme: "light" } }
+          : p.id === "app.DeviceKt.DeviceBodyDarkPreview"
+            ? { code: "ui/Device.kt#DeviceBody", variant: { theme: "dark" } }
+            : undefined,
+    });
+    const candidate = await source.getCandidate("ui/Device.kt#DeviceBody", ctx);
+    expect(candidate?.componentId).toBe("ui/Device.kt#DeviceBody");
+    // One merged render carrying both themed images → the report matrix's two columns.
+    expect(candidate?.images.map((i) => i.theme).sort()).toEqual(["dark", "light"]);
   });
 });
 

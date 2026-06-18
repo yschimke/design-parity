@@ -152,7 +152,16 @@ export async function buildCandidateProvider(
       sources.push(
         bundleCandidateSource({
           bundles,
-          resolveComponentId: (preview) => matches.get(preview.id)?.code,
+          // Carry any variant slot the explicit `previewId` link tagged (issue
+          // #111) so the bundle re-tags the preview's image(s) onto it; a plain
+          // (untagged) match resolves to the bare code handle as before (#44).
+          resolveComponentId: (preview) => {
+            const match = matches.get(preview.id);
+            if (!match) return undefined;
+            return match.variant
+              ? { code: match.code, variant: match.variant }
+              : match.code;
+          },
         }),
       );
     }

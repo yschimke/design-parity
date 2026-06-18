@@ -20,6 +20,7 @@ export type {
   PreviewIdentity,
   PreviewCodeMatch,
   PreviewResolveResult,
+  PreviewVariantSlot,
 } from "./preview-id.js";
 export { codeHandleForPreview, resolvePreviewIds } from "./preview-id.js";
 
