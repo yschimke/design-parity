@@ -244,6 +244,35 @@ export function parseFontSizeSp(spec: string | undefined): number | undefined {
 }
 
 /**
+ * Normalize a resolved font-family identity to a stable display name so the
+ * candidate and the reference read alike. The desktop backend resolves a
+ * `FontListFontFamily` to its face *file* (`fonts/SpaceGrotesk.ttf`) and Android
+ * to a resource path (`res/font/orbitron`), whereas the HTML reference reports the
+ * CSS family name (`Space Grotesk`). Strip directory + extension and split
+ * CamelCase / separators so a face path converges on `Space Grotesk`; a clean CSS
+ * name (no path, no font extension) passes through untouched. Weight/style live in
+ * `fontWeight` / `fontStyle`, so the variable-font file carries no weight suffix to
+ * strip here.
+ */
+export function normalizeFontFamily(raw: string): string {
+  let v = raw.trim();
+  if (!v) return v;
+  // A CSS family list ("Space Grotesk", sans-serif) → first family, unquoted.
+  v = (v.split(",")[0] ?? v).trim().replace(/^['"]|['"]$/g, "");
+  // Only rewrite path-like / font-file identities; leave clean names alone.
+  if (/[\\/]/.test(v) || /\.(ttf|otf|ttc|otc|woff2?|dfont|pfb)$/i.test(v)) {
+    v = (v.split(/[\\/]/).pop() ?? v)
+      .replace(/\.(ttf|otf|ttc|otc|woff2?|dfont|pfb)$/i, "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return v;
+}
+
+/**
  * Build a node's text {@link TypographyToken} from the resolved [fontSize] plus the
  * `typography` object (compose-ai-tools#1934, #1903) — the resolved face/weight/
  * style/axes of the drawn text. Lets the token diff compare *which face* the
@@ -257,7 +286,7 @@ export function textTypography(
   const typo = node.typography;
   const out: TypographyToken = {};
   if (fontSize !== undefined) out.fontSize = fontSize;
-  if (typo?.fontFamily) out.fontFamily = typo.fontFamily;
+  if (typo?.fontFamily) out.fontFamily = normalizeFontFamily(typo.fontFamily);
   if (typo?.fontWeight !== undefined) out.fontWeight = typo.fontWeight;
   if (typo?.fontStyle) out.fontStyle = typo.fontStyle;
   if (typo?.fontVariationSettings) out.fontVariationSettings = typo.fontVariationSettings;
@@ -571,7 +600,7 @@ function parseShapeDp(spec: string | undefined): number | undefined {
 /** Map a `compose/theme` typography token to the core {@link TypographyToken}. */
 function themeTypography(t: ComposeThemeTypography): TypographyToken {
   const out: TypographyToken = {};
-  if (t.fontFamily !== undefined) out.fontFamily = t.fontFamily;
+  if (t.fontFamily !== undefined) out.fontFamily = normalizeFontFamily(t.fontFamily);
   if (t.fontSize !== undefined) out.fontSize = t.fontSize;
   const weight = parseFontWeight(t.fontWeight);
   if (weight !== undefined) out.fontWeight = weight;
