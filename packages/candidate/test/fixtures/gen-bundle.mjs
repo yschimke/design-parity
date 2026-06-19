@@ -103,6 +103,10 @@ const lightSemantics = {
         role: "text",
         label: "Continue",
         bounds: { x: 16, y: 14, width: 128, height: 20 },
+        // Per-node v6 typography with a resolved face *path* — the reader must
+        // normalize it to the display family ("fonts/SpaceGrotesk.ttf" → "Space
+        // Grotesk") so the candidate reads like the reference (issue: bundle path).
+        typography: { fontFamily: "fonts/SpaceGrotesk.ttf", fontSize: "14.0sp", fontWeight: 500, lineHeight: "20.0sp" },
       },
     ],
   },
@@ -184,7 +188,16 @@ const expected = {
       bounds: { x: 0, y: 0, width: 160, height: 48 },
       tokens: lightSemantics.root.tokens,
       children: [
-        { role: "text", label: "Continue", bounds: { x: 16, y: 14, width: 128, height: 20 } },
+        {
+          role: "text",
+          label: "Continue",
+          bounds: { x: 16, y: 14, width: 128, height: 20 },
+          tokens: {
+            typography: {
+              text: { fontSize: 14, fontFamily: "Space Grotesk", fontWeight: 500, lineHeight: 20 },
+            },
+          },
+        },
       ],
     },
   },
