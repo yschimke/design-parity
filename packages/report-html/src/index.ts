@@ -8,7 +8,7 @@
  * in value order, every image inlined as a `data:` URI. Deterministic, no
  * external assets. A leaf consumer — depends only on `@design-parity/core`.
  */
-export { renderHtmlReport } from "./render.js";
+export { renderHtmlReport, toDisplayFrame } from "./render.js";
 export type { DiffImage, ReportInput } from "./types.js";
 export { pairVariants } from "./variants.js";
 export type { Variant } from "./variants.js";

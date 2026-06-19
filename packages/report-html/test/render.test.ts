@@ -9,8 +9,33 @@ import type {
   Verdict,
 } from "@design-parity/core";
 
-import { renderHtmlReport } from "../src/index.js";
+import { renderHtmlReport, toDisplayFrame } from "../src/index.js";
 import type { DiffImage } from "../src/index.js";
+
+describe("toDisplayFrame", () => {
+  it("scales the candidate's device-px geometry into the reference's dp space", () => {
+    // Candidate rendered at 2.625× density (411dp → 1078px); reference is dp.
+    const cand = {
+      root: {
+        role: "group",
+        bounds: { x: 0, y: 0, width: 1078, height: 2399 },
+        children: [{ role: "text", label: "x", bounds: { x: 105, y: 105, width: 263, height: 71 } }],
+      },
+    };
+    const ref = { root: { role: "group", bounds: { x: 0, y: 0, width: 411, height: 914 } } };
+    const out = toDisplayFrame(cand, ref)!;
+    expect(out.root.bounds!.width).toBeCloseTo(411, 0);
+    const child = out.root.children![0]!.bounds!;
+    expect(child.width).toBeCloseTo(100, 0); // 263 px → ~100 dp
+    expect(child.x).toBeCloseTo(40, 0); // 105 px → ~40 dp
+  });
+
+  it("is a no-op when frames already match or are absent", () => {
+    const t = { root: { role: "group", bounds: { x: 0, y: 0, width: 411, height: 914 } } };
+    expect(toDisplayFrame(t, t)).toBe(t);
+    expect(toDisplayFrame(t, { root: { role: "group" } })).toBe(t); // ref has no frame
+  });
+});
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 

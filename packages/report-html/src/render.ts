@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cwd } from "node:process";
 
-import type { Image, SemanticTree, Verdict } from "@design-parity/core";
+import type { Image, SemanticNode, SemanticTree, Verdict } from "@design-parity/core";
 
 import { groupFindings, tokenDelta } from "./findings.js";
 import { escapeHtml, pngDataUri } from "./html.js";
@@ -164,6 +164,38 @@ function panelMarkup(
             <figcaption>${escapeHtml(panel.label)}</figcaption>
             <div class="panel-body">${inner}</div>
           </figure>`;
+}
+
+/** Scale a node's geometry by a uniform factor — bounds only. Type sizes are
+ *  already density-independent (sp) and radius/padding already in dp, so only the
+ *  px bounds need converting. */
+function scaleNode(n: SemanticNode, s: number): SemanticNode {
+  const b = n.bounds;
+  return {
+    ...n,
+    ...(b ? { bounds: { x: b.x * s, y: b.y * s, width: b.width * s, height: b.height * s } } : {}),
+    ...(n.children ? { children: n.children.map((c) => scaleNode(c, s)) } : {}),
+  };
+}
+
+/**
+ * Put the candidate tree in the reference's dp space for display. The candidate's
+ * `boundsInRoot` are device pixels (e.g. a 411dp screen renders at 1078px), so its
+ * box-model readouts came out ~density× the reference's dp. Apply the same uniform
+ * frame-width scale the layout diff already uses ({@link diffLayout}) so both sides
+ * read in dp. No-op when either side lacks a root frame (assume a shared space).
+ */
+export function toDisplayFrame(
+  cand: SemanticTree | undefined,
+  ref: SemanticTree | undefined,
+): SemanticTree | undefined {
+  if (!cand) return cand;
+  const cw = cand.root.bounds?.width;
+  const rw = ref?.root.bounds?.width;
+  if (!cw || !rw) return cand;
+  const s = rw / cw;
+  if (Math.abs(s - 1) < 1e-6) return cand;
+  return { ...cand, root: scaleNode(cand.root, s) };
 }
 
 /** Toggle bar for the per-panel annotation layers (box model, typography, layout). */
@@ -424,8 +456,11 @@ export function renderHtmlReport(input: ReportInput): string {
 
   // One semantic tree per side for the whole component (geometry is theme-
   // invariant), reused across every variant's candidate/reference panel.
-  const candTree = candidate.semantics;
   const refTree = reference.layout;
+  // Display the candidate in the reference's dp space so box-model readouts are
+  // dp on both sides (its raw bounds are device px). The diff already does this
+  // internally; this is the matching fix for the overlay.
+  const candTree = toDisplayFrame(candidate.semantics, refTree);
   const deltas = layoutDeltas(verdict);
 
   const hasVariants = rendered.length > 0;
