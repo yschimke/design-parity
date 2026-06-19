@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.17](https://github.com/yschimke/design-parity/compare/v0.1.16...v0.1.17) (2026-06-19)
+
+
+### Bug Fixes
+
+* **candidate:** normalize font-family on the bundle path too ([05b3c22](https://github.com/yschimke/design-parity/commit/05b3c2297cd064187c79718994437e8e9f2c5ed2))
+* **candidate:** normalize font-family on the bundle path too ([022d257](https://github.com/yschimke/design-parity/commit/022d2573dcbc208d7ec3d456a60fa5ef88709029))
+
 ## [0.1.16](https://github.com/yschimke/design-parity/compare/v0.1.15...v0.1.16) (2026-06-19)
 
 
