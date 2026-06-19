@@ -22,6 +22,7 @@ import type {
   TypographyToken,
 } from "@design-parity/core";
 
+import { normalizeFontFamily } from "./daemon.js";
 import { execFileRunner, isNotFound, type CommandRunner } from "./exec.js";
 import {
   MissingComposePreviewError,
@@ -405,7 +406,13 @@ function nodeTokens(n: RawSemanticsNode): DesignTokens | undefined {
       : n.tokens;
     if (design.spacing) out.spacing = { ...out.spacing, ...design.spacing };
     if (design.radius) out.radius = { ...out.radius, ...design.radius };
-    if (design.typography) out.typography = { ...design.typography };
+    if (design.typography)
+      out.typography = Object.fromEntries(
+        Object.entries(design.typography).map(([k, v]) => [
+          k,
+          v.fontFamily ? { ...v, fontFamily: normalizeFontFamily(v.fontFamily) } : v,
+        ]),
+      );
     // A producer container colour (or a hierarchy bag's named colours) wins over
     // the text background read from `layout*Color`.
     if (design.colors) Object.assign(colors, design.colors);
@@ -417,7 +424,7 @@ function nodeTokens(n: RawSemanticsNode): DesignTokens | undefined {
   const text: TypographyToken = {};
   const fontSize = parseDp(n.typography?.fontSize ?? n.layoutFontSize); // "14.0sp" → 14
   if (fontSize !== undefined) text.fontSize = fontSize;
-  if (n.typography?.fontFamily) text.fontFamily = n.typography.fontFamily;
+  if (n.typography?.fontFamily) text.fontFamily = normalizeFontFamily(n.typography.fontFamily);
   if (n.typography?.fontWeight !== undefined) text.fontWeight = n.typography.fontWeight;
   if (n.typography?.fontStyle) text.fontStyle = n.typography.fontStyle;
   const lineHeight = parseDp(n.typography?.lineHeight);

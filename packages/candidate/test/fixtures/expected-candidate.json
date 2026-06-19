@@ -59,6 +59,16 @@
             "y": 14,
             "width": 128,
             "height": 20
+          },
+          "tokens": {
+            "typography": {
+              "text": {
+                "fontSize": 14,
+                "fontFamily": "Space Grotesk",
+                "fontWeight": 500,
+                "lineHeight": 20
+              }
+            }
           }
         }
       ]
