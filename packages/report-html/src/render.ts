@@ -206,6 +206,7 @@ function variantMarkup(
   refTree: SemanticTree | undefined,
   candTree: SemanticTree | undefined,
   deltas: readonly LayoutDelta[],
+  controls: string,
 ): string {
   const meta = [variant.state, variant.theme, variant.size]
     .filter(Boolean)
@@ -243,6 +244,7 @@ function variantMarkup(
               ${panelMarkup(cand, "candidate", candTree, deltas)}
               ${panelMarkup(diff, "diff", candTree, deltas, { diff: true })}
             </div>
+            ${controls}
             ${overlay}
           </section>`;
 }
@@ -385,8 +387,9 @@ const SCRIPT = `(function(){
   for(var j=0;j<toggles.length;j++){
     (function(box){
       var layer=box.getAttribute('data-anno-layer');
+      var scope=box.closest('.variant')||document;
       function apply(){
-        var gs=document.querySelectorAll('.anno g[data-layer="'+layer+'"]');
+        var gs=scope.querySelectorAll('.anno g[data-layer="'+layer+'"]');
         for(var k=0;k<gs.length;k++){ gs[k].classList[box.checked?'add':'remove']('on'); }
       }
       box.addEventListener('change',apply);
@@ -425,24 +428,25 @@ export function renderHtmlReport(input: ReportInput): string {
   const refTree = reference.layout;
   const deltas = layoutDeltas(verdict);
 
+  const hasVariants = rendered.length > 0;
+  // Show the annotation toggles only when at least one panel can draw them. They
+  // sit *inside* each variant — between its triptych and the overlay slider — so
+  // the controls for a comparison are right where you're looking (scoped per
+  // variant by the toggle script).
+  const hasAnnotations =
+    !!annotationSvg(candTree, deltas) || !!annotationSvg(refTree, deltas);
+  const controls = hasAnnotations ? annotationControls(deltas.length > 0) : "";
+
   const detailsHtml = rendered
     .map((r) =>
-      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree, deltas),
+      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree, deltas, controls),
     )
     .join("\n");
 
-  const hasVariants = rendered.length > 0;
-  // Show the annotation toggles only when at least one panel can draw them.
-  const hasAnnotations =
-    !!annotationSvg(candTree, deltas) || !!annotationSvg(refTree, deltas);
-  const controls = hasVariants && hasAnnotations ? annotationControls(deltas.length > 0) : "";
-  // Annotation toggles sit *below* the variant detail (after the diffs), so the
-  // panels lead and the spec overlays are an opt-in you reach for afterwards.
   const variantsSection = hasVariants
     ? `${matrixMarkup(rendered)}
 <h2 class="section-title">Variant detail</h2>
-${detailsHtml}
-${controls}`
+${detailsHtml}`
     : `<section class="variant"><p class="panel-empty">No images for this verdict — findings only.</p></section>`;
 
   const status = verdict.status;
