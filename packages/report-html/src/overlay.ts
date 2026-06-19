@@ -206,6 +206,7 @@ function layoutMark(n: Placed, d: LayoutDelta, u: number): string {
 export function annotationSvg(
   tree: SemanticTree | undefined,
   deltas?: readonly LayoutDelta[],
+  opts?: { diff?: boolean },
 ): string {
   if (!tree) return "";
   const nodes = flatten(tree);
@@ -214,14 +215,6 @@ export function annotationSvg(
   if (!frame || frame.width <= 0 || frame.height <= 0) return "";
   const u = frame.width / 100;
 
-  const boxes = nodes
-    .filter((n) => n.label !== undefined || n.role)
-    .map((n) => boxMark(n, u))
-    .join("");
-  const typography = nodes
-    .filter((n) => n.typography)
-    .map((n) => typographyMark(n, u))
-    .join("");
   // Layout deltas: match each finding to the first node with the same label and
   // highlight it (the element's own box on this panel, with the numeric drift).
   let layout = "";
@@ -239,10 +232,29 @@ export function annotationSvg(
       })
       .join("");
   }
+
+  const svgOpen = `<svg class="anno" viewBox="${r(frame.x)} ${r(frame.y)} ${r(frame.width)} ${r(frame.height)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`;
+
+  // Diff panel: surface *which* elements differ, not just which pixels. Draw only
+  // the layout deltas, in an always-on group (no `data-layer`, so the toggle
+  // controls don't hide it) — the diff view's whole job is to show differences.
+  if (opts?.diff) {
+    if (!layout) return "";
+    return `${svgOpen}<g class="anno-diff">${layout}</g></svg>`;
+  }
+
+  const boxes = nodes
+    .filter((n) => n.label !== undefined || n.role)
+    .map((n) => boxMark(n, u))
+    .join("");
+  const typography = nodes
+    .filter((n) => n.typography)
+    .map((n) => typographyMark(n, u))
+    .join("");
   if (!boxes && !typography && !layout) return "";
 
   return (
-    `<svg class="anno" viewBox="${r(frame.x)} ${r(frame.y)} ${r(frame.width)} ${r(frame.height)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">` +
+    `${svgOpen}` +
     `<g data-layer="spacing">${boxes}</g>` +
     `<g data-layer="typography">${typography}</g>` +
     `<g data-layer="layout">${layout}</g>` +

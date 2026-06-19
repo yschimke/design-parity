@@ -85,6 +85,38 @@ describe("annotationSvg", () => {
     expect(svg).toContain('stroke="#e8a23a"');
   });
 
+  it("diff mode draws only the differing elements, always-on (no toggle layer)", () => {
+    const tree: SemanticTree = {
+      root: {
+        role: "group",
+        bounds: { x: 0, y: 0, width: 200, height: 80 },
+        children: [
+          { role: "text", label: "Title", bounds: { x: 10, y: 10, width: 80, height: 20 } },
+          { role: "text", label: "Body", bounds: { x: 10, y: 40, width: 120, height: 20 } },
+        ],
+      },
+    };
+    const svg = annotationSvg(tree, [{ label: "Title", dx: 0, dy: -8, dw: 0, dh: 0 }], { diff: true });
+    // Always-on group (no data-layer so the toggle controls can't hide it).
+    expect(svg).toContain('<g class="anno-diff">');
+    expect(svg).not.toContain("data-layer");
+    // Only the matched (differing) element, with its drift; no box/typography layers.
+    expect(svg).toContain("Δpos 0,-8 · Δsize 0,0");
+    expect(svg).not.toContain("Body");
+  });
+
+  it("diff mode renders nothing when no element differs", () => {
+    const tree: SemanticTree = {
+      root: {
+        role: "group",
+        bounds: { x: 0, y: 0, width: 100, height: 40 },
+        children: [{ role: "text", label: "Here", bounds: { x: 0, y: 0, width: 40, height: 12 } }],
+      },
+    };
+    expect(annotationSvg(tree, [], { diff: true })).toBe("");
+    expect(annotationSvg(tree, [{ label: "Gone", dx: 1, dy: 1, dw: 0, dh: 0 }], { diff: true })).toBe("");
+  });
+
   it("leaves the layout layer empty when no finding matches a node", () => {
     const tree: SemanticTree = {
       root: {
