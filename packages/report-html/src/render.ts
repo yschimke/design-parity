@@ -148,13 +148,14 @@ function panelMarkup(
   role: string,
   tree?: SemanticTree,
   deltas?: readonly LayoutDelta[],
+  opts?: { diff?: boolean },
 ): string {
   let inner: string;
   if (panel.src) {
     const img = `<img class="panel-img" data-role="${role}" src="${panel.src}" alt="${escapeHtml(panel.label)}" />`;
     // When the panel has a semantic tree, overlay its annotation layers. The
     // image defines the box; the SVG is stretched over it (see .panel-figure).
-    const anno = annotationSvg(tree, deltas);
+    const anno = annotationSvg(tree, deltas, opts);
     inner = anno ? `<div class="panel-figure">${img}${anno}</div>` : img;
   } else {
     inner = `<div class="panel-empty">no image</div>`;
@@ -240,7 +241,7 @@ function variantMarkup(
             <div class="triptych">
               ${panelMarkup(ref, "reference", refTree, deltas)}
               ${panelMarkup(cand, "candidate", candTree, deltas)}
-              ${panelMarkup(diff, "diff")}
+              ${panelMarkup(diff, "diff", candTree, deltas, { diff: true })}
             </div>
             ${overlay}
           </section>`;
@@ -339,6 +340,7 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .anno{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .anno g[data-layer]{display:none}
 .anno g[data-layer].on{display:inline}
+.anno g.anno-diff{display:inline}
 .anno-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 14px;border:1px solid #26262f;border-radius:10px;background:#15151c}
 .anno-controls-label{color:#9a9ab0;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
 .anno-toggle{display:flex;align-items:center;gap:6px;color:#c9c9dd;font-size:13px;cursor:pointer}
