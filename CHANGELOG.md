@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.16](https://github.com/yschimke/design-parity/compare/v0.1.15...v0.1.16) (2026-06-19)
+
+
+### Features
+
+* **claude-design:** capture accessible objects, not just text leaves ([cb36e5a](https://github.com/yschimke/design-parity/commit/cb36e5a0d5509cb4a3bbb82f56d7b6ed706eeb34))
+* **claude-design:** capture accessible objects, not just text leaves ([02b2095](https://github.com/yschimke/design-parity/commit/02b2095e650af64fcd499e691f4f7da11a7bba36))
+* **report-html:** highlight which elements differ on the diff panel ([7d7c4cf](https://github.com/yschimke/design-parity/commit/7d7c4cf5076b44f479d1b093d78ee7b96f5a40aa))
+* **report-html:** highlight which elements differ on the diff panel ([106f4a1](https://github.com/yschimke/design-parity/commit/106f4a1962248e6c4c2653de332e18c9e900ef78))
+
 ## [0.1.15](https://github.com/yschimke/design-parity/compare/v0.1.14...v0.1.15) (2026-06-18)
 
 
