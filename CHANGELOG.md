@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.18](https://github.com/yschimke/design-parity/compare/v0.1.17...v0.1.18) (2026-06-22)
+
+
+### Features
+
+* **claude-design:** consume /design-sync token artifacts; reconcile the reverse path ([70411e4](https://github.com/yschimke/design-parity/commit/70411e4f4b1bfedb04b5fa451f11f5ec8deafcae))
+* **claude-design:** resolve a synced DTCG token artifact as a token-only reference ([8073ccd](https://github.com/yschimke/design-parity/commit/8073ccd0ce4432f437c898292b92fc7b069beb0f))
+
 ## [0.1.17](https://github.com/yschimke/design-parity/compare/v0.1.16...v0.1.17) (2026-06-19)
 
 
