@@ -96,11 +96,15 @@ Each `DesignSource` parses its own `ref` and normalises to a `DesignReference`
 | `claude-design` | repo-relative path to a committed HTML export (`claude-design/adapter.ts`) | manifest | embedded handoff manifest, rasterised |
 | `bundle` | repo-relative path to a PNG folder / `.zip` + `manifest.json` (`bundle/adapter.ts`) | manifest | committed PNGs |
 
-Note the asymmetry the user's question targets: **only Figma has a machine
-link**. Stitch, Claude Design, and bundles are all "designless" in the sense
-that the binding is a human-committed `design-map.json` entry — there is no
-authoritative pull from the tool, so the *code* (via the manifest) must point
-at the design element.
+Note the asymmetry the user's question targets: **only Figma has a live REST
+link**. Stitch and bundles remain "designless" in the sense that the binding is
+a human-committed `design-map.json` entry — there is no authoritative pull from
+the tool, so the *code* (via the manifest) must point at the design element.
+Claude Design sits between the two since the **`/design-sync`** beta (2026-06):
+there is still no read API to call at run time, but the terminal sync now
+materialises a machine-readable design system in the repo, so the adapter's
+input is *committed-but-machine-generated* rather than fully hand-authored. See
+[claude-design-sync-impact.md](./claude-design-sync-impact.md).
 
 ### 2.4 Gap — one preview, **multiple** design nodes
 

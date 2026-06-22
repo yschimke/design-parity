@@ -5,15 +5,24 @@ design-parity. Depends only on `@design-parity/core`.
 
 ## There is no Claude Design read API
 
-Claude Design is a research preview. It exposes **no read API and no Figma
-export**, so — unlike the Figma adapter (REST + Code Connect) or even Stitch
-(SDK) — there is nothing to fetch. The reference is consumed as a **committed
-HTML export** that a human (or the
-[`compose-preview-design-board`](https://github.com/yschimke/skills) skill,
-which owns the reverse direction — building the HTML imported *into* Claude
-Design) checks into the consumer repo. Because there is no machine link, the
-correspondence is always a `design-map.json` entry and the resulting
+Claude Design (beta since 2026-06) exposes **no read API and no Figma export**,
+so — unlike the Figma adapter (REST + Code Connect) or even Stitch (SDK) — there
+is nothing to fetch at run time. The reference is consumed as a **committed HTML
+export** checked into the consumer repo. Because there is no machine link to
+call, the correspondence is always a `design-map.json` entry and the resulting
 `DesignReference` always has `linkMethod: "manifest"`.
+
+> **`/design-sync` (2026-06):** Claude Code's `/design-sync` now syncs a design
+> system between the canvas and the repo — including pushing built UI back into
+> Claude Design (the reverse direction the
+> [`compose-preview-design-board`](https://github.com/yschimke/skills) skill
+> used to own) and emitting committed, machine-readable tokens/components. This
+> is a governed *read → plan → write* skill, **not** a read API the adapter can
+> call, so the committed-export shape below is unchanged. But it does make the
+> input *machine-generated-and-committed* rather than hand-authored, and opens a
+> richer reference (synced tokens) and a `ref → code` reverse index as
+> follow-ups. See
+> [docs/claude-design-sync-impact.md](../../../docs/claude-design-sync-impact.md).
 
 ```
 design-map.json ──▶ design/reference/*.html ──▶ rasterize ─┐
