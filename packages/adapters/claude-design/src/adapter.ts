@@ -1,10 +1,13 @@
 /**
  * The Claude Design reference adapter.
  *
- * Claude Design (the research preview) exposes **no read API and no Figma
- * export**, so unlike the Figma adapter there is nothing to fetch. The
- * reference is a human-committed HTML export, linked from the repo's
- * `design-map.json` by a repo-relative path. This adapter:
+ * Claude Design (beta since 2026-06) exposes **no read API and no Figma
+ * export**, so unlike the Figma adapter there is nothing to fetch at run time.
+ * The reference is a committed HTML export, linked from the repo's
+ * `design-map.json` by a repo-relative path. (Claude Code's `/design-sync` can
+ * now emit those committed artifacts, but it is a governed read->plan->write
+ * skill, not an API this adapter calls -- see docs/claude-design-sync-impact.md.)
+ * This adapter:
  *
  *   1. resolves that path against the consumer repo root,
  *   2. parses the export's embedded handoff manifest (tokens + image variants),
