@@ -67,6 +67,21 @@ The clean division of labour: **use `/design-sync` to seed the reference**, then
 Design, `baseline` bootstrap can point at the synced artifacts instead of
 synthesising tokens from scratch.
 
+### Getting a Compose/Kotlin app's tokens *into* Claude Design
+
+`/design-sync`'s code-import path reads a **web** design system (React +
+Tailwind/CSS), so it can't consume a Compose/Kotlin repo. Tokens, however, are
+platform-neutral — so the practical path is to feed Claude Design the **token
+file**, not the code. `baseline` mode now publishes the run's design-system
+table as DTCG at a stable location on the report branch
+(`tokens/design-system.tokens.json`; see
+[`report-format.md`](./report-format.md)). Point **Claude Design's GitHub
+import** at that file and re-pull when you want the canvas refreshed — a small,
+deliberate manual step (there is no import API, consistent with #151). This is
+the outbound complement to the inbound `.json` synced-token ref (#149): the
+table comes from the real render, deterministically, with no JS mirror and no AI
+in the CI loop.
+
 ## Follow-ups
 
 1. **Adapter premise text** — ✅ done alongside this doc (#148): softened the

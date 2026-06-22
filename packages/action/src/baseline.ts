@@ -17,10 +17,11 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import AjvModule, { type ValidateFunction } from "ajv";
 
-import type { VerdictStatus } from "@design-parity/core";
+import type { DesignTokens, VerdictStatus } from "@design-parity/core";
+import { tokensToDtcg } from "@design-parity/core";
 
 import type { ParityReport, ComponentResult } from "./orchestrate.js";
 import schema from "../schema/verdict.schema.json" with { type: "json" };
@@ -84,6 +85,12 @@ export interface BaselineSummary {
   direction: ParityReport["direction"];
   status: VerdictStatus;
   blocked: boolean;
+  /**
+   * Path (relative to the artifact root) of the published design-system DTCG
+   * token file ({@link DESIGN_TOKENS_PATH}), when the run exposed any tokens.
+   * Lets a consumer discover the known location without scraping the index.
+   */
+  tokens?: string;
   components: BaselineComponent[];
   warnings: string[];
 }
@@ -100,11 +107,65 @@ function reportRel(outDir: string, result: ComponentResult): string | undefined 
   return result.reportPath ? relative(outDir, result.reportPath) : undefined;
 }
 
+/**
+ * Committed path (relative to the artifact root) of the design-system token file
+ * written to the report branch. Stable and known so anything can link it
+ * directly — e.g. Claude Design's GitHub import or a raw fetch:
+ * `https://raw.githubusercontent.com/<owner>/<repo>/<report-branch>/tokens/design-system.tokens.json`.
+ */
+export const DESIGN_TOKENS_PATH = "tokens/design-system.tokens.json";
+
+/** Union a token bag into an accumulator, per category; existing keys win. */
+function mergeTokens(into: DesignTokens, from?: DesignTokens): void {
+  if (!from) return;
+  if (from.colors) into.colors = { ...from.colors, ...into.colors };
+  if (from.spacing) into.spacing = { ...from.spacing, ...into.spacing };
+  if (from.radius) into.radius = { ...from.radius, ...into.radius };
+  if (from.typography) into.typography = { ...from.typography, ...into.typography };
+}
+
+/** Overlay `top` onto `base` per category (top wins), dropping empty groups. */
+function overlayTokens(base: DesignTokens, top: DesignTokens): DesignTokens {
+  const out: DesignTokens = {};
+  const colors = { ...base.colors, ...top.colors };
+  if (Object.keys(colors).length) out.colors = colors;
+  const spacing = { ...base.spacing, ...top.spacing };
+  if (Object.keys(spacing).length) out.spacing = spacing;
+  const radius = { ...base.radius, ...top.radius };
+  if (Object.keys(radius).length) out.radius = radius;
+  const typography = { ...base.typography, ...top.typography };
+  if (Object.keys(typography).length) out.typography = typography;
+  return out;
+}
+
+/**
+ * The run's design-system token table, aggregated across components, or
+ * `undefined` when no source exposed one. The authoritative side per the
+ * resolved direction wins on conflict: the candidate render's resolved
+ * `themeTokens` in `code-led` (the shipped app's real table), the reference's
+ * tokens in `design-led`. The same theme repeats across components, so a union
+ * is safe — this is what gets published as DTCG for Claude Design to import.
+ */
+export function designSystemTokens(report: ParityReport): DesignTokens | undefined {
+  const code: DesignTokens = {};
+  const design: DesignTokens = {};
+  for (const r of report.results) {
+    mergeTokens(code, r.candidate?.semantics.themeTokens);
+    mergeTokens(design, r.reference?.themeTokens);
+    mergeTokens(design, r.reference?.tokens);
+  }
+  const [base, top] =
+    report.direction === "code-led" ? [design, code] : [code, design];
+  const merged = overlayTokens(base, top);
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 /** The machine-readable roll-up written as `verdict.json`. */
 export function baselineSummary(
   report: ParityReport,
   outDir: string,
   meta: BaselineMeta = {},
+  tokensPath?: string,
 ): BaselineSummary {
   const components: BaselineComponent[] = report.results.map((r) => {
     const rel = reportRel(outDir, r);
@@ -126,6 +187,7 @@ export function baselineSummary(
     direction: report.direction,
     status: report.status,
     blocked: report.blocked,
+    ...(tokensPath ? { tokens: tokensPath } : {}),
     components,
     warnings: report.warnings,
   };
@@ -222,7 +284,11 @@ export function renderBaselineIndex(summary: BaselineSummary): string {
 <h1>${escapeHtml(headline)}</h1>
 <p class="meta">Generated ${escapeHtml(summary.generatedAt)}${
     summary.commit ? ` · commit <code>${escapeHtml(summary.commit.slice(0, 12))}</code>` : ""
-  }</p>
+  }</p>${
+    summary.tokens
+      ? `\n<p class="meta">Design system: <a href="${escapeHtml(summary.tokens)}"><code>${escapeHtml(summary.tokens)}</code></a> — DTCG tokens (import into Claude Design)</p>`
+      : ""
+  }
 <table>
 <thead><tr><th></th><th>Component</th><th>Source</th><th>State</th><th>Note</th></tr></thead>
 <tbody>
@@ -240,22 +306,41 @@ export interface BaselineArtifacts {
   indexPath: string;
   /** Relative path written: `verdict.json`. */
   verdictPath: string;
+  /** Relative path written for the DTCG token file, when the run had tokens. */
+  tokensPath?: string;
   summary: BaselineSummary;
 }
 
 /**
  * Write `index.html` + `verdict.json` into `outDir` (alongside the per-component
- * subdirs `orchestrate` already populated). Returns the relative paths and the
- * computed summary.
+ * subdirs `orchestrate` already populated), plus — when the run exposed any
+ * design-system tokens — a DTCG token file at {@link DESIGN_TOKENS_PATH}. All
+ * three land on the published report branch, so the token file gets a stable,
+ * known URL anyone (Claude Design's import, a raw fetch) can link. Returns the
+ * relative paths and the computed summary.
  */
 export async function writeBaselineArtifacts(
   outDir: string,
   report: ParityReport,
   meta: BaselineMeta = {},
 ): Promise<BaselineArtifacts> {
-  const summary = baselineSummary(report, outDir, meta);
+  const tokens = designSystemTokens(report);
+  const tokensPath = tokens ? DESIGN_TOKENS_PATH : undefined;
+  const summary = baselineSummary(report, outDir, meta, tokensPath);
   await mkdir(outDir, { recursive: true });
+  if (tokens) {
+    await mkdir(join(outDir, dirname(DESIGN_TOKENS_PATH)), { recursive: true });
+    await writeFile(
+      join(outDir, DESIGN_TOKENS_PATH),
+      JSON.stringify(tokensToDtcg(tokens), null, 2) + "\n",
+    );
+  }
   await writeFile(join(outDir, "verdict.json"), JSON.stringify(summary, null, 2));
   await writeFile(join(outDir, "index.html"), renderBaselineIndex(summary));
-  return { indexPath: "index.html", verdictPath: "verdict.json", summary };
+  return {
+    indexPath: "index.html",
+    verdictPath: "verdict.json",
+    ...(tokensPath ? { tokensPath } : {}),
+    summary,
+  };
 }

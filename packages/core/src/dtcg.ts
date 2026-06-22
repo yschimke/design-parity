@@ -320,3 +320,70 @@ export async function loadDtcgTokens(path: string): Promise<DtcgReadResult> {
   }
   return readDtcgTokens(parsed);
 }
+
+/** The `$id` of the bundled DTCG schema, emitted as the document's `$schema`. */
+const DTCG_SCHEMA_ID = (dtcgTokensSchema as { $id?: string }).$id ?? "";
+
+/** A DTCG token node: a `$type` tag plus its `$value`. */
+interface DtcgTokenNode {
+  $type: string;
+  $value: unknown;
+}
+
+/** Build a DTCG group (name → token node) from a {@link DesignTokens} bag, or
+ *  `undefined` when the bag is absent/empty so the group is omitted entirely. */
+function dtcgGroup<T>(
+  bag: Record<string, T> | undefined,
+  node: (value: T) => DtcgTokenNode,
+): Record<string, DtcgTokenNode> | undefined {
+  if (!bag) return undefined;
+  const entries = Object.entries(bag);
+  if (entries.length === 0) return undefined;
+  const out: Record<string, DtcgTokenNode> = {};
+  for (const [name, value] of entries) out[name] = node(value);
+  return out;
+}
+
+/** A composite-typography `$value` carrying every field the token declares. */
+function dtcgTypographyValue(token: TypographyToken): Record<string, unknown> {
+  const value: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(token)) {
+    if (v !== undefined) value[key] = v;
+  }
+  return value;
+}
+
+/**
+ * Serialize a {@link DesignTokens} bag into a W3C DTCG token document — the
+ * inverse of {@link readDtcgTokens}.
+ *
+ * Each category becomes its own top-level group (`color`, `spacing`, `radius`,
+ * `type`) rather than a flat list, so the two dimension categories round-trip
+ * to the right bag: a `radius/*` token name routes back to `radius` and a
+ * `spacing/*` name to `spacing` (DTCG has one `dimension` type, and the reader
+ * keys radius-vs-spacing off the token name). Names that already carry a `/`
+ * stay verbatim under their group.
+ *
+ * Emitting DTCG (rather than the raw `DesignTokens` shape) makes the output a
+ * standards-based file any DTCG consumer reads — Style Dictionary, Tokens
+ * Studio, Claude Design's import — not just design-parity. The result is plain
+ * JSON-serializable data; callers `JSON.stringify` it.
+ */
+export function tokensToDtcg(tokens: DesignTokens): Record<string, unknown> {
+  const doc: Record<string, unknown> = {};
+  if (DTCG_SCHEMA_ID) doc.$schema = DTCG_SCHEMA_ID;
+
+  const color = dtcgGroup(tokens.colors, (v) => ({ $type: "color", $value: v }));
+  if (color) doc.color = color;
+  const spacing = dtcgGroup(tokens.spacing, (v) => ({ $type: "dimension", $value: v }));
+  if (spacing) doc.spacing = spacing;
+  const radius = dtcgGroup(tokens.radius, (v) => ({ $type: "dimension", $value: v }));
+  if (radius) doc.radius = radius;
+  const type = dtcgGroup(tokens.typography, (t) => ({
+    $type: "typography",
+    $value: dtcgTypographyValue(t),
+  }));
+  if (type) doc.type = type;
+
+  return doc;
+}
