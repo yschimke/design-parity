@@ -57,6 +57,31 @@ manifest:
 - **`componentId`** — optional; when present it must match the component the
   resolver asked for, else `resolve` throws.
 
+## The synced token artifact (`.json` ref)
+
+When a `design-map.json` ref ends in **`.json`**, the adapter treats it as a
+**synced design-system token artifact** — a committed [W3C DTCG](https://tr.designtokens.org/)
+document, typically emitted by Claude Code's `/design-sync` — instead of an HTML
+export. It is loaded through `@design-parity/core`'s `loadDtcgTokens` into a
+**token-only** `DesignReference`:
+
+- `referenceImages` is `[]` and **nothing rasterizes** (no HTML, no layout
+  capture) — the reference feeds the token-compliance diff only.
+- `linkMethod` is still `"manifest"` (there is no read API; this is a committed
+  file).
+- `resolve` throws a `claude-design`-prefixed error if the file is missing, isn't
+  JSON, or fails DTCG schema validation.
+
+```jsonc
+// design-map.json — point the ref at the synced DTCG document
+{ "code": "ui/Card.kt#OfferCard", "source": "claude-design",
+  "ref": "design/design-system.tokens.json" }
+```
+
+This is the richer of the two shapes: the token table comes straight from the
+synced design system rather than an export's embedded handoff block. See
+[docs/claude-design-sync-impact.md](../../../docs/claude-design-sync-impact.md).
+
 ## Usage
 
 ```ts

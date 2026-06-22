@@ -7,14 +7,17 @@
  * `design-map.json` by a repo-relative path. (Claude Code's `/design-sync` can
  * now emit those committed artifacts, but it is a governed read->plan->write
  * skill, not an API this adapter calls -- see docs/claude-design-sync-impact.md.)
- * This adapter:
+ * This adapter resolves two committed ref shapes:
  *
- *   1. resolves that path against the consumer repo root,
- *   2. parses the export's embedded handoff manifest (tokens + image variants),
- *   3. rasterizes any variant that ships as raw HTML headlessly, and
- *   4. normalizes everything to a {@link DesignReference} with
- *      `linkMethod: "manifest"` — the only link method possible for a source
- *      with no machine link.
+ *   - an **HTML export** (any non-`.json` ref): resolve the path, parse the
+ *     embedded handoff manifest (tokens + image variants), rasterize any raw-HTML
+ *     variant headlessly, and normalize to a {@link DesignReference}; and
+ *   - a **synced token artifact** (a `.json` ref): a committed DTCG document
+ *     emitted by `/design-sync`, loaded through core's DTCG reader into a
+ *     token-only `DesignReference` (no images, no rasterise) — issue #149.
+ *
+ * Either way the result has `linkMethod: "manifest"` — the only link method
+ * possible for a source with no read API.
  */
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
@@ -26,6 +29,7 @@ import type {
   Image,
   ReferenceAdapter,
 } from "@design-parity/core";
+import { loadDtcgTokens } from "@design-parity/core";
 
 import { parseHandoff, type HandoffManifest } from "./html-export.js";
 import { readPngSize } from "./png.js";
@@ -56,6 +60,16 @@ function repoRelative(repoRoot: string, abs: string): string {
   return relative(repoRoot, abs).split(/[\\/]/).join("/");
 }
 
+/**
+ * A `design-map.json` ref ending in `.json` is a **synced design-system token
+ * artifact** — a DTCG document emitted by Claude Code's `/design-sync` (or any
+ * committed DTCG file) — rather than an HTML export. It carries tokens only, so
+ * the adapter loads it through core's DTCG reader with no rasterise (issue #149).
+ */
+function isSyncedTokenRef(ref: string): boolean {
+  return /\.json$/i.test(ref);
+}
+
 export class ClaudeDesignAdapter implements ReferenceAdapter {
   readonly source = "claude-design" as const;
   readonly #rasterize: Rasterizer;
@@ -70,12 +84,15 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
   }
 
   /**
-   * Resolve a Claude Design reference from a committed HTML export.
+   * Resolve a Claude Design reference from a committed HTML export, or — when
+   * `ref` ends in `.json` — from a synced DTCG token artifact (see
+   * {@link isSyncedTokenRef} and {@link #resolveSyncedTokens}).
    *
    * @param componentId resolver-supplied code handle (authoritative).
-   * @param ref repo-relative path to the HTML export (the `design-map` ref).
+   * @param ref repo-relative path to the HTML export or the `.json` token
+   *   artifact (the `design-map` ref).
    * @param ctx consumer repo root + environment.
-   * @throws if the export is missing, its handoff block is malformed, a
+   * @throws if the export/artifact is missing, its handoff block is malformed, a
    *   referenced token file or image is missing, or its `componentId`
    *   contradicts `componentId`.
    */
@@ -84,6 +101,10 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
     ref: string,
     ctx: AdapterContext,
   ): Promise<DesignReference> {
+    if (isSyncedTokenRef(ref)) {
+      return this.#resolveSyncedTokens(componentId, ref, ctx);
+    }
+
     const htmlPath = isAbsolute(ref) ? ref : resolve(ctx.repoRoot, ref);
 
     let html: string;
@@ -133,6 +154,45 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
         // ignore — no layout geometry this run
       }
     }
+    return reference;
+  }
+
+  /**
+   * Resolve a synced design-system token artifact (a committed DTCG document,
+   * typically emitted by Claude Code's `/design-sync`). This is a token-only
+   * reference: there is no HTML, so nothing rasterizes and `referenceImages` is
+   * empty — the resulting `DesignReference` feeds the token-compliance diff
+   * only. There is still no read API, so `linkMethod` stays `"manifest"`.
+   *
+   * @throws if the file is missing, isn't JSON, or fails DTCG schema validation
+   *   (delegated to core's {@link loadDtcgTokens}, re-prefixed for this source).
+   */
+  async #resolveSyncedTokens(
+    componentId: string,
+    ref: string,
+    ctx: AdapterContext,
+  ): Promise<DesignReference> {
+    const tokenPath = isAbsolute(ref) ? ref : resolve(ctx.repoRoot, ref);
+
+    let tokens: DesignTokens;
+    try {
+      ({ tokens } = await loadDtcgTokens(tokenPath));
+    } catch (cause) {
+      throw new Error(
+        `claude-design: cannot load synced token artifact '${ref}': ` +
+          (cause instanceof Error ? cause.message : String(cause)),
+        { cause },
+      );
+    }
+
+    const reference: DesignReference = {
+      componentId,
+      source: this.source,
+      linkMethod: "manifest",
+      ref,
+      referenceImages: [],
+    };
+    if (Object.keys(tokens).length > 0) reference.tokens = tokens;
     return reference;
   }
 
