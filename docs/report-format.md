@@ -15,6 +15,8 @@ two ad-hoc ones (design-parity#71, companion to [compose-ai-tools#1866][cat-epic
 design-parity/<dev-branch>
 ├── index.html                      # landing page (overall verdict + per-component links)
 ├── verdict.json                    # machine-readable roll-up — BaselineSummary
+├── tokens/
+│   └── design-system.tokens.json   # the run's design-system tokens, as DTCG (when any)
 └── <sanitised-component>/
     └── report.html                 # self-contained per-component triptych
 ```
@@ -22,6 +24,30 @@ design-parity/<dev-branch>
 `verdict.json` is the baseline a PR run loads to diff its candidate against
 `main`. It is the design-parity counterpart to compose-ai-tools' on-branch
 `manifest.json` + per-render `entry.json` sidecars.
+
+### The published design-system token file
+
+When a run exposes any design-system tokens, `baseline` mode also writes them as
+a W3C DTCG document to a **stable, known location** —
+[`DESIGN_TOKENS_PATH`](../packages/action/src/baseline.ts) =
+`tokens/design-system.tokens.json` — and records that path in
+`verdict.json.tokens` and as a link on `index.html`. Because the path never
+changes, anything can consume it directly off the report branch:
+
+```
+https://raw.githubusercontent.com/<owner>/<repo>/design-parity/<dev-branch>/tokens/design-system.tokens.json
+```
+
+The table is aggregated across components (`designSystemTokens`), with the side
+authoritative for the resolved **direction** winning on conflict: the candidate
+render's resolved `themeTokens` in `code-led` (the shipped app's real table), the
+reference's in `design-led`. Emitting **DTCG** (via `tokensToDtcg`, the inverse
+of the reader) makes it a standards-based file any DTCG consumer reads — Style
+Dictionary, Tokens Studio, **Claude Design's GitHub import** — which is the
+recommended way to get a Compose/Kotlin app's tokens onto the Claude Design
+canvas without a JS mirror (see
+[`claude-design-sync-impact.md`](./claude-design-sync-impact.md)). `tokens` is an
+additive optional field — it does **not** bump `formatVersion`.
 
 ## Versioning
 

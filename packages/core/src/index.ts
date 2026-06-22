@@ -59,6 +59,7 @@ export {
   validateDtcgTokens,
   readDtcgTokens,
   loadDtcgTokens,
+  tokensToDtcg,
 } from "./dtcg.js";
 
 export type {

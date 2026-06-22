@@ -6,7 +6,9 @@ import {
   loadDtcgTokens,
   readDtcgTokens,
   validateDtcgTokens,
+  tokensToDtcg,
   dtcgTokensSchema,
+  type DesignTokens,
 } from "../src/index.js";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -29,6 +31,47 @@ describe("dtcg schema", () => {
       a: { $type: "color", $value: "#fff" },
     });
     expect(r.valid).toBe(true);
+  });
+});
+
+describe("dtcg writer (tokensToDtcg)", () => {
+  const tokens: DesignTokens = {
+    colors: { primary: "#6750A4", "on-surface": "#1C1B1F" },
+    spacing: { padding: 16 },
+    radius: { corner: 12, sm: 4 },
+    typography: { body: { fontFamily: "Inter", fontSize: 14, fontWeight: 400 } },
+  };
+
+  it("emits a schema-valid DTCG document grouped by category", () => {
+    const doc = tokensToDtcg(tokens) as Record<string, Record<string, unknown>>;
+    expect(validateDtcgTokens(doc).valid).toBe(true);
+    expect(doc.$schema).toContain("dtcg-tokens.schema.json");
+    expect(doc.color.primary).toEqual({ $type: "color", $value: "#6750A4" });
+    expect(doc.spacing.padding).toEqual({ $type: "dimension", $value: 16 });
+    expect(doc.radius.corner).toEqual({ $type: "dimension", $value: 12 });
+    expect(doc.type.body).toEqual({
+      $type: "typography",
+      $value: { fontFamily: "Inter", fontSize: 14, fontWeight: 400 },
+    });
+  });
+
+  it("round-trips through the reader, routing radius vs spacing by group", () => {
+    const { tokens: back, warnings } = readDtcgTokens(tokensToDtcg(tokens));
+    expect(warnings).toEqual([]);
+    expect(back.colors).toEqual({
+      "color/primary": "#6750A4",
+      "color/on-surface": "#1C1B1F",
+    });
+    expect(back.spacing).toEqual({ "spacing/padding": 16 });
+    // A radius token named `sm` still routes to radius because of its group path.
+    expect(back.radius).toEqual({ "radius/corner": 12, "radius/sm": 4 });
+    expect(back.typography?.["type/body"]).toMatchObject({ fontSize: 14 });
+  });
+
+  it("omits absent categories", () => {
+    const doc = tokensToDtcg({ colors: { primary: "#fff" } });
+    expect(doc).not.toHaveProperty("spacing");
+    expect(doc).not.toHaveProperty("type");
   });
 });
 

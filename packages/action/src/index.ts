@@ -61,6 +61,8 @@ export {
   baselineSummary,
   renderBaselineIndex,
   writeBaselineArtifacts,
+  designSystemTokens,
+  DESIGN_TOKENS_PATH,
   validateVerdict,
   verdictSchema,
   verdictSchemaPath,

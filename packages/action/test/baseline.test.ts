@@ -8,10 +8,13 @@ import {
   baselineSummary,
   renderBaselineIndex,
   writeBaselineArtifacts,
+  designSystemTokens,
+  DESIGN_TOKENS_PATH,
   validateVerdict,
   VERDICT_FORMAT_VERSION,
   type ParityReport,
 } from "../src/index.js";
+import { readDtcgTokens } from "@design-parity/core";
 
 const report = (outDir: string): ParityReport => ({
   status: "warn",
@@ -132,6 +135,110 @@ describe("writeBaselineArtifacts", () => {
       const index = await readFile(join(outDir, "index.html"), "utf8");
       expect(index).toContain("<!doctype html>");
       expect(index).toContain("Parity warn");
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+});
+
+/** A two-component report whose candidate + reference each expose theme tokens. */
+const tokenedReport = (direction: ParityReport["direction"]): ParityReport => ({
+  status: "pass",
+  blocked: false,
+  direction,
+  warnings: [],
+  results: [
+    {
+      code: "ui/Button.kt#Primary",
+      source: "claude-design",
+      status: "ok",
+      reference: {
+        componentId: "ui/Button.kt#Primary",
+        source: "claude-design",
+        linkMethod: "manifest",
+        referenceImages: [],
+        themeTokens: { colors: { primary: "#DESIGN" }, spacing: { gap: 8 } },
+      } as never,
+      candidate: {
+        componentId: "ui/Button.kt#Primary",
+        images: [],
+        semantics: {
+          root: { children: [] },
+          themeTokens: { colors: { primary: "#C0DE11" }, radius: { corner: 12 } },
+        },
+      } as never,
+    },
+    // A second component repeats the same theme — the union must not duplicate.
+    {
+      code: "ui/Card.kt#Hero",
+      source: "claude-design",
+      status: "ok",
+      candidate: {
+        componentId: "ui/Card.kt#Hero",
+        images: [],
+        semantics: {
+          root: { children: [] },
+          themeTokens: { colors: { primary: "#C0DE11" } },
+        },
+      } as never,
+    },
+  ],
+});
+
+describe("designSystemTokens", () => {
+  it("prefers the candidate's resolved tokens in code-led", () => {
+    const t = designSystemTokens(tokenedReport("code-led"));
+    expect(t?.colors?.primary).toBe("#C0DE11"); // candidate wins
+    expect(t?.radius?.corner).toBe(12); // candidate-only
+    expect(t?.spacing?.gap).toBe(8); // filled from the reference
+  });
+
+  it("prefers the reference's tokens in design-led", () => {
+    const t = designSystemTokens(tokenedReport("design-led"));
+    expect(t?.colors?.primary).toBe("#DESIGN"); // reference wins
+    expect(t?.radius?.corner).toBe(12); // still merged in from the candidate
+  });
+
+  it("returns undefined when no source exposed tokens", () => {
+    expect(designSystemTokens(report("/tmp/out"))).toBeUndefined();
+  });
+});
+
+describe("writeBaselineArtifacts — design-system tokens", () => {
+  it("writes a DTCG token file, links it, and records its path", async () => {
+    const outDir = await mkdtemp(join(tmpdir(), "baseline-tokens-"));
+    try {
+      const { tokensPath, summary } = await writeBaselineArtifacts(
+        outDir,
+        tokenedReport("code-led"),
+      );
+      expect(tokensPath).toBe(DESIGN_TOKENS_PATH);
+      expect(summary.tokens).toBe(DESIGN_TOKENS_PATH);
+
+      const raw = await readFile(join(outDir, DESIGN_TOKENS_PATH), "utf8");
+      const { tokens: back } = readDtcgTokens(JSON.parse(raw));
+      expect(back.colors?.["color/primary"]).toBe("#C0DE11");
+      expect(back.radius?.["radius/corner"]).toBe(12);
+
+      const index = await readFile(join(outDir, "index.html"), "utf8");
+      expect(index).toContain(`href="${DESIGN_TOKENS_PATH}"`);
+      expect(index).toContain("DTCG tokens");
+
+      const verdict = JSON.parse(await readFile(join(outDir, "verdict.json"), "utf8"));
+      expect(verdict.tokens).toBe(DESIGN_TOKENS_PATH);
+      expect(validateVerdict(verdict)).toEqual({ valid: true, errors: [] });
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the token file when the run exposed none", async () => {
+    const outDir = await mkdtemp(join(tmpdir(), "baseline-notokens-"));
+    try {
+      const { tokensPath, summary } = await writeBaselineArtifacts(outDir, report(outDir));
+      expect(tokensPath).toBeUndefined();
+      expect(summary.tokens).toBeUndefined();
+      await expect(readFile(join(outDir, DESIGN_TOKENS_PATH), "utf8")).rejects.toThrow();
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }

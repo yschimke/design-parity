@@ -47,11 +47,14 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   render the **full** mapped surface, run the pipeline, and **publish the
   browsable artifacts** — a top-level `README.md` + `index.html` landing page
   (linking each component's report, with a "generated, do not edit" banner),
-  each component's self-contained `report.html` triptych, and a machine-readable
+  each component's self-contained `report.html` triptych, a machine-readable
   `verdict.json` (a versioned `BaselineSummary` — carries `formatVersion` +
   `$schema`, validated against
   [`schema/verdict.schema.json`](./schema/verdict.schema.json); see
-  [`docs/report-format.md`](../../docs/report-format.md)) —
+  [`docs/report-format.md`](../../docs/report-format.md)), and — when the run
+  exposes any design-system tokens — the aggregated table as DTCG at the stable
+  `tokens/design-system.tokens.json` (linked from the index; the known location
+  to point Claude Design's GitHub import at) —
   to a permanent **`artifact_branch`** (default `design-parity/<dev-branch>`).
   This gives a stable, always-current view of `main`'s parity state without
   committing generated PNGs/HTML onto `main`, and a real baseline a PR can diff

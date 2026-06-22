@@ -43,6 +43,10 @@
       "type": "boolean",
       "description": "True only when the direction blocks PRs and at least one verdict failed."
     },
+    "tokens": {
+      "type": "string",
+      "description": "Path (relative to the artifact root) of the published design-system DTCG token file, when the run exposed any tokens. Stable known location (`tokens/design-system.tokens.json`) so consumers — e.g. Claude Design's GitHub import — can link it directly off the report branch. Additive optional field; does not bump formatVersion."
+    },
     "components": {
       "type": "array",
       "items": { "$ref": "#/definitions/component" }
