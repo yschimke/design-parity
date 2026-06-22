@@ -20,9 +20,24 @@ call, the correspondence is always a `design-map.json` entry and the resulting
 > is a governed *read → plan → write* skill, **not** a read API the adapter can
 > call, so the committed-export shape below is unchanged. But it does make the
 > input *machine-generated-and-committed* rather than hand-authored, and opens a
-> richer reference (synced tokens) and a `ref → code` reverse index as
-> follow-ups. See
+> richer reference (synced tokens, see below) and a `ref → code` reverse index
+> (already shipped: `buildReverseIndex` in `@design-parity/resolver`). See
 > [docs/claude-design-sync-impact.md](../../../docs/claude-design-sync-impact.md).
+
+### Push-back is `/design-sync`, not a CanvasWriter
+
+design-parity ships **no `claude-design` `CanvasWriter`** and runs no
+Code-to-Canvas push-back for this source. There is no Claude Design write API,
+and `/design-sync`'s canvas push-back is an **interactive, human-run terminal
+skill** — it has no place on design-parity's unattended GitHub Action path
+(PRINCIPLES.md 1 "no AI in the CI loop", 4 "unattended in steady state", 5).
+So the reverse direction — getting what you built into Claude Design — is
+`/design-sync` itself, run by a person, and **supersedes** the older
+[`compose-preview-design-board`](https://github.com/yschimke/skills) skill that
+hand-built HTML to import. The Action's read-only job stays the same: resolve a
+committed reference and diff it. (Contrast Figma, where `FigmaCanvasWriter` +
+the opt-in `code-led` push-back exist precisely because that bridge is a
+non-interactive REST/plugin write.)
 
 ```
 design-map.json ──▶ design/reference/*.html ──▶ rasterize ─┐
