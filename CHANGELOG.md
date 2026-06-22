@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.19](https://github.com/yschimke/design-parity/compare/v0.1.18...v0.1.19) (2026-06-22)
+
+
+### Features
+
+* **action:** publish design-system tokens as DTCG on the report branch ([35b9a7c](https://github.com/yschimke/design-parity/commit/35b9a7c6f1b972fb2f326f6979613cbe681c4ffc))
+* **action:** publish the design-system tokens as DTCG on the report branch ([c1d794c](https://github.com/yschimke/design-parity/commit/c1d794c6bdc8a35f3c7edc674c4ce9446ff4a299))
+
 ## [0.1.18](https://github.com/yschimke/design-parity/compare/v0.1.17...v0.1.18) (2026-06-22)
 
 
