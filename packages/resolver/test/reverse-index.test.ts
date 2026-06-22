@@ -49,4 +49,28 @@ describe("buildReverseIndex", () => {
   it("returns an empty list for an unknown ref", () => {
     expect(codeForRef(buildReverseIndex(designMap), "figma:K/0:0")).toEqual([]);
   });
+
+  it("indexes a claude-design ref, including a .json synced-token artifact", () => {
+    const map: DesignMap = {
+      components: [
+        {
+          code: "ui/Card.kt#OfferCard",
+          source: "claude-design",
+          ref: "design/reference/offer-card.html",
+        },
+        {
+          code: "ui/Theme.kt#AppTheme",
+          source: "claude-design",
+          ref: "design/design-system.tokens.json",
+        },
+      ],
+    };
+    const index = buildReverseIndex(map);
+    expect(codeForRef(index, "design/reference/offer-card.html")).toEqual([
+      "ui/Card.kt#OfferCard",
+    ]);
+    expect(codeForRef(index, "design/design-system.tokens.json")).toEqual([
+      "ui/Theme.kt#AppTheme",
+    ]);
+  });
 });

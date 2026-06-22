@@ -163,6 +163,67 @@ describe("ClaudeDesignAdapter.resolve", () => {
   });
 });
 
+describe("ClaudeDesignAdapter synced token artifact (.json ref)", () => {
+  const dtcg = JSON.stringify({
+    color: { primary: { $type: "color", $value: "#336699" } },
+    spacing: { padding: { $type: "dimension", $value: "16px" } },
+    radius: { corner: { $type: "dimension", $value: "12px" } },
+  });
+
+  // A rasterizer / layout extractor that fails the test if the token path ever
+  // touches it — the .json path must never rasterize or capture layout.
+  const neverRasterize: Rasterizer = async () => {
+    throw new Error("rasterizer must not run for a synced token artifact");
+  };
+
+  it("resolves a committed DTCG document to a token-only DesignReference", async () => {
+    const adapter = new ClaudeDesignAdapter({ rasterizer: neverRasterize });
+    const { ref } = await tempExport("design-system.tokens.json", dtcg);
+    const result = await adapter.resolve("ui/Card.kt#OfferCard", ref, {
+      repoRoot,
+      env: {},
+    });
+
+    expect(result.source).toBe("claude-design");
+    expect(result.linkMethod).toBe("manifest");
+    expect(result.componentId).toBe("ui/Card.kt#OfferCard");
+    expect(result.referenceImages).toEqual([]);
+    expect(result.layout).toBeUndefined();
+    expect(result.tokens).toEqual({
+      colors: { "color/primary": "#336699" },
+      spacing: { "spacing/padding": 16 },
+      radius: { "radius/corner": 12 },
+    });
+  });
+
+  it("omits tokens when the document routes nothing usable", async () => {
+    const adapter = new ClaudeDesignAdapter({ rasterizer: neverRasterize });
+    const { ref } = await tempExport("empty.json", JSON.stringify({}));
+    const result = await adapter.resolve("a#b", ref, { repoRoot, env: {} });
+    expect(result.tokens).toBeUndefined();
+    expect(result.referenceImages).toEqual([]);
+  });
+
+  it("throws a readable error when the artifact is missing", async () => {
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
+    await expect(
+      adapter.resolve("a#b", "design/reference/nope.json", ctx),
+    ).rejects.toThrow(/cannot load synced token artifact/);
+  });
+
+  it("throws when the artifact fails DTCG schema validation", async () => {
+    const adapter = new ClaudeDesignAdapter({ layoutExtractor: null });
+    // `$type` must be one of the DTCG enum; "bogus" fails schema validation.
+    const { ref } = await tempExport(
+      "bad-schema.json",
+      JSON.stringify({ x: { $type: "bogus", $value: 1 } }),
+    );
+    await expect(
+      adapter.resolve("a#b", ref, { repoRoot, env: {} }),
+    ).rejects.toThrow(/cannot load synced token artifact/);
+  });
+});
+
 describe("ClaudeDesignAdapter layout capture", () => {
   const html =
     `<script type="application/design-parity+json">` +

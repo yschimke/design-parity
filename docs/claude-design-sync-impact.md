@@ -67,21 +67,27 @@ The clean division of labour: **use `/design-sync` to seed the reference**, then
 Design, `baseline` bootstrap can point at the synced artifacts instead of
 synthesising tokens from scratch.
 
-## Recommended follow-ups (not in this doc's scope)
+## Follow-ups
 
-1. **Adapter premise text** — soften "no read API / no machine link" in
-   [`adapter-claude-design/README.md`](../packages/adapters/claude-design/README.md),
+1. **Adapter premise text** — ✅ done alongside this doc (#148): softened the
+   "no read API / no machine link" language in the adapter README,
    [`adapter.ts`](../packages/adapters/claude-design/src/adapter.ts) header, and
-   the `correspondence-and-token-matching.md` asymmetry note. *(Done alongside
-   this doc.)*
-2. **Consume synced tokens directly** — let a `design-map.json` entry point at a
-   `/design-sync`-emitted token/component file so the token table doesn't depend
-   on a rasterised HTML export. (New ref shape; no `diff` change.)
-3. **Reverse index** — derive `ref → code` from a synced component set so a
-   Claude-Design element can answer "what implements me?" (the
-   `correspondence-and-token-matching.md:335` future bullet).
-4. **Reconcile the reverse path** with `compose-preview-design-board` now that
-   canvas push-back is native.
+   the `correspondence-and-token-matching.md` asymmetry note.
+2. **Consume synced tokens directly** — ✅ done (issue #149): a `claude-design`
+   `design-map.json` ref ending in `.json` is loaded as a `/design-sync`-emitted
+   **DTCG token artifact** into a token-only `DesignReference` (no rasterise),
+   reusing core's `loadDtcgTokens`. No `diff` / contract change.
+3. **Reverse index** — ✅ already shipped (#94): `buildReverseIndex` in
+   [`@design-parity/resolver`](../packages/resolver/src/reverse-index.ts) inverts
+   the manifest + Code Connect to `ref → code[]`, source-agnostically — a
+   `claude-design` ref (including the `.json` synced-token ref) is covered.
+4. **Reconcile the reverse path** — ✅ resolved as positioning (issue #151):
+   design-parity ships **no `claude-design` `CanvasWriter`** and runs no
+   push-back for this source. `/design-sync`'s canvas push-back is an
+   interactive, human-run terminal skill — off the unattended Action path by
+   Principles 1, 4, and 5 — and it supersedes the older
+   `compose-preview-design-board` skill. Code-to-Canvas push-back stays
+   Figma-only (`FigmaCanvasWriter`), where the bridge is a non-interactive write.
 
 ## Sources
 

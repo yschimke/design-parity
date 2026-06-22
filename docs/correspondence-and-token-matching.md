@@ -93,7 +93,7 @@ Each `DesignSource` parses its own `ref` and normalises to a `DesignReference`
 | --- | --- | --- | --- |
 | `figma` | `figma:<fileKey>/<nodeId>` or a figma.com URL (`figma-ref.ts`) | code-connect / manifest | REST: node image + Variables (`normalize.ts`) |
 | `stitch` | `stitch:<projectId>/<screenId>` (`stitch-ref.ts`) | manifest | Stitch SDK |
-| `claude-design` | repo-relative path to a committed HTML export (`claude-design/adapter.ts`) | manifest | embedded handoff manifest, rasterised |
+| `claude-design` | repo-relative path to a committed HTML export, **or a `.json` DTCG token artifact** (`claude-design/adapter.ts`) | manifest | embedded handoff manifest (rasterised), or a `/design-sync`-emitted DTCG document (token-only, no rasterise) |
 | `bundle` | repo-relative path to a PNG folder / `.zip` + `manifest.json` (`bundle/adapter.ts`) | manifest | committed PNGs |
 
 Note the asymmetry the user's question targets: **only Figma has a live REST
@@ -151,7 +151,12 @@ image pairing.
   variables) are skipped — only concrete `{r,g,b,a}` values land. Typography
   comes from the first TEXT node's `style`. **This is the design token table.**
 - **claude-design / bundle**: the table is whatever the committed handoff /
-  `manifest.json` declares under `tokens` (a `DesignTokens` bag).
+  `manifest.json` declares under `tokens` (a `DesignTokens` bag). For
+  `claude-design` the ref may instead be a **`.json` DTCG token artifact** (a
+  `/design-sync`-emitted design system); the adapter loads it through
+  `loadDtcgTokens` into a token-only `DesignReference` — same loader as the
+  committed-DTCG-file path below, but it *is* the reference, with no HTML export
+  to rasterise (issue #149).
 - **A committed DTCG file** (any source): a `design-map.json` entry can point
   `tokensFile` at a W3C DTCG document (Figma Variables export, Tokens Studio)
   read by `@design-parity/core`'s `loadDtcgTokens` (issue #89). The action loads
