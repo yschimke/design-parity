@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.22](https://github.com/yschimke/design-parity/compare/v0.1.21...v0.1.22) (2026-06-23)
+
+
+### Features
+
+* **catalog-export:** add spec join + render-to-catalog driver ([bd5e6ff](https://github.com/yschimke/design-parity/commit/bd5e6ff870d5b9239082995042654a8e01ea23c3))
+* **catalog-export:** spec join + render-to-catalog driver ([0eda9e5](https://github.com/yschimke/design-parity/commit/0eda9e550c61be09143dc6b67656f9879d0a62db))
+* **catalog-export:** surface slot redlines (box + padding + gap) in the catalog ([63ff376](https://github.com/yschimke/design-parity/commit/63ff37639df12625a318b863d4555f5acc2b8185))
+* **catalog-export:** surface slot redlines (box + padding + gap) in the catalog ([70a090a](https://github.com/yschimke/design-parity/commit/70a090a1e9e0632ae2f58122a60de7e10aa3fa0e))
+
+
+### Bug Fixes
+
+* **catalog-export:** gate publish on a complete render ([645d98e](https://github.com/yschimke/design-parity/commit/645d98e93a01c4882a754c48b8d33db62223e1b3))
+* **catalog-export:** match catalog spec on functionName and fold theme variants ([15b81d8](https://github.com/yschimke/design-parity/commit/15b81d8f037b10aeb2647e2d915027daaaf8f4a0))
+* **catalog-export:** match catalog spec on functionName and fold theme variants ([4524c31](https://github.com/yschimke/design-parity/commit/4524c31837a961aa2c4bf4e86579921169225797))
+* **core:** normalizeSize accepts null (unset widthDp serializes as JSON null) ([872ed12](https://github.com/yschimke/design-parity/commit/872ed123f2b4d5f67b64ad7a8b0495d68abc9019))
+* **core:** normalizeSize accepts null (unset widthDp serializes as JSON null) ([e0a16bf](https://github.com/yschimke/design-parity/commit/e0a16bf6595bd2b0c773d744c191f44eb32a7f32))
+
 ## [0.1.21](https://github.com/yschimke/design-parity/compare/v0.1.20...v0.1.21) (2026-06-23)
 
 
