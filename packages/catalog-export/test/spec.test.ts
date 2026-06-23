@@ -67,4 +67,19 @@ describe("catalogFromCandidates", () => {
     expect(missing).toEqual(["Button/Text"]);
     expect(catalog.components.map((c) => c.componentId)).toEqual(["Button/Filled"]);
   });
+
+  it("flags rendered components whose semantics are the empty fallback", () => {
+    const noSem: CandidateRender = {
+      componentId: "x",
+      previewId: "com.example.CKt.TextButtonSticker",
+      images: [{ state: "default", uri: "x.png", width: 1, height: 1 }],
+      semantics: { root: {} }, // pixels but no semantics sidecar
+    };
+    const { missing, withoutSemantics } = catalogFromCandidates(
+      [candidate("com.example.CKt", "FilledButton"), noSem],
+      spec,
+    );
+    expect(missing).toEqual([]);
+    expect(withoutSemantics).toEqual(["Button/Text"]);
+  });
 });

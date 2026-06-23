@@ -65,6 +65,26 @@ export interface FromCandidatesResult {
   catalog: Catalog;
   /** Spec components with no matching rendered preview (a coverage gap). */
   missing: string[];
+  /**
+   * Components that rendered but carry no semantics tree — the render produced
+   * pixels but the `*.semantics.json` sidecar is absent (e.g. a best-effort
+   * `bundle pack --with-semantics` whose daemon/semantics capture silently
+   * failed). Without semantics there are no token, contrast, or greenline data,
+   * so a publishing job should treat this as an incomplete render, not ship it.
+   */
+  withoutSemantics: string[];
+}
+
+/** A semantics tree carries real signal (not the empty `{ root: {} }` fallback). */
+function hasSemantics(candidate: CandidateRender): boolean {
+  const tree = candidate.semantics;
+  if (!tree) return false;
+  if (tree.themeTokens) return true;
+  const r = tree.root;
+  return Boolean(
+    r &&
+      ((r.children && r.children.length > 0) || r.role || r.label || r.bounds || r.tokens),
+  );
 }
 
 /**
@@ -91,6 +111,7 @@ export function catalogFromCandidates(
 
   const sources: ComponentSource[] = [];
   const missing: string[] = [];
+  const withoutSemantics: string[] = [];
   for (const group of spec.groups) {
     for (const component of group.components) {
       const candidate = byFunction.get(component.preview);
@@ -98,6 +119,7 @@ export function catalogFromCandidates(
         missing.push(component.componentId);
         continue;
       }
+      if (!hasSemantics(candidate)) withoutSemantics.push(component.componentId);
       const source: ComponentSource = {
         componentId: component.componentId,
         group: group.name,
@@ -119,5 +141,5 @@ export function catalogFromCandidates(
   };
 
   const catalog = buildCatalog(meta, sources, opts.themeTokens);
-  return { catalog, missing };
+  return { catalog, missing, withoutSemantics };
 }
