@@ -1,0 +1,29 @@
+{
+  "name": "@design-parity/catalog-export",
+  "version": "0.1.19",
+  "description": "Turn a rendered Compose component system (compose-preview data products) into an importable design-artifact catalog: per-component sticker sheets in two variants (ideal + layout), a W3C DTCG token set, and an accessibility 'greenline' annotation layer — laid out for Figma / Stitch / Claude Design import.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@design-parity/core": "^0.1.19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/catalog-export"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/catalog-export#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
+}

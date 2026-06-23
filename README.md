@@ -56,6 +56,7 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 | [`@design-parity/action`](./packages/action) | 🚧 #8 · #9 | Orchestrator + CLI landed (registry → resolve → diff → policy → report); GitHub Action surface next. Includes optional Code-to-Canvas push-back (#9): gated on an opt-in flag + `code-led` + a `figma` source, writing the candidate render back via an injectable `CanvasWriter` (`@design-parity/adapter-figma`'s `FigmaCanvasWriter`). |
 | [`@design-parity/report-html`](./packages/report-html) | ✅ #31 | Per-run self-contained HTML comparison page: reference \| candidate \| diff side by side with the verdict findings, inlined to one offline `.html` (data-URI PNGs + inline CSS/JS, no external assets). Deterministic; leaf consumer. |
 | [`design-parity`](./packages/cli) | ✅ #61 | Top-level CLI package (unscoped) — owns the `design-parity` bin so `npx design-parity run …` works with no checkout. A thin launcher over `@design-parity/action` that also re-exports its programmatic API. |
+| [`@design-parity/catalog-export`](./packages/catalog-export) | ✅ | Code → design-artifact direction: render a whole component system and export it as an importable sticker-sheet **catalog** — per-component `ideal`+`layout` variants, a DTCG token set + Figma variable projection, and an accessibility **greenline** layer. Code-led; published kits are seed only (see [`docs/design-artifacts/REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md)). |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so
 every package can be built and tested against stubs with no live source or
@@ -69,6 +70,11 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
   backends (static bundle, CLI, local-compose-web, daemon) and how they wire in.
 - [Compose-for-Web / wasm renderer — feasibility verdict](./docs/cmp-web-wasm-feasibility.md)
   — why the web/wasm candidate backend is a deliberate stub (issue #30 stretch).
+- [Design-artifact catalogs](./docs/design-artifacts/PLAN.md) — the code →
+  design-tool direction: render a component system and export it as an importable
+  sticker-sheet catalog. Owned by
+  [`@design-parity/catalog-export`](./packages/catalog-export); seed kits in
+  [`REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md).
 - [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
 
 ## Use
