@@ -68,6 +68,44 @@ describe("catalogFromCandidates", () => {
     expect(catalog.components.map((c) => c.componentId)).toEqual(["Button/Filled"]);
   });
 
+  it("folds a function's theme multipreview variants into one component", () => {
+    // The real bundle reader emits one candidate per multipreview variant: the
+    // ids carry a `_Light` / `_Dark` suffix the spec doesn't, and `functionName`
+    // carries the stable identity. Both must fold onto one sticker with both
+    // theme images — keying off the suffixed previewId tail would match neither
+    // (regression: catalogFromCandidates matched 0/N before functionName).
+    const variant = (fn: string, theme: "light" | "dark"): CandidateRender => ({
+      componentId: `com.example.CKt.${fn}_${theme === "light" ? "Light" : "Dark"}`,
+      previewId: `com.example.CKt.${fn}_${theme === "light" ? "Light" : "Dark"}`,
+      functionName: fn,
+      images: [{ state: "default", theme, uri: `${fn}_${theme}.png`, width: 10, height: 10 }],
+      semantics: {
+        theme,
+        root: { children: [{ role: "button", label: fn, bounds: { x: 0, y: 0, width: 80, height: 48 } }] },
+        ...(theme === "light" ? { themeTokens: { colors: { primary: "#6750a4" } } } : {}),
+      },
+    });
+
+    const { catalog, missing, withoutSemantics } = catalogFromCandidates(
+      [
+        variant("FilledButton", "light"),
+        variant("FilledButton", "dark"),
+        variant("TextButtonSticker", "light"),
+        variant("TextButtonSticker", "dark"),
+      ],
+      spec,
+    );
+
+    expect(missing).toEqual([]);
+    expect(withoutSemantics).toEqual([]);
+    expect(catalog.components.map((c) => c.componentId)).toEqual(["Button/Filled", "Button/Text"]);
+    // Both theme captures land on the one sticker, not just the last one.
+    expect(catalog.components[0]!.variants.ideal).toHaveLength(2);
+    expect(catalog.components[0]!.variants.ideal.map((i) => i.theme).sort()).toEqual(["dark", "light"]);
+    // The light tree is kept for tokens/greenlines.
+    expect(catalog.themeTokens).toEqual({ colors: { primary: "#6750a4" } });
+  });
+
   it("flags rendered components whose semantics are the empty fallback", () => {
     const noSem: CandidateRender = {
       componentId: "x",
