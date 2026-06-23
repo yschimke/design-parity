@@ -51,4 +51,11 @@ describe("size vocabulary", () => {
     expect(normalizeSize(undefined)).toBeUndefined();
     expect(normalizeSize(Number.NaN)).toBeUndefined();
   });
+
+  it("returns undefined for null (an unset widthDp serializes as JSON null)", () => {
+    // A preview bundle's `params.widthDp` is `null` when the @Preview pins no
+    // width; the candidate reader passes it straight to normalizeSize, which
+    // must not throw on `.trim()`.
+    expect(normalizeSize(null)).toBeUndefined();
+  });
 });
