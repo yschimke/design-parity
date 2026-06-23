@@ -82,6 +82,28 @@ export interface ComponentReference {
   url?: string;
 }
 
+/** Per-edge content padding, in dp. */
+export interface RedlinePadding {
+  start?: number;
+  top?: number;
+  end?: number;
+  bottom?: number;
+}
+
+/**
+ * One **redline**: a layout annotation for a node — its box plus the spacing
+ * spec a designer reads off (content `padding`, inter-child `gap`, corner
+ * radius). Where greenlines annotate accessibility, redlines annotate layout.
+ */
+export interface Redline {
+  role?: string;
+  label?: string;
+  bounds: Bounds;
+  padding?: RedlinePadding;
+  gap?: number;
+  cornerRadius?: number;
+}
+
 /** One component on the sticker sheet, in its primary modes. */
 export interface CatalogComponent {
   /** Stable component id, e.g. `"Button/Filled"`. */
@@ -97,6 +119,12 @@ export interface CatalogComponent {
   tokens?: DesignTokens;
   /** Accessibility annotation layer for this component. */
   greenlines: Greenline[];
+  /**
+   * Layout annotation layer — per-node box + padding + inter-slot gap + corner
+   * radius (the spacing spec / redlines), walked from {@link semantics}. Empty
+   * when the component carries no semantics geometry.
+   */
+  redlines: Redline[];
   /**
    * The component's semantic tree — bounds, roles, and per-node tokens — so the
    * layout is identified, not just pictured. Optional; absent for hand-authored

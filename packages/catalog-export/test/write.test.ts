@@ -36,6 +36,7 @@ function catalogWith(idealUri: string, layoutUri: string): Catalog {
           layout: [{ state: "default", theme: "light", uri: layoutUri, width: 1, height: 1 }],
         },
         greenlines: [],
+        redlines: [],
       },
     ],
   };
@@ -81,7 +82,7 @@ describe("writeCatalog", () => {
     const catalog: Catalog = {
       meta: { system: "x", title: "X" },
       components: [
-        { componentId: "A", variants: { ideal: [{ state: "default", uri: PNG_DATA_URI, width: 1, height: 1 }] }, greenlines: [] },
+        { componentId: "A", variants: { ideal: [{ state: "default", uri: PNG_DATA_URI, width: 1, height: 1 }] }, greenlines: [], redlines: [] },
       ],
     };
     const result = await writeCatalog(catalog, out, { figmaVariables: true });

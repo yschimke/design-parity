@@ -19,6 +19,8 @@ export type {
   ComponentReference,
   ComponentVariants,
   Greenline,
+  Redline,
+  RedlinePadding,
 } from "./types.js";
 
 export {
@@ -35,6 +37,8 @@ export {
   findingsToGreenlines,
   specGreenlines,
 } from "./greenlines.js";
+
+export { buildRedlines } from "./redlines.js";
 
 export {
   imagePath,
