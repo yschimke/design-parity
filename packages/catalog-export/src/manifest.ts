@@ -14,7 +14,13 @@
  */
 import type { DesignTokens, Image, Theme } from "@design-parity/core";
 
-import type { Catalog, CatalogComponent, ComponentReference, Greenline } from "./types.js";
+import type {
+  Catalog,
+  CatalogComponent,
+  ComponentReference,
+  Greenline,
+  Redline,
+} from "./types.js";
 
 /** Which sticker-sheet variant an image belongs to. */
 export type VariantKind = "ideal" | "layout";
@@ -40,6 +46,8 @@ export interface CatalogManifestComponent {
   images: CatalogManifestImage[];
   tokens?: DesignTokens;
   greenlines: Greenline[];
+  /** Layout spacing spec — per-node box + padding + gap + corner radius. */
+  redlines: Redline[];
 }
 
 /** The parsed/serializable `catalog.json`. */
@@ -116,6 +124,7 @@ function manifestComponent(component: CatalogComponent): CatalogManifestComponen
     componentId: component.componentId,
     images: manifestImages(component),
     greenlines: component.greenlines,
+    redlines: component.redlines,
   };
   if (component.group !== undefined) out.group = component.group;
   if (component.caption !== undefined) out.caption = component.caption;

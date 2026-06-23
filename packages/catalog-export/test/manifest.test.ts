@@ -49,6 +49,7 @@ describe("toCatalogManifest", () => {
         },
         tokens: { radius: { container: 20 } },
         greenlines: [{ kind: "a11y", severity: "info", message: 'button "Save"' }],
+        redlines: [{ bounds: { x: 0, y: 0, width: 100, height: 48 }, padding: { start: 16, end: 16 } }],
       },
     ],
   };

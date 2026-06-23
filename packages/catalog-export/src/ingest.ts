@@ -17,6 +17,7 @@ import type {
 } from "@design-parity/core";
 
 import { buildGreenlines } from "./greenlines.js";
+import { buildRedlines } from "./redlines.js";
 import type {
   Catalog,
   CatalogComponent,
@@ -55,6 +56,7 @@ export function buildComponent(source: ComponentSource): CatalogComponent {
       ? { ideal: source.ideal, layout: source.layout }
       : { ideal: source.ideal },
     greenlines: buildGreenlines(source.findings, source.semantics),
+    redlines: buildRedlines(source.semantics),
   };
   if (source.group !== undefined) component.group = source.group;
   if (source.caption !== undefined) component.caption = source.caption;

@@ -26,6 +26,12 @@ For each component, in its primary modes (state × theme × size):
   *issue* greenlines from the renderer's a11y / contrast / i18n findings, and
   `info` *spec* greenlines documenting each interactive node's role and measured
   touch-target size.
+- **A redline layer** — the layout spacing spec: for each node with geometry, its
+  box plus the content `padding`, inter-slot `gap` (`Arrangement.spacedBy`), and
+  corner radius — so a component and its slots each carry an importable box +
+  spacing, not just a picture. (Walks the semantics tree, so a slot with no
+  semantics — a decorative icon — has no box; full slot coverage is a
+  renderer-side follow-up.)
 - **A token set** — the system's resolved `colors` / `typography` / `radius`
   (shapes), exported as a W3C **DTCG** file plus a **Figma variable-collection**
   projection (light/dark as modes).
