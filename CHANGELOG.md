@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.21](https://github.com/yschimke/design-parity/compare/v0.1.20...v0.1.21) (2026-06-23)
+
+
+### Bug Fixes
+
+* **release:** make workspace publish resilient to partial state ([071811d](https://github.com/yschimke/design-parity/commit/071811d3568513da8dfdb12bd780522f04f5fc50))
+* **release:** publish workspaces individually and skip already-published versions ([a615662](https://github.com/yschimke/design-parity/commit/a615662aa558e07549dc2fac7bebeb0878268ea8))
+
 ## [0.1.20](https://github.com/yschimke/design-parity/compare/v0.1.19...v0.1.20) (2026-06-23)
 
 
