@@ -3,7 +3,7 @@ name: release
 # release-please drives releases. On every push to main it maintains a single
 # "release PR" (one shared version + one CHANGELOG for the whole repo). Merging
 # that PR makes release-please tag `vX.Y.Z`, cut the GitHub release, and — in the
-# same run — publish all 14 packages to npm.
+# same run — publish all 15 packages to npm.
 #
 # IMPORTANT: this file is `release.yml` because the npm Trusted Publisher (OIDC)
 # for each package is bound to this exact workflow filename. Don't rename it, or
@@ -50,7 +50,37 @@ jobs:
       - run: npm test
       # Trusted publishing: OIDC supplies the credential (no NODE_AUTH_TOKEN),
       # provenance is automatic (no --provenance flag).
-      - run: npm publish --workspaces --access public
+      #
+      # Publish per-workspace so one failure (e.g. a brand-new package without
+      # OIDC trusted-publisher yet) does not abort the rest. Treat
+      # already-published versions as success so partial-publish reruns finish
+      # the job. Any other publish error still fails the workflow.
+      - name: Publish workspaces
+        run: |
+          set -u
+          fail=0
+          for ws in $(node -p "
+            const {globSync, existsSync} = require('node:fs');
+            const root = require('./package.json');
+            (root.workspaces ?? [])
+              .flatMap(p => globSync(p))
+              .filter(d => existsSync(d + '/package.json'))
+              .filter(d => !(require('./' + d + '/package.json').private))
+              .join('\n')
+          "); do
+            name=$(node -p "require('./${ws}/package.json').name")
+            version=$(node -p "require('./${ws}/package.json').version")
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "skip ${name}@${version} (already published)"
+              continue
+            fi
+            echo "publish ${name}@${version}"
+            if ! npm publish --workspace "${name}" --access public; then
+              echo "::error::failed to publish ${name}@${version}"
+              fail=1
+            fi
+          done
+          exit $fail
       - name: Commit the version sync back to main
         run: |
           if ! git diff --quiet; then
