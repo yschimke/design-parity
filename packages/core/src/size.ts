@@ -33,13 +33,17 @@ export function sizeForWidth(widthDp: number): CanonicalSize {
  * - a number, or a numeric string (`"600"`, `"600dp"`, `"840px"`) → classified
  *   by the Material breakpoints;
  * - a canonical name (any case) → itself;
- * - anything else (a custom/unknown label, `undefined`) → `undefined`, so the
- *   caller can keep the original rather than guess.
+ * - anything else (a custom/unknown label, `null`/`undefined`) → `undefined`, so
+ *   the caller can keep the original rather than guess.
+ *
+ * `null` is accepted as well as `undefined` because preview bundles serialize an
+ * unset width as JSON `null` (e.g. a `@Preview` with no `widthDp`), and the
+ * candidate reader passes `params.widthDp` straight through.
  */
 export function normalizeSize(
-  input: number | string | undefined,
+  input: number | string | null | undefined,
 ): CanonicalSize | undefined {
-  if (input === undefined) return undefined;
+  if (input == null) return undefined;
   if (typeof input === "number") {
     return Number.isFinite(input) ? sizeForWidth(input) : undefined;
   }
