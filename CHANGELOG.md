@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.20](https://github.com/yschimke/design-parity/compare/v0.1.19...v0.1.20) (2026-06-23)
+
+
+### Features
+
+* **catalog-export:** export rendered component systems as importable design catalogs ([1f0bd84](https://github.com/yschimke/design-parity/commit/1f0bd84b1cdc4ab17838fe0dca3a5f93fb79071f))
+* **catalog-export:** export rendered component systems as importable design catalogs ([32cdf02](https://github.com/yschimke/design-parity/commit/32cdf028b4a9e174fedfc9030bdba162e893d147))
+
 ## [0.1.19](https://github.com/yschimke/design-parity/compare/v0.1.18...v0.1.19) (2026-06-22)
 
 
