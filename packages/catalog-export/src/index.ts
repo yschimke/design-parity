@@ -58,3 +58,12 @@ export type {
 
 export { writeCatalog } from "./write.js";
 export type { WriteOptions, WriteResult } from "./write.js";
+
+export { catalogFromCandidates } from "./spec.js";
+export type {
+  CatalogSpec,
+  CatalogSpecComponent,
+  CatalogSpecGroup,
+  FromCandidatesOptions,
+  FromCandidatesResult,
+} from "./spec.js";
