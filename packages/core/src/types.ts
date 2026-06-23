@@ -157,6 +157,14 @@ export interface CandidateRender {
    * preview id (e.g. a hand-authored `CandidateRender`).
    */
   previewId?: string;
+  /**
+   * The `@Preview` **function name** (`"FilledButton"`), when the candidate came
+   * from a preview bundle / daemon — the stable identity shared by a function's
+   * theme/size multipreview variants, whose {@link previewId}s differ only by an
+   * appended `_<mode>` suffix. Catalog assembly keys on this to fold those
+   * variants into one component; absent for hand-authored candidates.
+   */
+  functionName?: string;
   images: Image[];
   semantics: SemanticTree;
 }

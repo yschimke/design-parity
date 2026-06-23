@@ -365,6 +365,10 @@ export function previewToCandidate(
   // When a resolver ran, keep the raw preview id reconcilable alongside the
   // code-handle componentId (issue #44).
   if (resolveComponentId) candidate.previewId = entry.id;
+  // Carry the function name so catalog assembly can fold a function's
+  // theme/size multipreview variants (whose ids differ only by an appended
+  // `_<mode>`) into one component, independent of any resolver.
+  if (entry.functionName !== undefined) candidate.functionName = entry.functionName;
   return candidate;
 }
 
@@ -406,6 +410,8 @@ export function mergeCandidateRenders(
   };
   const previewId = a.previewId ?? b.previewId;
   if (previewId !== undefined) merged.previewId = previewId;
+  const functionName = a.functionName ?? b.functionName;
+  if (functionName !== undefined) merged.functionName = functionName;
   return merged;
 }
 

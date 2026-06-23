@@ -1,5 +1,6 @@
 {
   "componentId": "ui.Button.PrimaryButton",
+  "functionName": "PrimaryButton",
   "images": [
     {
       "state": "default",

@@ -44,12 +44,44 @@ export interface CatalogSpec {
   groups: CatalogSpecGroup[];
 }
 
-/** The function-name tail of a preview id (`"a.b.CKt.FilledButton"` → `"FilledButton"`). */
+/**
+ * The `@Preview` function name a spec component matches on. Prefers the
+ * candidate's {@link CandidateRender.functionName} — the stable identity the
+ * bundle reader carries — so a function's theme/size multipreview variants
+ * (`FilledButton_Light`, `FilledButton_Dark`) all resolve to one key
+ * (`FilledButton`). Falls back to the dotted-id tail for hand-authored
+ * candidates with no function name; that tail keeps any `_<mode>` suffix, which
+ * is why the bundle path sets `functionName`.
+ */
 function functionOf(candidate: CandidateRender): string {
+  if (candidate.functionName) return candidate.functionName;
   const id = candidate.previewId ?? candidate.componentId;
-  const tail = id.split(".").pop() ?? id;
-  // Strip a trailing capture/variant suffix if the producer appended one.
-  return tail;
+  return id.split(".").pop() ?? id;
+}
+
+/** Fold a function's theme/size variants into one render: concatenate every
+ *  variant's images and keep a light-themed semantics tree (the token/greenline
+ *  reader keys off one). Mirrors `mergeCandidateRenders` but stays core-only so
+ *  catalog-export keeps its single `@design-parity/core` dependency. */
+function mergeByFunction(
+  a: CandidateRender,
+  b: CandidateRender,
+): CandidateRender {
+  const semantics =
+    a.semantics.theme === "light"
+      ? a.semantics
+      : b.semantics.theme === "light"
+        ? b.semantics
+        : a.semantics;
+  const merged: CandidateRender = {
+    componentId: a.componentId,
+    images: [...a.images, ...b.images],
+    semantics,
+  };
+  if (a.previewId ?? b.previewId) merged.previewId = a.previewId ?? b.previewId;
+  if (a.functionName ?? b.functionName)
+    merged.functionName = a.functionName ?? b.functionName;
+  return merged;
 }
 
 export interface FromCandidatesOptions {
@@ -104,9 +136,14 @@ export function catalogFromCandidates(
   spec: CatalogSpec,
   opts: FromCandidatesOptions = {},
 ): FromCandidatesResult {
+  // Fold each function's theme/size multipreview variants into one render, so a
+  // spec component picks up every variant's image (light + dark, small + large)
+  // as captures of the same sticker rather than the last one winning.
   const byFunction = new Map<string, CandidateRender>();
   for (const candidate of candidates) {
-    byFunction.set(functionOf(candidate), candidate);
+    const fn = functionOf(candidate);
+    const existing = byFunction.get(fn);
+    byFunction.set(fn, existing ? mergeByFunction(existing, candidate) : candidate);
   }
 
   const sources: ComponentSource[] = [];
