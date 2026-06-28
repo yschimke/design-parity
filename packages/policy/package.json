@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/policy",
-  "version": "0.1.19",
+  "version": "0.1.22",
   "description": "Parity direction policy: the committed .design-parity.json config (schema, loader, validator CLI) and the deterministic auto -> design-led/code-led resolver.",
   "license": "Apache-2.0",
   "type": "module",
@@ -22,7 +22,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.19",
+    "@design-parity/core": "^0.1.22",
     "ajv": "^8.17.1"
   },
   "repository": {
