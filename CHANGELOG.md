@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.23](https://github.com/yschimke/design-parity/compare/v0.1.22...v0.1.23) (2026-06-29)
+
+
+### Features
+
+* **catalog-export:** emit livePreview deep links into the catalog manifest ([f108fd1](https://github.com/yschimke/design-parity/commit/f108fd114f741ed00c0ef734c2c98ca3b342c441))
+* **catalog-export:** emit livePreview deep links into the catalog manifest ([532deb1](https://github.com/yschimke/design-parity/commit/532deb16b2f8e4c1842463b60e065482afa27c93))
+
+
+### Bug Fixes
+
+* **catalog-export:** point livePreview at the /p viewer route ([48ae723](https://github.com/yschimke/design-parity/commit/48ae7234b11149d9053e5916801bc8a00c2aa0eb))
+
 ## [0.1.22](https://github.com/yschimke/design-parity/compare/v0.1.21...v0.1.22) (2026-06-23)
 
 
