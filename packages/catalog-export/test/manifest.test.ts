@@ -132,17 +132,17 @@ describe("toCatalogManifest", () => {
       previewServer: { base: "https://preview.coo.ee/" },
     });
     const img = linked.components[0]!.images[0]!;
-    // Session = system; preview id = the image path minus images/ and .png with the subdir '/'
-    // flattened to '__' — exactly how `serve --catalogs` derives a route-safe catalog preview id,
-    // so the link resolves to the live render.
+    // Targets the /p viewer route; preview id = the image path minus images/ and .png with the
+    // subdir '/' flattened to '__' — exactly how `serve --catalogs` derives a route-safe catalog
+    // preview id, so the link resolves to the live render.
     expect(img.livePreview).toBe(
-      "https://preview.coo.ee/?session=compose-m3&preview=button-filled__ideal__default__light",
+      "https://preview.coo.ee/p/button-filled__ideal__default__light?session=compose-m3",
     );
   });
 });
 
 describe("livePreviewUrl", () => {
-  it("normalizes the base and flattens the path into a route-safe preview id", () => {
+  it("targets the /p viewer route with the base normalized and the path flattened", () => {
     expect(
       livePreviewUrl(
         "https://preview.coo.ee///",
@@ -150,7 +150,7 @@ describe("livePreviewUrl", () => {
         "images/fab/ideal__default__dark.png",
       ),
     ).toBe(
-      "https://preview.coo.ee/?session=compose-m3&preview=fab__ideal__default__dark",
+      "https://preview.coo.ee/p/fab__ideal__default__dark?session=compose-m3",
     );
   });
 });

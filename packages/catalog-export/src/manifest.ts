@@ -96,11 +96,12 @@ export interface ManifestOptions {
 const DEFAULT_TOKENS_FILE = "tokens.dtcg.json";
 
 /**
- * The live-preview deep link for a manifest image. The server's session is the
- * `system` and the preview id is the image's bundle path without the `images/`
- * prefix and `.png` suffix, with the component-subdir `/` flattened to `__` —
- * exactly how `compose-preview serve --catalogs` derives a catalog preview id
- * (its routes capture a single path segment, so the id must be slash-free), so
+ * The live-preview deep link for a manifest image. Targets the server's **viewer**
+ * route `/p/{name}` (not `/?preview=`, which only renders the session landing
+ * page) with `?session=<system>` selecting the catalog. The preview id is the
+ * image's bundle path without the `images/` prefix and `.png` suffix, with the
+ * component-subdir `/` flattened to `__` — exactly how `compose-preview serve
+ * --catalogs` derives a route-safe (single-path-segment) catalog preview id, so
  * the link resolves to the matching live render. Pure; trailing slashes on
  * `base` are normalized away.
  */
@@ -114,7 +115,7 @@ export function livePreviewUrl(
     .replace(/\.png$/, "")
     .replace(/\//g, "__");
   const root = base.replace(/\/+$/, "");
-  return `${root}/?session=${encodeURIComponent(system)}&preview=${encodeURIComponent(id)}`;
+  return `${root}/p/${encodeURIComponent(id)}?session=${encodeURIComponent(system)}`;
 }
 
 /** Filesystem-safe slug for a component id / variant key segment. */
