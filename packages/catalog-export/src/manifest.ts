@@ -35,6 +35,14 @@ export interface CatalogManifestImage {
   size?: string;
   width: number;
   height: number;
+  /**
+   * Deep link into a live preview server where this exact variant can be opened
+   * and customised — the cross-tool bridge that makes browsing the published
+   * `design-artifacts/<system>` branch and a live, editable preview the same
+   * render. Present only when a {@link ManifestOptions.previewServer} base is
+   * configured. See {@link livePreviewUrl}.
+   */
+  livePreview?: string;
 }
 
 /** One component entry in the manifest. */
@@ -63,12 +71,52 @@ export interface CatalogManifest {
   components: CatalogManifestComponent[];
 }
 
+/**
+ * A live preview server the catalog should deep-link into, so each image carries
+ * a `livePreview` URL where a designer can open and customise that variant. The
+ * upstream `compose-preview serve --catalogs <system>` hosts the same published
+ * catalog, so the link round-trips to the same render the sticker sheet shows.
+ */
+export interface PreviewServerOptions {
+  /** Base URL of the live server, e.g. `"https://preview.coo.ee"`. */
+  base: string;
+}
+
 export interface ManifestOptions {
   /** Bundle-relative DTCG token filename. Default `"tokens.dtcg.json"`. */
   tokensFile?: string;
+  /**
+   * When set, every image entry gets a {@link CatalogManifestImage.livePreview}
+   * deep link into this server. Omitted ⇒ no `livePreview` fields (the catalog is
+   * still complete; the links are an additive convenience).
+   */
+  previewServer?: PreviewServerOptions;
 }
 
 const DEFAULT_TOKENS_FILE = "tokens.dtcg.json";
+
+/**
+ * The live-preview deep link for a manifest image. Targets the server's **viewer**
+ * route `/p/{name}` (not `/?preview=`, which only renders the session landing
+ * page) with `?session=<system>` selecting the catalog. The preview id is the
+ * image's bundle path without the `images/` prefix and `.png` suffix, with the
+ * component-subdir `/` flattened to `__` — exactly how `compose-preview serve
+ * --catalogs` derives a route-safe (single-path-segment) catalog preview id, so
+ * the link resolves to the matching live render. Pure; trailing slashes on
+ * `base` are normalized away.
+ */
+export function livePreviewUrl(
+  base: string,
+  system: string,
+  imagePath: string,
+): string {
+  const id = imagePath
+    .replace(/^images\//, "")
+    .replace(/\.png$/, "")
+    .replace(/\//g, "__");
+  const root = base.replace(/\/+$/, "");
+  return `${root}/p/${encodeURIComponent(id)}?session=${encodeURIComponent(system)}`;
+}
 
 /** Filesystem-safe slug for a component id / variant key segment. */
 export function slug(value: string): string {
@@ -98,19 +146,36 @@ export function imagePath(
   return `images/${slug(componentId)}/${file}.png`;
 }
 
-function manifestImages(component: CatalogComponent): CatalogManifestImage[] {
+/** Context threaded into the per-component builders: the system id + optional live-link base. */
+interface ManifestContext {
+  system: string;
+  previewServer?: PreviewServerOptions;
+}
+
+function manifestImages(
+  component: CatalogComponent,
+  ctx: ManifestContext,
+): CatalogManifestImage[] {
   const out: CatalogManifestImage[] = [];
   const push = (variant: VariantKind, images: Image[] | undefined): void => {
     for (const image of images ?? []) {
+      const path = imagePath(component.componentId, variant, image);
       const entry: CatalogManifestImage = {
         variant,
-        path: imagePath(component.componentId, variant, image),
+        path,
         state: image.state,
         width: image.width,
         height: image.height,
       };
       if (image.theme) entry.theme = image.theme;
       if (image.size) entry.size = image.size;
+      if (ctx.previewServer) {
+        entry.livePreview = livePreviewUrl(
+          ctx.previewServer.base,
+          ctx.system,
+          path,
+        );
+      }
       out.push(entry);
     }
   };
@@ -119,10 +184,13 @@ function manifestImages(component: CatalogComponent): CatalogManifestImage[] {
   return out;
 }
 
-function manifestComponent(component: CatalogComponent): CatalogManifestComponent {
+function manifestComponent(
+  component: CatalogComponent,
+  ctx: ManifestContext,
+): CatalogManifestComponent {
   const out: CatalogManifestComponent = {
     componentId: component.componentId,
-    images: manifestImages(component),
+    images: manifestImages(component, ctx),
     greenlines: component.greenlines,
     redlines: component.redlines,
   };
@@ -138,11 +206,15 @@ export function toCatalogManifest(
   catalog: Catalog,
   opts: ManifestOptions = {},
 ): CatalogManifest {
+  const ctx: ManifestContext = {
+    system: catalog.meta.system,
+    previewServer: opts.previewServer,
+  };
   const manifest: CatalogManifest = {
     schema: "design-parity-catalog/v1",
     system: catalog.meta.system,
     title: catalog.meta.title,
-    components: catalog.components.map(manifestComponent),
+    components: catalog.components.map((c) => manifestComponent(c, ctx)),
   };
   if (catalog.meta.library) manifest.library = catalog.meta.library;
   if (catalog.meta.renderer) manifest.renderer = catalog.meta.renderer;
