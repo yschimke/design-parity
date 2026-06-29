@@ -23,10 +23,7 @@ export type {
   RedlinePadding,
 } from "./types.js";
 
-export {
-  buildCatalog,
-  buildComponent,
-} from "./ingest.js";
+export { buildCatalog, buildComponent } from "./ingest.js";
 export type { ComponentSource } from "./ingest.js";
 
 export {
@@ -42,6 +39,7 @@ export { buildRedlines } from "./redlines.js";
 
 export {
   imagePath,
+  livePreviewUrl,
   slug,
   toCatalogManifest,
 } from "./manifest.js";
@@ -50,6 +48,7 @@ export type {
   CatalogManifestComponent,
   CatalogManifestImage,
   ManifestOptions,
+  PreviewServerOptions,
   VariantKind,
 } from "./manifest.js";
 
