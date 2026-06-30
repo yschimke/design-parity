@@ -1,6 +1,6 @@
 {
   "name": "design-parity",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Top-level CLI for design-parity: run a parity check with no checkout via `npx design-parity run …`. A thin launcher over @design-parity/action; re-exports its programmatic API too.",
   "license": "Apache-2.0",
   "type": "module",
@@ -18,7 +18,7 @@
     "design-parity": "./bin/design-parity.mjs"
   },
   "dependencies": {
-    "@design-parity/action": "^0.1.22"
+    "@design-parity/action": "^0.1.23"
   },
   "repository": {
     "type": "git",
