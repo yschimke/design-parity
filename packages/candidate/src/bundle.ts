@@ -20,6 +20,12 @@
  * - `previews/<id>.semantics.json` — **the a11y/semantics blob** added per the
  *   #38 contract (a {@link SemanticTree}-shaped payload, theme-tagged). This is
  *   the location this reader chose and documents; see `docs/candidate-sources.md`.
+ * - `previews/<id>.catalog.json` — **the resolved `@ColorCatalog` /
+ *   `@TypographyCatalog` token values** for a `CATALOG` sheet (compose-ai-tools#2167):
+ *   `{ tokens: [{ label, kind: "COLOR"|"TEXT_STYLE", color?, textStyle? }] }`.
+ *   Read across the whole bundle by {@link catalogTokensFromBundle} into a system
+ *   {@link DesignTokens} — an annotation-declared palette / type scale — for the
+ *   catalog export's `themeTokens`, alongside the theme-derived tokens.
  *
  * Each preview becomes one {@link CandidateRender}: image as a
  * `data:image/png;base64,…` URI (bundle PNGs are not on disk, dims read from the
@@ -33,9 +39,11 @@ import { unzipSync, type Unzipped } from "fflate";
 import {
   normalizeSize,
   type CandidateRender,
+  type DesignTokens,
   type Image,
   type SemanticTree,
   type Theme,
+  type TypographyToken,
 } from "@design-parity/core";
 
 import {
@@ -44,6 +52,7 @@ import {
   type PreviewParams,
   type RawSemantics,
 } from "./cli.js";
+import { argbToCssHex, normalizeFontFamily } from "./daemon.js";
 import { InvalidBundleError } from "./errors.js";
 import { readPngSize } from "./png.js";
 
@@ -434,4 +443,94 @@ export async function loadPreviewBundle(
   resolveComponentId?: ComponentIdResolver,
 ): Promise<CandidateRender[]> {
   return bundleToCandidates(await readPreviewBundle(input), resolveComponentId);
+}
+
+// ---------------------------------------------------------------------------
+// Catalog-token sidecars → system DesignTokens (compose-ai-tools#2167).
+// ---------------------------------------------------------------------------
+
+/** One resolved token in a `previews/<id>.catalog.json` sidecar. */
+interface CatalogTokenEntry {
+  /** The design-token name (`"BrandCoral"`, `"DisplayLarge"`, `"Body Large"`). */
+  label?: string;
+  kind?: "COLOR" | "TEXT_STYLE";
+  /** For `COLOR`: the reflected value. `hex` is `#AARRGGBB`. */
+  color?: { hex?: string; argb?: number };
+  /** For `TEXT_STYLE`: the reflected `TextStyle` metrics (sp magnitudes). */
+  textStyle?: {
+    fontSizeSp?: number;
+    fontWeight?: number;
+    fontStyle?: string;
+    letterSpacingSp?: number;
+    lineHeightSp?: number;
+    fontFamily?: string;
+  };
+}
+
+/** The `compose-preview-catalog-tokens` sidecar payload. */
+interface CatalogTokenSidecar {
+  schema?: string;
+  previewId?: string;
+  tokens?: CatalogTokenEntry[];
+}
+
+function toTypographyToken(
+  ts: NonNullable<CatalogTokenEntry["textStyle"]>,
+): TypographyToken {
+  const out: TypographyToken = {};
+  if (ts.fontFamily) out.fontFamily = normalizeFontFamily(ts.fontFamily);
+  if (ts.fontSizeSp !== undefined) out.fontSize = ts.fontSizeSp;
+  if (ts.fontWeight !== undefined) out.fontWeight = ts.fontWeight;
+  if (ts.fontStyle) out.fontStyle = ts.fontStyle;
+  if (ts.letterSpacingSp !== undefined) out.letterSpacing = ts.letterSpacingSp;
+  if (ts.lineHeightSp !== undefined) out.lineHeight = ts.lineHeightSp;
+  return out;
+}
+
+/**
+ * Aggregate every `previews/<id>.catalog.json` sidecar in [bundle] into a system
+ * {@link DesignTokens} — the resolved `@ColorCatalog` colours (as CSS hex, keyed
+ * by token name) and `@TypographyCatalog` type styles (compose-ai-tools#2167).
+ * This is how an annotation-declared palette or type scale — which carries no
+ * `MaterialTheme` and so never shows up in the `compose/theme` `themeTokens` a
+ * screen render exposes — becomes importable data: pass the result as (or merge
+ * it into) `catalogFromCandidates`' `opts.themeTokens` so it lands in the
+ * catalog's exported token set.
+ *
+ * Colours reuse {@link argbToCssHex} so they match the daemon/theme colour format
+ * exactly. Best-effort and pure: a malformed sidecar is skipped, not fatal.
+ * Returns `undefined` when the bundle carries no catalog tokens (the common case
+ * for a bundle of ordinary component previews).
+ */
+export function catalogTokensFromBundle(
+  bundle: PreviewBundle,
+): DesignTokens | undefined {
+  const colors: Record<string, string> = {};
+  const typography: Record<string, TypographyToken> = {};
+
+  for (const [path, bytes] of Object.entries(bundle.entries)) {
+    if (!path.startsWith("previews/") || !path.endsWith(".catalog.json")) {
+      continue;
+    }
+    let payload: CatalogTokenSidecar;
+    try {
+      payload = JSON.parse(td.decode(bytes)) as CatalogTokenSidecar;
+    } catch {
+      continue; // best-effort: a malformed sidecar doesn't sink the read
+    }
+    for (const token of payload.tokens ?? []) {
+      if (!token.label) continue;
+      if (token.kind === "COLOR") {
+        const css = argbToCssHex(token.color?.hex);
+        if (css) colors[token.label] = css;
+      } else if (token.kind === "TEXT_STYLE" && token.textStyle) {
+        typography[token.label] = toTypographyToken(token.textStyle);
+      }
+    }
+  }
+
+  const out: DesignTokens = {};
+  if (Object.keys(colors).length > 0) out.colors = colors;
+  if (Object.keys(typography).length > 0) out.typography = typography;
+  return out.colors || out.typography ? out : undefined;
 }

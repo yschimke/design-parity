@@ -17,6 +17,7 @@ import {
   loadPreviewBundle,
   previewToCandidate,
   mergeCandidateRenders,
+  catalogTokensFromBundle,
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
@@ -301,4 +302,76 @@ describe("stub sources", () => {
     );
   });
 
+});
+
+describe("catalogTokensFromBundle", () => {
+  const te = new TextEncoder();
+  const sidecar = (previewId: string, tokens: unknown[]): Uint8Array =>
+    te.encode(JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, tokens }));
+
+  it("aggregates @ColorCatalog and @TypographyCatalog sidecars into system tokens", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/colorcatalog__Brand.catalog.json": sidecar("colorcatalog__Brand", [
+          { label: "BrandCoral", kind: "COLOR", color: { hex: "#FFFF6F61", argb: -37023 } },
+          { label: "Scrim", kind: "COLOR", color: { hex: "#80000000", argb: -2147483648 } },
+        ]),
+        "previews/typographycatalog__Display.catalog.json": sidecar(
+          "typographycatalog__Display",
+          [
+            {
+              label: "DisplayLarge",
+              kind: "TEXT_STYLE",
+              textStyle: { fontSizeSp: 45, fontWeight: 400 },
+            },
+            {
+              label: "Body Large",
+              kind: "TEXT_STYLE",
+              textStyle: { fontSizeSp: 16, fontWeight: 500, fontStyle: "italic", lineHeightSp: 24 },
+            },
+          ],
+        ),
+      },
+    };
+
+    const tokens = catalogTokensFromBundle(bundle);
+    // Colours: keyed by token name, ARGB hex reformatted to CSS `#rrggbbaa`.
+    expect(tokens?.colors).toEqual({
+      BrandCoral: "#ff6f61ff",
+      Scrim: "#00000080",
+    });
+    // Type styles: sp magnitudes carried straight onto TypographyToken.
+    expect(tokens?.typography?.DisplayLarge).toEqual({ fontSize: 45, fontWeight: 400 });
+    expect(tokens?.typography?.["Body Large"]).toEqual({
+      fontSize: 16,
+      fontWeight: 500,
+      fontStyle: "italic",
+      lineHeight: 24,
+    });
+  });
+
+  it("returns undefined for a bundle with no catalog sidecars", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: { "previews/a.b.CKt.Foo.png": Uint8Array.of(1, 2, 3) },
+    };
+    expect(catalogTokensFromBundle(bundle)).toBeUndefined();
+  });
+
+  it("skips a malformed sidecar without throwing", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/bad.catalog.json": te.encode("{ not json"),
+        "previews/colorcatalog__Brand.catalog.json": sidecar("colorcatalog__Brand", [
+          { label: "BrandCoral", kind: "COLOR", color: { hex: "#FFFF6F61" } },
+        ]),
+      },
+    };
+    expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ BrandCoral: "#ff6f61ff" });
+  });
 });

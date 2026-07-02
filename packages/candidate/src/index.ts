@@ -93,6 +93,7 @@ export {
   previewToCandidate,
   mergeCandidateRenders,
   loadPreviewBundle,
+  catalogTokensFromBundle,
 } from "./bundle.js";
 export type {
   PreviewBundle,
