@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/resolver",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "Correspondence resolver: decide which design reference (source, ref) matches a changed code component — Code Connect, then design-map.json, then name convention.",
   "license": "Apache-2.0",
   "type": "module",
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.23"
+    "@design-parity/core": "^0.1.24"
   },
   "repository": {
     "type": "git",

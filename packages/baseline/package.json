@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/baseline",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "Detect a repo's design-system maturity and, for a repo with no design system, bootstrap an opinionated committed baseline (tokens, design-map, check config, parity direction).",
   "license": "Apache-2.0",
   "type": "module",
@@ -20,9 +20,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@design-parity/checks": "^0.1.23",
-    "@design-parity/core": "^0.1.23",
-    "@design-parity/policy": "^0.1.23"
+    "@design-parity/checks": "^0.1.24",
+    "@design-parity/core": "^0.1.24",
+    "@design-parity/policy": "^0.1.24"
   },
   "repository": {
     "type": "git",
