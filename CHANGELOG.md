@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.24](https://github.com/yschimke/design-parity/compare/v0.1.23...v0.1.24) (2026-07-02)
+
+
+### Features
+
+* **candidate:** read @ColorCatalog/@TypographyCatalog tokens from a bundle ([4a5fc8b](https://github.com/yschimke/design-parity/commit/4a5fc8b8511a1310c00a05f9b3f1b6a0a40e10f6))
+* **candidate:** read @ColorCatalog/@TypographyCatalog tokens from a bundle ([488770f](https://github.com/yschimke/design-parity/commit/488770f57874846495aadc8946b883332ad8bfc8))
+
 ## [0.1.23](https://github.com/yschimke/design-parity/compare/v0.1.22...v0.1.23) (2026-06-29)
 
 
