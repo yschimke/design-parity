@@ -54,6 +54,11 @@ jobs:
       - uses: anthropics/claude-code-action@v1.0.163
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Request the CI-read scope on the Claude App token the action
+          # mints for itself — the job-level `actions: read` grant above only
+          # covers the workflow token.
+          additional_permissions: |
+            actions: read
           branch_prefix: agent/
           settings: |
             {
