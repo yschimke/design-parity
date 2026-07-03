@@ -74,7 +74,9 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
   design-tool direction: render a component system and export it as an importable
   sticker-sheet catalog. Owned by
   [`@design-parity/catalog-export`](./packages/catalog-export); seed kits in
-  [`REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md).
+  [`REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md). Importing a
+  delivery branch into Figma (one file per system) is documented in
+  [`FIGMA_IMPORT.md`](./docs/design-artifacts/FIGMA_IMPORT.md).
 - [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
 
 ## Use
