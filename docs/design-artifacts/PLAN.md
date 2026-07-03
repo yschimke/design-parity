@@ -77,6 +77,13 @@ design-artifacts/glance-wear
 Each holds the `catalog-export` bundle (`catalog.json`, `tokens.dtcg.json`,
 `figma-variables.json`, `images/…`) for that system.
 
+## Importing into Figma
+
+The delivery branches are the handoff point; turning one into an importable
+Figma sticker sheet (one file per system) and keeping it fresh is documented in
+[`FIGMA_IMPORT.md`](./FIGMA_IMPORT.md), with the deterministic prep owned by
+[`scripts/figma-import-prep.mjs`](../../scripts/figma-import-prep.mjs).
+
 ## Status
 
 - ✅ `@design-parity/catalog-export` — model, ingest, greenlines, manifest, DTCG
