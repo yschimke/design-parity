@@ -1,0 +1,15 @@
+{
+  "name": "design-parity — Catalog Import",
+  "api": "1.0.0",
+  "main": "../dist/plugin/code.js",
+  "ui": "../dist/plugin/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://raw.githubusercontent.com",
+      "https://objects.githubusercontent.com"
+    ],
+    "reasoning": "Fetches a published design-parity catalog manifest (catalog.json), its DTCG token file, and the sticker-sheet PNGs from a design-artifacts/<system> branch on GitHub. Add your own live preview server host here to import from compose-preview serve."
+  }
+}

@@ -1,0 +1,29 @@
+<!-- UI iframe markup. esbuild inlines the compiled ui.ts into <script> at build. -->
+<style>
+  :root { color-scheme: light dark; font-family: Inter, system-ui, sans-serif; }
+  body { margin: 0; padding: 16px; font-size: 12px; }
+  h1 { font-size: 13px; margin: 0 0 4px; }
+  p.hint { margin: 0 0 12px; opacity: 0.7; }
+  label { display: block; font-weight: 600; margin-bottom: 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px;
+          border: 1px solid rgba(128,128,128,0.4); background: transparent; color: inherit; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button { flex: 1; padding: 8px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 600; }
+  button[type="submit"] { background: #0d99ff; color: #fff; }
+  #cancel { background: rgba(128,128,128,0.2); color: inherit; }
+  #status { margin-top: 12px; font-variant-numeric: tabular-nums; min-height: 16px; opacity: 0.85; }
+  code { font-size: 11px; opacity: 0.6; word-break: break-all; }
+</style>
+
+<h1>Import a design-parity catalog</h1>
+<p class="hint">Paste the raw root of a published <code>design-artifacts/&lt;system&gt;</code> branch — the folder containing <code>catalog.json</code>.</p>
+
+<form id="form">
+  <label for="base">Catalog base URL</label>
+  <input id="base" name="base" type="url" placeholder="https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compose-m3" />
+  <div class="row">
+    <button type="submit">Import</button>
+    <button id="cancel" type="button">Close</button>
+  </div>
+</form>
+<p id="status"></p>
