@@ -3,7 +3,9 @@ dist/
 *.tsbuildinfo
 coverage/
 .design-parity/
-.claude/
+/.claude/*
+!/.claude/settings.json
+/.claude/settings.local.json
 .DS_Store
 *.log
 .compose-preview-history/
