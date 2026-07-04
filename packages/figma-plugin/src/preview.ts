@@ -9,7 +9,7 @@
  * reviewer — and this package's own tests — can see what the plugin will build
  * without a live Figma session. Pure: string in, string out, no `figma`, no I/O.
  */
-import { severityHex } from "./annotations.js";
+import { REDLINE_HEX, redlineLabel, severityHex } from "./annotations.js";
 import type { ImportPlan, PlannedComponent } from "./plan.js";
 
 const PAD = 24;
@@ -61,7 +61,7 @@ function drawComponent(c: PlannedComponent, cur: Cursor): void {
         `<text x='${x + w / 2}' y='${boxTop + h / 2 + 11}' ${FONT} font-size='8' fill='#8c959f' text-anchor='middle'>${img.width}×${img.height}</text>`,
     );
 
-    // Greenlines anchor to the first image's pixel space.
+    // Greenlines and redlines anchor to the first image's pixel space.
     if (i === 0) {
       for (const g of c.greenlines) {
         if (!g.bounds) continue;
@@ -69,6 +69,13 @@ function drawComponent(c: PlannedComponent, cur: Cursor): void {
         const gy = boxTop + g.bounds.y * s;
         cur.parts.push(
           `<rect x='${gx.toFixed(1)}' y='${gy.toFixed(1)}' width='${(g.bounds.width * s).toFixed(1)}' height='${(g.bounds.height * s).toFixed(1)}' fill='none' stroke='${severityHex(g.severity)}' stroke-width='1.5'/>`,
+        );
+      }
+      for (const r of c.redlines) {
+        const rx = x + r.bounds.x * s;
+        const ry = boxTop + r.bounds.y * s;
+        cur.parts.push(
+          `<rect x='${rx.toFixed(1)}' y='${ry.toFixed(1)}' width='${(r.bounds.width * s).toFixed(1)}' height='${(r.bounds.height * s).toFixed(1)}' rx='${((r.cornerRadius ?? 0) * s).toFixed(1)}' fill='none' stroke='${REDLINE_HEX}' stroke-width='1' stroke-dasharray='3 2'/>`,
         );
       }
     }
@@ -87,6 +94,16 @@ function drawComponent(c: PlannedComponent, cur: Cursor): void {
     );
     below += 15;
   }
+  // Redline captions (the spacing spec) beneath the row.
+  for (const r of c.redlines) {
+    const label = redlineLabel(r);
+    if (!label) continue;
+    cur.parts.push(
+      `<rect x='${PAD}' y='${below}' width='8' height='8' fill='none' stroke='${REDLINE_HEX}' stroke-dasharray='2 1.5'/>` +
+        `<text x='${PAD + 14}' y='${below + 8}' ${FONT} font-size='10' fill='#424a53'>${esc(label)}</text>`,
+    );
+    below += 15;
+  }
   cur.y = below + ROW_GAP;
 }
 
@@ -99,7 +116,7 @@ export function planToSvg(plan: ImportPlan): string {
   );
   cur.y += 28;
   cur.parts.push(
-    `<text x='${PAD}' y='${cur.y + 10}' ${FONT} font-size='11' fill='#57606a'>${plan.imageCount} render${plan.imageCount === 1 ? "" : "s"} · ${plan.greenlineCount} a11y greenline${plan.greenlineCount === 1 ? "" : "s"}${plan.collection ? ` · ${plan.collection.variables.length} variables` : ""}</text>`,
+    `<text x='${PAD}' y='${cur.y + 10}' ${FONT} font-size='11' fill='#57606a'>${plan.imageCount} render${plan.imageCount === 1 ? "" : "s"} · ${plan.greenlineCount} a11y greenline${plan.greenlineCount === 1 ? "" : "s"}${plan.redlineCount > 0 ? ` · ${plan.redlineCount} redline${plan.redlineCount === 1 ? "" : "s"}` : ""}${plan.collection ? ` · ${plan.collection.variables.length} variables` : ""}</text>`,
   );
   cur.y += 24;
 

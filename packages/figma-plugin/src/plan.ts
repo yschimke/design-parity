@@ -21,6 +21,7 @@ import type {
   CatalogManifestComponent,
   CatalogManifestImage,
   Greenline,
+  Redline,
 } from "@design-parity/catalog-export";
 // The pure Figma projection is imported from catalog-export's browser-safe
 // `./figma` subpath, not the package barrel: the barrel re-exports the on-disk
@@ -54,6 +55,13 @@ export interface PlannedComponent {
    * {@link PlanOptions.greenlines} is `false`.
    */
   greenlines: Greenline[];
+  /**
+   * Layout redlines (per-node box + padding + gap + corner radius), anchored to
+   * the first image's pixel space. Populated only for the `layout` variant —
+   * the spacing spec belongs over the wireframe, the way greenlines belong over
+   * the ideal render. Empty otherwise.
+   */
+  redlines: Redline[];
 }
 
 /** A group of components laid out under one section header on the canvas. */
@@ -77,6 +85,8 @@ export interface ImportPlan {
   imageCount: number;
   /** Total greenline annotations across all components (0 when disabled). */
   greenlineCount: number;
+  /** Total redline annotations across all components (0 unless layout variant). */
+  redlineCount: number;
 }
 
 export interface PlanOptions {
@@ -103,6 +113,11 @@ export interface PlanOptions {
    * the `layout` variant (its geometry isn't the greenlines' anchor space).
    */
   greenlines?: boolean;
+  /**
+   * Include the layout redline (spacing) annotation layer. Default `true`. Only
+   * ever populated for the `layout` variant.
+   */
+  redlines?: boolean;
 }
 
 /** Resolve a manifest image path against the base URL (absolute paths pass through). */
@@ -150,8 +165,10 @@ export function buildImportPlan(
   let imageCount = 0;
 
   const variant = opts.variant ?? "ideal";
-  // Greenlines anchor to ideal pixel space; never draw them over the wireframe.
+  // Each variant gets its natural overlay: greenlines (a11y) over the ideal
+  // render, redlines (spacing spec) over the layout wireframe.
   const withGreenlines = variant === "ideal" && opts.greenlines !== false;
+  const withRedlines = variant === "layout" && opts.redlines !== false;
 
   for (const component of manifest.components) {
     const images = planImages(component, opts);
@@ -162,6 +179,7 @@ export function buildImportPlan(
       componentId: component.componentId,
       images,
       greenlines: withGreenlines ? component.greenlines : [],
+      redlines: withRedlines ? component.redlines : [],
     };
     if (component.caption !== undefined) planned.caption = component.caption;
 
@@ -179,6 +197,10 @@ export function buildImportPlan(
     (sum, g) => sum + g.components.reduce((n, c) => n + c.greenlines.length, 0),
     0,
   );
+  const redlineCount = groups.reduce(
+    (sum, g) => sum + g.components.reduce((n, c) => n + c.redlines.length, 0),
+    0,
+  );
 
   const plan: ImportPlan = {
     system: manifest.system,
@@ -186,6 +208,7 @@ export function buildImportPlan(
     groups,
     imageCount,
     greenlineCount,
+    redlineCount,
   };
   if (opts.themeTokens) {
     plan.collection = toFigmaVariables(opts.themeTokens, manifest.title);

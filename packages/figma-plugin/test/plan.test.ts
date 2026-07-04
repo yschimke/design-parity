@@ -222,3 +222,57 @@ describe("buildImportPlan — greenlines", () => {
     expect(plan.greenlineCount).toBe(0);
   });
 });
+
+const withRedlines: CatalogManifest = {
+  schema: "design-parity-catalog/v1",
+  system: "compose-m3",
+  title: "Compose Material 3",
+  components: [
+    {
+      componentId: "Card",
+      group: "Containers",
+      images: [
+        { variant: "ideal", path: "images/card/ideal.png", state: "default", width: 240, height: 120 },
+        { variant: "layout", path: "images/card/layout.png", state: "default", width: 240, height: 120 },
+      ],
+      greenlines: [{ kind: "a11y", severity: "info", message: "Role: card" }],
+      redlines: [
+        {
+          role: "Column",
+          bounds: { x: 0, y: 0, width: 240, height: 120 },
+          padding: { top: 16, end: 16, bottom: 16, start: 16 },
+          gap: 8,
+          cornerRadius: 12,
+        },
+      ],
+    },
+  ],
+};
+
+describe("buildImportPlan — redlines", () => {
+  const base = "https://x/y";
+
+  it("attaches redlines and totals redlineCount only for the layout variant", () => {
+    const plan = buildImportPlan(withRedlines, { baseUrl: base, variant: "layout" });
+    expect(plan.redlineCount).toBe(1);
+    expect(plan.groups[0]!.components[0]!.redlines).toHaveLength(1);
+    // greenlines are ideal-only, so none here
+    expect(plan.greenlineCount).toBe(0);
+  });
+
+  it("drops redlines for the ideal variant (greenlines take that layer)", () => {
+    const plan = buildImportPlan(withRedlines, { baseUrl: base });
+    expect(plan.redlineCount).toBe(0);
+    expect(plan.groups[0]!.components[0]!.redlines).toEqual([]);
+    expect(plan.greenlineCount).toBe(1);
+  });
+
+  it("drops redlines when explicitly disabled on the layout variant", () => {
+    const plan = buildImportPlan(withRedlines, {
+      baseUrl: base,
+      variant: "layout",
+      redlines: false,
+    });
+    expect(plan.redlineCount).toBe(0);
+  });
+});

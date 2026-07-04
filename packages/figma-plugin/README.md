@@ -6,19 +6,24 @@ component system: sticker-sheet PNGs plus a DTCG token set — straight onto a
 Figma canvas as authoritative renders, grouped by component group, with:
 
 - the **`ideal` render or the `layout` wireframe** variant (a UI toggle);
-- an a11y **greenline** annotation layer over each render (touch-target,
-  contrast, label findings from the catalog) — design-parity leads with a11y;
+- an a11y **greenline** layer over the ideal render (touch-target, contrast,
+  label findings from the catalog) — design-parity leads with a11y;
+- a **redline** (spacing spec) layer over the layout wireframe — per-node box,
+  padding, gap, and corner radius;
 - a **variable collection** projected from the design system's tokens
   (light/dark become Figma modes).
 
-Figma is a *view* of the code, never the source of truth — the same stance the
-upstream catalogs and the Figma roundtrip take. The render is authoritative;
-the plugin only places it.
+Each variant gets its natural overlay: greenlines annotate the *ideal* render,
+redlines annotate the *layout* wireframe. Figma is a *view* of the code, never
+the source of truth — the same stance the upstream catalogs and the Figma
+roundtrip take. The render is authoritative; the plugin only places it.
 
-![Canvas preview — the layout the plugin builds](docs/canvas-preview.png)
+| Ideal variant — a11y greenlines | Layout variant — spacing redlines |
+| --- | --- |
+| ![Ideal render with greenlines](docs/canvas-preview.png) | ![Layout wireframe with redlines](docs/canvas-preview-layout.png) |
 
-*A deterministic SVG proof of the imported scene (`planToSvg`), rendered from a
-sample catalog. A Figma plugin can't be rendered headlessly, so this stands in
+*Deterministic SVG proofs of the imported scene (`planToSvg`), rendered from a
+sample catalog. A Figma plugin can't be rendered headlessly, so these stand in
 for canvas pixels in review; regenerate with
 [`docs/canvas-preview.mjs`](docs/canvas-preview.mjs).*
 
@@ -38,12 +43,12 @@ core and the two runtime files stay thin:
 
 | Path | Realm | Role |
 | --- | --- | --- |
-| [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline, and the Figma variable collection. No `figma`, no `fetch`. |
+| [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
-| [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared severity → colour mapping for the greenline layer (SVG hex + Figma RGB). |
+| [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared colour + label helpers for the greenline (severity) and redline (spacing spec) layers — one place so the SVG preview and Figma paints match. |
 | [`figma/ui.ts`](figma/ui.ts) | UI iframe | Fetches `catalog.json` + tokens + PNG bytes, runs the planner, posts the plan to the main thread. |
-| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, greenline overlays, variable collection. Mechanical. |
+| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, greenline/redline overlays, variable collection. Mechanical. |
 | [`figma/ui.html`](figma/ui.html) | UI iframe | Markup; esbuild inlines the compiled `ui.ts` into it. |
 | [`figma/manifest.json`](figma/manifest.json) | — | Figma plugin manifest (network allowlist, entry points). |
 
@@ -83,16 +88,15 @@ https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compos
 ```
 
 Pick the **Ideal render** (with a11y greenlines) or the **Layout wireframe**
-variant, then Import. The plugin fetches the manifest, its DTCG token file, and
-every PNG for that variant, then lays out a `<system> — Catalog` page with the
-greenline overlay and a variable collection (light/dark become Figma modes).
-Add your own live-preview host to the manifest's `networkAccess.allowedDomains`
-to import from `compose-preview serve` instead of GitHub.
+(with spacing redlines) variant, then Import. The plugin fetches the manifest,
+its DTCG token file, and every PNG for that variant, then lays out a
+`<system> — Catalog` page with the matching annotation layer and a variable
+collection (light/dark become Figma modes). Add your own live-preview host to
+the manifest's `networkAccess.allowedDomains` to import from
+`compose-preview serve` instead of GitHub.
 
 ## Roadmap
 
-- **Redline** (spacing) annotation layer — the manifest already carries
-  `redlines`; the greenline layer is the pattern to follow.
 - Code Connect authoring: map imported frames back to code components.
 - Wire `planToSvg` output into the CI preview-diff workflow so plugin UI
   changes get before/after evidence automatically.

@@ -7,7 +7,7 @@
  * which URLs, how tokens map to variables — was computed by the pure planner in
  * `src/plan.ts` and tested there. Keep this file mechanical.
  */
-import { severityRgb } from "../src/annotations.js";
+import { redlineLabel, redlineRgb, severityRgb } from "../src/annotations.js";
 import type { ImportPlan, PlannedGroup } from "../src/plan.js";
 import type { FigmaVariableCollection } from "@design-parity/catalog-export/figma";
 
@@ -87,7 +87,9 @@ async function runImport(
   const groupNote = `${plan.groups.length} group${plan.groups.length === 1 ? "" : "s"}`;
   const greenlineNote =
     plan.greenlineCount > 0 ? `, ${plan.greenlineCount} a11y greenlines` : "";
-  return `Imported ${placed} render${placed === 1 ? "" : "s"} across ${groupNote}${greenlineNote}${variableNote}.`;
+  const redlineNote =
+    plan.redlineCount > 0 ? `, ${plan.redlineCount} layout redlines` : "";
+  return `Imported ${placed} render${placed === 1 ? "" : "s"} across ${groupNote}${greenlineNote}${redlineNote}${variableNote}.`;
 }
 
 function renderGroup(
@@ -137,6 +139,30 @@ function renderGroup(
           box.strokes = [{ type: "SOLID", color: severityRgb(g.severity) }];
           box.strokeWeight = 2;
           cell.appendChild(box);
+        }
+        for (const r of component.redlines) {
+          const label = redlineLabel(r);
+          const box = figma.createRectangle();
+          box.name = `layout: ${label || r.role || "node"}`;
+          box.x = r.bounds.x;
+          box.y = r.bounds.y;
+          box.resize(Math.max(1, r.bounds.width), Math.max(1, r.bounds.height));
+          box.fills = [];
+          box.strokes = [{ type: "SOLID", color: redlineRgb() }];
+          box.strokeWeight = 1;
+          box.dashPattern = [4, 3];
+          if (r.cornerRadius !== undefined) box.cornerRadius = r.cornerRadius;
+          cell.appendChild(box);
+          if (label) {
+            const tag = figma.createText();
+            tag.fontName = { family: "Inter", style: "Regular" };
+            tag.fontSize = 9;
+            tag.characters = label;
+            tag.x = r.bounds.x + 2;
+            tag.y = r.bounds.y + 2;
+            tag.fills = [{ type: "SOLID", color: redlineRgb() }];
+            cell.appendChild(tag);
+          }
         }
       }
       row.appendChild(cell);

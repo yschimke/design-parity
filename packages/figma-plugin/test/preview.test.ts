@@ -56,6 +56,33 @@ describe("planToSvg", () => {
     expect(svg).toContain("fill='#6750A4'");
   });
 
+  it("draws redline overlays and their spacing spec for the layout variant", () => {
+    const layoutManifest: CatalogManifest = {
+      ...manifest,
+      components: [
+        {
+          ...manifest.components[0]!,
+          images: [
+            { variant: "layout", path: "images/btn/layout.png", state: "default", width: 200, height: 80 },
+          ],
+          redlines: [
+            {
+              role: "Row",
+              bounds: { x: 4, y: 4, width: 192, height: 72 },
+              padding: { top: 12, end: 16, bottom: 12, start: 16 },
+              gap: 8,
+              cornerRadius: 8,
+            },
+          ],
+        },
+      ],
+    };
+    const svg = planToSvg(buildImportPlan(layoutManifest, { baseUrl: "https://x", variant: "layout" }));
+    expect(svg).toContain("#0969da"); // redline accent
+    expect(svg).toContain("stroke-dasharray");
+    expect(svg).toContain("Row · pad 12/16/12/16 · gap 8 · r 8");
+  });
+
   it("escapes XML-significant characters in labels", () => {
     const evil: CatalogManifest = {
       ...manifest,
