@@ -175,3 +175,50 @@ describe("buildImportPlan", () => {
     expect(plan.collection).toBeUndefined();
   });
 });
+
+const withGreenlines: CatalogManifest = {
+  schema: "design-parity-catalog/v1",
+  system: "compose-m3",
+  title: "Compose Material 3",
+  components: [
+    {
+      componentId: "Button/Small",
+      group: "Buttons",
+      images: [
+        { variant: "ideal", path: "images/btn/ideal.png", state: "default", width: 100, height: 40 },
+        { variant: "layout", path: "images/btn/layout.png", state: "default", width: 100, height: 40 },
+      ],
+      greenlines: [
+        {
+          kind: "a11y",
+          severity: "error",
+          message: "Touch target 40dp below 48dp minimum",
+          bounds: { x: 0, y: 0, width: 100, height: 40 },
+        },
+        { kind: "a11y", severity: "info", message: "Role: button" },
+      ],
+      redlines: [],
+    },
+  ],
+};
+
+describe("buildImportPlan — greenlines", () => {
+  const base = "https://x/y";
+
+  it("carries the component greenlines and totals greenlineCount for the ideal variant", () => {
+    const plan = buildImportPlan(withGreenlines, { baseUrl: base });
+    expect(plan.greenlineCount).toBe(2);
+    expect(plan.groups[0]!.components[0]!.greenlines).toHaveLength(2);
+  });
+
+  it("drops greenlines for the layout variant (they anchor to ideal pixel space)", () => {
+    const plan = buildImportPlan(withGreenlines, { baseUrl: base, variant: "layout" });
+    expect(plan.greenlineCount).toBe(0);
+    expect(plan.groups[0]!.components[0]!.greenlines).toEqual([]);
+  });
+
+  it("drops greenlines when explicitly disabled", () => {
+    const plan = buildImportPlan(withGreenlines, { baseUrl: base, greenlines: false });
+    expect(plan.greenlineCount).toBe(0);
+  });
+});

@@ -20,6 +20,7 @@ import type {
   CatalogManifest,
   CatalogManifestComponent,
   CatalogManifestImage,
+  Greenline,
 } from "@design-parity/catalog-export";
 // The pure Figma projection is imported from catalog-export's browser-safe
 // `./figma` subpath, not the package barrel: the barrel re-exports the on-disk
@@ -41,11 +42,18 @@ export interface PlannedImage {
   height: number;
 }
 
-/** One component frame: its ideal-variant images in a row. */
+/** One component frame: its images in a row plus its a11y annotation layer. */
 export interface PlannedComponent {
   componentId: string;
   caption?: string;
   images: PlannedImage[];
+  /**
+   * Accessibility greenlines for this component, anchored (when they carry
+   * bounds) to the pixel space of the component's first image. Empty when the
+   * catalog reports no findings, or omitted from the scene when
+   * {@link PlanOptions.greenlines} is `false`.
+   */
+  greenlines: Greenline[];
 }
 
 /** A group of components laid out under one section header on the canvas. */
@@ -67,6 +75,8 @@ export interface ImportPlan {
   collection?: FigmaVariableCollection;
   /** Total placed images across all groups, for the UI progress readout. */
   imageCount: number;
+  /** Total greenline annotations across all components (0 when disabled). */
+  greenlineCount: number;
 }
 
 export interface PlanOptions {
@@ -83,10 +93,16 @@ export interface PlanOptions {
    */
   themeTokens?: DesignTokens;
   /**
-   * Which sticker variant to place. The prototype imports the authoritative
-   * `ideal` render; `layout` (the wireframe) is a future toggle.
+   * Which sticker variant to place: the authoritative `ideal` render (default)
+   * or the `layout` wireframe. Greenlines anchor to `ideal` pixel space, so
+   * they are dropped when importing the `layout` variant.
    */
   variant?: "ideal" | "layout";
+  /**
+   * Include the a11y greenline annotation layer. Default `true`. Forced off for
+   * the `layout` variant (its geometry isn't the greenlines' anchor space).
+   */
+  greenlines?: boolean;
 }
 
 /** Resolve a manifest image path against the base URL (absolute paths pass through). */
@@ -133,6 +149,10 @@ export function buildImportPlan(
   const byGroup = new Map<string, PlannedComponent[]>();
   let imageCount = 0;
 
+  const variant = opts.variant ?? "ideal";
+  // Greenlines anchor to ideal pixel space; never draw them over the wireframe.
+  const withGreenlines = variant === "ideal" && opts.greenlines !== false;
+
   for (const component of manifest.components) {
     const images = planImages(component, opts);
     if (images.length === 0) continue;
@@ -141,6 +161,7 @@ export function buildImportPlan(
     const planned: PlannedComponent = {
       componentId: component.componentId,
       images,
+      greenlines: withGreenlines ? component.greenlines : [],
     };
     if (component.caption !== undefined) planned.caption = component.caption;
 
@@ -154,11 +175,17 @@ export function buildImportPlan(
     ([name, components]) => ({ name, components }),
   );
 
+  const greenlineCount = groups.reduce(
+    (sum, g) => sum + g.components.reduce((n, c) => n + c.greenlines.length, 0),
+    0,
+  );
+
   const plan: ImportPlan = {
     system: manifest.system,
     title: manifest.title,
     groups,
     imageCount,
+    greenlineCount,
   };
   if (opts.themeTokens) {
     plan.collection = toFigmaVariables(opts.themeTokens, manifest.title);

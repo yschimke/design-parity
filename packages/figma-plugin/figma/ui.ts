@@ -15,6 +15,7 @@ import { buildImportPlan, type PlannedImage } from "../src/plan.js";
 
 const form = document.getElementById("form") as HTMLFormElement;
 const baseInput = document.getElementById("base") as HTMLInputElement;
+const variantInput = document.getElementById("variant") as HTMLSelectElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
 const cancel = document.getElementById("cancel") as HTMLButtonElement;
 
@@ -53,7 +54,8 @@ form.addEventListener("submit", async (event) => {
       themeTokens = readDtcgTokensLite(doc);
     }
 
-    const plan = buildImportPlan(manifest, { baseUrl: base, themeTokens });
+    const variant = variantInput.value === "layout" ? "layout" : "ideal";
+    const plan = buildImportPlan(manifest, { baseUrl: base, themeTokens, variant });
     if (plan.imageCount === 0) {
       say("Catalog has no importable renders.");
       return;

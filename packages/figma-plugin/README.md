@@ -3,16 +3,24 @@
 The in-Figma client for design-parity's **code → design** direction. It imports
 a published `@design-parity/catalog-export` catalog — a compose-preview-rendered
 component system: sticker-sheet PNGs plus a DTCG token set — straight onto a
-Figma canvas as authoritative renders, grouped by component group, alongside a
-**variable collection** projected from the design system's tokens.
+Figma canvas as authoritative renders, grouped by component group, with:
+
+- the **`ideal` render or the `layout` wireframe** variant (a UI toggle);
+- an a11y **greenline** annotation layer over each render (touch-target,
+  contrast, label findings from the catalog) — design-parity leads with a11y;
+- a **variable collection** projected from the design system's tokens
+  (light/dark become Figma modes).
 
 Figma is a *view* of the code, never the source of truth — the same stance the
 upstream catalogs and the Figma roundtrip take. The render is authoritative;
 the plugin only places it.
 
-> **Prototype.** Today it imports the `ideal` sticker variant and builds the
-> variable collection. The `layout` (wireframe) variant, greenline/redline
-> annotation layers, and Code Connect authoring are planned — see *Roadmap*.
+![Canvas preview — the layout the plugin builds](docs/canvas-preview.png)
+
+*A deterministic SVG proof of the imported scene (`planToSvg`), rendered from a
+sample catalog. A Figma plugin can't be rendered headlessly, so this stands in
+for canvas pixels in review; regenerate with
+[`docs/canvas-preview.mjs`](docs/canvas-preview.mjs).*
 
 ## Status
 
@@ -30,10 +38,12 @@ core and the two runtime files stay thin:
 
 | Path | Realm | Role |
 | --- | --- | --- |
-| [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, and the Figma variable collection. No `figma`, no `fetch`. |
+| [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline, and the Figma variable collection. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
+| [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
+| [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared severity → colour mapping for the greenline layer (SVG hex + Figma RGB). |
 | [`figma/ui.ts`](figma/ui.ts) | UI iframe | Fetches `catalog.json` + tokens + PNG bytes, runs the planner, posts the plan to the main thread. |
-| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, variable collection. Mechanical. |
+| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, greenline overlays, variable collection. Mechanical. |
 | [`figma/ui.html`](figma/ui.html) | UI iframe | Markup; esbuild inlines the compiled `ui.ts` into it. |
 | [`figma/manifest.json`](figma/manifest.json) | — | Figma plugin manifest (network allowlist, entry points). |
 
@@ -72,16 +82,17 @@ Run the plugin and paste the raw root of a published
 https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compose-m3
 ```
 
-The plugin fetches the manifest, its DTCG token file, and every `ideal` PNG,
-then lays out a `<system> — Catalog` page and creates a variable collection
-(light/dark become Figma modes). Add your own live-preview host to the
-manifest's `networkAccess.allowedDomains` to import from
-`compose-preview serve` instead of GitHub.
+Pick the **Ideal render** (with a11y greenlines) or the **Layout wireframe**
+variant, then Import. The plugin fetches the manifest, its DTCG token file, and
+every PNG for that variant, then lays out a `<system> — Catalog` page with the
+greenline overlay and a variable collection (light/dark become Figma modes).
+Add your own live-preview host to the manifest's `networkAccess.allowedDomains`
+to import from `compose-preview serve` instead of GitHub.
 
 ## Roadmap
 
-- `layout` (wireframe) variant toggle — the planner already accepts `variant`.
-- Greenline (a11y) / redline (spacing) annotation layers from the manifest.
+- **Redline** (spacing) annotation layer — the manifest already carries
+  `redlines`; the greenline layer is the pattern to follow.
 - Code Connect authoring: map imported frames back to code components.
-- Wire the plugin's rendered output into the preview-diff workflow so plugin
-  UI changes get before/after evidence automatically.
+- Wire `planToSvg` output into the CI preview-diff workflow so plugin UI
+  changes get before/after evidence automatically.

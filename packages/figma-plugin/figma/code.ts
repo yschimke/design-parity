@@ -7,6 +7,7 @@
  * which URLs, how tokens map to variables — was computed by the pure planner in
  * `src/plan.ts` and tested there. Keep this file mechanical.
  */
+import { severityRgb } from "../src/annotations.js";
 import type { ImportPlan, PlannedGroup } from "../src/plan.js";
 import type { FigmaVariableCollection } from "@design-parity/catalog-export/figma";
 
@@ -83,7 +84,10 @@ async function runImport(
   }
 
   figma.viewport.scrollAndZoomIntoView([root]);
-  return `Imported ${placed} render${placed === 1 ? "" : ""} across ${plan.groups.length} group${plan.groups.length === 1 ? "" : "s"}${variableNote}.`;
+  const groupNote = `${plan.groups.length} group${plan.groups.length === 1 ? "" : "s"}`;
+  const greenlineNote =
+    plan.greenlineCount > 0 ? `, ${plan.greenlineCount} a11y greenlines` : "";
+  return `Imported ${placed} render${placed === 1 ? "" : "s"} across ${groupNote}${greenlineNote}${variableNote}.`;
 }
 
 function renderGroup(
@@ -109,17 +113,35 @@ function renderGroup(
     row.counterAxisSizingMode = "AUTO";
     row.fills = [];
 
-    for (const image of component.images) {
+    component.images.forEach((image, i) => {
       const bytes = bytesByPath.get(image.path);
-      if (!bytes) continue;
-      const node = figma.createRectangle();
-      node.name = `${component.componentId} — ${image.key}`;
-      node.resize(image.width, image.height);
+      if (!bytes) return;
       const hash = figma.createImage(bytes).hash;
-      node.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
-      row.appendChild(node);
+
+      // A fixed-size frame holds the render plus, on the first image, the a11y
+      // greenline overlay positioned in the render's own pixel space.
+      const cell = figma.createFrame();
+      cell.name = `${component.componentId} — ${image.key}`;
+      cell.resize(image.width, image.height);
+      cell.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+
+      if (i === 0) {
+        for (const g of component.greenlines) {
+          if (!g.bounds) continue;
+          const box = figma.createRectangle();
+          box.name = `a11y (${g.severity}): ${g.message}`;
+          box.x = g.bounds.x;
+          box.y = g.bounds.y;
+          box.resize(Math.max(1, g.bounds.width), Math.max(1, g.bounds.height));
+          box.fills = [];
+          box.strokes = [{ type: "SOLID", color: severityRgb(g.severity) }];
+          box.strokeWeight = 2;
+          cell.appendChild(box);
+        }
+      }
+      row.appendChild(cell);
       onPlaced();
-    }
+    });
     section.appendChild(row);
   }
   return section;

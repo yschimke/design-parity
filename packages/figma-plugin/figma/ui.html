@@ -21,6 +21,11 @@
 <form id="form">
   <label for="base">Catalog base URL</label>
   <input id="base" name="base" type="url" placeholder="https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compose-m3" />
+  <label for="variant" style="margin-top:12px">Variant</label>
+  <select id="variant" name="variant" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(128,128,128,0.4);background:transparent;color:inherit">
+    <option value="ideal">Ideal render + a11y greenlines</option>
+    <option value="layout">Layout wireframe</option>
+  </select>
   <div class="row">
     <button type="submit">Import</button>
     <button id="cancel" type="button">Close</button>

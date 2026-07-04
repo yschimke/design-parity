@@ -15,6 +15,9 @@ export {
   imageKey,
 } from "./plan.js";
 export { readDtcgTokensLite } from "./dtcg.js";
+export { planToSvg } from "./preview.js";
+export { severityHex, severityRgb } from "./annotations.js";
+export type { Rgb } from "./annotations.js";
 export type {
   ImportPlan,
   PlanOptions,
