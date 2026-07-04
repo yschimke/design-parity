@@ -1,0 +1,36 @@
+{
+  "name": "@design-parity/figma-plugin",
+  "version": "0.1.24",
+  "private": true,
+  "description": "In-Figma client for the design-parity code → design flow: import a compose-preview design-artifact catalog (sticker sheets + DTCG tokens) onto a Figma canvas as authoritative renders plus a variable collection. Ships to the Figma Community, not npm — the pure import planner is the testable core; the figma/ glue is bundled with esbuild.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "build:plugin": "node esbuild.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@design-parity/catalog-export": "^0.1.24",
+    "@design-parity/core": "^0.1.24"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.100.0",
+    "esbuild": "^0.24.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/figma-plugin"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/figma-plugin#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
+}
