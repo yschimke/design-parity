@@ -7,7 +7,10 @@ name: Claude
 # resumable session. Only users with write access can trigger it.
 #
 # One-time setup: install the Claude GitHub App (https://github.com/apps/claude)
-# and add an ANTHROPIC_API_KEY secret. Design notes live in the canonical copy:
+# and add a CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`; runs
+# bill the Claude subscription's included usage — swap the input to
+# `anthropic_api_key` for metered API billing). Design notes live in the
+# canonical copy:
 # https://github.com/yschimke/compose-ai-tools/blob/main/docs/AGENT_INVOCATION.md
 
 on:
@@ -53,7 +56,7 @@ jobs:
           cache: npm
       - uses: anthropics/claude-code-action@v1.0.163
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Request the CI-read scope on the Claude App token the action
           # mints for itself — the job-level `actions: read` grant above only
           # covers the workflow token.
