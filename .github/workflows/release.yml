@@ -11,6 +11,9 @@ name: release
 on:
   push:
     branches: [main]
+  # Lets scheduled-merge.yml re-trigger release-please after bot merges
+  # (GITHUB_TOKEN merges don't fire push workflows).
+  workflow_dispatch:
 
 permissions:
   contents: write # release-please commits/tags; publish job pushes the version sync
