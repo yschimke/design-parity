@@ -16,6 +16,7 @@
   "scripts": {
     "build": "tsc --build",
     "build:plugin": "node esbuild.mjs",
+    "preview": "node docs/canvas-preview.mjs",
     "test": "vitest run"
   },
   "dependencies": {
