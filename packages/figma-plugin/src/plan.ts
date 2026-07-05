@@ -47,6 +47,8 @@ export interface PlannedImage {
   state?: string;
   theme?: string;
   size?: string;
+  /** Extra named variant axes (e.g. `{ content: "icon+label" }`) → set variant props. */
+  props?: Record<string, string>;
 }
 
 /** One component frame: its images in a row plus its a11y annotation layer. */
@@ -162,7 +164,10 @@ export function resolveImageUrl(baseUrl: string, path: string): string {
 
 /** Human-readable variant key for a layer name: `state · theme · size`. */
 export function imageKey(image: CatalogManifestImage): string {
-  return [image.state, image.theme, image.size].filter(Boolean).join(" · ");
+  const props = Object.entries(image.props ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`);
+  return [image.state, image.theme, image.size, ...props].filter(Boolean).join(" · ");
 }
 
 function planImages(
@@ -183,6 +188,7 @@ function planImages(
       if (image.state !== undefined) planned.state = image.state;
       if (image.theme !== undefined) planned.theme = image.theme;
       if (image.size !== undefined) planned.size = image.size;
+      if (image.props !== undefined) planned.props = image.props;
       return planned;
     });
 }

@@ -186,6 +186,55 @@ describe("catalogFromCandidates", () => {
     expect(ideal.map((i) => i.state)).toEqual(["default", "pressed", "disabled"]);
   });
 
+  it("folds a content-axis variant (label vs icon+label) via props", () => {
+    const specWithVariants: CatalogSpec = {
+      system: "compose-m3",
+      title: "Compose Material 3",
+      groups: [
+        {
+          name: "Buttons",
+          components: [
+            {
+              componentId: "Button/Filled",
+              preview: "FilledButton",
+              variants: [{ props: { content: "icon+label" }, preview: "FilledButtonIconLabel" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { catalog, missing } = catalogFromCandidates(
+      [
+        candidate("com.example.CKt", "FilledButton"),
+        candidate("com.example.CKt", "FilledButtonIconLabel"),
+      ],
+      specWithVariants,
+    );
+
+    expect(missing).toEqual([]);
+    const ideal = catalog.components[0]!.variants.ideal;
+    // The default carries no props; the variant carries the content axis.
+    expect(ideal[0]!.props).toBeUndefined();
+    expect(ideal[1]!.props).toEqual({ content: "icon+label" });
+  });
+
+  it("reports a props-only variant that didn't render, labelled by its axes", () => {
+    const spec2: CatalogSpec = {
+      ...spec,
+      groups: [
+        {
+          name: "Buttons",
+          components: [
+            { componentId: "Button/Filled", preview: "FilledButton", variants: [{ props: { content: "icon+label" }, preview: "Missing" }] },
+          ],
+        },
+      ],
+    };
+    const { missing } = catalogFromCandidates([candidate("com.example.CKt", "FilledButton")], spec2);
+    expect(missing).toEqual(["Button/Filled [content=icon+label]"]);
+  });
+
   it("reports a variant whose preview did not render, keyed by state", () => {
     const specWithVariants: CatalogSpec = {
       system: "compose-m3",

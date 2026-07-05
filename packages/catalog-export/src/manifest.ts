@@ -34,6 +34,8 @@ export interface CatalogManifestImage {
   state: string;
   theme?: Theme;
   size?: string;
+  /** Extra named variant axes (e.g. `{ content: "icon+label" }`) → set variant props. */
+  props?: Record<string, string>;
   width: number;
   height: number;
   /**
@@ -156,9 +158,9 @@ export function slug(value: string): string {
 
 /**
  * Bundle-relative path for one variant image of a component. Encodes the
- * component id and every variant key so distinct states/themes/sizes never
- * collide:
- * `images/<component>/<variant>__<state>[__<theme>][__<size>].png`.
+ * component id and every variant key — including extra `props` axes — so
+ * distinct states/themes/sizes/props never collide:
+ * `images/<component>/<variant>__<state>[__<theme>][__<size>][__<k-v>…].png`.
  */
 export function imagePath(
   componentId: string,
@@ -168,6 +170,10 @@ export function imagePath(
   const parts = [variant, image.state];
   if (image.theme) parts.push(image.theme);
   if (image.size) parts.push(image.size);
+  // Sorted so the path is deterministic regardless of prop declaration order.
+  for (const [key, value] of Object.entries(image.props ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    parts.push(`${key}-${value}`);
+  }
   const file = parts.map(slug).join("__");
   return `images/${slug(componentId)}/${file}.png`;
 }
@@ -195,6 +201,7 @@ function manifestImages(
       };
       if (image.theme) entry.theme = image.theme;
       if (image.size) entry.size = image.size;
+      if (image.props && Object.keys(image.props).length > 0) entry.props = image.props;
       if (ctx.previewServer) {
         entry.livePreview = livePreviewUrl(
           ctx.previewServer.base,
