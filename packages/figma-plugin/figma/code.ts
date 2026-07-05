@@ -8,7 +8,9 @@
  * `src/plan.ts` and tested there. Keep this file mechanical.
  */
 import { redlineLabel, redlineRgb, severityRgb } from "../src/annotations.js";
+import { buildDesignMap } from "../src/designMap.js";
 import type { ImportPlan, PlannedGroup } from "../src/plan.js";
+import type { DesignMap } from "@design-parity/core";
 import type { FigmaVariableCollection } from "@design-parity/catalog-export/figma";
 
 /** Bytes the UI fetched for one planned image, keyed by its bundle path. */
@@ -39,8 +41,17 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "import") {
     try {
-      const summary = await runImport(msg.plan, msg.images);
-      figma.ui.postMessage({ type: "done", summary });
+      const { summary, designMap, fileKeyKnown } = await runImport(
+        msg.plan,
+        msg.images,
+      );
+      figma.ui.postMessage({
+        type: "done",
+        summary,
+        designMap: JSON.stringify(designMap, null, 2),
+        componentCount: designMap.components.length,
+        fileKeyKnown,
+      });
       figma.notify(summary);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -53,7 +64,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
 async function runImport(
   plan: ImportPlan,
   images: FetchedImage[],
-): Promise<string> {
+): Promise<ImportResult> {
   await figma.loadFontAsync({ family: "Inter", style: "Regular" });
   await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
 
@@ -73,8 +84,12 @@ async function runImport(
   root.appendChild(title(plan.title, 32));
 
   let placed = 0;
+  // componentId → the frame the plugin placed, for correspondence authoring.
+  const nodeIds: Record<string, string> = {};
   for (const group of plan.groups) {
-    root.appendChild(renderGroup(group, bytesByPath, () => (placed += 1)));
+    root.appendChild(
+      renderGroup(group, bytesByPath, nodeIds, () => (placed += 1)),
+    );
   }
 
   let variableNote = "";
@@ -84,17 +99,35 @@ async function runImport(
   }
 
   figma.viewport.scrollAndZoomIntoView([root]);
+
+  // Emit the design-map correspondence (code componentId → placed frame). The
+  // file key is null outside a saved file — fall back to a placeholder the user
+  // fills in, rather than emitting an unparseable empty ref.
+  const fileKey = figma.fileKey ?? "";
+  const designMap = buildDesignMap(plan, {
+    fileKey: fileKey || "FILE_KEY",
+    nodeIds,
+  });
+
   const groupNote = `${plan.groups.length} group${plan.groups.length === 1 ? "" : "s"}`;
   const greenlineNote =
     plan.greenlineCount > 0 ? `, ${plan.greenlineCount} a11y greenlines` : "";
   const redlineNote =
     plan.redlineCount > 0 ? `, ${plan.redlineCount} layout redlines` : "";
-  return `Imported ${placed} render${placed === 1 ? "" : "s"} across ${groupNote}${greenlineNote}${redlineNote}${variableNote}.`;
+  const summary = `Imported ${placed} render${placed === 1 ? "" : "s"} across ${groupNote}${greenlineNote}${redlineNote}${variableNote}.`;
+  return { summary, designMap, fileKeyKnown: fileKey.length > 0 };
+}
+
+interface ImportResult {
+  summary: string;
+  designMap: DesignMap;
+  fileKeyKnown: boolean;
 }
 
 function renderGroup(
   group: PlannedGroup,
   bytesByPath: Map<string, Uint8Array>,
+  nodeIds: Record<string, string>,
   onPlaced: () => void,
 ): FrameNode {
   const section = figma.createFrame();
@@ -115,9 +148,11 @@ function renderGroup(
     row.counterAxisSizingMode = "AUTO";
     row.fills = [];
 
+    let componentPlaced = false;
     component.images.forEach((image, i) => {
       const bytes = bytesByPath.get(image.path);
       if (!bytes) return;
+      componentPlaced = true;
       const hash = figma.createImage(bytes).hash;
 
       // A fixed-size frame holds the render plus, on the first image, the a11y
@@ -168,6 +203,9 @@ function renderGroup(
       row.appendChild(cell);
       onPlaced();
     });
+    // Only map components that actually placed a render — the row frame is the
+    // node correspondence links back to.
+    if (componentPlaced) nodeIds[component.componentId] = row.id;
     section.appendChild(row);
   }
   return section;

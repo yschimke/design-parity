@@ -18,6 +18,9 @@ const baseInput = document.getElementById("base") as HTMLInputElement;
 const variantInput = document.getElementById("variant") as HTMLSelectElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
 const cancel = document.getElementById("cancel") as HTMLButtonElement;
+const result = document.getElementById("result") as HTMLElement;
+const designMapArea = document.getElementById("designmap") as HTMLTextAreaElement;
+const copyButton = document.getElementById("copy") as HTMLButtonElement;
 
 function say(text: string): void {
   status.textContent = text;
@@ -80,10 +83,27 @@ cancel.addEventListener("click", () => {
   parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
 });
 
+copyButton.addEventListener("click", () => {
+  designMapArea.select();
+  // execCommand is the reliable clipboard path inside a Figma plugin iframe.
+  document.execCommand("copy");
+  copyButton.textContent = "Copied";
+  setTimeout(() => (copyButton.textContent = "Copy"), 1200);
+});
+
 window.onmessage = (event: MessageEvent) => {
   const msg = event.data.pluginMessage;
   if (!msg) return;
-  if (msg.type === "done") say(msg.summary);
+  if (msg.type === "done") {
+    const keyNote = msg.fileKeyKnown
+      ? ""
+      : " (replace the FILE_KEY placeholder — this file has no key yet)";
+    say(`${msg.summary} Correspondence for ${msg.componentCount} component${msg.componentCount === 1 ? "" : "s"} ready${keyNote}.`);
+    if (msg.componentCount > 0) {
+      designMapArea.value = msg.designMap;
+      result.hidden = false;
+    }
+  }
   if (msg.type === "error") say(`Import failed: ${msg.message}`);
 };
 

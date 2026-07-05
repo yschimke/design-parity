@@ -13,6 +13,14 @@
   #cancel { background: rgba(128,128,128,0.2); color: inherit; }
   #status { margin-top: 12px; font-variant-numeric: tabular-nums; min-height: 16px; opacity: 0.85; }
   code { font-size: 11px; opacity: 0.6; word-break: break-all; }
+  #result { margin-top: 12px; }
+  #result[hidden] { display: none; }
+  #result .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  #result label { margin: 0; }
+  #copy { flex: 0 0 auto; padding: 4px 10px; font-size: 11px; background: rgba(128,128,128,0.2); color: inherit; }
+  #designmap { width: 100%; box-sizing: border-box; height: 132px; font-family: ui-monospace, monospace;
+               font-size: 11px; padding: 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4);
+               background: transparent; color: inherit; resize: vertical; }
 </style>
 
 <h1>Import a design-parity catalog</h1>
@@ -32,3 +40,12 @@
   </div>
 </form>
 <p id="status"></p>
+
+<section id="result" hidden>
+  <div class="head">
+    <label for="designmap">Correspondence — <code>design-map.json</code></label>
+    <button id="copy" type="button">Copy</button>
+  </div>
+  <textarea id="designmap" readonly spellcheck="false"></textarea>
+  <p class="hint" id="result-hint" style="margin:4px 0 0">Commit this to a consumer repo so the resolver maps these code components to the imported frames.</p>
+</section>

@@ -1,0 +1,19 @@
+{
+  "components": [
+    {
+      "code": "Button#Filled",
+      "source": "figma",
+      "ref": "figma:aBcD1234Ef/12:100"
+    },
+    {
+      "code": "Button#Outlined",
+      "source": "figma",
+      "ref": "figma:aBcD1234Ef/12:140"
+    },
+    {
+      "code": "Switch#On",
+      "source": "figma",
+      "ref": "figma:aBcD1234Ef/18:20"
+    }
+  ]
+}
