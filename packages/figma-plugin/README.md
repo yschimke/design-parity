@@ -165,6 +165,17 @@ consumer repo's `.design-parity.json` (`generate-design-catalog.mjs` →
 safe design-led default), with **Code-led** / **Design-led** as manual
 overrides.
 
+### Per-screen pages
+
+When the catalog carries a **screen graph** (`catalog.json`'s `screens`, from the
+spec's `screens: [{ id, title?, related }]`) and the import is **code-led**, the
+plugin lays out **one page per main screen** — the screen's card plus its related
+secondaries/dialogs — and a `<system> — Catalog` page for everything not on a
+screen. Each page is its own reconcile **scope** (the root is stamped
+`scope: screen:<id>` / `catalog`), so a re-import refreshes each page in place
+independently and never mixes a screen's cards with the catalog's. A catalog with
+no `screens` (or a design-led import) stays a single flat page as before.
+
 ## Correspondence export
 
 Because the plugin *creates* the frames, it knows each imported component's
