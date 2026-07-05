@@ -84,6 +84,12 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
         n.width = width;
         n.height = height;
       },
+      remove(): void {
+        // Detach from parent and drop from the recorded node list (mimics figma's removal).
+        if (n.parent) n.parent.children = n.parent.children.filter((x) => x !== n);
+        n.parent = undefined;
+        state.nodes = state.nodes.filter((x) => x !== n);
+      },
       setSharedPluginData(namespace: string, key: string, value: string): void {
         (pluginData[namespace] ??= {})[key] = value;
       },

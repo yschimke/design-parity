@@ -6,6 +6,7 @@ import {
   placeLiveSvg,
   planRefresh,
   refreshLiveRender,
+  refreshLiveSvg,
   LIVE_ROLE,
 } from "../src/live.js";
 import { readRenderSource, refreshUrl } from "../src/provenance.js";
@@ -107,6 +108,37 @@ describe("refreshLiveRender", () => {
   });
 });
 
+describe("refreshLiveSvg", () => {
+  it("re-parses the SVG into a replacement node at the old node's spot, and removes the old", () => {
+    const fake = paged();
+    const node = placeLiveSvg(fake.figma, svgSource, "<svg><rect/></svg>", { name: "Filled" });
+    node.x = 40;
+    node.y = 24;
+    const page = fake.figma.currentPage as FakeNode;
+
+    const refreshed = refreshLiveSvg(fake.figma, node, "<svg><circle/></svg>");
+    expect(refreshed).toEqual(svgSource);
+
+    // The old node is gone; a single fresh vector node stands in its place, same identity.
+    expect(page.children).not.toContain(node);
+    const live = page.children.filter((c) => isLiveRender(c));
+    expect(live).toHaveLength(1);
+    const replacement = live[0]! as FakeNode;
+    expect(replacement.fromSvg).toBe("<svg><circle/></svg>"); // the fresh SVG was parsed
+    expect(replacement.name).toBe("Filled");
+    expect(replacement.x).toBe(40); // position carried over
+    expect(replacement.y).toBe(24);
+    expect(readRenderSource(replacement)).toEqual(svgSource); // provenance re-stamped
+  });
+
+  it("no-ops (undefined) on a PNG node or one with no provenance", () => {
+    const fake = paged();
+    const png = placeLiveRender(fake.figma, source, new Uint8Array([1]));
+    expect(refreshLiveSvg(fake.figma, png, "<svg/>")).toBeUndefined();
+    expect(refreshLiveSvg(fake.figma, fake.figma.createFrame(), "<svg/>")).toBeUndefined();
+  });
+});
+
 describe("planRefresh", () => {
   it("yields a re-fetch job only for nodes carrying render provenance", () => {
     const fake = paged();
@@ -116,8 +148,9 @@ describe("planRefresh", () => {
     const jobs = planRefresh([live, plain]);
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.node).toBe(live);
-    // The job URL is exactly what the node's stamp rebuilds.
+    // The job carries the exact URL its stamp rebuilds plus its format.
     expect(jobs[0]!.url).toBe(buildRenderUrl(source));
+    expect(jobs[0]!.format).toBe("png");
   });
 
   it("is empty for a selection with no live renders", () => {
@@ -125,13 +158,16 @@ describe("planRefresh", () => {
     expect(planRefresh([fake.figma.createFrame()])).toEqual([]);
   });
 
-  it("skips SVG live nodes (they refresh by re-placement, not an in-place re-fetch)", () => {
+  it("plans both PNG and SVG live nodes, each tagged with its format", () => {
     const fake = paged();
     const png = placeLiveRender(fake.figma, source, new Uint8Array([1]));
     const svg = placeLiveSvg(fake.figma, svgSource, "<svg/>");
 
     const jobs = planRefresh([png, svg]);
-    expect(jobs.map((j) => j.node)).toEqual([png]);
+    expect(jobs.map((j) => [j.node, j.format])).toEqual([
+      [png, "png"],
+      [svg, "svg"],
+    ]);
   });
 });
 

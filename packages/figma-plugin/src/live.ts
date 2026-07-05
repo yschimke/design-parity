@@ -15,7 +15,7 @@
  * no `figma` global): asserted headlessly against the fake node.
  */
 import { readRenderSource, stampRenderSource } from "./provenance.js";
-import { buildRenderUrl, type RenderSource } from "./render.js";
+import { buildRenderUrl, type RenderFormat, type RenderSource } from "./render.js";
 import { STAMP, type FigmaApi, type FigmaNode } from "./scene.js";
 
 /** The `role` a standalone live-rendered node carries (distinct from catalog cells). */
@@ -90,26 +90,29 @@ export function placeLiveSvg(
   return node;
 }
 
-/** One node to re-fetch on Refresh: the node and the URL its provenance rebuilds. */
+/**
+ * One node to re-fetch on Refresh: the node, the URL its provenance rebuilds, and
+ * its {@link RenderFormat} — the UI fetches PNG jobs as bytes (→ {@link refreshLiveRender},
+ * an in-place fill swap) and SVG jobs as text (→ {@link refreshLiveSvg}, a re-place).
+ */
 export interface RefreshJob {
   node: FigmaNode;
   url: string;
+  format: RenderFormat;
 }
 
 /**
- * Plan a Refresh over a selection: for each **PNG** live node, the URL to
- * re-fetch (rebuilt from its stamp, so it re-renders against current code).
- * Nodes with no provenance — a designer's own content, or a static import — are
- * skipped, so a mixed selection only touches live nodes. SVG live nodes are also
- * skipped: they refresh by re-placement (`createNodeFromSvg`), not an in-place
- * re-fill, which {@link refreshLiveRender} doesn't do yet.
+ * Plan a Refresh over a selection: for each live node carrying render provenance,
+ * the URL to re-fetch (rebuilt from its stamp, so it re-renders against current
+ * code) and its format. Nodes with no provenance — a designer's own content, or a
+ * static import — are skipped, so a mixed selection only touches live nodes.
  */
 export function planRefresh(nodes: readonly FigmaNode[]): RefreshJob[] {
   const jobs: RefreshJob[] = [];
   for (const node of nodes) {
     const source = readRenderSource(node);
-    if (!source || source.format !== "png") continue;
-    jobs.push({ node, url: buildRenderUrl(source) });
+    if (!source) continue;
+    jobs.push({ node, url: buildRenderUrl(source), format: source.format });
   }
   return jobs;
 }
@@ -118,8 +121,8 @@ export function planRefresh(nodes: readonly FigmaNode[]): RefreshJob[] {
  * Re-fill a **PNG** live node with freshly fetched bytes, keeping its identity,
  * size, and provenance intact. Returns the node's {@link RenderSource} (what was
  * re-rendered), or `undefined` when the node isn't a PNG live import — no
- * provenance, or an SVG node (which refreshes by re-placement, not a fill swap),
- * so there's nothing to swap here.
+ * provenance, or an SVG node (which refreshes via {@link refreshLiveSvg}), so
+ * there's nothing to swap here.
  */
 export function refreshLiveRender(
   figma: FigmaApi,
@@ -130,5 +133,31 @@ export function refreshLiveRender(
   if (!source || source.format !== "png") return undefined;
   const hash = figma.createImage(bytes).hash;
   node.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+  return source;
+}
+
+/**
+ * Refresh an **SVG** live node against freshly fetched SVG text. An SVG node is a
+ * parsed frame of vector shapes, not an image, so it can't be re-filled in place:
+ * this parses a **new** node from the fresh SVG ({@link FigmaApi.createNodeFromSvg}),
+ * moves it to the old node's position, carries over its name + {@link LIVE_ROLE} +
+ * provenance, then removes the old node. Returns the node's {@link RenderSource},
+ * or `undefined` when it isn't an SVG live import. The replacement is a new node
+ * (a fresh vector tree), so any designer edits to the old shapes don't carry over.
+ */
+export function refreshLiveSvg(
+  figma: FigmaApi,
+  node: FigmaNode,
+  svg: string,
+): RenderSource | undefined {
+  const source = readRenderSource(node);
+  if (!source || source.format !== "svg") return undefined;
+  const replacement = figma.createNodeFromSvg(svg);
+  replacement.name = node.name;
+  if (node.x !== undefined) replacement.x = node.x;
+  if (node.y !== undefined) replacement.y = node.y;
+  replacement.setSharedPluginData(STAMP, "role", LIVE_ROLE);
+  stampRenderSource(replacement, source);
+  node.remove();
   return source;
 }

@@ -356,8 +356,14 @@ refreshButton.addEventListener("click", () => {
   parent.postMessage({ pluginMessage: { type: "refresh" } }, "*");
 });
 
-/** Fetch each planned job's bytes and hand them back to the main thread to re-fill. */
-async function runRefreshJobs(jobs: { nodeId: string; url: string }[]): Promise<void> {
+/**
+ * Fetch each planned job and hand it back to the main thread to apply: a PNG job
+ * as bytes (main thread swaps the fill), an SVG job as text (main thread re-places
+ * the vector node).
+ */
+async function runRefreshJobs(
+  jobs: { nodeId: string; url: string; format: "png" | "svg" }[],
+): Promise<void> {
   if (jobs.length === 0) {
     editorSay("Select a placed live render on the canvas, then Refresh.");
     return;
@@ -367,8 +373,19 @@ async function runRefreshJobs(jobs: { nodeId: string; url: string }[]): Promise<
   editorSay(`Refreshing ${jobs.length} render${jobs.length === 1 ? "" : "s"}…`);
   for (const job of jobs) {
     try {
-      const bytes = await fetchBytes(job.url);
-      parent.postMessage({ pluginMessage: { type: "applyRefresh", nodeId: job.nodeId, bytes } }, "*");
+      if (job.format === "svg") {
+        const svg = await fetchText(job.url);
+        parent.postMessage(
+          { pluginMessage: { type: "applyRefreshSvg", nodeId: job.nodeId, svg } },
+          "*",
+        );
+      } else {
+        const bytes = await fetchBytes(job.url);
+        parent.postMessage(
+          { pluginMessage: { type: "applyRefresh", nodeId: job.nodeId, bytes } },
+          "*",
+        );
+      }
     } catch (err) {
       editorSay(err instanceof Error ? err.message : String(err));
     }
