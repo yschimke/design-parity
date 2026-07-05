@@ -602,6 +602,7 @@ async function buildScopes(
       pageName: name,
       rootName: name,
       groups: [{ name, components }],
+      renderUnit: renderScreenCard,
       ...(specSeed ? { specSeed } : {}),
     });
   }
@@ -684,7 +685,10 @@ function refreshCardImages(
   bytesByPath: Map<string, Uint8Array>,
 ): boolean {
   const cells = descendants(card, (n) => n.getSharedPluginData(STAMP, "role") === ROLE.image);
-  const available = component.images.filter((img) => bytesByPath.has(img.path));
+  // Refresh both lanes in placement order: the ideal renders, then the wireframe
+  // comparison renders. A flat card has only the ideal cells; a screen card has
+  // both — `Math.min` below refreshes exactly the cells that exist.
+  const available = [...component.images, ...(component.compare ?? [])].filter((img) => bytesByPath.has(img.path));
   let changed = false;
   const count = Math.min(cells.length, available.length);
   for (let i = 0; i < count; i++) {
@@ -827,6 +831,39 @@ function renderCard(
     placedImages += 1;
   });
   return { row, placedImages };
+}
+
+/**
+ * A screen-page card: the exact **code render** (lane c, via {@link renderCard})
+ * followed by the **wireframe** comparison lane (lane b) — the component's layout
+ * renders (`compare`), placed as further `role=image` cells in the same row.
+ * Both lanes are `role=image` in placement order (code, then wireframe), which is
+ * exactly the order {@link refreshCardImages} refreshes, so a re-import updates
+ * both. Together with the page's {@link makeSpecFrame} header (lane a), this is
+ * the figma / wireframe / PNG diff the per-screen page is for.
+ */
+function renderScreenCard(
+  figma: FigmaApi,
+  component: PlannedComponent,
+  bytesByPath: Map<string, Uint8Array>,
+): { row: FigmaNode; placedImages: number } {
+  const { row, placedImages } = renderCard(figma, component, bytesByPath);
+  if (placedImages === 0) return { row, placedImages };
+
+  let placed = placedImages;
+  for (const image of component.compare ?? []) {
+    const bytes = bytesByPath.get(image.path);
+    if (!bytes) continue;
+    const hash = figma.createImage(bytes).hash;
+    const cell = figma.createFrame();
+    cell.name = `${component.componentId} — wireframe · ${image.key}`;
+    cell.resize(image.width, image.height);
+    cell.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+    stamp(cell, ROLE.image, { componentId: component.componentId });
+    row.appendChild(cell);
+    placed += 1;
+  }
+  return { row, placedImages: placed };
 }
 
 /**

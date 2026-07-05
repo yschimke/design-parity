@@ -78,10 +78,12 @@ Instead of one board, the file gets **pages**:
    secondaries). Ordered by the app's primary navigation. The page **leads with a
    `Figma spec` frame** (`role=spec`) seeded once from the screen's code render
    and then designer-owned — the reconcile never touches it — with the live code
-   renders below it, so the page is a spec-vs-code diff. *(Done: `scene.ts`
-   `makeSpecFrame`. The SVG-wireframe comparison lane beside the exact PNG is the
-   remaining lane — it needs the plan to carry both the `ideal` and `layout`
-   variants at once.)*
+   renders below it, so the page is a spec-vs-code diff. Each code card shows two
+   lanes side by side — the exact **PNG render** and the **layout wireframe**
+   (the plan carries the `layout` variant as `compare` alongside `ideal`). *(Done:
+   `scene.ts` `makeSpecFrame` + `renderScreenCard`; the three lanes — figma spec ·
+   wireframe · PNG — are all in place. The wireframe lane uses the layout render;
+   a true vector SVG import (`createNodeFromSvg`) is a later polish.)*
 
 ## What v2 needs that doesn't exist yet
 

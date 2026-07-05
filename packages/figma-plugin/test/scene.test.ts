@@ -333,6 +333,56 @@ describe("applyImport — Components page (native component sets)", () => {
   });
 });
 
+describe("applyImport — wireframe comparison lane (screen pages)", () => {
+  const manifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    screens: [{ id: "Screen/Home", title: "Home" }],
+    components: [
+      { componentId: "Screen/Home", group: "Screens", images: [
+        { variant: "ideal", path: "home", state: "default", theme: "light", width: 100, height: 200 },
+        { variant: "layout", path: "home-wire", state: "default", theme: "light", width: 100, height: 200 },
+      ], greenlines: [], redlines: [] },
+    ],
+  };
+
+  it("carries the layout wireframe as a compare lane in the plan", () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const home = plan.groups[0]!.components[0]!;
+    expect(home.images.map((i) => i.path)).toEqual(["home"]); // ideal only
+    expect(home.compare?.map((i) => i.path)).toEqual(["home-wire"]); // layout wireframe
+  });
+
+  it("places the code render and the wireframe side by side on the screen card", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["home", "home-wire"]));
+
+    const card = descendants(
+      catalogRoots(fake).find((r) => r.getSharedPluginData("designParity", "scope") === "screen:Screen/Home")!,
+      isCard("Screen/Home"),
+    )[0]!;
+    const cells = descendants(card, (n) => (n.fills ?? []).some((f) => f.type === "IMAGE"));
+    // Two lanes: the ideal render (code) and the wireframe.
+    expect(cells).toHaveLength(2);
+    expect(cells.some((c) => c.name.includes("wireframe"))).toBe(true);
+    expect(cells.every((c) => c.getSharedPluginData("designParity", "role") === "image")).toBe(true);
+  });
+
+  it("refreshes both lanes in place on re-import", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["home", "home-wire"]));
+    const before = fake.state.images.length;
+
+    const result = await applyImport(fake.figma, plan, bytesFor(["home", "home-wire"]));
+    expect(result.reconciled).toBe(true);
+    // Both the code cell and the wireframe cell re-created their fills (2 images).
+    expect(fake.state.images.length).toBe(before + 2);
+  });
+});
+
 describe("applyImport — Figma spec header (screen pages)", () => {
   const manifest: CatalogManifest = {
     schema: "design-parity-catalog/v1",
