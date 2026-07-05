@@ -55,6 +55,12 @@ export interface PlannedComponent {
   caption?: string;
   images: PlannedImage[];
   /**
+   * The comparison-lane renders — the **layout wireframe** of this component,
+   * carried alongside the ideal `images` so a screen page can place a
+   * code-vs-wireframe diff. Empty/absent when the catalog has no layout variant.
+   */
+  compare?: PlannedImage[];
+  /**
    * Accessibility greenlines for this component, anchored (when they carry
    * bounds) to the pixel space of the component's first image. Empty when the
    * catalog reports no findings, or omitted from the scene when
@@ -148,8 +154,8 @@ export function imageKey(image: CatalogManifestImage): string {
 function planImages(
   component: CatalogManifestComponent,
   opts: PlanOptions,
+  variant: "ideal" | "layout" = opts.variant ?? "ideal",
 ): PlannedImage[] {
-  const variant = opts.variant ?? "ideal";
   return component.images
     .filter((image) => image.variant === variant)
     .map((image) => {
@@ -200,6 +206,13 @@ export function buildImportPlan(
       redlines: withRedlines ? component.redlines : [],
     };
     if (component.caption !== undefined) planned.caption = component.caption;
+    // The comparison lane: the layout wireframe render, carried alongside the
+    // ideal render so a screen page can diff code (PNG) against wireframe (SVG).
+    // Only when importing the ideal variant (else `images` is already layout).
+    if (variant === "ideal") {
+      const compare = planImages(component, opts, "layout");
+      if (compare.length > 0) planned.compare = compare;
+    }
 
     const groupName = component.group ?? "Ungrouped";
     const bucket = byGroup.get(groupName);

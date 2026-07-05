@@ -98,7 +98,9 @@ form.addEventListener("submit", async (event) => {
       return;
     }
 
-    const uniqueImages = dedupeImages(plan.groups.flatMap((g) => g.components.flatMap((c) => c.images)));
+    const uniqueImages = dedupeImages(
+      plan.groups.flatMap((g) => g.components.flatMap((c) => [...c.images, ...(c.compare ?? [])])),
+    );
     const images: { path: string; bytes: Uint8Array }[] = [];
     let done = 0;
     for (const image of uniqueImages) {

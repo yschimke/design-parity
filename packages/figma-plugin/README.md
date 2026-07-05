@@ -181,8 +181,11 @@ refreshes each page in place independently:
   `Figma spec` frame** seeded once from the screen's code render — stamped
   `role=spec`, which the reconcile never touches, so the designer takes it over
   and it becomes the design intent. Below it sit the screen's card plus its
-  related secondaries/dialogs as the live **code renders**, refreshed on every
-  re-import — so the page reads as a spec-vs-code diff.
+  related secondaries/dialogs, each showing two code lanes side by side — the
+  exact **code render** (PNG) and the **layout wireframe** (`compare`, from the
+  catalog's `layout` variant), both refreshed on every re-import. So the page is
+  the three-lane diff: **figma spec · wireframe · code render**. (The wireframe
+  lane appears only when the catalog carries a layout variant.)
 - **`Components`** — the remainder (everything not a theme or on a screen) as the
   component library: each component is a **native Figma component set**, one
   `COMPONENT` per render named with its variant properties (`state=…, theme=…,
