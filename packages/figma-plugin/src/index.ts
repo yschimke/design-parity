@@ -49,8 +49,11 @@ export {
 } from "./annotations.js";
 export type { Rgb } from "./annotations.js";
 export { applyImport, hexToRgba, STAMP, ROLE } from "./scene.js";
+export type { ImportOptions } from "./scene.js";
 export { reconcile } from "./reconcile.js";
 export type { ExistingCard, ReconcileActions } from "./reconcile.js";
+export { resolveDirection, REFERENCE_PAGE } from "./direction.js";
+export type { ParityDirection } from "./direction.js";
 export type {
   FigmaApi,
   FigmaNode,
