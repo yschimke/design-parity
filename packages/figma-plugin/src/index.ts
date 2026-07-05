@@ -31,6 +31,12 @@ export type {
   OverrideKey,
   KnobKind,
 } from "./render.js";
+export {
+  stampRenderSource,
+  readRenderSource,
+  hasRenderSource,
+  refreshUrl,
+} from "./provenance.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
