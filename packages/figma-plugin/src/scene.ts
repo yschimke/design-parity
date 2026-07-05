@@ -218,11 +218,11 @@ export async function applyImport(
     return dryRun(figma, plan, bytesByPath, pageName);
   }
 
-  // Code-led with a screen graph: one page per main screen + its related
-  // components, plus a catalog page for the remainder. (Design-led stays a
-  // single reference page — its renders are comparison-only.)
-  if (direction === "code-led" && plan.screens && plan.screens.length > 0) {
-    return buildPerScreen(figma, plan, bytesByPath, direction);
+  // Code-led with a screen graph or theme foundations: a structured, multi-page
+  // layout (Themes/Tokens page + one page per screen + a catalog remainder).
+  // (Design-led stays a single reference page — its renders are comparison-only.)
+  if (direction === "code-led" && (planHasThemes(plan) || (plan.screens?.length ?? 0) > 0)) {
+    return buildScopes(figma, plan, bytesByPath, direction);
   }
 
   const existing = findCatalogRoot(figma, plan.system, direction, "catalog");
@@ -498,7 +498,31 @@ async function reconcileInto(
  * its own reconcile scope, so a re-import refreshes each in place. Screen /
  * related ids that name no rendered component are skipped (the generator warns).
  */
-async function buildPerScreen(
+/** The dedicated page for the theme-foundation showcases + token variables. */
+const TOKENS_PAGE = "Themes / Tokens";
+
+/**
+ * A theme-foundation component — the `Theme/*` showcases the catalogs emit (or
+ * anything in a "Themes" group). These route to the {@link TOKENS_PAGE} instead
+ * of the catalog/screen pages.
+ */
+function isThemeComponent(componentId: string, group: string): boolean {
+  return componentId.startsWith("Theme/") || group === "Themes";
+}
+
+/** Whether the plan carries any theme-foundation components for the Tokens page. */
+function planHasThemes(plan: ImportPlan): boolean {
+  return plan.groups.some((g) => g.components.some((c) => isThemeComponent(c.componentId, g.name)));
+}
+
+/**
+ * Code-led multi-page import: a `Themes / Tokens` page for the theme
+ * foundations, one page per main screen (+ related), and a catalog page for the
+ * remainder. Each page is its own reconcile scope. Used whenever the plan has a
+ * screen graph or theme components; a plain catalog with neither stays a single
+ * flat page (see {@link buildFresh}).
+ */
+async function buildScopes(
   figma: FigmaApi,
   plan: ImportPlan,
   bytesByPath: Map<string, Uint8Array>,
@@ -511,6 +535,22 @@ async function buildPerScreen(
 
   const used = new Set<string>();
   const scopes: Array<{ scope: string; pageName: string; rootName: string; groups: PlannedGroup[] }> = [];
+
+  // Tokens scope first: the theme-foundation showcases get their own
+  // `Themes / Tokens` page (the native Figma variable collection, created once
+  // below, is the machine-readable half of that page).
+  const themeGroups = plan.groups
+    .map((group) => ({
+      name: group.name,
+      components: group.components.filter((c) => isThemeComponent(c.componentId, group.name)),
+    }))
+    .filter((group) => group.components.length > 0);
+  if (themeGroups.length > 0) {
+    for (const group of themeGroups) {
+      for (const component of group.components) used.add(component.componentId);
+    }
+    scopes.push({ scope: "tokens", pageName: TOKENS_PAGE, rootName: TOKENS_PAGE, groups: themeGroups });
+  }
 
   for (const screen of plan.screens ?? []) {
     const components: PlannedComponent[] = [];

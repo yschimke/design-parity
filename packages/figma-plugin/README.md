@@ -165,16 +165,25 @@ consumer repo's `.design-parity.json` (`generate-design-catalog.mjs` →
 safe design-led default), with **Code-led** / **Design-led** as manual
 overrides.
 
-### Per-screen pages
+### Structured pages — Themes/Tokens & per-screen
 
-When the catalog carries a **screen graph** (`catalog.json`'s `screens`, from the
-spec's `screens: [{ id, title?, related }]`) and the import is **code-led**, the
-plugin lays out **one page per main screen** — the screen's card plus its related
-secondaries/dialogs — and a `<system> — Catalog` page for everything not on a
-screen. Each page is its own reconcile **scope** (the root is stamped
-`scope: screen:<id>` / `catalog`), so a re-import refreshes each page in place
-independently and never mixes a screen's cards with the catalog's. A catalog with
-no `screens` (or a design-led import) stays a single flat page as before.
+A **code-led** import with theme foundations and/or a screen graph lays out
+multiple pages instead of one flat sheet, each its own reconcile **scope** (the
+root is stamped `scope: tokens` / `screen:<id>` / `catalog`), so a re-import
+refreshes each page in place independently:
+
+- **`Themes / Tokens`** — the theme-foundation showcases (the `Theme/*` cards / a
+  "Themes" group). The native Figma **variable collection** (light/dark modes,
+  projected from the DTCG tokens) is the machine-readable half of this page and
+  is created once per file.
+- **One page per main screen** — from the catalog's screen graph
+  (`catalog.json`'s `screens: [{ id, title?, related }]`): the screen's card plus
+  its related secondaries/dialogs.
+- **`<system> — Catalog`** — the remainder (everything not a theme or on a
+  screen).
+
+A catalog with neither themes nor `screens` — and any design-led import — stays a
+single flat page as before.
 
 ## Correspondence export
 

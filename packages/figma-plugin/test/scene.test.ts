@@ -237,6 +237,45 @@ describe("applyImport — per-screen pages (code-led)", () => {
   });
 });
 
+describe("applyImport — Themes/Tokens page (code-led)", () => {
+  const tokensManifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    components: [
+      { componentId: "Theme/Light", group: "Themes", images: [{ variant: "ideal", path: "tl", state: "default", theme: "light", width: 300, height: 400 }], greenlines: [], redlines: [] },
+      { componentId: "Theme/Dark", group: "Themes", images: [{ variant: "ideal", path: "td", state: "default", theme: "dark", width: 300, height: 400 }], greenlines: [], redlines: [] },
+      { componentId: "Button/Filled", group: "Buttons", images: [{ variant: "ideal", path: "bf", state: "default", theme: "light", width: 200, height: 72 }], greenlines: [], redlines: [] },
+    ],
+  };
+
+  it("routes theme foundations to a Themes / Tokens page and still creates the variable collection", async () => {
+    const plan = buildImportPlan(tokensManifest, { baseUrl: "https://x", themeTokens: tokens });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    const result = await applyImport(fake.figma, plan, bytesFor(["tl", "td", "bf"]));
+
+    expect(result.summary).toContain("across 2 pages");
+    expect(fake.state.nodes.filter((n) => n.kind === "page").map((p) => p.name).sort()).toEqual([
+      "Compose Material 3 — Catalog",
+      "Themes / Tokens",
+    ]);
+
+    const ids = (scope: string): string[] =>
+      descendants(
+        catalogRoots(fake).find((r) => r.getSharedPluginData("designParity", "scope") === scope)!,
+        (n) => n.getSharedPluginData("designParity", "role") === "card",
+      )
+        .map((n) => n.getSharedPluginData("designParity", "componentId"))
+        .sort();
+
+    expect(ids("tokens")).toEqual(["Theme/Dark", "Theme/Light"]);
+    expect(ids("catalog")).toEqual(["Button/Filled"]);
+    // The token variable collection (light/dark modes) is still created once.
+    expect(fake.state.collections).toHaveLength(1);
+    expect(fake.state.collections[0]!.modes.map((m) => m.name).sort()).toEqual(["dark", "light"]);
+  });
+});
+
 describe("applyImport — design-led mode gate", () => {
   it("dry-runs without writing anything until confirmed", async () => {
     const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
