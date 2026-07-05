@@ -8,8 +8,9 @@
   "networkAccess": {
     "allowedDomains": [
       "https://raw.githubusercontent.com",
-      "https://objects.githubusercontent.com"
+      "https://objects.githubusercontent.com",
+      "https://preview.coo.ee"
     ],
-    "reasoning": "Fetches a published design-parity catalog manifest (catalog.json), its DTCG token file, and the sticker-sheet PNGs from a design-artifacts/<system> branch on GitHub. Add your own live preview server host here to import from compose-preview serve."
+    "reasoning": "Fetches a published design-parity catalog manifest (catalog.json), its DTCG token file, and the sticker-sheet PNGs from a design-artifacts/<system> branch on GitHub, and — for the override editor / structured-screen slot flow — previews, renders, and `/render/<id>.slots` from a `compose-preview serve` host (`preview.coo.ee`, the public demo). Add your own serve host here (or `http://localhost:<port>` for a local daemon) to point the editor at it."
   }
 }
