@@ -51,7 +51,8 @@ core and the two runtime files stay thin:
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
 | [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared colour + label helpers for the greenline (severity) and redline (spacing spec) layers — one place so the SVG preview and Figma paints match. |
-| [`src/scene.ts`](src/scene.ts) | main-thread logic (tested) | `applyImport(figma, plan, images)` — builds the page: frames, image fills, greenline/redline overlays, variable collection; emits the `design-map.json`. Takes an **injected** `FigmaApi`, so it runs headlessly against a fake (see [Testing before Figma](#testing-before-figma)). |
+| [`src/reconcile.ts`](src/reconcile.ts) | pure (tested) | `reconcile(existing, plannedIds)` → the update/add/stale decision for a re-import, keyed by `componentId`. No `figma`. The decision half of non-destructive re-import; `scene.ts` executes it. |
+| [`src/scene.ts`](src/scene.ts) | main-thread logic (tested) | `applyImport(figma, plan, images)` — **stamps** every node with its identity and either builds a fresh page or **reconciles** an existing stamped board in place; image fills, greenline/redline overlays, variable collection; emits the `design-map.json`. Takes an **injected** `FigmaApi`, so it runs headlessly against a fake (see [Testing before Figma](#testing-before-figma)). |
 | [`figma/ui.ts`](figma/ui.ts) | UI iframe | Fetches `catalog.json` + tokens + PNG bytes, runs the planner, posts the plan to the main thread. |
 | [`figma/code.ts`](figma/code.ts) | main thread | Thin bootstrap: wires the UI and hands the real `figma` to `applyImport`. |
 | [`figma/ui.html`](figma/ui.html) | UI iframe | Markup; esbuild inlines the compiled `ui.ts` into it. |
@@ -119,6 +120,27 @@ its DTCG token file, and every PNG for that variant, then lays out a
 collection (light/dark become Figma modes). Add your own live-preview host to
 the manifest's `networkAccess.allowedDomains` to import from
 `compose-preview serve` instead of GitHub.
+
+### Re-import reconciles in place — identity, not position
+
+Importing the same system again is **not** a delete-and-rebuild. Every node the
+plugin creates is stamped with invisible shared plugin data (`designParity`)
+recording its role and, on each card, the catalog `componentId`. A re-import
+finds the existing `<system>` board by that stamp and **reconciles** against it,
+keyed by `componentId` (not by position, so a card a designer moved or regrouped
+still matches):
+
+- **matched** → the card's renders are refreshed on the *same* node, keeping its
+  id, position, and any designer edits;
+- **new in the catalog** → a card is added into its group;
+- **gone from the catalog** → the card is tagged `stale` (name prefixed
+  `(stale)`), never deleted;
+- **unstamped** nodes — a designer's own content — are never touched.
+
+The update/add/stale decision is the pure [`reconcile`](src/reconcile.ts); the
+[`FIGMA_IMPORT_V2.md`](../../docs/design-artifacts/FIGMA_IMPORT_V2.md) spec's
+mode gate (design-led ⇒ a `Code renders (reference)` page + confirm-before-write)
+is the next step and is not wired yet — today's reconcile is the code-led path.
 
 ## Correspondence export
 

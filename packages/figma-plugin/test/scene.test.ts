@@ -164,3 +164,90 @@ describe("applyImport — edge cases", () => {
 function hasImageFill(n: FakeNode): boolean {
   return (n.fills ?? []).some((f) => f.type === "IMAGE");
 }
+
+const isCard = (componentId: string) => (n: FakeNode): boolean =>
+  n.getSharedPluginData("designParity", "role") === "card" &&
+  n.getSharedPluginData("designParity", "componentId") === componentId;
+
+describe("applyImport — reconcile (re-import)", () => {
+  // A second catalog: Button/Filled's renders change, Chip/Assist is new (same
+  // group), and Switch/On is gone.
+  const manifest2: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    components: [
+      {
+        componentId: "Button/Filled",
+        group: "Buttons",
+        images: [
+          { variant: "ideal", path: "a-light-v2", state: "default", theme: "light", width: 200, height: 72 },
+          { variant: "ideal", path: "a-dark-v2", state: "default", theme: "dark", width: 200, height: 72 },
+        ],
+        greenlines: [],
+        redlines: [],
+      },
+      {
+        componentId: "Chip/Assist",
+        group: "Buttons",
+        images: [
+          { variant: "ideal", path: "chip", state: "default", theme: "light", width: 120, height: 40 },
+        ],
+        greenlines: [],
+        redlines: [],
+      },
+    ],
+  };
+
+  it("updates matched cards in place, adds newcomers, and tags removed cards stale", async () => {
+    const fake = createFakeFigma({ fileKey: "ABC123" });
+
+    // First import (fresh).
+    const plan1 = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    const first = await applyImport(fake.figma, plan1, bytesFor(["a-light", "a-dark", "b-on"]));
+    expect(first.reconciled).toBe(false);
+
+    const buttonBefore = descendants(fake.root(), isCard("Button/Filled"))[0]!;
+    const buttonId = buttonBefore.id;
+    const pagesAfterFirst = fake.state.nodes.filter((n) => n.kind === "page").length;
+    expect(pagesAfterFirst).toBe(1);
+
+    // Second import (reconcile) onto the same file.
+    const plan2 = buildImportPlan(manifest2, { baseUrl: "https://x", themeTokens: tokens });
+    const second = await applyImport(fake.figma, plan2, bytesFor(["a-light-v2", "a-dark-v2", "chip"]));
+
+    expect(second.reconciled).toBe(true);
+    expect(second.summary).toBe("Reconciled Compose Material 3: 1 updated, 1 added, 1 tagged stale.");
+
+    // No second page — reconcile reuses the existing board.
+    expect(fake.state.nodes.filter((n) => n.kind === "page").length).toBe(1);
+
+    // Button/Filled kept its identity: same node id, fills swapped to new bytes.
+    const buttonAfter = descendants(fake.root(), isCard("Button/Filled"))[0]!;
+    expect(buttonAfter.id).toBe(buttonId);
+    const buttonCells = descendants(buttonAfter, (n) => hasImageFill(n));
+    expect(buttonCells).toHaveLength(2);
+    // Fills point at images created during the second import (img3+).
+    for (const cell of buttonCells) {
+      const hash = cell.fills!.find((f) => f.type === "IMAGE")!;
+      expect(hash.type === "IMAGE" && Number(hash.imageHash.replace("img", ""))).toBeGreaterThanOrEqual(3);
+    }
+
+    // Chip/Assist added into the existing Buttons section.
+    const chip = descendants(fake.root(), isCard("Chip/Assist"))[0];
+    expect(chip).toBeDefined();
+    expect(chip!.parent!.name).toBe("Buttons");
+
+    // Switch/On is gone from the catalog → tagged stale in place, not deleted.
+    const switchCard = descendants(fake.root(), isCard("Switch/On"))[0]!;
+    expect(switchCard.getSharedPluginData("designParity", "state")).toBe("stale");
+    expect(switchCard.name.startsWith("(stale) ")).toBe(true);
+
+    // Design-map reflects the current catalog (updated + added), not the stale one.
+    expect(second.designMap.components.map((c) => c.code).sort()).toEqual([
+      "Button#Filled",
+      "Chip#Assist",
+    ]);
+    expect(validateDesignMap(second.designMap).valid).toBe(true);
+  });
+});

@@ -26,7 +26,9 @@ export {
   REDLINE_HEX,
 } from "./annotations.js";
 export type { Rgb } from "./annotations.js";
-export { applyImport, hexToRgba } from "./scene.js";
+export { applyImport, hexToRgba, STAMP, ROLE } from "./scene.js";
+export { reconcile } from "./reconcile.js";
+export type { ExistingCard, ReconcileActions } from "./reconcile.js";
 export type {
   FigmaApi,
   FigmaNode,
