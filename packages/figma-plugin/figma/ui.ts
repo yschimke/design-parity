@@ -158,6 +158,11 @@ window.onmessage = (event: MessageEvent) => {
     editorSay(`Placed “${msg.name}”. Edit the knobs and place again for another variant.`);
   }
   if (msg.type === "liveError") editorSay(`Place failed: ${msg.message}`);
+  if (msg.type === "refreshJobs") void runRefreshJobs(msg.jobs);
+  if (msg.type === "refreshed") {
+    refreshDone += 1;
+    editorSay(`Refreshed ${refreshDone}/${refreshExpected}.`);
+  }
 };
 
 function dedupeImages(images: PlannedImage[]): PlannedImage[] {
@@ -198,7 +203,12 @@ const previewSelect = document.getElementById("preview") as HTMLSelectElement;
 const knobsDiv = document.getElementById("knobs") as HTMLElement;
 const axesDiv = document.getElementById("axes") as HTMLElement;
 const placeButton = document.getElementById("place") as HTMLButtonElement;
+const refreshButton = document.getElementById("refresh") as HTMLButtonElement;
 const editorStatus = document.getElementById("editor-status") as HTMLParagraphElement;
+
+/** Progress counters for an in-flight Refresh (main thread reports each node done). */
+let refreshExpected = 0;
+let refreshDone = 0;
 
 /** The loaded system: its previews plus the coordinates a render request needs. */
 let loaded: { previews: Preview[]; serverBase: string; system: string; token: string } | undefined;
@@ -330,6 +340,30 @@ function collectAxes(): Record<string, string> {
     axes[input.dataset.key!] = input.value.trim();
   }
   return axes;
+}
+
+refreshButton.addEventListener("click", () => {
+  editorSay("Refreshing selection…");
+  parent.postMessage({ pluginMessage: { type: "refresh" } }, "*");
+});
+
+/** Fetch each planned job's bytes and hand them back to the main thread to re-fill. */
+async function runRefreshJobs(jobs: { nodeId: string; url: string }[]): Promise<void> {
+  if (jobs.length === 0) {
+    editorSay("Select a placed live render on the canvas, then Refresh.");
+    return;
+  }
+  refreshExpected = jobs.length;
+  refreshDone = 0;
+  editorSay(`Refreshing ${jobs.length} render${jobs.length === 1 ? "" : "s"}…`);
+  for (const job of jobs) {
+    try {
+      const bytes = await fetchBytes(job.url);
+      parent.postMessage({ pluginMessage: { type: "applyRefresh", nodeId: job.nodeId, bytes } }, "*");
+    } catch (err) {
+      editorSay(err instanceof Error ? err.message : String(err));
+    }
+  }
 }
 
 placeButton.addEventListener("click", async () => {

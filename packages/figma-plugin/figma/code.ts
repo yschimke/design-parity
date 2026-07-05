@@ -7,9 +7,9 @@
  * `test/fakeFigma.ts`). The one `as unknown as FigmaApi` cast bridges Figma's
  * exhaustive `PluginAPI` to the structural subset the builder needs.
  */
-import { applyImport, type FetchedImage, type FigmaApi } from "../src/scene.js";
+import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
 import type { ParityDirection } from "../src/direction.js";
-import { placeLiveRender } from "../src/live.js";
+import { placeLiveRender, planRefresh, refreshLiveRender } from "../src/live.js";
 import type { ImportPlan } from "../src/plan.js";
 import type { RenderSource } from "../src/render.js";
 
@@ -34,7 +34,30 @@ interface PlaceLiveMessage {
   name?: string;
 }
 
-type UiMessage = ImportMessage | PlaceLiveMessage | { type: "cancel" };
+/** The UI asks to refresh every live render in the current selection. */
+interface RefreshMessage {
+  type: "refresh";
+}
+
+/** The UI posts back the freshly fetched bytes for one refresh job. */
+interface ApplyRefreshMessage {
+  type: "applyRefresh";
+  nodeId: string;
+  bytes: Uint8Array;
+}
+
+type UiMessage =
+  | ImportMessage
+  | PlaceLiveMessage
+  | RefreshMessage
+  | ApplyRefreshMessage
+  | { type: "cancel" };
+
+// Refresh is a round-trip: the main thread plans the jobs (only it can read a
+// node's provenance) and hands the URLs to the UI (the only realm that can
+// `fetch`); the UI fetches and posts the bytes back per node. Hold the target
+// nodes by id across that hop so an `applyRefresh` re-fills the right one.
+const refreshTargets = new Map<string, FigmaNode>();
 
 figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 
@@ -54,6 +77,32 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       const message = err instanceof Error ? err.message : String(err);
       figma.ui.postMessage({ type: "liveError", message });
       figma.notify(`Place failed: ${message}`, { error: true });
+    }
+    return;
+  }
+  if (msg.type === "refresh") {
+    const selection = figma.currentPage.selection as unknown as FigmaNode[];
+    const jobs = planRefresh(selection);
+    refreshTargets.clear();
+    for (const job of jobs) refreshTargets.set(job.node.id, job.node);
+    figma.ui.postMessage({
+      type: "refreshJobs",
+      jobs: jobs.map((j) => ({ nodeId: j.node.id, url: j.url })),
+    });
+    if (jobs.length === 0) figma.notify("Select a live render to refresh.");
+    return;
+  }
+  if (msg.type === "applyRefresh") {
+    const node = refreshTargets.get(msg.nodeId);
+    if (!node) return;
+    try {
+      refreshLiveRender(figma as unknown as FigmaApi, node, msg.bytes);
+      figma.ui.postMessage({ type: "refreshed", nodeId: msg.nodeId, name: node.name });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "liveError", message });
+    } finally {
+      refreshTargets.delete(msg.nodeId);
     }
     return;
   }

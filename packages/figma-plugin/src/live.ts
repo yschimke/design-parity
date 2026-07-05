@@ -14,7 +14,7 @@
  * Pure given the injected {@link FigmaApi} + already-fetched bytes (no `fetch`,
  * no `figma` global): asserted headlessly against the fake node.
  */
-import { readRenderSource, stampRenderSource } from "./provenance.js";
+import { readRenderSource, refreshUrl, stampRenderSource } from "./provenance.js";
 import type { RenderSource } from "./render.js";
 import { STAMP, type FigmaApi, type FigmaNode } from "./scene.js";
 
@@ -66,6 +66,27 @@ export function placeLiveRender(
   figma.currentPage.appendChild(node);
   figma.viewport.scrollAndZoomIntoView([node]);
   return node;
+}
+
+/** One node to re-fetch on Refresh: the node and the URL its provenance rebuilds. */
+export interface RefreshJob {
+  node: FigmaNode;
+  url: string;
+}
+
+/**
+ * Plan a Refresh over a selection: for each node that carries render provenance,
+ * the URL to re-fetch (rebuilt from its stamp, so it re-renders against current
+ * code). Nodes with no provenance — a designer's own content, or a static
+ * import — are skipped, so refreshing a mixed selection only touches live nodes.
+ */
+export function planRefresh(nodes: readonly FigmaNode[]): RefreshJob[] {
+  const jobs: RefreshJob[] = [];
+  for (const node of nodes) {
+    const url = refreshUrl(node);
+    if (url) jobs.push({ node, url });
+  }
+  return jobs;
 }
 
 /**
