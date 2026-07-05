@@ -19,6 +19,21 @@ import { buildCatalog } from "./ingest.js";
 import type { ComponentSource } from "./ingest.js";
 import type { Catalog, CatalogScreen, ComponentReference } from "./types.js";
 
+/**
+ * One extra **state variant** of a component: its own `@Preview` function whose
+ * render folds onto the parent sticker, tagged with `state`. Lets one component
+ * carry its default plus every state (pressed / focused / disabled / off / …) —
+ * the default is the grid hero, the variants are secondary previews in the
+ * single-component view.
+ */
+export interface CatalogSpecVariant {
+  /** State this variant renders, e.g. `"pressed"`, `"focused"`, `"disabled"`. */
+  state: string;
+  /** The `@Preview` **function name** that renders this state. */
+  preview: string;
+  caption?: string;
+}
+
 /** One component slot in a {@link CatalogSpec} group. */
 export interface CatalogSpecComponent {
   /** Stable component id, e.g. `"Button/Filled"`. */
@@ -28,6 +43,12 @@ export interface CatalogSpecComponent {
   caption?: string;
   /** Published-kit reference (URL or `figma:` handle) for the seed import. */
   reference?: ComponentReference;
+  /**
+   * Extra state renders folded onto this component (see {@link CatalogSpecVariant}).
+   * The default `preview` stays the grid hero; each variant's images are appended
+   * to `ideal`, re-tagged with the variant's `state`.
+   */
+  variants?: CatalogSpecVariant[];
 }
 
 /** A named group of components in a {@link CatalogSpec}. */
@@ -185,10 +206,26 @@ export function catalogFromCandidates(
         continue;
       }
       if (!hasSemantics(candidate)) withoutSemantics.push(component.componentId);
+      // Fold the component's state `variants` (pressed / focused / disabled / …)
+      // onto the default render: the default images stay first (the grid hero),
+      // each variant's images are appended re-tagged with its `state` so the
+      // single-component view can show them as secondary previews. A variant
+      // preview that didn't render is reported as missing, keyed by state.
+      const ideal = [...candidate.images];
+      for (const variant of component.variants ?? []) {
+        const variantCandidate = byFunction.get(variant.preview);
+        if (!variantCandidate || variantCandidate.images.length === 0) {
+          missing.push(`${component.componentId} [${variant.state}]`);
+          continue;
+        }
+        for (const image of variantCandidate.images) {
+          ideal.push({ ...image, state: variant.state });
+        }
+      }
       const source: ComponentSource = {
         componentId: component.componentId,
         group: group.name,
-        ideal: [...candidate.images],
+        ideal,
       };
       if (component.caption !== undefined) source.caption = component.caption;
       if (component.reference !== undefined) source.reference = component.reference;
