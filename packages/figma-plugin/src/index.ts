@@ -15,6 +15,22 @@ export {
   imageKey,
 } from "./plan.js";
 export { readDtcgTokensLite } from "./dtcg.js";
+export {
+  buildRenderUrl,
+  encodeSegment,
+  nonBlankOverrides,
+  isSupportedOverrideKey,
+  knobKey,
+  knobValue,
+  SUPPORTED_OVERRIDE_KEYS,
+  KNOB_PREFIX,
+} from "./render.js";
+export type {
+  RenderSource,
+  RenderFormat,
+  OverrideKey,
+  KnobKind,
+} from "./render.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
