@@ -169,7 +169,7 @@ overrides.
 
 A **code-led** import with theme foundations and/or a screen graph lays out
 multiple pages instead of one flat sheet, each its own reconcile **scope** (the
-root is stamped `scope: tokens` / `screen:<id>` / `catalog`), so a re-import
+root is stamped `scope: tokens` / `screen:<id>` / `components`), so a re-import
 refreshes each page in place independently:
 
 - **`Themes / Tokens`** — the theme-foundation showcases (the `Theme/*` cards / a
@@ -178,9 +178,14 @@ refreshes each page in place independently:
   is created once per file.
 - **One page per main screen** — from the catalog's screen graph
   (`catalog.json`'s `screens: [{ id, title?, related }]`): the screen's card plus
-  its related secondaries/dialogs.
-- **`<system> — Catalog`** — the remainder (everything not a theme or on a
-  screen).
+  its related secondaries/dialogs (as in-context renders).
+- **`Components`** — the remainder (everything not a theme or on a screen) as the
+  component library: each component is a **native Figma component set**, one
+  `COMPONENT` per render named with its variant properties (`state=…, theme=…,
+  size=…`) combined into a set. The set is the reconcile unit, so a re-import
+  refreshes each variant's render in place. (Overlays aren't drawn here — the set
+  is the reusable form; a11y greenlines / spacing redlines live on the
+  screen/catalog renders.)
 
 A catalog with neither themes nor `screens` — and any design-led import — stays a
 single flat page as before.

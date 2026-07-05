@@ -200,17 +200,17 @@ describe("applyImport — per-screen pages (code-led)", () => {
     expect(result.summary).toContain("across 2 pages");
 
     expect(fake.state.nodes.filter((n) => n.kind === "page").map((p) => p.name).sort()).toEqual([
-      "Compose Material 3 — Catalog",
+      "Components",
       "Home",
     ]);
     expect(catalogRoots(fake).map((r) => r.getSharedPluginData("designParity", "scope")).sort()).toEqual([
-      "catalog",
+      "components",
       "screen:Screen/Home",
     ]);
 
-    // The screen page carries its main + related; the remainder holds the rest.
+    // The screen page carries its main + related; the remainder is the Components library.
     expect(cardIds(rootForScope(fake, "screen:Screen/Home"))).toEqual(["Dialog/Confirm", "Screen/Home"]);
-    expect(cardIds(rootForScope(fake, "catalog"))).toEqual(["Widget/Clock"]);
+    expect(cardIds(rootForScope(fake, "components"))).toEqual(["Widget/Clock"]);
 
     expect(result.designMap.components.map((c) => c.code).sort()).toEqual([
       "Dialog#Confirm",
@@ -256,7 +256,7 @@ describe("applyImport — Themes/Tokens page (code-led)", () => {
 
     expect(result.summary).toContain("across 2 pages");
     expect(fake.state.nodes.filter((n) => n.kind === "page").map((p) => p.name).sort()).toEqual([
-      "Compose Material 3 — Catalog",
+      "Components",
       "Themes / Tokens",
     ]);
 
@@ -269,10 +269,67 @@ describe("applyImport — Themes/Tokens page (code-led)", () => {
         .sort();
 
     expect(ids("tokens")).toEqual(["Theme/Dark", "Theme/Light"]);
-    expect(ids("catalog")).toEqual(["Button/Filled"]);
+    expect(ids("components")).toEqual(["Button/Filled"]);
     // The token variable collection (light/dark modes) is still created once.
     expect(fake.state.collections).toHaveLength(1);
     expect(fake.state.collections[0]!.modes.map((m) => m.name).sort()).toEqual(["dark", "light"]);
+  });
+});
+
+describe("applyImport — Components page (native component sets)", () => {
+  // Themes present ⇒ structured layout; Button/Filled has two theme renders that
+  // should become two variants of one component set.
+  const manifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    components: [
+      { componentId: "Theme/Light", group: "Themes", images: [{ variant: "ideal", path: "tl", state: "default", theme: "light", width: 300, height: 400 }], greenlines: [], redlines: [] },
+      { componentId: "Button/Filled", group: "Buttons", images: [
+        { variant: "ideal", path: "bl", state: "default", theme: "light", width: 200, height: 72 },
+        { variant: "ideal", path: "bd", state: "default", theme: "dark", width: 200, height: 72 },
+      ], greenlines: [], redlines: [] },
+    ],
+  };
+
+  const buttonSet = (fake: ReturnType<typeof createFakeFigma>): FakeNode =>
+    fake.state.nodes.find(
+      (n) => n.kind === "component-set" && n.getSharedPluginData("designParity", "componentId") === "Button/Filled",
+    )!;
+
+  it("builds each library component as a native set with variant-named components", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["tl", "bl", "bd"]));
+
+    const set = buttonSet(fake);
+    expect(set.getSharedPluginData("designParity", "role")).toBe("card");
+    expect(set.name).toBe("Button/Filled");
+    // Two COMPONENT variants, each named with its variant properties.
+    const variants = set.children.filter((c) => c.kind === "component");
+    expect(variants).toHaveLength(2);
+    expect(variants.map((v) => v.name).sort()).toEqual([
+      "state=default, theme=dark",
+      "state=default, theme=light",
+    ]);
+    // Each variant is an image cell (role=image) with an IMAGE fill.
+    expect(variants.every((v) => v.getSharedPluginData("designParity", "role") === "image")).toBe(true);
+    expect(variants.every((v) => (v.fills ?? []).some((f) => f.type === "IMAGE"))).toBe(true);
+  });
+
+  it("reconciles a component set in place on re-import (set id kept, fills swapped)", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["tl", "bl", "bd"]));
+    const setId = buttonSet(fake).id;
+    const imagesBefore = fake.state.images.length;
+
+    const result = await applyImport(fake.figma, plan, bytesFor(["tl", "bl", "bd"]));
+
+    expect(result.reconciled).toBe(true);
+    expect(buttonSet(fake).id).toBe(setId); // same set node
+    expect(buttonSet(fake).children.filter((c) => c.kind === "component")).toHaveLength(2); // no dupes
+    expect(fake.state.images.length).toBeGreaterThan(imagesBefore); // fills re-created from new bytes
   });
 });
 
