@@ -82,12 +82,13 @@ Instead of one board, the file gets **pages**:
    lanes side by side — the exact **PNG render** and the **layout wireframe**
    (the plan carries the `layout` variant as `compare` alongside `ideal`). *(Done:
    `scene.ts` `makeSpecFrame` + `renderScreenCard`; the three lanes — figma spec ·
-   wireframe · PNG — are all in place. The wireframe is now generated **ahead of
+   wireframe · PNG — are all in place. The wireframe is generated **ahead of
    time** from the semantics bounds and baked into the bundle as a real SVG
    (`catalog-export` `buildWireframeSvg` → `wireframes/<slug>.svg`, referenced by
-   `CatalogManifestComponent.wireframe`), so a static catalog carries it without a
-   daemon-rendered `layout` variant; the plugin placing it as vector via
-   `createNodeFromSvg` is the remaining consumer step.)*
+   `CatalogManifestComponent.wireframe`), and the plugin places it as a **true
+   vector** node via `createNodeFromSvg` (`placeVectorWireframe`, refreshed on
+   re-import by re-place), so a static catalog gets a scalable wireframe without a
+   daemon-rendered `layout` variant.)*
 
 ## What v2 needs that doesn't exist yet
 

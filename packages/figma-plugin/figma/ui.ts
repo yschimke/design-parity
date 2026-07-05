@@ -108,6 +108,19 @@ form.addEventListener("submit", async (event) => {
       images.push({ path: image.path, bytes: await fetchBytes(image.url) });
     }
 
+    // Fetch the pre-generated wireframe SVGs for the components that land on a
+    // screen page (the only surface that shows the vector wireframe lane), and
+    // attach the text to the plan so the main thread places it as vector.
+    const screenIds = new Set((plan.screens ?? []).flatMap((s) => [s.id, ...(s.related ?? [])]));
+    const screenComponents = plan.groups
+      .flatMap((g) => g.components)
+      .filter((c) => screenIds.has(c.componentId) && c.wireframeUrl);
+    let wf = 0;
+    for (const component of screenComponents) {
+      say(`Fetching wireframes… ${++wf}/${screenComponents.length}`);
+      component.wireframeSvg = await fetchText(component.wireframeUrl!);
+    }
+
     // "auto" (the default) defers to the direction the generator stamped into
     // the catalog from the repo's .design-parity.json; an explicit pick overrides.
     const rawMode = modeInput.value === "auto" ? manifest.direction : modeInput.value;

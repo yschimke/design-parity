@@ -182,12 +182,13 @@ refreshes each page in place independently:
   `role=spec`, which the reconcile never touches, so the designer takes it over
   and it becomes the design intent. Below it sit the screen's card plus its
   related secondaries/dialogs, each showing two code lanes side by side — the
-  exact **code render** (PNG) and the **layout wireframe** (`compare`, from the
-  catalog's `layout` variant), both refreshed on every re-import. Each lane wears
-  its natural overlay — a11y **greenlines** on the code render, spacing
-  **redlines** on the wireframe (`compareRedlines`). So the page is the three-lane
-  diff: **figma spec · wireframe · code render**. (The wireframe lane appears only
-  when the catalog carries a layout variant.)
+  exact **code render** (PNG) and the **wireframe** — the pre-generated
+  `wireframes/<slug>.svg` placed as a true **vector** node via `createNodeFromSvg`
+  (`role=wireframe`, refreshed on re-import by re-place), falling back to the
+  raster `layout` render only when no SVG is baked. Each lane wears its natural
+  overlay — a11y **greenlines** on the code render, spacing **redlines** on the
+  wireframe (`compareRedlines`). So the page is the three-lane diff: **figma spec
+  · wireframe · code render**.
 - **`Components`** — the remainder (everything not a theme or on a screen) as the
   component library: each component is a **native Figma component set**, one
   `COMPONENT` per render named with its variant properties (`state=…, theme=…,
