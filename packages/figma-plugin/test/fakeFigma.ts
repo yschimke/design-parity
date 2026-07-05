@@ -60,7 +60,10 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
   };
   const collectionByApi = new Map<FigmaVariableCollectionNode, FakeCollection>();
 
+  const pages: FakeNode[] = [];
+
   function make(kind: FakeNode["kind"]): FakeNode {
+    const pluginData: Record<string, Record<string, string>> = {};
     const n: FakeNode = {
       kind,
       id: `${idc++}:0`,
@@ -68,6 +71,10 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
       children: [],
       appendChild(child: FigmaNode): void {
         const c = child as FakeNode;
+        // Reparent: drop from a previous parent so the tree stays a tree.
+        if (c.parent) {
+          c.parent.children = c.parent.children.filter((x) => x !== c);
+        }
         c.parent = n;
         n.children.push(c);
       },
@@ -75,13 +82,21 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
         n.width = width;
         n.height = height;
       },
+      setSharedPluginData(namespace: string, key: string, value: string): void {
+        (pluginData[namespace] ??= {})[key] = value;
+      },
+      getSharedPluginData(namespace: string, key: string): string {
+        return pluginData[namespace]?.[key] ?? "";
+      },
     };
     state.nodes.push(n);
+    if (kind === "page") pages.push(n);
     return n;
   }
 
   const figma: FigmaApi = {
     fileKey: opts.fileKey,
+    root: { get children(): readonly FigmaNode[] { return pages; } },
     currentPage: undefined as unknown as FigmaNode,
     async loadFontAsync(font: { family: string; style: string }): Promise<void> {
       state.fontsLoaded.push(font);
@@ -142,10 +157,13 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
     figma,
     state,
     root(): FakeNode {
-      // The root frame is the one frame with no parent (never appendChild'd).
-      const roots = state.nodes.filter((n) => n.kind === "frame" && !n.parent);
+      // The catalog root is the frame stamped `role=catalog-root`. A re-import
+      // reconciles into the same one, so there is still exactly one.
+      const roots = state.nodes.filter(
+        (n) => n.kind === "frame" && n.getSharedPluginData("designParity", "role") === "catalog-root",
+      );
       if (roots.length !== 1) {
-        throw new Error(`expected exactly one root frame, found ${roots.length}`);
+        throw new Error(`expected exactly one catalog-root frame, found ${roots.length}`);
       }
       return roots[0]!;
     },

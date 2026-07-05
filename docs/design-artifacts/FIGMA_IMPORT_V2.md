@@ -86,7 +86,7 @@ Each of these is a discrete work item; none is just a layout change:
 | **Figma variables** on the Tokens page | delivery branch + importer | The generated bundle must emit `figma-variables.json` (the `@design-parity/catalog-export` `writeCatalog` already produces it; the `generate-design-catalog.mjs` driver must stop dropping it). Then the importer creates a variable collection (not just the theme *picture*). |
 | **Multi-state × breakpoint renders** | renderer + `catalog.spec.json` | Component sets need every `state × breakpoint` rendered. Today the catalog renders **one image per component**; `breakpoints` exists in the spec but isn't multi-rendered. Requires the compose-preview override matrix to fan out and the spec to declare the states per component. |
 | **Screen-relationship metadata** | `catalog.spec.json` schema | Per-screen pages need to know which entries are *main screens* and their related secondaries/dialogs — a screen graph (`screens: [{ id, primary, related: […] }]`). Today groups are flat. |
-| **Reconcile engine** | importer | Match-by-`componentId`, in-place fill/text update, add/stale, page routing, mode gate. Replaces the delete-and-rebuild in the v1 runbook. |
+| **Reconcile engine** | importer | Match-by-`componentId`, in-place render refresh, add/stale. Replaces the delete-and-rebuild. **Done in the plugin** (`figma-plugin/src/reconcile.ts` + `scene.ts`); page routing + mode gate still to come. |
 | **Confirmation gate** | importer / trigger | design-led first-touch must surface a diff and require confirmation before writing into a designer-owned file. |
 
 ## Phasing
@@ -95,6 +95,11 @@ Each of these is a discrete work item; none is just a layout change:
   foundation. meshcore / HA / cadence imported.
 - **v2a** — reconcile engine (stop deleting) + mode gate from `.design-parity.json`
   (design-led ⇒ `Code renders (reference)` page + confirm-before-replace).
+  **Reconcile engine: done** — the plugin stamps every node with its identity
+  (`designParity` shared plugin data) and a re-import updates matched cards in
+  place / adds newcomers / tags removed cards `stale`, keyed by `componentId`
+  (`packages/figma-plugin/src/reconcile.ts` + `scene.ts`). The **mode gate** is
+  still to do — today's reconcile is the code-led path.
 - **v2b** — page structure: `Themes/Tokens` (with Figma variables), `Components`,
   per-screen pages. Needs `figma-variables.json` on the delivery branch and the
   screen-graph spec field.
