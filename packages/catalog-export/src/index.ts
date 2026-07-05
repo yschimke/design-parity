@@ -16,6 +16,7 @@ export type {
   Catalog,
   CatalogComponent,
   CatalogMeta,
+  CatalogScreen,
   ComponentReference,
   ComponentVariants,
   Greenline,
@@ -62,7 +63,7 @@ export type {
 export { writeCatalog } from "./write.js";
 export type { WriteOptions, WriteResult } from "./write.js";
 
-export { catalogFromCandidates } from "./spec.js";
+export { catalogFromCandidates, screenGraphIssues } from "./spec.js";
 export type {
   CatalogSpec,
   CatalogSpecComponent,

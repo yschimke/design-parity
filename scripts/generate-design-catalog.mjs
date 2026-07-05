@@ -24,7 +24,7 @@ import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { loadPreviewBundle } from "@design-parity/candidate";
-import { catalogFromCandidates, writeCatalog } from "@design-parity/catalog-export";
+import { catalogFromCandidates, screenGraphIssues, writeCatalog } from "@design-parity/catalog-export";
 import { PARITY_CONFIG_FILENAME, loadParityConfigOrDefault } from "@design-parity/policy";
 
 const { values } = parseArgs({
@@ -58,6 +58,12 @@ const outPath = resolve(values.out);
 
 const spec = JSON.parse(await readFile(specPath, "utf8"));
 const candidates = await loadPreviewBundle(rendersPath);
+
+// Screen graph (optional): warn on references to components the spec never
+// declares, so a typo/stale id in the hand-authored graph is visible.
+for (const issue of screenGraphIssues(spec)) {
+  console.warn(`[${spec.system}] screen graph: ${issue}`);
+}
 
 // The repo's parity direction (from .design-parity.json) — stamped into the
 // manifest so the importer knows the mode without reaching the repo. A set-up

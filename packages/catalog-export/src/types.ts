@@ -20,6 +20,25 @@ import type {
   Severity,
 } from "@design-parity/core";
 
+/**
+ * One **main screen** and the secondary screens/dialogs directly related to it —
+ * the unit a per-screen import page is built from. Screen `id` and every
+ * `related` entry are `componentId`s that also appear in the flat groups; the
+ * screen graph is *additive* metadata that says which of those are top-level
+ * screens and how they cluster, so it never changes the flat catalog.
+ */
+export interface CatalogScreen {
+  /** The main screen's `componentId` (must be declared in a group). */
+  id: string;
+  /** Page title for this screen; defaults to the component's caption/id. */
+  title?: string;
+  /**
+   * `componentId`s of the secondary screens and dialogs shown alongside the main
+   * screen (also declared in groups). Ordered as they should appear on the page.
+   */
+  related?: string[];
+}
+
 /** Provenance for a catalog: which system, library, and renderer produced it. */
 export interface CatalogMeta {
   /** Stable system id, kebab-case, e.g. `"compose-m3"`. */
@@ -32,6 +51,11 @@ export interface CatalogMeta {
   renderer?: string;
   /** ISO-8601 timestamp the catalog was generated, for provenance. */
   generatedAt?: string;
+  /**
+   * The screen graph — main screens + their related secondaries/dialogs — for a
+   * per-screen import. Additive; absent ⇒ the flat catalog with no screen pages.
+   */
+  screens?: CatalogScreen[];
 }
 
 /**

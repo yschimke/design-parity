@@ -118,6 +118,13 @@ describe("toCatalogManifest", () => {
     expect(toCatalogManifest(catalog, { direction: "code-led" }).direction).toBe("code-led");
   });
 
+  it("carries the catalog's screen graph into the manifest", () => {
+    expect(toCatalogManifest(catalog).screens).toBeUndefined();
+    const screens = [{ id: "Button/Filled", title: "Primary", related: ["Button/Text"] }];
+    const withScreens: Catalog = { ...catalog, meta: { ...catalog.meta, screens } };
+    expect(toCatalogManifest(withScreens).screens).toEqual(screens);
+  });
+
   it("honours a custom tokens filename and omits it without themeTokens", () => {
     expect(
       toCatalogManifest(catalog, { tokensFile: "t.json" }).tokensFile,

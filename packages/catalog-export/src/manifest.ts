@@ -17,6 +17,7 @@ import type { DesignTokens, Image, ParityDirection, Theme } from "@design-parity
 import type {
   Catalog,
   CatalogComponent,
+  CatalogScreen,
   ComponentReference,
   Greenline,
   Redline,
@@ -76,6 +77,11 @@ export interface CatalogManifest {
    * importer applies its safe default. Set by the generator, not by the renderer.
    */
   direction?: ParityDirection;
+  /**
+   * The screen graph — main screens + their related secondaries/dialogs — for a
+   * per-screen import. Carried through from the catalog spec; absent ⇒ flat.
+   */
+  screens?: CatalogScreen[];
   components: CatalogManifestComponent[];
 }
 
@@ -234,6 +240,7 @@ export function toCatalogManifest(
   if (catalog.meta.renderer) manifest.renderer = catalog.meta.renderer;
   if (catalog.meta.generatedAt) manifest.generatedAt = catalog.meta.generatedAt;
   if (opts.direction) manifest.direction = opts.direction;
+  if (catalog.meta.screens) manifest.screens = catalog.meta.screens;
   if (catalog.themeTokens) {
     manifest.tokensFile = opts.tokensFile ?? DEFAULT_TOKENS_FILE;
   }
