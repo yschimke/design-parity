@@ -157,8 +157,13 @@ treated as design-led, so an uncertain direction never clobbers a designer):
   and a **Confirm write** button commits it. It never restructures
   designer-owned content unasked.
 
-The direction comes from the Mode selector in the plugin UI; wiring it from the
-consumer repo's `.design-parity.json` automatically is the remaining thread.
+The direction is **stamped into `catalog.json`** by the generator from the
+consumer repo's `.design-parity.json` (`generate-design-catalog.mjs` →
+`toCatalogManifest`'s `direction`). The plugin's Mode selector defaults to
+**From catalog** and honours it (a set-up repo has materialized a concrete
+`code-led`/`design-led`; an unresolved `auto` or absent field falls back to the
+safe design-led default), with **Code-led** / **Design-led** as manual
+overrides.
 
 ## Correspondence export
 

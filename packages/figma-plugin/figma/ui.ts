@@ -87,7 +87,10 @@ form.addEventListener("submit", async (event) => {
       images.push({ path: image.path, bytes: await fetchBytes(image.url) });
     }
 
-    const direction = resolveDirection(modeInput.value);
+    // "auto" (the default) defers to the direction the generator stamped into
+    // the catalog from the repo's .design-parity.json; an explicit pick overrides.
+    const rawMode = modeInput.value === "auto" ? manifest.direction : modeInput.value;
+    const direction = resolveDirection(rawMode);
     pending = { plan, images, direction };
     confirmButton.hidden = true;
     // Design-led sends confirm:false first — the main thread replies with a dry
