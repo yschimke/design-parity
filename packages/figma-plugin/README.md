@@ -11,7 +11,9 @@ Figma canvas as authoritative renders, grouped by component group, with:
 - a **redline** (spacing spec) layer over the layout wireframe — per-node box,
   padding, gap, and corner radius;
 - a **variable collection** projected from the design system's tokens
-  (light/dark become Figma modes).
+  (light/dark become Figma modes);
+- a **`design-map.json` correspondence** scaffold linking each code component to
+  the frame the plugin just placed (see *Correspondence export* below).
 
 Each variant gets its natural overlay: greenlines annotate the *ideal* render,
 redlines annotate the *layout* wireframe. Figma is a *view* of the code, never
@@ -47,9 +49,10 @@ core and the two runtime files stay thin:
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
+| [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
 | [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared colour + label helpers for the greenline (severity) and redline (spacing spec) layers — one place so the SVG preview and Figma paints match. |
 | [`figma/ui.ts`](figma/ui.ts) | UI iframe | Fetches `catalog.json` + tokens + PNG bytes, runs the planner, posts the plan to the main thread. |
-| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, greenline/redline overlays, variable collection. Mechanical. |
+| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, greenline/redline overlays, variable collection; collects the placed node ids and emits the `design-map.json`. Mechanical. |
 | [`figma/ui.html`](figma/ui.html) | UI iframe | Markup; esbuild inlines the compiled `ui.ts` into it. |
 | [`figma/manifest.json`](figma/manifest.json) | — | Figma plugin manifest (network allowlist, entry points). |
 
@@ -96,6 +99,26 @@ collection (light/dark become Figma modes). Add your own live-preview host to
 the manifest's `networkAccess.allowedDomains` to import from
 `compose-preview serve` instead of GitHub.
 
+## Correspondence export
+
+Because the plugin *creates* the frames, it knows each imported component's
+Figma node id — the one thing correspondence needs. After an import it emits a
+[`design-map.json`](https://github.com/yschimke/design-parity/tree/main/packages/core#design-map)
+linking each code component to the frame it placed, shown in a panel to copy and
+commit into a consumer repo. Once committed, design-parity's resolver maps code
+↔ design from it (its `Code Connect → design-map.json → name convention` chain).
+
+![The correspondence panel — the emitted design-map.json](docs/ui-designmap.png)
+
+It's a **scaffold**: the plugin fills the authoritative half of each entry —
+`source: "figma"` and `ref: figma:<fileKey>/<nodeId>` — but a catalog carries
+only a `componentId`, not the `file#symbol` code handle the schema requires, so
+`code` is derived from the componentId (`Button/Filled` → `Button#Filled`) and
+meant to be reconciled with the consumer's real component handle. A sample is
+committed at [`docs/design-map.sample.json`](docs/design-map.sample.json). When
+the file isn't saved yet (`figma.fileKey` is null) the ref carries a `FILE_KEY`
+placeholder the panel flags.
+
 ## Keeping evidence current
 
 `planToSvg` is deterministic, so the committed `docs/canvas-preview*.svg` must
@@ -118,4 +141,5 @@ and refreshed alongside by hand.
 
 ## Roadmap
 
-- Code Connect authoring: map imported frames back to code components.
+- Generate true Code Connect (`*.figma.tsx`) rather than a design-map scaffold —
+  needs each component's code import path, which the catalog doesn't yet carry.

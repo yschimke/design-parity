@@ -15,6 +15,8 @@ export {
   imageKey,
 } from "./plan.js";
 export { readDtcgTokensLite } from "./dtcg.js";
+export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
+export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
 export {
   severityHex,
