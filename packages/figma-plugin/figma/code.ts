@@ -8,6 +8,7 @@
  * exhaustive `PluginAPI` to the structural subset the builder needs.
  */
 import { applyImport, type FetchedImage, type FigmaApi } from "../src/scene.js";
+import type { ParityDirection } from "../src/direction.js";
 import type { ImportPlan } from "../src/plan.js";
 
 /** The message the UI posts once it has resolved the plan and all image bytes. */
@@ -15,11 +16,15 @@ interface ImportMessage {
   type: "import";
   plan: ImportPlan;
   images: FetchedImage[];
+  /** Resolved parity direction; design-led writes also need `confirm`. */
+  direction?: ParityDirection;
+  /** User confirmed a design-led write (otherwise design-led is a dry run). */
+  confirm?: boolean;
 }
 
 type UiMessage = ImportMessage | { type: "cancel" };
 
-figma.showUI(__html__, { width: 420, height: 320, themeColors: true });
+figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   if (msg.type === "cancel") {
@@ -28,10 +33,11 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "import") {
     try {
-      const { summary, designMap, fileKeyKnown } = await applyImport(
+      const { summary, designMap, fileKeyKnown, pendingConfirmation } = await applyImport(
         figma as unknown as FigmaApi,
         msg.plan,
         msg.images,
+        { direction: msg.direction, confirmDesignLed: msg.confirm },
       );
       figma.ui.postMessage({
         type: "done",
@@ -39,6 +45,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
         designMap: JSON.stringify(designMap, null, 2),
         componentCount: designMap.components.length,
         fileKeyKnown,
+        pendingConfirmation: pendingConfirmation ?? false,
       });
       figma.notify(summary);
     } catch (err) {

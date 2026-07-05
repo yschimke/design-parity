@@ -27,6 +27,7 @@ import type { FigmaVariableCollection, FigmaVariableType } from "@design-parity/
 
 import { redlineLabel, redlineRgb, severityRgb } from "./annotations.js";
 import { buildDesignMap } from "./designMap.js";
+import { REFERENCE_PAGE, type ParityDirection } from "./direction.js";
 import type { ImportPlan, PlannedComponent, PlannedGroup } from "./plan.js";
 import { reconcile, type ExistingCard } from "./reconcile.js";
 import type { DesignMap } from "@design-parity/core";
@@ -147,6 +148,26 @@ export interface ImportResult {
   fileKeyKnown: boolean;
   /** Whether this import reconciled an existing board (vs built a fresh one). */
   reconciled: boolean;
+  /**
+   * Design-led, unconfirmed: nothing was written — the summary describes what a
+   * confirmed run *would* do. The UI surfaces a confirm affordance and re-runs
+   * with {@link ImportOptions.confirmDesignLed} set.
+   */
+  pendingConfirmation?: boolean;
+}
+
+/** How an import should behave, beyond the plan itself. */
+export interface ImportOptions {
+  /**
+   * Who owns the source of truth. **code-led** (default): the importer owns the
+   * catalog page and builds/reconciles it directly. **design-led**: renders are
+   * a comparison reference only — they go onto a dedicated
+   * `Code renders (reference)` page and the importer refuses to write until the
+   * caller confirms (so it never restructures a designer-owned file unasked).
+   */
+  direction?: ParityDirection;
+  /** Design-led writes require this to be `true`; otherwise the run is a dry run. */
+  confirmDesignLed?: boolean;
 }
 
 function stamp(node: FigmaNode, role: string, extra?: Record<string, string>): void {
@@ -181,36 +202,93 @@ export async function applyImport(
   figma: FigmaApi,
   plan: ImportPlan,
   images: FetchedImage[],
+  opts: ImportOptions = {},
 ): Promise<ImportResult> {
   await figma.loadFontAsync({ family: "Inter", style: "Regular" });
   await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
 
   const bytesByPath = new Map(images.map((i) => [i.path, i.bytes]));
+  const direction: ParityDirection = opts.direction ?? "code-led";
+  const pageName =
+    direction === "design-led" ? REFERENCE_PAGE : `${plan.title} — Catalog`;
 
-  const existing = findCatalogRoot(figma, plan.system);
+  // Design-led: never write a designer-owned file without an explicit go-ahead —
+  // report what a confirmed run would do and stop.
+  if (direction === "design-led" && !opts.confirmDesignLed) {
+    return dryRun(figma, plan, bytesByPath, pageName);
+  }
+
+  const existing = findCatalogRoot(figma, plan.system, direction);
   if (existing) {
     return reconcileInto(figma, existing.page, existing.root, plan, bytesByPath);
   }
-  return buildFresh(figma, plan, bytesByPath);
+  return buildFresh(figma, plan, bytesByPath, direction, pageName);
 }
 
-/** Locate an existing catalog root frame stamped for `system`, with its page. */
+/**
+ * Locate an existing catalog root frame stamped for `system` **in this mode**,
+ * with its page. A design-led reference board and a code-led catalog board are
+ * kept distinct, so one mode never reconciles into the other's board. Boards
+ * stamped before modes existed carry no `mode` and read as `code-led`.
+ */
 function findCatalogRoot(
   figma: FigmaApi,
   system: string,
+  mode: ParityDirection,
 ): { page: FigmaNode; root: FigmaNode } | undefined {
   for (const page of figma.root.children) {
-    const match = descendants(page, isCatalogRootFor(system)).find(Boolean);
+    if (isCatalogRootFor(system, mode)(page)) return { page, root: page };
+    const match = descendants(page, isCatalogRootFor(system, mode)).find(Boolean);
     if (match) return { page, root: match };
-    if (isCatalogRootFor(system)(page)) return { page, root: page };
   }
   return undefined;
 }
 
-function isCatalogRootFor(system: string): (n: FigmaNode) => boolean {
+function isCatalogRootFor(system: string, mode: ParityDirection): (n: FigmaNode) => boolean {
   return (n) =>
     n.getSharedPluginData(STAMP, "role") === ROLE.root &&
-    n.getSharedPluginData(STAMP, "system") === system;
+    n.getSharedPluginData(STAMP, "system") === system &&
+    (n.getSharedPluginData(STAMP, "mode") || "code-led") === mode;
+}
+
+/**
+ * Design-led dry run: read-only. Reports how many renders a confirmed import
+ * would place / update on the reference page, without touching the scene.
+ */
+function dryRun(
+  figma: FigmaApi,
+  plan: ImportPlan,
+  bytesByPath: Map<string, Uint8Array>,
+  pageName: string,
+): ImportResult {
+  const existing = findCatalogRoot(figma, plan.system, "design-led");
+  let action: string;
+  if (existing) {
+    const existingCards: ExistingCard[] = [];
+    for (const node of descendants(existing.root, (n) => n.getSharedPluginData(STAMP, "role") === ROLE.card)) {
+      const componentId = node.getSharedPluginData(STAMP, "componentId");
+      if (componentId) existingCards.push({ componentId, nodeId: node.id });
+    }
+    const plannedIds = plan.groups.flatMap((g) => g.components.map((c) => c.componentId));
+    const { update, add, stale } = reconcile(existingCards, plannedIds);
+    const staleNote = stale.length > 0 ? `, tag ${stale.length} stale` : "";
+    action = `update ${update.length}, add ${add.length}${staleNote}`;
+  } else {
+    const renders = plan.groups.reduce(
+      (n, g) => n + g.components.reduce((m, c) => m + c.images.filter((i) => bytesByPath.has(i.path)).length, 0),
+      0,
+    );
+    action = `import ${renders} render${renders === 1 ? "" : "s"} across ${plan.groups.length} group${plan.groups.length === 1 ? "" : "s"}`;
+  }
+  const designMap = emitDesignMap(figma, plan, {});
+  const summary = `Design-led (Figma owns this file): confirm to ${action} on the "${pageName}" page. Nothing written yet.`;
+  return {
+    summary,
+    designMap: designMap.map,
+    fileKeyKnown: designMap.fileKeyKnown,
+    reconciled: false,
+    pendingConfirmation: true,
+  };
 }
 
 /** Fresh import: a new page with the whole catalog. Every node is stamped. */
@@ -218,9 +296,11 @@ async function buildFresh(
   figma: FigmaApi,
   plan: ImportPlan,
   bytesByPath: Map<string, Uint8Array>,
+  direction: ParityDirection,
+  pageName: string,
 ): Promise<ImportResult> {
   const page = figma.createPage();
-  page.name = `${plan.title} — Catalog`;
+  page.name = pageName;
   figma.currentPage = page;
 
   const root = figma.createFrame();
@@ -230,7 +310,7 @@ async function buildFresh(
   root.paddingTop = root.paddingBottom = root.paddingLeft = root.paddingRight = PAD;
   root.primaryAxisSizingMode = "AUTO";
   root.counterAxisSizingMode = "AUTO";
-  stamp(root, ROLE.root, { system: plan.system });
+  stamp(root, ROLE.root, { system: plan.system, mode: direction });
   page.appendChild(root);
   root.appendChild(title(figma, plan.title, 32));
 

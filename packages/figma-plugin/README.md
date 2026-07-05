@@ -52,6 +52,7 @@ core and the two runtime files stay thin:
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
 | [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared colour + label helpers for the greenline (severity) and redline (spacing spec) layers — one place so the SVG preview and Figma paints match. |
 | [`src/reconcile.ts`](src/reconcile.ts) | pure (tested) | `reconcile(existing, plannedIds)` → the update/add/stale decision for a re-import, keyed by `componentId`. No `figma`. The decision half of non-destructive re-import; `scene.ts` executes it. |
+| [`src/direction.ts`](src/direction.ts) | pure (tested) | `resolveDirection(raw)` → `code-led` \| `design-led` (unresolved ⇒ design-led, the safe default). The mode gate: design-led routes renders to a reference page and requires confirm-before-write. |
 | [`src/scene.ts`](src/scene.ts) | main-thread logic (tested) | `applyImport(figma, plan, images)` — **stamps** every node with its identity and either builds a fresh page or **reconciles** an existing stamped board in place; image fills, greenline/redline overlays, variable collection; emits the `design-map.json`. Takes an **injected** `FigmaApi`, so it runs headlessly against a fake (see [Testing before Figma](#testing-before-figma)). |
 | [`figma/ui.ts`](figma/ui.ts) | UI iframe | Fetches `catalog.json` + tokens + PNG bytes, runs the planner, posts the plan to the main thread. |
 | [`figma/code.ts`](figma/code.ts) | main thread | Thin bootstrap: wires the UI and hands the real `figma` to `applyImport`. |
@@ -137,10 +138,27 @@ still matches):
   `(stale)`), never deleted;
 - **unstamped** nodes — a designer's own content — are never touched.
 
-The update/add/stale decision is the pure [`reconcile`](src/reconcile.ts); the
-[`FIGMA_IMPORT_V2.md`](../../docs/design-artifacts/FIGMA_IMPORT_V2.md) spec's
-mode gate (design-led ⇒ a `Code renders (reference)` page + confirm-before-write)
-is the next step and is not wired yet — today's reconcile is the code-led path.
+The update/add/stale decision is the pure [`reconcile`](src/reconcile.ts).
+
+### Mode-aware — code-led vs design-led
+
+Who owns the file decides how the import behaves (the parity direction, resolved
+by [`resolveDirection`](src/direction.ts) — only an explicit `code-led` lets the
+importer own the file; `design-led`, an unresolved `auto`, or anything unknown is
+treated as design-led, so an uncertain direction never clobbers a designer):
+
+- **Code-led** (code is the source of truth): the plugin owns the
+  `<system> — Catalog` page and builds / reconciles it directly, as above.
+- **Design-led** (Figma is the source of truth): renders are a **comparison
+  reference** only. They go onto a dedicated **`Code renders (reference)`** page,
+  kept separate from the code-led catalog board (stamped `mode`, so one never
+  reconciles into the other), and the plugin **refuses to write until you
+  confirm** — the first Import is a dry run that reports what it *would* place,
+  and a **Confirm write** button commits it. It never restructures
+  designer-owned content unasked.
+
+The direction comes from the Mode selector in the plugin UI; wiring it from the
+consumer repo's `.design-parity.json` automatically is the remaining thread.
 
 ## Correspondence export
 

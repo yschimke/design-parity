@@ -10,20 +10,35 @@
  */
 import type { CatalogManifest } from "@design-parity/catalog-export";
 
+import { resolveDirection, type ParityDirection } from "../src/direction.js";
 import { readDtcgTokensLite } from "../src/dtcg.js";
-import { buildImportPlan, type PlannedImage } from "../src/plan.js";
+import { buildImportPlan, type ImportPlan, type PlannedImage } from "../src/plan.js";
 
 const form = document.getElementById("form") as HTMLFormElement;
 const baseInput = document.getElementById("base") as HTMLInputElement;
 const variantInput = document.getElementById("variant") as HTMLSelectElement;
+const modeInput = document.getElementById("mode") as HTMLSelectElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
 const cancel = document.getElementById("cancel") as HTMLButtonElement;
+const confirmButton = document.getElementById("confirm") as HTMLButtonElement;
 const result = document.getElementById("result") as HTMLElement;
 const designMapArea = document.getElementById("designmap") as HTMLTextAreaElement;
 const copyButton = document.getElementById("copy") as HTMLButtonElement;
 
+/** The last resolved import, retained so a design-led confirm can re-send it. */
+let pending: { plan: ImportPlan; images: { path: string; bytes: Uint8Array }[]; direction: ParityDirection } | undefined;
+
 function say(text: string): void {
   status.textContent = text;
+}
+
+function post(
+  plan: ImportPlan,
+  images: { path: string; bytes: Uint8Array }[],
+  direction: ParityDirection,
+  confirm: boolean,
+): void {
+  parent.postMessage({ pluginMessage: { type: "import", plan, images, direction, confirm } }, "*");
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -72,11 +87,23 @@ form.addEventListener("submit", async (event) => {
       images.push({ path: image.path, bytes: await fetchBytes(image.url) });
     }
 
-    say("Placing on canvas…");
-    parent.postMessage({ pluginMessage: { type: "import", plan, images } }, "*");
+    const direction = resolveDirection(modeInput.value);
+    pending = { plan, images, direction };
+    confirmButton.hidden = true;
+    // Design-led sends confirm:false first — the main thread replies with a dry
+    // run and the Confirm button appears; code-led writes straight away.
+    say(direction === "design-led" ? "Checking (design-led — nothing written yet)…" : "Placing on canvas…");
+    post(plan, images, direction, false);
   } catch (err) {
     say(err instanceof Error ? err.message : String(err));
   }
+});
+
+confirmButton.addEventListener("click", () => {
+  if (!pending) return;
+  confirmButton.hidden = true;
+  say("Writing to the reference page…");
+  post(pending.plan, pending.images, pending.direction, true);
 });
 
 cancel.addEventListener("click", () => {
@@ -95,6 +122,12 @@ window.onmessage = (event: MessageEvent) => {
   const msg = event.data.pluginMessage;
   if (!msg) return;
   if (msg.type === "done") {
+    // Design-led dry run: nothing written yet — surface the Confirm affordance.
+    if (msg.pendingConfirmation) {
+      confirmButton.hidden = false;
+      say(msg.summary);
+      return;
+    }
     const keyNote = msg.fileKeyKnown
       ? ""
       : " (replace the FILE_KEY placeholder — this file has no key yet)";

@@ -10,6 +10,8 @@
   .row { display: flex; gap: 8px; margin-top: 12px; }
   button { flex: 1; padding: 8px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 600; }
   button[type="submit"] { background: #0d99ff; color: #fff; }
+  #confirm { background: #ffb020; color: #111; }
+  #confirm[hidden] { display: none; }
   #cancel { background: rgba(128,128,128,0.2); color: inherit; }
   #status { margin-top: 12px; font-variant-numeric: tabular-nums; min-height: 16px; opacity: 0.85; }
   code { font-size: 11px; opacity: 0.6; word-break: break-all; }
@@ -34,8 +36,14 @@
     <option value="ideal">Ideal render + a11y greenlines</option>
     <option value="layout">Layout wireframe</option>
   </select>
+  <label for="mode" style="margin-top:12px">Mode</label>
+  <select id="mode" name="mode" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(128,128,128,0.4);background:transparent;color:inherit">
+    <option value="code-led">Code-led — build / refresh the catalog</option>
+    <option value="design-led">Design-led — reference page, confirm before writing</option>
+  </select>
   <div class="row">
     <button type="submit">Import</button>
+    <button id="confirm" type="button" hidden>Confirm write</button>
     <button id="cancel" type="button">Close</button>
   </div>
 </form>

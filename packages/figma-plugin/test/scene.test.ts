@@ -165,6 +165,69 @@ function hasImageFill(n: FakeNode): boolean {
   return (n.fills ?? []).some((f) => f.type === "IMAGE");
 }
 
+const catalogRoots = (fake: ReturnType<typeof createFakeFigma>): FakeNode[] =>
+  fake.state.nodes.filter(
+    (n) => n.kind === "frame" && n.getSharedPluginData("designParity", "role") === "catalog-root",
+  );
+
+describe("applyImport — design-led mode gate", () => {
+  it("dry-runs without writing anything until confirmed", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    const result = await applyImport(fake.figma, plan, bytesFor(["a-light", "a-dark", "b-on"]), {
+      direction: "design-led",
+    });
+
+    expect(result.pendingConfirmation).toBe(true);
+    expect(result.reconciled).toBe(false);
+    expect(result.summary).toContain("confirm to import 3 renders across 2 groups");
+    expect(result.summary).toContain("Code renders (reference)");
+    // Read-only: not a single node was created.
+    expect(fake.state.nodes).toHaveLength(0);
+    expect(fake.state.images).toHaveLength(0);
+  });
+
+  it("writes to the reference page when confirmed, stamped design-led", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    const result = await applyImport(fake.figma, plan, bytesFor(["a-light", "a-dark", "b-on"]), {
+      direction: "design-led",
+      confirmDesignLed: true,
+    });
+
+    expect(result.pendingConfirmation).toBeFalsy();
+    expect(fake.figma.currentPage.name).toBe("Code renders (reference)");
+    expect(fake.root().getSharedPluginData("designParity", "mode")).toBe("design-led");
+    expect(fake.state.images).toHaveLength(3);
+  });
+
+  it("keeps the design-led reference board separate from a code-led catalog", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+
+    // Code-led catalog first (default direction).
+    await applyImport(fake.figma, plan, bytesFor(["a-light", "a-dark", "b-on"]));
+    const codeLedRoot = catalogRoots(fake)[0]!;
+    const codeLedButtonId = descendants(codeLedRoot, isCard("Button/Filled"))[0]!.id;
+
+    // A confirmed design-led import must NOT reconcile the code-led board — it
+    // creates its own reference page.
+    await applyImport(fake.figma, plan, bytesFor(["a-light", "a-dark", "b-on"]), {
+      direction: "design-led",
+      confirmDesignLed: true,
+    });
+
+    const roots = catalogRoots(fake);
+    expect(roots.map((r) => r.getSharedPluginData("designParity", "mode")).sort()).toEqual([
+      "code-led",
+      "design-led",
+    ]);
+    expect(fake.state.nodes.filter((n) => n.kind === "page")).toHaveLength(2);
+    // The code-led card kept its identity — untouched by the design-led import.
+    expect(descendants(codeLedRoot, isCard("Button/Filled"))[0]!.id).toBe(codeLedButtonId);
+  });
+});
+
 const isCard = (componentId: string) => (n: FakeNode): boolean =>
   n.getSharedPluginData("designParity", "role") === "card" &&
   n.getSharedPluginData("designParity", "componentId") === componentId;
