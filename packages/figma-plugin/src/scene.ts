@@ -129,6 +129,8 @@ export interface FigmaApi {
   createComponent(): FigmaNode;
   /** Combine components into a variant COMPONENT_SET under `parent` (real Figma API). */
   combineAsVariants(components: FigmaNode[], parent: FigmaNode): FigmaNode;
+  /** Parse an SVG string into a frame of vector nodes, added to the current page (real Figma API). */
+  createNodeFromSvg(svg: string): FigmaNode;
   createImage(bytes: Uint8Array): { hash: string };
   variables: {
     createVariableCollection(name: string): FigmaVariableCollectionNode;

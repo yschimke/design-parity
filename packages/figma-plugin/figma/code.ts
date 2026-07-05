@@ -9,7 +9,7 @@
  */
 import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
 import type { ParityDirection } from "../src/direction.js";
-import { placeLiveRender, planRefresh, refreshLiveRender } from "../src/live.js";
+import { placeLiveRender, placeLiveSvg, planRefresh, refreshLiveRender } from "../src/live.js";
 import type { ImportPlan } from "../src/plan.js";
 import type { RenderSource } from "../src/render.js";
 
@@ -34,6 +34,17 @@ interface PlaceLiveMessage {
   name?: string;
 }
 
+/** The override editor posts this once it has fetched one preview's SVG export. */
+interface PlaceLiveSvgMessage {
+  type: "placeLiveSvg";
+  /** The render request (format `svg`) — stamped as provenance. */
+  source: RenderSource;
+  /** The self-contained SVG text (raster crops already inlined by the serve host). */
+  svg: string;
+  /** The node name; defaults to the preview id. */
+  name?: string;
+}
+
 /** The UI asks to refresh every live render in the current selection. */
 interface RefreshMessage {
   type: "refresh";
@@ -49,6 +60,7 @@ interface ApplyRefreshMessage {
 type UiMessage =
   | ImportMessage
   | PlaceLiveMessage
+  | PlaceLiveSvgMessage
   | RefreshMessage
   | ApplyRefreshMessage
   | { type: "cancel" };
@@ -73,6 +85,20 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       });
       figma.ui.postMessage({ type: "livePlaced", name: node.name });
       figma.notify(`Placed “${node.name}”.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "liveError", message });
+      figma.notify(`Place failed: ${message}`, { error: true });
+    }
+    return;
+  }
+  if (msg.type === "placeLiveSvg") {
+    try {
+      const node = placeLiveSvg(figma as unknown as FigmaApi, msg.source, msg.svg, {
+        name: msg.name,
+      });
+      figma.ui.postMessage({ type: "livePlaced", name: node.name });
+      figma.notify(`Placed “${node.name}” (SVG).`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       figma.ui.postMessage({ type: "liveError", message });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isLiveRender,
   placeLiveRender,
+  placeLiveSvg,
   planRefresh,
   refreshLiveRender,
   LIVE_ROLE,
@@ -19,6 +20,8 @@ const source: RenderSource = {
   overrides: { "knob.label": "string:Save", uiMode: "dark" },
   format: "png",
 };
+
+const svgSource: RenderSource = { ...source, format: "svg" };
 
 /** A fake with a current page, as the real plugin always has one. */
 function paged(): ReturnType<typeof createFakeFigma> {
@@ -59,6 +62,24 @@ describe("placeLiveRender", () => {
   });
 });
 
+describe("placeLiveSvg", () => {
+  it("parses the SVG into a stamped node carrying its svg-format provenance", () => {
+    const fake = paged();
+    const node = placeLiveSvg(fake.figma, svgSource, "<svg><rect/></svg>", { name: "Filled" });
+
+    expect(node.name).toBe("Filled");
+    expect(isLiveRender(node)).toBe(true);
+    // The vector was parsed (not set as an image fill), and the page carries it.
+    expect((node as FakeNode).fromSvg).toBe("<svg><rect/></svg>");
+    expect(node.fills).toBeUndefined();
+    expect((fake.figma.currentPage as FakeNode).children).toContain(node);
+    // Provenance round-trips with format svg, so a later re-place rebuilds the .svg URL.
+    expect(readRenderSource(node)).toEqual(svgSource);
+    expect(refreshUrl(node)).toBe(buildRenderUrl(svgSource));
+    expect(fake.state.scrolledInto.at(-1)).toEqual([node]);
+  });
+});
+
 describe("refreshLiveRender", () => {
   it("swaps the fill for new bytes and returns the node's source", () => {
     const fake = paged();
@@ -76,6 +97,13 @@ describe("refreshLiveRender", () => {
     const plain = fake.figma.createFrame();
     expect(isLiveRender(plain)).toBe(false);
     expect(refreshLiveRender(fake.figma, plain, new Uint8Array([1]))).toBeUndefined();
+  });
+
+  it("no-ops on an SVG node — it refreshes by re-placement, not a fill swap", () => {
+    const fake = paged();
+    const node = placeLiveSvg(fake.figma, svgSource, "<svg/>");
+    expect(refreshLiveRender(fake.figma, node, new Uint8Array([1]))).toBeUndefined();
+    expect(node.fills).toBeUndefined(); // untouched — no bogus image fill on a vector node
   });
 });
 
@@ -95,6 +123,15 @@ describe("planRefresh", () => {
   it("is empty for a selection with no live renders", () => {
     const fake = paged();
     expect(planRefresh([fake.figma.createFrame()])).toEqual([]);
+  });
+
+  it("skips SVG live nodes (they refresh by re-placement, not an in-place re-fetch)", () => {
+    const fake = paged();
+    const png = placeLiveRender(fake.figma, source, new Uint8Array([1]));
+    const svg = placeLiveSvg(fake.figma, svgSource, "<svg/>");
+
+    const jobs = planRefresh([png, svg]);
+    expect(jobs.map((j) => j.node)).toEqual([png]);
   });
 });
 

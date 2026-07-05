@@ -66,6 +66,12 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+  return res.text();
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const base = baseInput.value.trim().replace(/\/+$/, "");
@@ -203,6 +209,7 @@ const previewSelect = document.getElementById("preview") as HTMLSelectElement;
 const knobsDiv = document.getElementById("knobs") as HTMLElement;
 const axesDiv = document.getElementById("axes") as HTMLElement;
 const placeButton = document.getElementById("place") as HTMLButtonElement;
+const formatSelect = document.getElementById("format") as HTMLSelectElement;
 const refreshButton = document.getElementById("refresh") as HTMLButtonElement;
 const editorStatus = document.getElementById("editor-status") as HTMLParagraphElement;
 
@@ -370,22 +377,33 @@ placeButton.addEventListener("click", async () => {
   const preview = loaded?.previews.find((p) => p.id === previewSelect.value);
   if (!loaded || !preview) return;
 
+  const format = formatSelect.value === "svg" ? "svg" : "png";
   const source = renderSourceForPreview(preview, {
     serverBase: loaded.serverBase,
     basePath: loaded.system,
     token: loaded.token,
-    format: "png",
+    format,
     knobEdits: collectEdits(),
     axes: collectAxes(),
   });
+  const url = buildRenderUrl(source);
 
   try {
     editorSay("Rendering…");
-    const bytes = await fetchBytes(buildRenderUrl(source));
-    parent.postMessage(
-      { pluginMessage: { type: "placeLive", source, bytes, name: preview.label } },
-      "*",
-    );
+    if (format === "svg") {
+      // SVG imports as editable vector: post the text for figma.createNodeFromSvg.
+      const svg = await fetchText(url);
+      parent.postMessage(
+        { pluginMessage: { type: "placeLiveSvg", source, svg, name: preview.label } },
+        "*",
+      );
+    } else {
+      const bytes = await fetchBytes(url);
+      parent.postMessage(
+        { pluginMessage: { type: "placeLive", source, bytes, name: preview.label } },
+        "*",
+      );
+    }
   } catch (err) {
     editorSay(err instanceof Error ? err.message : String(err));
   }
