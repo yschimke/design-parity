@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.1.25](https://github.com/yschimke/design-parity/compare/v0.1.24...v0.1.25) (2026-07-05)
+
+
+### Features
+
+* **catalog-export:** add the screen graph to the catalog spec and manifest ([#190](https://github.com/yschimke/design-parity/issues/190)) ([d54b1b4](https://github.com/yschimke/design-parity/commit/d54b1b435ea51bf26e31a86c35d87b389c68643b))
+* **catalog-export:** bake a wireframe SVG into the bundle ahead of time ([#204](https://github.com/yschimke/design-parity/issues/204)) ([bec2faa](https://github.com/yschimke/design-parity/commit/bec2faa39b95e04b4af34147c4dc4679cf879310))
+* **catalog-export:** generalize component variants to named prop axes ([#206](https://github.com/yschimke/design-parity/issues/206)) ([42d7ae1](https://github.com/yschimke/design-parity/commit/42d7ae101ce0cb35af809846690f4ef500e02cc5))
+* **catalog-export:** stamp parity direction into catalog.json ([#189](https://github.com/yschimke/design-parity/issues/189)) ([8d7b4e0](https://github.com/yschimke/design-parity/commit/8d7b4e0d2e0aa7732f29dd9d54ce0cc2888e6f8e))
+* **catalog-export:** support component state `variants` in the spec join ([#193](https://github.com/yschimke/design-parity/issues/193)) ([e38a941](https://github.com/yschimke/design-parity/commit/e38a941b85c8e26b7000fb69543a675eeee51634))
+* **figma-plugin:** /api/previews (v2) client + override-editor model ([#191](https://github.com/yschimke/design-parity/issues/191)) ([8f4d7fd](https://github.com/yschimke/design-parity/commit/8f4d7fd093da0752ea0351cf5713daceafe3812a))
+* **figma-plugin:** add the wireframe comparison lane on screen pages ([#201](https://github.com/yschimke/design-parity/issues/201)) ([f4b9f87](https://github.com/yschimke/design-parity/commit/f4b9f87f5a2b796da998cb935ec22ff4398f9786))
+* **figma-plugin:** build the Components page as native Figma component sets ([#198](https://github.com/yschimke/design-parity/issues/198)) ([787fdd3](https://github.com/yschimke/design-parity/commit/787fdd3b5bdc4e2d8ee556ebb3fd9dde00c68b6c))
+* **figma-plugin:** catalog-import Figma plugin ([#175](https://github.com/yschimke/design-parity/issues/175)) ([b01274b](https://github.com/yschimke/design-parity/commit/b01274be29d49ff56ba05f2721ac0dd90c3fdced))
+* **figma-plugin:** emit a design-map.json correspondence on import ([#178](https://github.com/yschimke/design-parity/issues/178)) ([8c46781](https://github.com/yschimke/design-parity/commit/8c467813409e18e4a4a34626c72802e6f41a9ee9))
+* **figma-plugin:** head each screen page with a designer-owned Figma spec ([#199](https://github.com/yschimke/design-parity/issues/199)) ([caadf2b](https://github.com/yschimke/design-parity/commit/caadf2bda879302ae7827d75847e55d31d9705b1))
+* **figma-plugin:** import a component as an editable SVG (mode c) ([#200](https://github.com/yschimke/design-parity/issues/200)) ([352248c](https://github.com/yschimke/design-parity/commit/352248c09fbf14d5d4cc2f4199cac808705b4e80))
+* **figma-plugin:** lay out per-screen import pages from the screen graph ([#195](https://github.com/yschimke/design-parity/issues/195)) ([deacafc](https://github.com/yschimke/design-parity/commit/deacafca2d96c7d60b7249fb2acafc9c3205d9a8))
+* **figma-plugin:** live-render client contract for compose-preview serve ([#185](https://github.com/yschimke/design-parity/issues/185)) ([b02af39](https://github.com/yschimke/design-parity/commit/b02af396cdf02913511e45cee8623b32647f7412))
+* **figma-plugin:** mode gate — design-led imports to a reference page, confirm before write ([#188](https://github.com/yschimke/design-parity/issues/188)) ([79f4d11](https://github.com/yschimke/design-parity/commit/79f4d117330e52a61a8c673616acc65edba98f70))
+* **figma-plugin:** overlay spacing redlines on the wireframe lane ([#202](https://github.com/yschimke/design-parity/issues/202)) ([484258c](https://github.com/yschimke/design-parity/commit/484258c2593deb0b4bac4fc8649fd13675b28230))
+* **figma-plugin:** override editor UI — instantiate a live component ([#194](https://github.com/yschimke/design-parity/issues/194)) ([3336712](https://github.com/yschimke/design-parity/commit/33367123debcdaf876265fbf09722ac50bb2fd4c))
+* **figma-plugin:** parse the /render/&lt;id&gt;.slots response ([#207](https://github.com/yschimke/design-parity/issues/207)) ([8a158f4](https://github.com/yschimke/design-parity/commit/8a158f4e2055be61fdacd6a8d05434d64e453281))
+* **figma-plugin:** place + refresh a single live-rendered preview ([#192](https://github.com/yschimke/design-parity/issues/192)) ([81f4ad3](https://github.com/yschimke/design-parity/commit/81f4ad3fbebccd272691d42c9bdd800ef415e8ee))
+* **figma-plugin:** place the baked wireframe SVG as a true vector lane ([#205](https://github.com/yschimke/design-parity/issues/205)) ([a3d9b98](https://github.com/yschimke/design-parity/commit/a3d9b9845e8bf6767382c744d984193a3fb0dd52))
+* **figma-plugin:** reconcile re-imports in place, keyed by componentId ([#184](https://github.com/yschimke/design-parity/issues/184)) ([8eefa74](https://github.com/yschimke/design-parity/commit/8eefa7410a5687913f3c6ddef28e863e784e14a9))
+* **figma-plugin:** redline (spacing) annotation layer ([#177](https://github.com/yschimke/design-parity/issues/177)) ([70fd620](https://github.com/yschimke/design-parity/commit/70fd6204d7e78d316596d8827b19efdd67754e85))
+* **figma-plugin:** Refresh — re-render placed live nodes against latest code ([#197](https://github.com/yschimke/design-parity/issues/197)) ([c9b36d3](https://github.com/yschimke/design-parity/commit/c9b36d35c1b3260e93c83f56e41c3067edf68c6e))
+* **figma-plugin:** refresh a placed SVG node against updated code ([#203](https://github.com/yschimke/design-parity/issues/203)) ([5d8c6c3](https://github.com/yschimke/design-parity/commit/5d8c6c3636f173b75aeb8ea36d826b0fd17d74c8))
+* **figma-plugin:** render provenance — stamp RenderSource for refresh ([#186](https://github.com/yschimke/design-parity/issues/186)) ([02c25db](https://github.com/yschimke/design-parity/commit/02c25dbfad8cd4b7280b51988252f4d7915a5cfe))
+* **figma-plugin:** render provenance — stamp RenderSource for refresh ([#187](https://github.com/yschimke/design-parity/issues/187)) ([4e06339](https://github.com/yschimke/design-parity/commit/4e063393b545cf762caa4dc13df711876b88ab61))
+* **figma-plugin:** route theme foundations to a Themes/Tokens page ([#196](https://github.com/yschimke/design-parity/issues/196)) ([0536098](https://github.com/yschimke/design-parity/commit/0536098e370317b192afba26b2db7e56959fe211))
+
 ## [0.1.24](https://github.com/yschimke/design-parity/compare/v0.1.23...v0.1.24) (2026-07-02)
 
 
