@@ -9,7 +9,13 @@
  */
 import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
 import type { ParityDirection } from "../src/direction.js";
-import { placeLiveRender, placeLiveSvg, planRefresh, refreshLiveRender } from "../src/live.js";
+import {
+  placeLiveRender,
+  placeLiveSvg,
+  planRefresh,
+  refreshLiveRender,
+  refreshLiveSvg,
+} from "../src/live.js";
 import type { ImportPlan } from "../src/plan.js";
 import type { RenderSource } from "../src/render.js";
 
@@ -50,11 +56,18 @@ interface RefreshMessage {
   type: "refresh";
 }
 
-/** The UI posts back the freshly fetched bytes for one refresh job. */
+/** The UI posts back the freshly fetched bytes for one PNG refresh job (a fill swap). */
 interface ApplyRefreshMessage {
   type: "applyRefresh";
   nodeId: string;
   bytes: Uint8Array;
+}
+
+/** The UI posts back the freshly fetched SVG text for one SVG refresh job (a re-place). */
+interface ApplyRefreshSvgMessage {
+  type: "applyRefreshSvg";
+  nodeId: string;
+  svg: string;
 }
 
 type UiMessage =
@@ -63,6 +76,7 @@ type UiMessage =
   | PlaceLiveSvgMessage
   | RefreshMessage
   | ApplyRefreshMessage
+  | ApplyRefreshSvgMessage
   | { type: "cancel" };
 
 // Refresh is a round-trip: the main thread plans the jobs (only it can read a
@@ -113,7 +127,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
     for (const job of jobs) refreshTargets.set(job.node.id, job.node);
     figma.ui.postMessage({
       type: "refreshJobs",
-      jobs: jobs.map((j) => ({ nodeId: j.node.id, url: j.url })),
+      jobs: jobs.map((j) => ({ nodeId: j.node.id, url: j.url, format: j.format })),
     });
     if (jobs.length === 0) figma.notify("Select a live render to refresh.");
     return;
@@ -124,6 +138,22 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
     try {
       refreshLiveRender(figma as unknown as FigmaApi, node, msg.bytes);
       figma.ui.postMessage({ type: "refreshed", nodeId: msg.nodeId, name: node.name });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "liveError", message });
+    } finally {
+      refreshTargets.delete(msg.nodeId);
+    }
+    return;
+  }
+  if (msg.type === "applyRefreshSvg") {
+    const node = refreshTargets.get(msg.nodeId);
+    if (!node) return;
+    try {
+      // SVG refresh replaces the node; the name is read before the old node is removed.
+      const name = node.name;
+      refreshLiveSvg(figma as unknown as FigmaApi, node, msg.svg);
+      figma.ui.postMessage({ type: "refreshed", nodeId: msg.nodeId, name });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       figma.ui.postMessage({ type: "liveError", message });

@@ -99,6 +99,8 @@ export interface FigmaNode {
   selection?: readonly FigmaNode[];
   appendChild(child: FigmaNode): void;
   resize(width: number, height: number): void;
+  /** Remove this node from the document (real Figma API); used to replace an SVG node on refresh. */
+  remove(): void;
   /** Stamp durable, invisible identity data under a namespace (real Figma API). */
   setSharedPluginData(namespace: string, key: string, value: string): void;
   /** Read an identity stamp; returns `""` when unset (real Figma API). */

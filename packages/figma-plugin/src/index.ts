@@ -41,6 +41,7 @@ export {
   placeLiveRender,
   placeLiveSvg,
   refreshLiveRender,
+  refreshLiveSvg,
   planRefresh,
   isLiveRender,
   LIVE_ROLE,
