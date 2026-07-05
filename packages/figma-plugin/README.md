@@ -22,10 +22,11 @@ roundtrip take. The render is authoritative; the plugin only places it.
 | --- | --- |
 | ![Ideal render with greenlines](docs/canvas-preview.png) | ![Layout wireframe with redlines](docs/canvas-preview-layout.png) |
 
-*Deterministic SVG proofs of the imported scene (`planToSvg`), rendered from a
-sample catalog. A Figma plugin can't be rendered headlessly, so these stand in
-for canvas pixels in review; regenerate with
-[`docs/canvas-preview.mjs`](docs/canvas-preview.mjs).*
+*Deterministic SVG proofs of the imported scene (`planToSvg`), rendered from the
+shared [`docs/sample-catalog.json`](docs/sample-catalog.json) fixture. A Figma
+plugin can't be rendered headlessly, so these stand in for canvas pixels in
+review; regenerate with `npm run preview` (see [Keeping evidence
+current](#keeping-evidence-current)).*
 
 ## Status
 
@@ -95,8 +96,26 @@ collection (light/dark become Figma modes). Add your own live-preview host to
 the manifest's `networkAccess.allowedDomains` to import from
 `compose-preview serve` instead of GitHub.
 
+## Keeping evidence current
+
+`planToSvg` is deterministic, so the committed `docs/canvas-preview*.svg` must
+equal what the current code produces from
+[`docs/sample-catalog.json`](docs/sample-catalog.json). A test
+([`test/preview-evidence.test.ts`](test/preview-evidence.test.ts)) regenerates
+them and fails if they drift — so any change to the planner / preview /
+annotations that isn't reflected in the committed evidence is caught by
+`npm test` in CI, forcing the PR to refresh its before/after proof. Regenerate
+with:
+
+```sh
+npm run build --workspace @design-parity/figma-plugin
+npm run preview --workspace @design-parity/figma-plugin   # rewrites the SVGs
+```
+
+then re-rasterize the PNGs (the generator prints the `chromium --screenshot`
+command). Only the deterministic SVGs are gated; the PNGs are Chrome-rendered
+and refreshed alongside by hand.
+
 ## Roadmap
 
 - Code Connect authoring: map imported frames back to code components.
-- Wire `planToSvg` output into the CI preview-diff workflow so plugin UI
-  changes get before/after evidence automatically.
