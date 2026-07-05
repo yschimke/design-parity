@@ -26,6 +26,8 @@ import {
   type Preview,
 } from "../src/previews.js";
 import { buildRenderUrl } from "../src/render.js";
+import { buildSlotsUrl, parseSlotsResponse } from "../src/slots.js";
+import { slotSizeAxes } from "../src/structure.js";
 
 const form = document.getElementById("form") as HTMLFormElement;
 const baseInput = document.getElementById("base") as HTMLInputElement;
@@ -184,7 +186,78 @@ window.onmessage = (event: MessageEvent) => {
     refreshDone += 1;
     editorSay(`Refreshed ${refreshDone}/${refreshExpected}.`);
   }
+  if (msg.type === "slotsPlaced") {
+    renderSlotFills(msg.container, msg.slots);
+    editorSay(`Placed “${msg.container}” with ${msg.slots.length} slot${msg.slots.length === 1 ? "" : "s"} — pick a component for each and Fill.`);
+  }
+  if (msg.type === "slotFilled") editorSay(`Filled “${msg.name}”.`);
 };
+
+/** A placed slot the main thread reports back: its name, node id, and box size. */
+interface SlotFill {
+  name: string;
+  nodeId: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Render a fill control per placed slot: a component picker + a Fill button that
+ * renders the chosen component to the slot's exact size and posts it for the main
+ * thread to drop into that slot frame.
+ */
+function renderSlotFills(container: string, slots: SlotFill[]): void {
+  slotsPanel.replaceChildren();
+  if (slots.length === 0) {
+    slotsPanel.hidden = true;
+    return;
+  }
+  const title = document.createElement("p");
+  title.className = "group-title";
+  title.textContent = `Slots in ${container}`;
+  slotsPanel.append(title);
+  for (const slot of slots) {
+    const row = document.createElement("div");
+    row.className = "field";
+    const label = document.createElement("label");
+    label.textContent = `${slot.name} (${slot.width}×${slot.height})`;
+    const select = document.createElement("select");
+    for (const preview of loaded?.previews ?? []) {
+      const option = document.createElement("option");
+      option.value = preview.id;
+      option.textContent = preview.label;
+      select.append(option);
+    }
+    const fill = document.createElement("button");
+    fill.type = "button";
+    fill.className = "secondary";
+    fill.textContent = "Fill";
+    fill.addEventListener("click", async () => {
+      const child = loaded?.previews.find((p) => p.id === select.value);
+      if (!loaded || !child) return;
+      const source = renderSourceForPreview(child, {
+        serverBase: loaded.serverBase,
+        basePath: loaded.system,
+        token: loaded.token,
+        format: "png",
+        axes: slotSizeAxes(slot),
+      });
+      try {
+        editorSay(`Rendering ${child.label} for ${slot.name}…`);
+        const bytes = await fetchBytes(buildRenderUrl(source));
+        parent.postMessage(
+          { pluginMessage: { type: "fillSlot", slotNodeId: slot.nodeId, source, bytes } },
+          "*",
+        );
+      } catch (err) {
+        editorSay(err instanceof Error ? err.message : String(err));
+      }
+    });
+    row.append(label, select, fill);
+    slotsPanel.append(row);
+  }
+  slotsPanel.hidden = false;
+}
 
 function dedupeImages(images: PlannedImage[]): PlannedImage[] {
   const seen = new Set<string>();
@@ -224,6 +297,8 @@ const previewSelect = document.getElementById("preview") as HTMLSelectElement;
 const knobsDiv = document.getElementById("knobs") as HTMLElement;
 const axesDiv = document.getElementById("axes") as HTMLElement;
 const placeButton = document.getElementById("place") as HTMLButtonElement;
+const placeSlotsButton = document.getElementById("place-slots") as HTMLButtonElement;
+const slotsPanel = document.getElementById("slots-panel") as HTMLElement;
 const formatSelect = document.getElementById("format") as HTMLSelectElement;
 const refreshButton = document.getElementById("refresh") as HTMLButtonElement;
 const editorStatus = document.getElementById("editor-status") as HTMLParagraphElement;
@@ -436,6 +511,42 @@ placeButton.addEventListener("click", async () => {
         "*",
       );
     }
+  } catch (err) {
+    editorSay(err instanceof Error ? err.message : String(err));
+  }
+});
+
+placeSlotsButton.addEventListener("click", async () => {
+  const preview = loaded?.previews.find((p) => p.id === previewSelect.value);
+  if (!loaded || !preview) return;
+
+  // A slotted container places as a PNG; its slot boxes come from /render/<id>.slots.
+  const source = renderSourceForPreview(preview, {
+    serverBase: loaded.serverBase,
+    basePath: loaded.system,
+    token: loaded.token,
+    format: "png",
+    knobEdits: collectEdits(),
+    axes: collectAxes(),
+  });
+
+  try {
+    editorSay("Rendering container + reading slots…");
+    const [bytes, slotsBody] = await Promise.all([
+      fetchBytes(buildRenderUrl(source)),
+      fetchJson<unknown>(buildSlotsUrl(source)),
+    ]);
+    const slots = parseSlotsResponse(slotsBody);
+    if (!slots || slots.slots.length === 0) {
+      editorSay("That preview declares no slots (no dp-slot markers).");
+      slotsPanel.replaceChildren();
+      slotsPanel.hidden = true;
+      return;
+    }
+    parent.postMessage(
+      { pluginMessage: { type: "placeWithSlots", source, bytes, slots, name: preview.label } },
+      "*",
+    );
   } catch (err) {
     editorSay(err instanceof Error ? err.message : String(err));
   }
