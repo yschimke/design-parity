@@ -106,6 +106,68 @@ describe("catalogFromCandidates", () => {
     expect(catalog.themeTokens).toEqual({ colors: { primary: "#6750a4" } });
   });
 
+  it("folds a component's state variants onto its sticker, re-tagged by state", () => {
+    const specWithVariants: CatalogSpec = {
+      system: "compose-m3",
+      title: "Compose Material 3",
+      groups: [
+        {
+          name: "Buttons",
+          components: [
+            {
+              componentId: "Button/Filled",
+              preview: "FilledButton",
+              variants: [
+                { state: "pressed", preview: "FilledButtonPressed" },
+                { state: "disabled", preview: "FilledButtonDisabled" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { catalog, missing } = catalogFromCandidates(
+      [
+        candidate("com.example.CKt", "FilledButton"),
+        candidate("com.example.CKt", "FilledButtonPressed"),
+        candidate("com.example.CKt", "FilledButtonDisabled"),
+      ],
+      specWithVariants,
+    );
+
+    expect(missing).toEqual([]);
+    // 1 default + 1 pressed + 1 disabled, all on the one component.
+    const ideal = catalog.components[0]!.variants.ideal;
+    expect(ideal.map((i) => i.state)).toEqual(["default", "pressed", "disabled"]);
+  });
+
+  it("reports a variant whose preview did not render, keyed by state", () => {
+    const specWithVariants: CatalogSpec = {
+      system: "compose-m3",
+      title: "Compose Material 3",
+      groups: [
+        {
+          name: "Buttons",
+          components: [
+            {
+              componentId: "Button/Filled",
+              preview: "FilledButton",
+              variants: [{ state: "focused", preview: "FilledButtonFocused" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { catalog, missing } = catalogFromCandidates(
+      [candidate("com.example.CKt", "FilledButton")],
+      specWithVariants,
+    );
+    expect(missing).toEqual(["Button/Filled [focused]"]);
+    expect(catalog.components[0]!.variants.ideal.map((i) => i.state)).toEqual(["default"]);
+  });
+
   it("flags rendered components whose semantics are the empty fallback", () => {
     const noSem: CandidateRender = {
       componentId: "x",
