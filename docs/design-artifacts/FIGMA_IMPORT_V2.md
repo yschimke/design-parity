@@ -85,7 +85,7 @@ Each of these is a discrete work item; none is just a layout change:
 | --- | --- | --- |
 | **Figma variables** on the Tokens page | delivery branch + importer | The generated bundle must emit `figma-variables.json` (the `@design-parity/catalog-export` `writeCatalog` already produces it; the `generate-design-catalog.mjs` driver must stop dropping it). Then the importer creates a variable collection (not just the theme *picture*). |
 | **Multi-state × breakpoint renders** | renderer + `catalog.spec.json` | Component sets need every `state × breakpoint` rendered. Today the catalog renders **one image per component**; `breakpoints` exists in the spec but isn't multi-rendered. Requires the compose-preview override matrix to fan out and the spec to declare the states per component. |
-| **Screen-relationship metadata** | `catalog.spec.json` schema | Per-screen pages need to know which entries are *main screens* and their related secondaries/dialogs — a screen graph (`screens: [{ id, title?, related: […] }]`). **Schema done** — `CatalogSpec.screens` → `CatalogMeta` → `CatalogManifest.screens`, carried through the generator (`catalog-export`), with `screenGraphIssues` validating refs. The importer's per-screen page routing that consumes it is the next slice. |
+| **Screen-relationship metadata** | `catalog.spec.json` schema | Per-screen pages need to know which entries are *main screens* and their related secondaries/dialogs — a screen graph (`screens: [{ id, title?, related: […] }]`). **Schema done** — `CatalogSpec.screens` → `CatalogMeta` → `CatalogManifest.screens`, carried through the generator (`catalog-export`), with `screenGraphIssues` validating refs. **Importer routing done** — a code-led import with `screens` lays out one page per main screen (+ related) plus a catalog remainder page, each its own reconcile scope (`figma-plugin/src/scene.ts` `buildPerScreen`). |
 | **Reconcile engine** | importer | Match-by-`componentId`, in-place render refresh, add/stale. Replaces the delete-and-rebuild. **Done in the plugin** (`figma-plugin/src/reconcile.ts` + `scene.ts`). |
 | **Confirmation gate** | importer / trigger | design-led first-touch must confirm before writing into a designer-owned file. **Done in the plugin** (`direction.ts` + `scene.ts`): design-led dry-runs and writes to a separate `Code renders (reference)` page only on confirm. The direction is stamped into `catalog.json` from the repo's `.design-parity.json` by the generator. |
 
@@ -109,10 +109,12 @@ Each of these is a discrete work item; none is just a layout change:
     manual override). v2a is complete.
 - **v2b** — page structure: `Themes/Tokens` (with Figma variables), `Components`,
   per-screen pages. Needs `figma-variables.json` on the delivery branch and the
-  screen-graph spec field. *Started:* the **screen-graph spec field** is done
-  (`CatalogSpec.screens` → manifest, validated by `screenGraphIssues`); still to
-  come — the importer routing that builds per-screen pages from it, the
-  `Components` set page, and the Tokens page's Figma variables.
+  screen-graph spec field. *In progress:* the **screen-graph spec field** and the
+  **per-screen importer routing** are done — `CatalogSpec.screens` → manifest
+  (validated by `screenGraphIssues`), and a code-led import lays out one page per
+  main screen (+ related) plus a catalog remainder, each its own reconcile scope
+  (`buildPerScreen`). Still to come — the `Components` set page and the Tokens
+  page's Figma variables (needs `figma-variables.json` on the delivery branch).
 - **v3** — native component sets with `state × breakpoint` variants. Needs the
   renderer to emit the multi-state/breakpoint matrix.
 

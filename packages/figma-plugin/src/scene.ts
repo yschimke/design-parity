@@ -218,7 +218,14 @@ export async function applyImport(
     return dryRun(figma, plan, bytesByPath, pageName);
   }
 
-  const existing = findCatalogRoot(figma, plan.system, direction);
+  // Code-led with a screen graph: one page per main screen + its related
+  // components, plus a catalog page for the remainder. (Design-led stays a
+  // single reference page — its renders are comparison-only.)
+  if (direction === "code-led" && plan.screens && plan.screens.length > 0) {
+    return buildPerScreen(figma, plan, bytesByPath, direction);
+  }
+
+  const existing = findCatalogRoot(figma, plan.system, direction, "catalog");
   if (existing) {
     return reconcileInto(figma, existing.page, existing.root, plan, bytesByPath);
   }
@@ -235,20 +242,23 @@ function findCatalogRoot(
   figma: FigmaApi,
   system: string,
   mode: ParityDirection,
+  scope: string,
 ): { page: FigmaNode; root: FigmaNode } | undefined {
   for (const page of figma.root.children) {
-    if (isCatalogRootFor(system, mode)(page)) return { page, root: page };
-    const match = descendants(page, isCatalogRootFor(system, mode)).find(Boolean);
+    if (isCatalogRootFor(system, mode, scope)(page)) return { page, root: page };
+    const match = descendants(page, isCatalogRootFor(system, mode, scope)).find(Boolean);
     if (match) return { page, root: match };
   }
   return undefined;
 }
 
-function isCatalogRootFor(system: string, mode: ParityDirection): (n: FigmaNode) => boolean {
+function isCatalogRootFor(system: string, mode: ParityDirection, scope: string): (n: FigmaNode) => boolean {
   return (n) =>
     n.getSharedPluginData(STAMP, "role") === ROLE.root &&
     n.getSharedPluginData(STAMP, "system") === system &&
-    (n.getSharedPluginData(STAMP, "mode") || "code-led") === mode;
+    (n.getSharedPluginData(STAMP, "mode") || "code-led") === mode &&
+    // Boards from before per-screen scopes carry no `scope` and read as "catalog".
+    (n.getSharedPluginData(STAMP, "scope") || "catalog") === scope;
 }
 
 /**
@@ -261,7 +271,7 @@ function dryRun(
   bytesByPath: Map<string, Uint8Array>,
   pageName: string,
 ): ImportResult {
-  const existing = findCatalogRoot(figma, plan.system, "design-led");
+  const existing = findCatalogRoot(figma, plan.system, "design-led", "catalog");
   let action: string;
   if (existing) {
     const existingCards: ExistingCard[] = [];
@@ -291,33 +301,47 @@ function dryRun(
   };
 }
 
-/** Fresh import: a new page with the whole catalog. Every node is stamped. */
-async function buildFresh(
+/**
+ * Create a fresh page + stamped catalog root for one scope (the flat catalog, or
+ * one screen). `rootName` labels the root frame; `scope` distinguishes screen
+ * boards from the catalog board so a re-import reconciles the right one.
+ */
+function createScopePage(
   figma: FigmaApi,
-  plan: ImportPlan,
-  bytesByPath: Map<string, Uint8Array>,
+  system: string,
   direction: ParityDirection,
+  scope: string,
   pageName: string,
-): Promise<ImportResult> {
+  rootName: string,
+): FigmaNode {
   const page = figma.createPage();
   page.name = pageName;
   figma.currentPage = page;
 
   const root = figma.createFrame();
-  root.name = plan.title;
+  root.name = rootName;
   root.layoutMode = "VERTICAL";
   root.itemSpacing = GROUP_GAP;
   root.paddingTop = root.paddingBottom = root.paddingLeft = root.paddingRight = PAD;
   root.primaryAxisSizingMode = "AUTO";
   root.counterAxisSizingMode = "AUTO";
-  stamp(root, ROLE.root, { system: plan.system, mode: direction });
+  stamp(root, ROLE.root, { system, mode: direction, scope });
   page.appendChild(root);
-  root.appendChild(title(figma, plan.title, 32));
+  root.appendChild(title(figma, rootName, 32));
+  return root;
+}
 
+/** Build the section/card tree for `groups` under a fresh `root`. */
+function buildCardsInto(
+  figma: FigmaApi,
+  root: FigmaNode,
+  groups: readonly PlannedGroup[],
+  bytesByPath: Map<string, Uint8Array>,
+): { placed: number; nodeIds: Record<string, string> } {
   let placed = 0;
   // componentId → the card frame the plugin placed, for correspondence authoring.
   const nodeIds: Record<string, string> = {};
-  for (const group of plan.groups) {
+  for (const group of groups) {
     const section = renderSection(figma, group.name);
     for (const component of group.components) {
       const { row, placedImages } = renderCard(figma, component, bytesByPath);
@@ -329,6 +353,19 @@ async function buildFresh(
     }
     root.appendChild(section);
   }
+  return { placed, nodeIds };
+}
+
+/** Fresh import: a new page with the whole catalog. Every node is stamped. */
+async function buildFresh(
+  figma: FigmaApi,
+  plan: ImportPlan,
+  bytesByPath: Map<string, Uint8Array>,
+  direction: ParityDirection,
+  pageName: string,
+): Promise<ImportResult> {
+  const root = createScopePage(figma, plan.system, direction, "catalog", pageName, plan.title);
+  const { placed, nodeIds } = buildCardsInto(figma, root, plan.groups, bytesByPath);
 
   let variableNote = "";
   if (plan.collection) {
@@ -354,15 +391,19 @@ async function buildFresh(
  * cards gone from the catalog are tagged `stale` — never deleted. Unstamped
  * nodes (a designer's own content) are never touched.
  */
-async function reconcileInto(
+/**
+ * Reconcile the cards for `groups` onto an existing stamped `root`: matched cards
+ * are refreshed in place (same node id), newcomers are added into their group
+ * section, and cards gone from `groups` are tagged `stale` — never deleted.
+ * Unstamped nodes (a designer's own content) are never touched. Returns the
+ * counts + the componentId → node-id map for the correspondence.
+ */
+function reconcileCardsInto(
   figma: FigmaApi,
-  page: FigmaNode,
   root: FigmaNode,
-  plan: ImportPlan,
+  groups: readonly PlannedGroup[],
   bytesByPath: Map<string, Uint8Array>,
-): Promise<ImportResult> {
-  figma.currentPage = page;
-
+): { updated: number; added: number; stale: number; nodeIds: Record<string, string> } {
   // Index the board's stamped cards by componentId (first stamp wins).
   const cardNodes = new Map<string, FigmaNode>();
   const existingCards: ExistingCard[] = [];
@@ -373,9 +414,9 @@ async function reconcileInto(
     if (!cardNodes.has(componentId)) cardNodes.set(componentId, node);
   }
 
-  // Index the incoming plan: componentId → its component + owning group.
+  // Index the incoming groups: componentId → its component + owning group.
   const planned = new Map<string, { component: PlannedComponent; group: string }>();
-  for (const group of plan.groups) {
+  for (const group of groups) {
     for (const component of group.components) {
       planned.set(component.componentId, { component, group: group.name });
     }
@@ -430,12 +471,114 @@ async function reconcileInto(
     if (!target.name.startsWith("(stale) ")) target.name = `(stale) ${target.name}`;
   }
 
+  return { updated, added, stale: actions.stale.length, nodeIds };
+}
+
+/** Single-board reconcile: the whole plan onto the one catalog `root`. */
+async function reconcileInto(
+  figma: FigmaApi,
+  page: FigmaNode,
+  root: FigmaNode,
+  plan: ImportPlan,
+  bytesByPath: Map<string, Uint8Array>,
+): Promise<ImportResult> {
+  figma.currentPage = page;
+  const { updated, added, stale, nodeIds } = reconcileCardsInto(figma, root, plan.groups, bytesByPath);
   figma.viewport.scrollAndZoomIntoView([root]);
 
   const designMap = emitDesignMap(figma, plan, nodeIds);
-  const staleNote = actions.stale.length > 0 ? `, ${actions.stale.length} tagged stale` : "";
+  const staleNote = stale > 0 ? `, ${stale} tagged stale` : "";
   const summary = `Reconciled ${plan.title}: ${updated} updated, ${added} added${staleNote}.`;
   return { summary, designMap: designMap.map, fileKeyKnown: designMap.fileKeyKnown, reconciled: true };
+}
+
+/**
+ * Code-led per-screen import: one page per main screen (its card + related
+ * components) plus a catalog page for everything not on a screen. Each page is
+ * its own reconcile scope, so a re-import refreshes each in place. Screen /
+ * related ids that name no rendered component are skipped (the generator warns).
+ */
+async function buildPerScreen(
+  figma: FigmaApi,
+  plan: ImportPlan,
+  bytesByPath: Map<string, Uint8Array>,
+  direction: ParityDirection,
+): Promise<ImportResult> {
+  const byId = new Map<string, PlannedComponent>();
+  for (const group of plan.groups) {
+    for (const component of group.components) byId.set(component.componentId, component);
+  }
+
+  const used = new Set<string>();
+  const scopes: Array<{ scope: string; pageName: string; rootName: string; groups: PlannedGroup[] }> = [];
+
+  for (const screen of plan.screens ?? []) {
+    const components: PlannedComponent[] = [];
+    for (const id of [screen.id, ...(screen.related ?? [])]) {
+      const component = byId.get(id);
+      if (!component) continue; // undeclared/unrendered — generator already warned
+      components.push(component);
+      used.add(id);
+    }
+    if (components.length === 0) continue;
+    const name = screen.title ?? screen.id;
+    scopes.push({ scope: `screen:${screen.id}`, pageName: name, rootName: name, groups: [{ name, components }] });
+  }
+
+  // Remainder: components on no screen keep the flat catalog page (by group).
+  const remainder = plan.groups
+    .map((group) => ({ name: group.name, components: group.components.filter((c) => !used.has(c.componentId)) }))
+    .filter((group) => group.components.length > 0);
+  if (remainder.length > 0) {
+    scopes.push({ scope: "catalog", pageName: `${plan.title} — Catalog`, rootName: plan.title, groups: remainder });
+  }
+
+  const nodeIds: Record<string, string> = {};
+  let updated = 0;
+  let added = 0;
+  let stale = 0;
+  let placed = 0;
+  let anyReconciled = false;
+  let anyFresh = false;
+  const roots: FigmaNode[] = [];
+  for (const { scope, pageName, rootName, groups } of scopes) {
+    const existing = findCatalogRoot(figma, plan.system, direction, scope);
+    if (existing) {
+      figma.currentPage = existing.page;
+      const r = reconcileCardsInto(figma, existing.root, groups, bytesByPath);
+      updated += r.updated;
+      added += r.added;
+      stale += r.stale;
+      Object.assign(nodeIds, r.nodeIds);
+      roots.push(existing.root);
+      anyReconciled = true;
+    } else {
+      const root = createScopePage(figma, plan.system, direction, scope, pageName, rootName);
+      const r = buildCardsInto(figma, root, groups, bytesByPath);
+      placed += r.placed;
+      Object.assign(nodeIds, r.nodeIds);
+      roots.push(root);
+      anyFresh = true;
+    }
+  }
+
+  // Variables live once at the file level: create them only on a first, all-fresh
+  // import (a reconcile means the collection already exists — don't duplicate it).
+  let variableNote = "";
+  if (plan.collection && anyFresh && !anyReconciled) {
+    const n = createVariableCollection(figma, plan.collection);
+    variableNote = `, ${n} variables`;
+  }
+
+  if (roots.length > 0) figma.viewport.scrollAndZoomIntoView(roots);
+
+  const designMap = emitDesignMap(figma, plan, nodeIds);
+  const pageCount = scopes.length;
+  const pageNote = `${pageCount} page${pageCount === 1 ? "" : "s"}`;
+  const summary = anyReconciled
+    ? `Reconciled ${plan.title} across ${pageNote}: ${updated} updated, ${added} added${stale > 0 ? `, ${stale} tagged stale` : ""}${variableNote}.`
+    : `Imported ${placed} render${placed === 1 ? "" : "s"} across ${pageNote}${variableNote}.`;
+  return { summary, designMap: designMap.map, fileKeyKnown: designMap.fileKeyKnown, reconciled: anyReconciled };
 }
 
 /** Swap the fills of a card's existing image cells against the new plan bytes. */

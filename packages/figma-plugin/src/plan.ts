@@ -20,6 +20,7 @@ import type {
   CatalogManifest,
   CatalogManifestComponent,
   CatalogManifestImage,
+  CatalogScreen,
   Greenline,
   Redline,
 } from "@design-parity/catalog-export";
@@ -75,6 +76,12 @@ export interface ImportPlan {
   system: string;
   title: string;
   groups: PlannedGroup[];
+  /**
+   * The catalog's screen graph, carried through from the manifest. When present
+   * (and code-led), the importer lays out one page per main screen with its
+   * related components instead of a single flat catalog page. Absent ⇒ flat.
+   */
+  screens?: CatalogScreen[];
   /**
    * The design system's tokens as a Figma variable collection, when theme
    * tokens are available. The main thread creates a local variable collection
@@ -213,5 +220,6 @@ export function buildImportPlan(
   if (opts.themeTokens) {
     plan.collection = toFigmaVariables(opts.themeTokens, manifest.title);
   }
+  if (manifest.screens && manifest.screens.length > 0) plan.screens = manifest.screens;
   return plan;
 }

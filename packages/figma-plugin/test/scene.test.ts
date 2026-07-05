@@ -170,6 +170,73 @@ const catalogRoots = (fake: ReturnType<typeof createFakeFigma>): FakeNode[] =>
     (n) => n.kind === "frame" && n.getSharedPluginData("designParity", "role") === "catalog-root",
   );
 
+describe("applyImport — per-screen pages (code-led)", () => {
+  const screenManifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    screens: [{ id: "Screen/Home", title: "Home", related: ["Dialog/Confirm"] }],
+    components: [
+      { componentId: "Screen/Home", group: "Screens", images: [{ variant: "ideal", path: "home", state: "default", theme: "light", width: 100, height: 200 }], greenlines: [], redlines: [] },
+      { componentId: "Dialog/Confirm", group: "Dialogs", images: [{ variant: "ideal", path: "dialog", state: "default", theme: "light", width: 100, height: 80 }], greenlines: [], redlines: [] },
+      { componentId: "Widget/Clock", group: "Widgets", images: [{ variant: "ideal", path: "clock", state: "default", theme: "light", width: 100, height: 100 }], greenlines: [], redlines: [] },
+    ],
+  };
+
+  const cardIds = (root: FakeNode): string[] =>
+    descendants(root, (n) => n.getSharedPluginData("designParity", "role") === "card")
+      .map((n) => n.getSharedPluginData("designParity", "componentId"))
+      .sort();
+  const rootForScope = (fake: ReturnType<typeof createFakeFigma>, scope: string): FakeNode =>
+    catalogRoots(fake).find((r) => r.getSharedPluginData("designParity", "scope") === scope)!;
+
+  it("lays out one page per screen plus a catalog page for the remainder", async () => {
+    const plan = buildImportPlan(screenManifest, { baseUrl: "https://x" });
+    expect(plan.screens).toHaveLength(1);
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    const result = await applyImport(fake.figma, plan, bytesFor(["home", "dialog", "clock"]));
+
+    expect(result.reconciled).toBe(false);
+    expect(result.summary).toContain("across 2 pages");
+
+    expect(fake.state.nodes.filter((n) => n.kind === "page").map((p) => p.name).sort()).toEqual([
+      "Compose Material 3 — Catalog",
+      "Home",
+    ]);
+    expect(catalogRoots(fake).map((r) => r.getSharedPluginData("designParity", "scope")).sort()).toEqual([
+      "catalog",
+      "screen:Screen/Home",
+    ]);
+
+    // The screen page carries its main + related; the remainder holds the rest.
+    expect(cardIds(rootForScope(fake, "screen:Screen/Home"))).toEqual(["Dialog/Confirm", "Screen/Home"]);
+    expect(cardIds(rootForScope(fake, "catalog"))).toEqual(["Widget/Clock"]);
+
+    expect(result.designMap.components.map((c) => c.code).sort()).toEqual([
+      "Dialog#Confirm",
+      "Screen#Home",
+      "Widget#Clock",
+    ]);
+    expect(validateDesignMap(result.designMap).valid).toBe(true);
+  });
+
+  it("reconciles each screen page in place on re-import (no new pages, ids kept)", async () => {
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, buildImportPlan(screenManifest, { baseUrl: "https://x" }), bytesFor(["home", "dialog", "clock"]));
+    const homeId = catalogRoots(fake).flatMap((r) => descendants(r, isCard("Screen/Home")))[0]!.id;
+
+    const result = await applyImport(fake.figma, buildImportPlan(screenManifest, { baseUrl: "https://x" }), bytesFor(["home", "dialog", "clock"]));
+
+    expect(result.reconciled).toBe(true);
+    expect(result.summary).toContain("Reconciled");
+    // No second set of pages.
+    expect(fake.state.nodes.filter((n) => n.kind === "page")).toHaveLength(2);
+    // The Screen/Home card kept its identity.
+    const homeAfter = catalogRoots(fake).flatMap((r) => descendants(r, isCard("Screen/Home")))[0]!;
+    expect(homeAfter.id).toBe(homeId);
+  });
+});
+
 describe("applyImport — design-led mode gate", () => {
   it("dry-runs without writing anything until confirmed", async () => {
     const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
