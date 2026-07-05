@@ -30,6 +30,7 @@ export const SUPPORTED_OVERRIDE_KEYS = [
   "heightPx",
   "orientation",
   "inspectionMode",
+  "slotMode",
 ] as const;
 export type OverrideKey = (typeof SUPPORTED_OVERRIDE_KEYS)[number];
 
