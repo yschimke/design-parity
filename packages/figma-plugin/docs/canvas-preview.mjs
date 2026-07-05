@@ -29,17 +29,24 @@ const manifest = {
       images: [
         { variant: "ideal", path: "a", state: "default", theme: "light", width: 200, height: 72 },
         { variant: "ideal", path: "b", state: "default", theme: "dark", width: 200, height: 72 },
+        { variant: "layout", path: "aw", state: "default", theme: "light", width: 200, height: 72 },
       ],
       greenlines: [{ kind: "a11y", severity: "info", message: "Role: button · label “Save”", bounds: { x: 8, y: 8, width: 184, height: 56 } }],
-      redlines: [] },
+      redlines: [{ role: "Row", bounds: { x: 8, y: 8, width: 184, height: 56 }, padding: { top: 16, end: 24, bottom: 16, start: 24 }, gap: 8, cornerRadius: 20 }] },
     { componentId: "Button/Outlined", group: "Buttons",
-      images: [{ variant: "ideal", path: "c", state: "default", theme: "light", width: 200, height: 72 }],
+      images: [
+        { variant: "ideal", path: "c", state: "default", theme: "light", width: 200, height: 72 },
+        { variant: "layout", path: "cw", state: "default", theme: "light", width: 200, height: 72 },
+      ],
       greenlines: [{ kind: "a11y", severity: "error", message: "Touch target 40dp < 48dp minimum", bounds: { x: 30, y: 20, width: 140, height: 32 } }],
-      redlines: [] },
+      redlines: [{ role: "Row", bounds: { x: 30, y: 20, width: 140, height: 32 }, padding: { top: 8, end: 16, bottom: 8, start: 16 }, gap: 8, cornerRadius: 20 }] },
     { componentId: "Switch/On", group: "Selection",
-      images: [{ variant: "ideal", path: "d", state: "on", theme: "light", width: 120, height: 60 }],
+      images: [
+        { variant: "ideal", path: "d", state: "on", theme: "light", width: 120, height: 60 },
+        { variant: "layout", path: "dw", state: "on", theme: "light", width: 120, height: 60 },
+      ],
       greenlines: [{ kind: "contrast", severity: "warn", message: "Track contrast 2.9:1 (AA needs 3:1)", bounds: { x: 10, y: 14, width: 100, height: 32 } }],
-      redlines: [] },
+      redlines: [{ role: "Track", bounds: { x: 10, y: 14, width: 100, height: 32 }, cornerRadius: 16 }] },
   ],
 };
 const themeTokens = {
@@ -47,7 +54,10 @@ const themeTokens = {
   radius: { small: 8, medium: 12, large: 16 },
 };
 
-const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens });
-const out = fileURLToPath(new URL("./canvas-preview.svg", import.meta.url));
-await writeFile(out, planToSvg(plan));
-console.log(`wrote ${out}`);
+const idealPlan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens });
+const layoutPlan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens, variant: "layout" });
+for (const [name, plan] of [["canvas-preview", idealPlan], ["canvas-preview-layout", layoutPlan]]) {
+  const out = fileURLToPath(new URL(`./${name}.svg`, import.meta.url));
+  await writeFile(out, planToSvg(plan));
+  console.log(`wrote ${out}`);
+}
