@@ -25,6 +25,7 @@ import { parseArgs } from "node:util";
 
 import { loadPreviewBundle } from "@design-parity/candidate";
 import { catalogFromCandidates, writeCatalog } from "@design-parity/catalog-export";
+import { PARITY_CONFIG_FILENAME, loadParityConfigOrDefault } from "@design-parity/policy";
 
 const { values } = parseArgs({
   options: {
@@ -32,6 +33,11 @@ const { values } = parseArgs({
     renders: { type: "string" },
     out: { type: "string" },
     renderer: { type: "string" },
+    // Path to the consumer repo's .design-parity.json — its parity direction is
+    // stamped into catalog.json so the Figma importer knows who owns the source
+    // of truth. Defaults to the file in the current directory (a missing file
+    // resolves to the `auto` default, which the importer treats as design-led).
+    config: { type: "string" },
     // Publish even when the render is incomplete (missing previews or absent
     // semantics). Off by default so a degraded render fails the job rather than
     // force-pushing a tokens/greenline-less bundle over a good delivery branch.
@@ -52,6 +58,13 @@ const outPath = resolve(values.out);
 
 const spec = JSON.parse(await readFile(specPath, "utf8"));
 const candidates = await loadPreviewBundle(rendersPath);
+
+// The repo's parity direction (from .design-parity.json) — stamped into the
+// manifest so the importer knows the mode without reaching the repo. A set-up
+// repo has already materialized this to a concrete code-led/design-led; an
+// un-configured repo resolves to `auto`, which the importer treats as design-led.
+const configPath = resolve(values.config ?? PARITY_CONFIG_FILENAME);
+const { direction } = await loadParityConfigOrDefault(configPath);
 
 const { catalog, missing, withoutSemantics } = catalogFromCandidates(candidates, spec, {
   ...(values.renderer ? { renderer: values.renderer } : {}),
@@ -78,8 +91,8 @@ if (!values["allow-incomplete"] && (missing.length > 0 || withoutSemantics.lengt
 
 // Images in the bundle are relative to the render dir; resolve them from there.
 const sourceRoot = rendersPath.endsWith(".zip") ? dirname(rendersPath) : rendersPath;
-const result = await writeCatalog(catalog, outPath, { sourceRoot });
+const result = await writeCatalog(catalog, outPath, { sourceRoot, direction });
 
 console.log(
-  `[${spec.system}] ${catalog.components.length} component(s), ${result.imageCount} image(s) → ${result.manifestPath}`,
+  `[${spec.system}] ${catalog.components.length} component(s), ${result.imageCount} image(s), direction=${direction} → ${result.manifestPath}`,
 );

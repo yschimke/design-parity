@@ -87,7 +87,7 @@ Each of these is a discrete work item; none is just a layout change:
 | **Multi-state × breakpoint renders** | renderer + `catalog.spec.json` | Component sets need every `state × breakpoint` rendered. Today the catalog renders **one image per component**; `breakpoints` exists in the spec but isn't multi-rendered. Requires the compose-preview override matrix to fan out and the spec to declare the states per component. |
 | **Screen-relationship metadata** | `catalog.spec.json` schema | Per-screen pages need to know which entries are *main screens* and their related secondaries/dialogs — a screen graph (`screens: [{ id, primary, related: […] }]`). Today groups are flat. |
 | **Reconcile engine** | importer | Match-by-`componentId`, in-place render refresh, add/stale. Replaces the delete-and-rebuild. **Done in the plugin** (`figma-plugin/src/reconcile.ts` + `scene.ts`). |
-| **Confirmation gate** | importer / trigger | design-led first-touch must confirm before writing into a designer-owned file. **Done in the plugin** (`direction.ts` + `scene.ts`): design-led dry-runs and writes to a separate `Code renders (reference)` page only on confirm. Automating the direction from `.design-parity.json` is the remaining thread. |
+| **Confirmation gate** | importer / trigger | design-led first-touch must confirm before writing into a designer-owned file. **Done in the plugin** (`direction.ts` + `scene.ts`): design-led dry-runs and writes to a separate `Code renders (reference)` page only on confirm. The direction is stamped into `catalog.json` from the repo's `.design-parity.json` by the generator. |
 
 ## Phasing
 
@@ -101,9 +101,12 @@ Each of these is a discrete work item; none is just a layout change:
   - *Mode gate:* the parity direction (`packages/figma-plugin/src/direction.ts`,
     surfaced as the plugin's Mode selector) routes **design-led** imports onto a
     separate `Code renders (reference)` page and gates them behind an explicit
-    confirm (dry-run first); **code-led** owns the catalog board as before. The
-    one remaining thread is feeding the direction from the consumer repo's
-    `.design-parity.json` automatically rather than via the UI selector.
+    confirm (dry-run first); **code-led** owns the catalog board as before.
+  - *Direction from `.design-parity.json`:* the generator stamps the repo's
+    committed parity direction into `catalog.json`
+    (`generate-design-catalog.mjs` → `catalog-export` manifest `direction`), and
+    the plugin's Mode selector defaults to **From catalog** and honours it (with
+    manual override). v2a is complete.
 - **v2b** — page structure: `Themes/Tokens` (with Figma variables), `Components`,
   per-screen pages. Needs `figma-variables.json` on the delivery branch and the
   screen-graph spec field.

@@ -112,6 +112,12 @@ describe("toCatalogManifest", () => {
     expect(c.greenlines).toHaveLength(1);
   });
 
+  it("stamps the parity direction when given and omits it otherwise", () => {
+    expect(toCatalogManifest(catalog).direction).toBeUndefined();
+    expect(toCatalogManifest(catalog, { direction: "design-led" }).direction).toBe("design-led");
+    expect(toCatalogManifest(catalog, { direction: "code-led" }).direction).toBe("code-led");
+  });
+
   it("honours a custom tokens filename and omits it without themeTokens", () => {
     expect(
       toCatalogManifest(catalog, { tokensFile: "t.json" }).tokensFile,

@@ -12,7 +12,7 @@
  * {@link toCatalogManifest} is **pure** (it only computes paths, no I/O); the
  * {@link writeCatalog} step materializes the bytes those paths point at.
  */
-import type { DesignTokens, Image, Theme } from "@design-parity/core";
+import type { DesignTokens, Image, ParityDirection, Theme } from "@design-parity/core";
 
 import type {
   Catalog,
@@ -68,6 +68,14 @@ export interface CatalogManifest {
   generatedAt?: string;
   /** Bundle-relative path to the DTCG token file, when tokens were exported. */
   tokensFile?: string;
+  /**
+   * The consumer repo's parity direction (from its `.design-parity.json`), so a
+   * design-tool importer knows who owns the source of truth without reaching the
+   * repo. `code-led` ⇒ the importer may own the design catalog; `design-led` ⇒
+   * renders are reference-only and writes need confirmation; `auto`/absent ⇒ the
+   * importer applies its safe default. Set by the generator, not by the renderer.
+   */
+  direction?: ParityDirection;
   components: CatalogManifestComponent[];
 }
 
@@ -85,6 +93,12 @@ export interface PreviewServerOptions {
 export interface ManifestOptions {
   /** Bundle-relative DTCG token filename. Default `"tokens.dtcg.json"`. */
   tokensFile?: string;
+  /**
+   * The consumer repo's parity direction to stamp into the manifest (from its
+   * `.design-parity.json`). Omitted ⇒ no `direction` field; the importer applies
+   * its own safe default.
+   */
+  direction?: ParityDirection;
   /**
    * When set, every image entry gets a {@link CatalogManifestImage.livePreview}
    * deep link into this server. Omitted ⇒ no `livePreview` fields (the catalog is
@@ -219,6 +233,7 @@ export function toCatalogManifest(
   if (catalog.meta.library) manifest.library = catalog.meta.library;
   if (catalog.meta.renderer) manifest.renderer = catalog.meta.renderer;
   if (catalog.meta.generatedAt) manifest.generatedAt = catalog.meta.generatedAt;
+  if (opts.direction) manifest.direction = opts.direction;
   if (catalog.themeTokens) {
     manifest.tokensFile = opts.tokensFile ?? DEFAULT_TOKENS_FILE;
   }
