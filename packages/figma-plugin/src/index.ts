@@ -37,6 +37,13 @@ export {
   hasRenderSource,
   refreshUrl,
 } from "./provenance.js";
+export {
+  placeLiveRender,
+  refreshLiveRender,
+  isLiveRender,
+  LIVE_ROLE,
+} from "./live.js";
+export type { PlaceLiveOptions, LiveRenderSize } from "./live.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
