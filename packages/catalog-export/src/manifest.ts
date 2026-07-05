@@ -57,6 +57,12 @@ export interface CatalogManifestComponent {
   greenlines: Greenline[];
   /** Layout spacing spec — per-node box + padding + gap + corner radius. */
   redlines: Redline[];
+  /**
+   * Bundle-relative path to the pre-generated **wireframe SVG** (one bordered box
+   * per composable), when the component carries box geometry. The importer places
+   * it as the vector wireframe comparison lane. Absent ⇒ no wireframe.
+   */
+  wireframe?: string;
 }
 
 /** The parsed/serializable `catalog.json`. */
@@ -204,6 +210,11 @@ function manifestImages(
   return out;
 }
 
+/** Bundle-relative path for a component's pre-generated wireframe SVG. */
+export function wireframePath(componentId: string): string {
+  return `wireframes/${slug(componentId)}.svg`;
+}
+
 function manifestComponent(
   component: CatalogComponent,
   ctx: ManifestContext,
@@ -218,6 +229,7 @@ function manifestComponent(
   if (component.caption !== undefined) out.caption = component.caption;
   if (component.reference !== undefined) out.reference = component.reference;
   if (component.tokens !== undefined) out.tokens = component.tokens;
+  if (component.wireframeSvg !== undefined) out.wireframe = wireframePath(component.componentId);
   return out;
 }
 

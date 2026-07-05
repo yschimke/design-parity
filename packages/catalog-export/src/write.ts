@@ -24,7 +24,7 @@ import { tokensToDtcg } from "@design-parity/core";
 import type { Image } from "@design-parity/core";
 
 import { toFigmaVariables } from "./figma.js";
-import { imagePath, toCatalogManifest, type ManifestOptions } from "./manifest.js";
+import { imagePath, toCatalogManifest, wireframePath, type ManifestOptions } from "./manifest.js";
 import type { Catalog } from "./types.js";
 
 export interface WriteOptions extends ManifestOptions {
@@ -45,6 +45,8 @@ export interface WriteResult {
   figmaPath?: string;
   /** Number of image files written. */
   imageCount: number;
+  /** Number of wireframe SVG files written. */
+  wireframeCount?: number;
 }
 
 const DATA_URI = /^data:([^;,]*)?(;base64)?,(.*)$/s;
@@ -119,6 +121,15 @@ export async function writeCatalog(
         await writeFile(dest, await imageBytes(image, sourceRoot));
         result.imageCount += 1;
       }
+    }
+
+    // The pre-generated wireframe SVG (schematic), baked beside the images so the
+    // importer only fetches + places it.
+    if (component.wireframeSvg !== undefined) {
+      const dest = join(out, wireframePath(component.componentId));
+      await mkdir(dirname(dest), { recursive: true });
+      await writeFile(dest, component.wireframeSvg, "utf8");
+      result.wireframeCount = (result.wireframeCount ?? 0) + 1;
     }
   }
 
