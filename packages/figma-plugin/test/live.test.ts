@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isLiveRender,
   placeLiveRender,
+  planRefresh,
   refreshLiveRender,
   LIVE_ROLE,
 } from "../src/live.js";
@@ -75,6 +76,25 @@ describe("refreshLiveRender", () => {
     const plain = fake.figma.createFrame();
     expect(isLiveRender(plain)).toBe(false);
     expect(refreshLiveRender(fake.figma, plain, new Uint8Array([1]))).toBeUndefined();
+  });
+});
+
+describe("planRefresh", () => {
+  it("yields a re-fetch job only for nodes carrying render provenance", () => {
+    const fake = paged();
+    const live = placeLiveRender(fake.figma, source, new Uint8Array([1]));
+    const plain = fake.figma.createFrame(); // a designer's own node — no provenance
+
+    const jobs = planRefresh([live, plain]);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.node).toBe(live);
+    // The job URL is exactly what the node's stamp rebuilds.
+    expect(jobs[0]!.url).toBe(buildRenderUrl(source));
+  });
+
+  it("is empty for a selection with no live renders", () => {
+    const fake = paged();
+    expect(planRefresh([fake.figma.createFrame()])).toEqual([]);
   });
 });
 

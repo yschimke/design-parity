@@ -93,6 +93,8 @@ export interface FigmaNode {
   characters?: string;
   /** Present on container nodes (pages, frames); used to walk for reconcile. */
   children?: readonly FigmaNode[];
+  /** Present on a page node: the user's current on-canvas selection (real Figma API). */
+  selection?: readonly FigmaNode[];
   appendChild(child: FigmaNode): void;
   resize(width: number, height: number): void;
   /** Stamp durable, invisible identity data under a namespace (real Figma API). */
