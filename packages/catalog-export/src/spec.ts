@@ -17,7 +17,7 @@ import type { CandidateRender, DesignTokens } from "@design-parity/core";
 
 import { buildCatalog } from "./ingest.js";
 import type { ComponentSource } from "./ingest.js";
-import type { Catalog, ComponentReference } from "./types.js";
+import type { Catalog, CatalogScreen, ComponentReference } from "./types.js";
 
 /** One component slot in a {@link CatalogSpec} group. */
 export interface CatalogSpecComponent {
@@ -42,6 +42,34 @@ export interface CatalogSpec {
   title: string;
   library?: string[];
   groups: CatalogSpecGroup[];
+  /**
+   * Optional screen graph: which components are main screens and their related
+   * secondaries/dialogs, for a per-screen import. Additive — every id references
+   * a component declared in {@link CatalogSpec.groups}; absent ⇒ flat catalog.
+   */
+  screens?: CatalogScreen[];
+}
+
+/**
+ * The screen-graph references (`screen.id` / `related[]`) that don't name a
+ * component declared in any group — a hand-authored `catalog.spec.json` typo or
+ * a stale id after a rename. Pure; empty ⇒ the graph is sound. The generator
+ * warns on these rather than dropping them silently.
+ */
+export function screenGraphIssues(spec: CatalogSpec): string[] {
+  const declared = new Set(
+    spec.groups.flatMap((g) => g.components.map((c) => c.componentId)),
+  );
+  const issues: string[] = [];
+  for (const screen of spec.screens ?? []) {
+    if (!declared.has(screen.id)) issues.push(`screen "${screen.id}" is not a declared component`);
+    for (const related of screen.related ?? []) {
+      if (!declared.has(related)) {
+        issues.push(`screen "${screen.id}" relates to undeclared component "${related}"`);
+      }
+    }
+  }
+  return issues;
 }
 
 /**
@@ -175,6 +203,7 @@ export function catalogFromCandidates(
     ...(spec.library ? { library: spec.library } : {}),
     ...(opts.renderer ? { renderer: opts.renderer } : {}),
     generatedAt: opts.generatedAt ?? new Date().toISOString(),
+    ...(spec.screens ? { screens: spec.screens } : {}),
   };
 
   const catalog = buildCatalog(meta, sources, opts.themeTokens);

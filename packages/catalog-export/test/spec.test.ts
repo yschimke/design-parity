@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CandidateRender } from "@design-parity/core";
 
-import { catalogFromCandidates } from "../src/spec.js";
+import { catalogFromCandidates, screenGraphIssues } from "../src/spec.js";
 import type { CatalogSpec } from "../src/spec.js";
 
 function candidate(previewId: string, fn: string): CandidateRender {
@@ -32,6 +32,31 @@ const spec: CatalogSpec = {
   ],
 };
 
+describe("screenGraphIssues", () => {
+  it("is empty when every screen ref names a declared component", () => {
+    const ok: CatalogSpec = {
+      ...spec,
+      screens: [{ id: "Button/Filled", related: ["Button/Text"] }],
+    };
+    expect(screenGraphIssues(ok)).toEqual([]);
+  });
+
+  it("is empty when there is no screen graph", () => {
+    expect(screenGraphIssues(spec)).toEqual([]);
+  });
+
+  it("flags a screen id and a related id that no group declares", () => {
+    const bad: CatalogSpec = {
+      ...spec,
+      screens: [{ id: "Screen/Ghost", related: ["Button/Text", "Dialog/Missing"] }],
+    };
+    expect(screenGraphIssues(bad)).toEqual([
+      'screen "Screen/Ghost" is not a declared component',
+      'screen "Screen/Ghost" relates to undeclared component "Dialog/Missing"',
+    ]);
+  });
+});
+
 describe("catalogFromCandidates", () => {
   it("joins candidates to spec components by preview function name", () => {
     const { catalog, missing } = catalogFromCandidates(
@@ -57,6 +82,25 @@ describe("catalogFromCandidates", () => {
       spec,
     );
     expect(catalog.themeTokens).toEqual({ colors: { primary: "#6750a4" } });
+  });
+
+  it("carries an optional screen graph through to catalog meta", () => {
+    const withScreens: CatalogSpec = {
+      ...spec,
+      screens: [{ id: "Button/Filled", title: "Primary action", related: ["Button/Text"] }],
+    };
+    const { catalog } = catalogFromCandidates(
+      [candidate("com.example.CKt", "FilledButton"), candidate("com.example.CKt", "TextButtonSticker")],
+      withScreens,
+    );
+    expect(catalog.meta.screens).toEqual([
+      { id: "Button/Filled", title: "Primary action", related: ["Button/Text"] },
+    ]);
+  });
+
+  it("omits screens from meta when the spec declares none", () => {
+    const { catalog } = catalogFromCandidates([candidate("com.example.CKt", "FilledButton")], spec);
+    expect(catalog.meta.screens).toBeUndefined();
   });
 
   it("reports spec components with no rendered preview as missing", () => {
