@@ -75,7 +75,13 @@ Instead of one board, the file gets **pages**:
 3. **`<Screen>` (one page each)** — each *main screen* with its **directly
    related secondary screens and dialogs** grouped on the same page (e.g.
    `Scanner` page = the scanner + its permission dialog + its empty/populated
-   secondaries). Ordered by the app's primary navigation.
+   secondaries). Ordered by the app's primary navigation. The page **leads with a
+   `Figma spec` frame** (`role=spec`) seeded once from the screen's code render
+   and then designer-owned — the reconcile never touches it — with the live code
+   renders below it, so the page is a spec-vs-code diff. *(Done: `scene.ts`
+   `makeSpecFrame`. The SVG-wireframe comparison lane beside the exact PNG is the
+   remaining lane — it needs the plan to carry both the `ideal` and `layout`
+   variants at once.)*
 
 ## What v2 needs that doesn't exist yet
 

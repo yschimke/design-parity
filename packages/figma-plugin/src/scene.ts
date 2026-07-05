@@ -49,6 +49,8 @@ export const ROLE = {
   group: "group",
   card: "card",
   image: "image",
+  /** A designer-owned Figma spec frame — seeded from code once, never reconciled. */
+  spec: "spec",
 } as const;
 
 /** A colour or scalar assigned to a Figma variable, per mode. */
@@ -563,6 +565,8 @@ async function buildScopes(
     rootName: string;
     groups: PlannedGroup[];
     renderUnit?: RenderUnit;
+    /** Seed a designer-owned Figma-spec header from this component (screen pages). */
+    specSeed?: PlannedComponent;
   }> = [];
 
   // Tokens scope first: the theme-foundation showcases get their own
@@ -591,7 +595,15 @@ async function buildScopes(
     }
     if (components.length === 0) continue;
     const name = screen.title ?? screen.id;
-    scopes.push({ scope: `screen:${screen.id}`, pageName: name, rootName: name, groups: [{ name, components }] });
+    // Seed the Figma-spec header from the main screen's render (the first id).
+    const specSeed = byId.get(screen.id);
+    scopes.push({
+      scope: `screen:${screen.id}`,
+      pageName: name,
+      rootName: name,
+      groups: [{ name, components }],
+      ...(specSeed ? { specSeed } : {}),
+    });
   }
 
   // Remainder: everything not a theme or on a screen becomes the component
@@ -618,7 +630,7 @@ async function buildScopes(
   let anyReconciled = false;
   let anyFresh = false;
   const roots: FigmaNode[] = [];
-  for (const { scope, pageName, rootName, groups, renderUnit } of scopes) {
+  for (const { scope, pageName, rootName, groups, renderUnit, specSeed } of scopes) {
     const existing = findCatalogRoot(figma, plan.system, direction, scope);
     if (existing) {
       figma.currentPage = existing.page;
@@ -631,6 +643,12 @@ async function buildScopes(
       anyReconciled = true;
     } else {
       const root = createScopePage(figma, plan.system, direction, scope, pageName, rootName);
+      // The Figma-spec header goes first on a screen page, before the code
+      // renders — seeded from code once, then owned by the designer.
+      if (specSeed) {
+        const spec = makeSpecFrame(figma, specSeed, bytesByPath);
+        if (spec) root.appendChild(spec);
+      }
       const r = buildCardsInto(figma, root, groups, bytesByPath, renderUnit);
       placed += r.placed;
       Object.assign(nodeIds, r.nodeIds);
@@ -690,6 +708,48 @@ function renderSection(figma: FigmaApi, name: string): FigmaNode {
   stamp(section, ROLE.group, { group: name });
   section.appendChild(title(figma, name, 20));
   return section;
+}
+
+/**
+ * The **Figma spec** frame that heads a screen page: a designer-owned starting
+ * point, seeded once from the screen's code render. Stamped `role=spec` (not
+ * `role=card`), so the reconcile — which only ever touches `role=card` /
+ * `role=image` nodes — never overwrites it: the designer takes it over and the
+ * code renders below stay the live comparison. Returns `undefined` when the
+ * seed component has no render (nothing to seed from).
+ */
+function makeSpecFrame(
+  figma: FigmaApi,
+  component: PlannedComponent,
+  bytesByPath: Map<string, Uint8Array>,
+): FigmaNode | undefined {
+  const seed = component.images.find((image) => bytesByPath.has(image.path));
+  if (!seed) return undefined;
+
+  const frame = figma.createFrame();
+  frame.name = `Figma spec — ${component.componentId}`;
+  frame.layoutMode = "VERTICAL";
+  frame.itemSpacing = GAP;
+  frame.primaryAxisSizingMode = "AUTO";
+  frame.counterAxisSizingMode = "AUTO";
+  frame.fills = [];
+  stamp(frame, ROLE.spec, { componentId: component.componentId });
+  frame.appendChild(title(figma, `Figma spec — ${component.componentId}`, 20));
+
+  const caption = figma.createText();
+  caption.fontName = { family: "Inter", style: "Regular" };
+  caption.fontSize = 12;
+  caption.characters = "Seeded from the code render — designer owns this; the code renders below stay the live comparison.";
+  frame.appendChild(caption);
+
+  const hash = figma.createImage(bytesByPath.get(seed.path)!).hash;
+  const cell = figma.createFrame();
+  cell.name = `${component.componentId} — spec (seed)`;
+  cell.resize(seed.width, seed.height);
+  cell.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+  // Deliberately NOT stamped role=image: reconcile must never refresh the spec.
+  frame.appendChild(cell);
+  return frame;
 }
 
 /**
