@@ -44,6 +44,24 @@ export {
   LIVE_ROLE,
 } from "./live.js";
 export type { PlaceLiveOptions, LiveRenderSize } from "./live.js";
+export {
+  previewsUrl,
+  parsePreviewsResponse,
+  servesOverrides,
+  seedKey,
+  overrideValueText,
+  declarationText,
+  knobOverrides,
+  renderSourceForPreview,
+  SERVE_SCHEMA_V2,
+} from "./previews.js";
+export type {
+  PreviewsResponse,
+  Preview,
+  OverrideDeclaration,
+  OverrideValue,
+  RenderSourceOptions,
+} from "./previews.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
