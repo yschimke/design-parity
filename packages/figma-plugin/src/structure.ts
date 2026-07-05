@@ -7,6 +7,8 @@
  * {@link ./scene.js}; the thin `figma/code.ts` bootstrap passes the real `figma` in.
  * Consumes the parsed slots from {@link ./slots.js} (the `/render/<id>.slots` client).
  */
+import { stampRenderSource } from "./provenance.js";
+import type { RenderSource } from "./render.js";
 import { STAMP, type FigmaApi, type FigmaNode } from "./scene.js";
 import { slotHeight, slotWidth, type PreviewSlots } from "./slots.js";
 
@@ -58,6 +60,42 @@ export function placeSlots(
     placed.push({ name: slot.name, node: frame, width, height });
   }
   return placed;
+}
+
+/**
+ * The fixed render axes that size a child to exactly fill [slot] — merge into a
+ * child preview's {@link RenderSource} overrides (e.g. via `renderSourceForPreview`'s
+ * `axes`) so the server renders it at the slot's box (`?widthPx=…&heightPx=…`). The
+ * server's `SlotFit` wrapper then makes wrap-content children fill that box.
+ */
+export function slotSizeAxes(slot: PlacedSlot): { widthPx: string; heightPx: string } {
+  return { widthPx: String(slot.width), heightPx: String(slot.height) };
+}
+
+/**
+ * Fill a slot [frame] with a child component's live **PNG** render: set the frame's
+ * fill to [bytes] and stamp the child's [source] as provenance, so the slot shows the
+ * child and a later Refresh ({@link ./live.js} `planRefresh` reads the provenance)
+ * re-renders it. The frame keeps its slot identity + box, so the child always fits.
+ * [source] should carry the slot's size (see {@link slotSizeAxes}) so the fetched
+ * render matches the slot's box. Returns the filled frame.
+ */
+export function fillSlot(
+  figma: FigmaApi,
+  frame: FigmaNode,
+  source: RenderSource,
+  bytes: Uint8Array,
+): FigmaNode {
+  const hash = figma.createImage(bytes).hash;
+  frame.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+  frame.setSharedPluginData(STAMP, "filledWith", source.previewId);
+  stampRenderSource(frame, source);
+  return frame;
+}
+
+/** The child preview id a slot frame was filled with, or `""` when unfilled. */
+export function slotFilledWith(node: FigmaNode): string {
+  return node.getSharedPluginData(STAMP, "filledWith");
 }
 
 /** True for a frame [placeSlots] materialized as a slot. */
