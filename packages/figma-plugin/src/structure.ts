@@ -68,8 +68,11 @@ export function placeSlots(
  * `axes`) so the server renders it at the slot's box (`?widthPx=…&heightPx=…`). The
  * server's `SlotFit` wrapper then makes wrap-content children fill that box.
  */
-export function slotSizeAxes(slot: PlacedSlot): { widthPx: string; heightPx: string } {
-  return { widthPx: String(slot.width), heightPx: String(slot.height) };
+export function slotSizeAxes(box: { width: number; height: number }): {
+  widthPx: string;
+  heightPx: string;
+} {
+  return { widthPx: String(box.width), heightPx: String(box.height) };
 }
 
 /**

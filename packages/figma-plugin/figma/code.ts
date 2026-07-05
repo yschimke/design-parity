@@ -18,6 +18,8 @@ import {
 } from "../src/live.js";
 import type { ImportPlan } from "../src/plan.js";
 import type { RenderSource } from "../src/render.js";
+import type { PreviewSlots } from "../src/slots.js";
+import { fillSlot, placeSlots } from "../src/structure.js";
 
 /** The message the UI posts once it has resolved the plan and all image bytes. */
 interface ImportMessage {
@@ -70,6 +72,27 @@ interface ApplyRefreshSvgMessage {
   svg: string;
 }
 
+/**
+ * The UI posts this to place a slotted container: its live PNG render plus the
+ * parsed `/render/<id>.slots` response, so the main thread places the container and
+ * materializes a frame per named slot (a structured-screen skeleton to fill).
+ */
+interface PlaceWithSlotsMessage {
+  type: "placeWithSlots";
+  source: RenderSource;
+  bytes: Uint8Array;
+  slots: PreviewSlots;
+  name?: string;
+}
+
+/** The UI posts this to fill one slot with a child rendered to the slot's size. */
+interface FillSlotMessage {
+  type: "fillSlot";
+  slotNodeId: string;
+  source: RenderSource;
+  bytes: Uint8Array;
+}
+
 type UiMessage =
   | ImportMessage
   | PlaceLiveMessage
@@ -77,6 +100,8 @@ type UiMessage =
   | RefreshMessage
   | ApplyRefreshMessage
   | ApplyRefreshSvgMessage
+  | PlaceWithSlotsMessage
+  | FillSlotMessage
   | { type: "cancel" };
 
 // Refresh is a round-trip: the main thread plans the jobs (only it can read a
@@ -84,6 +109,12 @@ type UiMessage =
 // `fetch`); the UI fetches and posts the bytes back per node. Hold the target
 // nodes by id across that hop so an `applyRefresh` re-fills the right one.
 const refreshTargets = new Map<string, FigmaNode>();
+
+// Filling a slot is the same round-trip as refresh: the main thread materializes
+// the slot frames and hands their ids to the UI (which fetches each child render),
+// then the UI posts bytes back per slot id. Hold the slot frames by id across that
+// hop so a `fillSlot` fills the right one.
+const slotTargets = new Map<string, FigmaNode>();
 
 figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 
@@ -159,6 +190,41 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       figma.ui.postMessage({ type: "liveError", message });
     } finally {
       refreshTargets.delete(msg.nodeId);
+    }
+    return;
+  }
+  if (msg.type === "placeWithSlots") {
+    try {
+      const container = placeLiveRender(figma as unknown as FigmaApi, msg.source, msg.bytes, {
+        name: msg.name,
+      });
+      const placed = placeSlots(figma as unknown as FigmaApi, container, msg.slots);
+      slotTargets.clear();
+      for (const slot of placed) slotTargets.set(slot.node.id, slot.node);
+      figma.ui.postMessage({
+        type: "slotsPlaced",
+        container: container.name,
+        slots: placed.map((s) => ({ name: s.name, nodeId: s.node.id, width: s.width, height: s.height })),
+      });
+      figma.notify(`Placed “${container.name}” with ${placed.length} slot${placed.length === 1 ? "" : "s"}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "liveError", message });
+      figma.notify(`Place failed: ${message}`, { error: true });
+    }
+    return;
+  }
+  if (msg.type === "fillSlot") {
+    const node = slotTargets.get(msg.slotNodeId);
+    if (!node) return;
+    try {
+      fillSlot(figma as unknown as FigmaApi, node, msg.source, msg.bytes);
+      figma.ui.postMessage({ type: "slotFilled", nodeId: msg.slotNodeId, name: node.name });
+      figma.notify(`Filled “${node.name}”.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "liveError", message });
+      figma.notify(`Fill failed: ${message}`, { error: true });
     }
     return;
   }
