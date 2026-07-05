@@ -29,6 +29,9 @@ describe("buildComponent", () => {
     expect(c.greenlines[0]?.severity).toBe("error");
     expect(c.greenlines[1]?.detail?.["role"]).toBe("button");
     expect(c.semantics).toBe(semantics);
+    // A wireframe SVG is generated ahead of time from the bounded semantics.
+    expect(c.wireframeSvg).toContain("<svg");
+    expect(c.wireframeSvg).toContain("<rect ");
   });
 
   it("omits the layout variant when none is supplied", () => {

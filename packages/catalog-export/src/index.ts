@@ -43,7 +43,9 @@ export {
   livePreviewUrl,
   slug,
   toCatalogManifest,
+  wireframePath,
 } from "./manifest.js";
+export { buildWireframeSvg } from "./wireframe.js";
 export type {
   CatalogManifest,
   CatalogManifestComponent,

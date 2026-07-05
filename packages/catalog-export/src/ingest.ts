@@ -18,6 +18,7 @@ import type {
 
 import { buildGreenlines } from "./greenlines.js";
 import { buildRedlines } from "./redlines.js";
+import { buildWireframeSvg } from "./wireframe.js";
 import type {
   Catalog,
   CatalogComponent,
@@ -63,6 +64,8 @@ export function buildComponent(source: ComponentSource): CatalogComponent {
   if (source.reference !== undefined) component.reference = source.reference;
   if (source.tokens !== undefined) component.tokens = source.tokens;
   if (source.semantics !== undefined) component.semantics = source.semantics;
+  const wireframeSvg = buildWireframeSvg(source.semantics);
+  if (wireframeSvg !== undefined) component.wireframeSvg = wireframeSvg;
   return component;
 }
 

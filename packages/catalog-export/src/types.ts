@@ -155,6 +155,13 @@ export interface CatalogComponent {
    * components that carry only images.
    */
   semantics?: SemanticTree;
+  /**
+   * The **wireframe SVG** — one bordered box per composable, generated ahead of
+   * time from {@link semantics} (see `buildWireframeSvg`). Baked into the bundle
+   * so a static catalog carries the schematic even without a daemon-rendered
+   * `layout` variant. Absent when there is no box geometry.
+   */
+  wireframeSvg?: string;
 }
 
 /** A whole design-system catalog: provenance + token set + components. */

@@ -118,6 +118,15 @@ describe("toCatalogManifest", () => {
     expect(toCatalogManifest(catalog, { direction: "code-led" }).direction).toBe("code-led");
   });
 
+  it("references a pre-generated wireframe SVG path when present", () => {
+    expect(toCatalogManifest(catalog).components[0]!.wireframe).toBeUndefined();
+    const withWire: Catalog = {
+      ...catalog,
+      components: [{ ...catalog.components[0]!, wireframeSvg: "<svg/>" }, ...catalog.components.slice(1)],
+    };
+    expect(toCatalogManifest(withWire).components[0]!.wireframe).toBe("wireframes/button-filled.svg");
+  });
+
   it("carries the catalog's screen graph into the manifest", () => {
     expect(toCatalogManifest(catalog).screens).toBeUndefined();
     const screens = [{ id: "Button/Filled", title: "Primary", related: ["Button/Text"] }];

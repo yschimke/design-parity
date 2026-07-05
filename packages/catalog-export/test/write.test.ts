@@ -37,6 +37,7 @@ function catalogWith(idealUri: string, layoutUri: string): Catalog {
         },
         greenlines: [],
         redlines: [],
+        wireframeSvg: '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
       },
     ],
   };
@@ -61,6 +62,12 @@ describe("writeCatalog", () => {
     const png = await readFile(join(out, "images/button-filled/ideal__default__light.png"));
     expect(png.length).toBeGreaterThan(0);
     expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
+
+    // The pre-generated wireframe SVG is baked into the bundle + referenced.
+    expect(result.wireframeCount).toBe(1);
+    expect(manifest.components[0].wireframe).toBe("wireframes/button-filled.svg");
+    const svg = await readFile(join(out, "wireframes/button-filled.svg"), "utf8");
+    expect(svg.startsWith("<svg")).toBe(true);
   });
 
   it("resolves relative image paths against sourceRoot", async () => {
