@@ -53,6 +53,8 @@ export const ROLE = {
   image: "image",
   /** A designer-owned Figma spec frame — seeded from code once, never reconciled. */
   spec: "spec",
+  /** The vector wireframe node placed from the baked SVG (refreshed by re-place). */
+  wireframe: "wireframe",
 } as const;
 
 /** A colour or scalar assigned to a Figma variable, per mode. */
@@ -359,6 +361,13 @@ type RenderUnit = (
   bytesByPath: Map<string, Uint8Array>,
 ) => { row: FigmaNode; placedImages: number };
 
+/**
+ * Per-updated-card side effect on reconcile, for content the image-fill refresh
+ * can't touch — e.g. re-placing a card's vector wireframe. Runs after
+ * {@link refreshCardImages} for each matched card.
+ */
+type RefreshUnit = (figma: FigmaApi, card: FigmaNode, component: PlannedComponent) => void;
+
 function buildCardsInto(
   figma: FigmaApi,
   root: FigmaNode,
@@ -432,6 +441,7 @@ function reconcileCardsInto(
   groups: readonly PlannedGroup[],
   bytesByPath: Map<string, Uint8Array>,
   renderUnit: RenderUnit = renderCard,
+  refreshUnit?: RefreshUnit,
 ): { updated: number; added: number; stale: number; nodeIds: Record<string, string> } {
   // Index the board's stamped cards by componentId (first stamp wins).
   const cardNodes = new Map<string, FigmaNode>();
@@ -460,6 +470,7 @@ function reconcileCardsInto(
     const card = cardNodes.get(componentId)!;
     const { component } = planned.get(componentId)!;
     if (refreshCardImages(figma, card, component, bytesByPath)) updated += 1;
+    refreshUnit?.(figma, card, component);
     card.setSharedPluginData(STAMP, "state", ""); // clear any prior stale mark
     nodeIds[componentId] = card.id;
   }
@@ -569,6 +580,7 @@ async function buildScopes(
     rootName: string;
     groups: PlannedGroup[];
     renderUnit?: RenderUnit;
+    refreshUnit?: RefreshUnit;
     /** Seed a designer-owned Figma-spec header from this component (screen pages). */
     specSeed?: PlannedComponent;
   }> = [];
@@ -607,6 +619,7 @@ async function buildScopes(
       rootName: name,
       groups: [{ name, components }],
       renderUnit: renderScreenCard,
+      refreshUnit: refreshScreenWireframe,
       ...(specSeed ? { specSeed } : {}),
     });
   }
@@ -635,11 +648,11 @@ async function buildScopes(
   let anyReconciled = false;
   let anyFresh = false;
   const roots: FigmaNode[] = [];
-  for (const { scope, pageName, rootName, groups, renderUnit, specSeed } of scopes) {
+  for (const { scope, pageName, rootName, groups, renderUnit, refreshUnit, specSeed } of scopes) {
     const existing = findCatalogRoot(figma, plan.system, direction, scope);
     if (existing) {
       figma.currentPage = existing.page;
-      const r = reconcileCardsInto(figma, existing.root, groups, bytesByPath, renderUnit);
+      const r = reconcileCardsInto(figma, existing.root, groups, bytesByPath, renderUnit, refreshUnit);
       updated += r.updated;
       added += r.added;
       stale += r.stale;
@@ -843,13 +856,47 @@ function drawRedlines(figma: FigmaApi, cell: FigmaNode, redlines: readonly Redli
 }
 
 /**
+ * Place the **vector wireframe** (lane b) into a screen card from the baked SVG:
+ * `createNodeFromSvg` parses it into real vector shapes, stamped `role=wireframe`
+ * with its spacing-redline overlay. Returns the node, or `undefined` when the
+ * component carries no wireframe SVG. The node reparents from the current page
+ * into the card. Refreshed by re-place (see {@link refreshScreenWireframe}), not
+ * an in-place fill swap, so `role=wireframe` is deliberately not `role=image`.
+ */
+function placeVectorWireframe(
+  figma: FigmaApi,
+  card: FigmaNode,
+  component: PlannedComponent,
+): FigmaNode | undefined {
+  if (!component.wireframeSvg) return undefined;
+  const node = figma.createNodeFromSvg(component.wireframeSvg);
+  node.name = `${component.componentId} — wireframe`;
+  stamp(node, ROLE.wireframe, { componentId: component.componentId });
+  if (component.compareRedlines) drawRedlines(figma, node, component.compareRedlines);
+  card.appendChild(node);
+  return node;
+}
+
+/** Re-place a card's vector wireframe on reconcile (remove the old, place fresh). */
+function refreshScreenWireframe(
+  figma: FigmaApi,
+  card: FigmaNode,
+  component: PlannedComponent,
+): void {
+  if (!component.wireframeSvg) return; // raster fallback (role=image) refreshes via fills
+  for (const old of descendants(card, (n) => n.getSharedPluginData(STAMP, "role") === ROLE.wireframe)) {
+    old.remove();
+  }
+  placeVectorWireframe(figma, card, component);
+}
+
+/**
  * A screen-page card: the exact **code render** (lane c, via {@link renderCard})
- * followed by the **wireframe** comparison lane (lane b) — the component's layout
- * renders (`compare`), placed as further `role=image` cells in the same row.
- * Both lanes are `role=image` in placement order (code, then wireframe), which is
- * exactly the order {@link refreshCardImages} refreshes, so a re-import updates
- * both. Together with the page's {@link makeSpecFrame} header (lane a), this is
- * the figma / wireframe / PNG diff the per-screen page is for.
+ * followed by the **wireframe** comparison lane (lane b). The wireframe is the
+ * baked **vector** SVG when present ({@link placeVectorWireframe}); otherwise it
+ * falls back to the raster `compare` renders as `role=image` cells. Together with
+ * the page's {@link makeSpecFrame} header (lane a), this is the figma / wireframe
+ * / PNG diff the per-screen page is for.
  */
 function renderScreenCard(
   figma: FigmaApi,
@@ -859,6 +906,9 @@ function renderScreenCard(
   const { row, placedImages } = renderCard(figma, component, bytesByPath);
   if (placedImages === 0) return { row, placedImages };
 
+  if (placeVectorWireframe(figma, row, component)) return { row, placedImages: placedImages + 1 };
+
+  // Fallback: the raster layout renders as further role=image cells.
   let placed = placedImages;
   (component.compare ?? []).forEach((image, i) => {
     const bytes = bytesByPath.get(image.path);
@@ -869,7 +919,6 @@ function renderScreenCard(
     cell.resize(image.width, image.height);
     cell.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
     stamp(cell, ROLE.image, { componentId: component.componentId });
-    // The wireframe's natural overlay: the spacing redlines, on the first cell.
     if (i === 0 && component.compareRedlines) {
       drawRedlines(figma, cell, component.compareRedlines);
     }

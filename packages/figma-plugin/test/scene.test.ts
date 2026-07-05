@@ -333,6 +333,58 @@ describe("applyImport — Components page (native component sets)", () => {
   });
 });
 
+describe("applyImport — vector wireframe lane (screen pages)", () => {
+  const manifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    screens: [{ id: "Screen/Home", title: "Home" }],
+    components: [
+      {
+        componentId: "Screen/Home",
+        group: "Screens",
+        images: [{ variant: "ideal", path: "home", state: "default", theme: "light", width: 100, height: 200 }],
+        greenlines: [],
+        redlines: [],
+        wireframe: "wireframes/screen-home.svg",
+      },
+    ],
+  };
+  // The UI fetches the wireframe SVG text into the plan; simulate that here.
+  const planWithSvg = (): ReturnType<typeof buildImportPlan> => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    expect(plan.groups[0]!.components[0]!.wireframeUrl).toBe("https://x/wireframes/screen-home.svg");
+    plan.groups[0]!.components[0]!.wireframeSvg = '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>';
+    return plan;
+  };
+  const wireframeNodes = (fake: ReturnType<typeof createFakeFigma>): FakeNode[] =>
+    fake.state.nodes.filter((n) => n.getSharedPluginData("designParity", "role") === "wireframe");
+
+  it("places the wireframe as a vector node (createNodeFromSvg), not a raster cell", async () => {
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, planWithSvg(), bytesFor(["home"]));
+
+    const wf = wireframeNodes(fake);
+    expect(wf).toHaveLength(1);
+    expect(wf[0]!.fromSvg).toContain("<svg");
+    expect(wf[0]!.getSharedPluginData("designParity", "componentId")).toBe("Screen/Home");
+    // It lives inside the Screen/Home card, alongside the code render.
+    expect(wf[0]!.parent!.getSharedPluginData("designParity", "role")).toBe("card");
+  });
+
+  it("re-places the vector wireframe on re-import — still exactly one", async () => {
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, planWithSvg(), bytesFor(["home"]));
+    const firstId = wireframeNodes(fake)[0]!.id;
+
+    const result = await applyImport(fake.figma, planWithSvg(), bytesFor(["home"]));
+    expect(result.reconciled).toBe(true);
+    const wf = wireframeNodes(fake);
+    expect(wf).toHaveLength(1); // old removed, fresh placed
+    expect(wf[0]!.id).not.toBe(firstId); // re-placed, not the same node
+  });
+});
+
 describe("applyImport — wireframe comparison lane (screen pages)", () => {
   const manifest: CatalogManifest = {
     schema: "design-parity-catalog/v1",

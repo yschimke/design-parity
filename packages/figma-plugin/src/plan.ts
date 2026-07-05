@@ -61,11 +61,19 @@ export interface PlannedComponent {
    */
   compare?: PlannedImage[];
   /**
-   * The spacing **redlines** for the {@link compare} wireframe lane (box /
-   * padding / gap / corner radius), anchored to the wireframe's pixel space —
-   * the wireframe's natural overlay. Absent when there are no redlines.
+   * The spacing **redlines** for the wireframe lane (box / padding / gap / corner
+   * radius), anchored to the wireframe's pixel space — the wireframe's natural
+   * overlay. Absent when there are no redlines.
    */
   compareRedlines?: Redline[];
+  /**
+   * URL of the pre-generated **wireframe SVG** (`catalog.json`'s `wireframe`
+   * path, resolved). The UI fetches its text into {@link wireframeSvg}; the
+   * importer places it as a true **vector** wireframe lane. Absent ⇒ no wireframe.
+   */
+  wireframeUrl?: string;
+  /** The fetched wireframe SVG text — filled in by the UI before the import. */
+  wireframeSvg?: string;
   /**
    * Accessibility greenlines for this component, anchored (when they carry
    * bounds) to the pixel space of the component's first image. Empty when the
@@ -219,11 +227,17 @@ export function buildImportPlan(
     // the way greenlines annotate the ideal render.
     if (variant === "ideal") {
       const compare = planImages(component, opts, "layout");
-      if (compare.length > 0) {
-        planned.compare = compare;
-        if (opts.redlines !== false && component.redlines.length > 0) {
-          planned.compareRedlines = component.redlines;
-        }
+      if (compare.length > 0) planned.compare = compare;
+      // The pre-generated wireframe SVG (baked into the bundle) is the vector
+      // comparison lane; the raster `compare` is a fallback when it's absent.
+      if (component.wireframe) planned.wireframeUrl = resolveImageUrl(opts.baseUrl, component.wireframe);
+      // The wireframe's spacing redlines ride along for either lane.
+      if (
+        opts.redlines !== false &&
+        component.redlines.length > 0 &&
+        (planned.compare || planned.wireframeUrl)
+      ) {
+        planned.compareRedlines = component.redlines;
       }
     }
 
