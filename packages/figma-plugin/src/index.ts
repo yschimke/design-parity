@@ -76,8 +76,11 @@ export {
 export type { PreviewSlots, PreviewSlot, SlotBounds } from "./slots.js";
 export {
   placeSlots,
+  fillSlot,
+  slotSizeAxes,
   isSlotFrame,
   slotName,
+  slotFilledWith,
   slotContainerPreviewId,
   SLOT_ROLE,
   SLOT_CONTAINER_ROLE,

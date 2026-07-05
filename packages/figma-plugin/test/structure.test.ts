@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { readRenderSource, refreshUrl } from "../src/provenance.js";
+import { buildRenderUrl, type RenderSource } from "../src/render.js";
 import { STAMP } from "../src/scene.js";
 import type { PreviewSlots } from "../src/slots.js";
 import {
+  fillSlot,
   isSlotFrame,
   placeSlots,
   slotContainerPreviewId,
+  slotFilledWith,
   slotName,
+  slotSizeAxes,
   SLOT_CONTAINER_ROLE,
   SLOT_ROLE,
 } from "../src/structure.js";
@@ -60,6 +65,40 @@ describe("placeSlots", () => {
     expect(placed).toEqual([]);
     expect(slotContainerPreviewId(container)).toBe("Plain");
     expect((container as FakeNode).children ?? []).toHaveLength(0);
+  });
+});
+
+describe("fillSlot / slotSizeAxes", () => {
+  const childSource: RenderSource = {
+    serverBase: "http://127.0.0.1:8723",
+    basePath: "compose-m3",
+    token: "tok",
+    previewId: "Icon/Star",
+    overrides: { widthPx: "40", heightPx: "40" },
+    format: "png",
+  };
+
+  it("slotSizeAxes returns the slot box as string px axes", () => {
+    const fake = createFakeFigma();
+    const slot = { name: "leadingIcon", node: fake.figma.createFrame(), width: 40, height: 24 };
+    expect(slotSizeAxes(slot)).toEqual({ widthPx: "40", heightPx: "24" });
+  });
+
+  it("fills the slot with the child image + refreshable provenance, keeping slot identity", () => {
+    const fake = createFakeFigma();
+    const container = fake.figma.createFrame();
+    const icon = placeSlots(fake.figma, container, slots)[0]!;
+
+    const filled = fillSlot(fake.figma, icon.node, childSource, new Uint8Array([1, 2, 3]));
+    expect(filled).toBe(icon.node);
+    expect(filled.fills).toEqual([{ type: "IMAGE", scaleMode: "FILL", imageHash: "img0" }]);
+    // Provenance round-trips, so a Refresh re-renders the child at the slot's size.
+    expect(readRenderSource(filled)).toEqual(childSource);
+    expect(refreshUrl(filled)).toBe(buildRenderUrl(childSource));
+    expect(slotFilledWith(filled)).toBe("Icon/Star");
+    // Still a slot — identity preserved, now filled.
+    expect(isSlotFrame(filled)).toBe(true);
+    expect(slotName(filled)).toBe("leadingIcon");
   });
 });
 
