@@ -14,8 +14,8 @@
  * Pure given the injected {@link FigmaApi} + already-fetched bytes (no `fetch`,
  * no `figma` global): asserted headlessly against the fake node.
  */
-import { readRenderSource, refreshUrl, stampRenderSource } from "./provenance.js";
-import type { RenderSource } from "./render.js";
+import { readRenderSource, stampRenderSource } from "./provenance.js";
+import { buildRenderUrl, type RenderSource } from "./render.js";
 import { STAMP, type FigmaApi, type FigmaNode } from "./scene.js";
 
 /** The `role` a standalone live-rendered node carries (distinct from catalog cells). */
@@ -68,6 +68,28 @@ export function placeLiveRender(
   return node;
 }
 
+/**
+ * Place a live render as an **editable SVG** (import mode c): Figma parses the
+ * vector into a real frame of shapes (not a flat raster), stamped with
+ * {@link LIVE_ROLE} and its {@link RenderSource} provenance. `createNodeFromSvg`
+ * adds the node to the current page itself, so this only names, stamps, and
+ * frames it. The `svg` must be self-contained — the serve host inlines any
+ * raster crops as data URIs, since Figma can't resolve external hrefs.
+ */
+export function placeLiveSvg(
+  figma: FigmaApi,
+  source: RenderSource,
+  svg: string,
+  opts: PlaceLiveOptions = {},
+): FigmaNode {
+  const node = figma.createNodeFromSvg(svg);
+  node.name = opts.name ?? source.previewId;
+  node.setSharedPluginData(STAMP, "role", LIVE_ROLE);
+  stampRenderSource(node, source);
+  figma.viewport.scrollAndZoomIntoView([node]);
+  return node;
+}
+
 /** One node to re-fetch on Refresh: the node and the URL its provenance rebuilds. */
 export interface RefreshJob {
   node: FigmaNode;
@@ -75,25 +97,29 @@ export interface RefreshJob {
 }
 
 /**
- * Plan a Refresh over a selection: for each node that carries render provenance,
- * the URL to re-fetch (rebuilt from its stamp, so it re-renders against current
- * code). Nodes with no provenance — a designer's own content, or a static
- * import — are skipped, so refreshing a mixed selection only touches live nodes.
+ * Plan a Refresh over a selection: for each **PNG** live node, the URL to
+ * re-fetch (rebuilt from its stamp, so it re-renders against current code).
+ * Nodes with no provenance — a designer's own content, or a static import — are
+ * skipped, so a mixed selection only touches live nodes. SVG live nodes are also
+ * skipped: they refresh by re-placement (`createNodeFromSvg`), not an in-place
+ * re-fill, which {@link refreshLiveRender} doesn't do yet.
  */
 export function planRefresh(nodes: readonly FigmaNode[]): RefreshJob[] {
   const jobs: RefreshJob[] = [];
   for (const node of nodes) {
-    const url = refreshUrl(node);
-    if (url) jobs.push({ node, url });
+    const source = readRenderSource(node);
+    if (!source || source.format !== "png") continue;
+    jobs.push({ node, url: buildRenderUrl(source) });
   }
   return jobs;
 }
 
 /**
- * Re-fill a live node with freshly fetched bytes, keeping its identity, size, and
- * provenance intact. Returns the node's {@link RenderSource} (what was
- * re-rendered), or `undefined` when the node carries no provenance — i.e. it
- * isn't a live import, so there's nothing to refresh.
+ * Re-fill a **PNG** live node with freshly fetched bytes, keeping its identity,
+ * size, and provenance intact. Returns the node's {@link RenderSource} (what was
+ * re-rendered), or `undefined` when the node isn't a PNG live import — no
+ * provenance, or an SVG node (which refreshes by re-placement, not a fill swap),
+ * so there's nothing to swap here.
  */
 export function refreshLiveRender(
   figma: FigmaApi,
@@ -101,7 +127,7 @@ export function refreshLiveRender(
   bytes: Uint8Array,
 ): RenderSource | undefined {
   const source = readRenderSource(node);
-  if (!source) return undefined;
+  if (!source || source.format !== "png") return undefined;
   const hash = figma.createImage(bytes).hash;
   node.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
   return source;

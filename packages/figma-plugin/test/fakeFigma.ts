@@ -19,6 +19,8 @@ export interface FakeNode extends FigmaNode {
   parent?: FakeNode;
   width?: number;
   height?: number;
+  /** The SVG a node parsed from `createNodeFromSvg`, recorded for assertions. */
+  fromSvg?: string;
 }
 
 export interface FakeVariable {
@@ -111,6 +113,13 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
       for (const component of components) set.appendChild(component); // reparents into the set
       parent.appendChild(set);
       return set;
+    },
+    createNodeFromSvg(svg: string): FigmaNode {
+      const n = make("frame");
+      n.fromSvg = svg;
+      // Real Figma appends the parsed frame to the current page; mirror that.
+      (figma.currentPage as FakeNode).appendChild(n);
+      return n;
     },
     createImage(bytes: Uint8Array): { hash: string } {
       const hash = `img${state.images.length}`;

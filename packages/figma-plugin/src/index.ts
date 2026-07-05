@@ -39,6 +39,7 @@ export {
 } from "./provenance.js";
 export {
   placeLiveRender,
+  placeLiveSvg,
   refreshLiveRender,
   planRefresh,
   isLiveRender,
