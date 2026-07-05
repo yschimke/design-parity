@@ -61,6 +61,12 @@ export interface PlannedComponent {
    */
   compare?: PlannedImage[];
   /**
+   * The spacing **redlines** for the {@link compare} wireframe lane (box /
+   * padding / gap / corner radius), anchored to the wireframe's pixel space —
+   * the wireframe's natural overlay. Absent when there are no redlines.
+   */
+  compareRedlines?: Redline[];
+  /**
    * Accessibility greenlines for this component, anchored (when they carry
    * bounds) to the pixel space of the component's first image. Empty when the
    * catalog reports no findings, or omitted from the scene when
@@ -209,9 +215,16 @@ export function buildImportPlan(
     // The comparison lane: the layout wireframe render, carried alongside the
     // ideal render so a screen page can diff code (PNG) against wireframe (SVG).
     // Only when importing the ideal variant (else `images` is already layout).
+    // Its spacing **redlines** ride along too — the wireframe's natural overlay,
+    // the way greenlines annotate the ideal render.
     if (variant === "ideal") {
       const compare = planImages(component, opts, "layout");
-      if (compare.length > 0) planned.compare = compare;
+      if (compare.length > 0) {
+        planned.compare = compare;
+        if (opts.redlines !== false && component.redlines.length > 0) {
+          planned.compareRedlines = component.redlines;
+        }
+      }
     }
 
     const groupName = component.group ?? "Ungrouped";

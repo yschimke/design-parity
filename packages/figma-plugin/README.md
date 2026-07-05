@@ -183,9 +183,11 @@ refreshes each page in place independently:
   and it becomes the design intent. Below it sit the screen's card plus its
   related secondaries/dialogs, each showing two code lanes side by side — the
   exact **code render** (PNG) and the **layout wireframe** (`compare`, from the
-  catalog's `layout` variant), both refreshed on every re-import. So the page is
-  the three-lane diff: **figma spec · wireframe · code render**. (The wireframe
-  lane appears only when the catalog carries a layout variant.)
+  catalog's `layout` variant), both refreshed on every re-import. Each lane wears
+  its natural overlay — a11y **greenlines** on the code render, spacing
+  **redlines** on the wireframe (`compareRedlines`). So the page is the three-lane
+  diff: **figma spec · wireframe · code render**. (The wireframe lane appears only
+  when the catalog carries a layout variant.)
 - **`Components`** — the remainder (everything not a theme or on a screen) as the
   component library: each component is a **native Figma component set**, one
   `COMPONENT` per render named with its variant properties (`state=…, theme=…,
