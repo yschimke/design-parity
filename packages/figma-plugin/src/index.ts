@@ -74,6 +74,15 @@ export {
   slotHeight,
 } from "./slots.js";
 export type { PreviewSlots, PreviewSlot, SlotBounds } from "./slots.js";
+export {
+  placeSlots,
+  isSlotFrame,
+  slotName,
+  slotContainerPreviewId,
+  SLOT_ROLE,
+  SLOT_CONTAINER_ROLE,
+} from "./structure.js";
+export type { PlacedSlot } from "./structure.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
