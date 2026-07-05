@@ -343,15 +343,35 @@ describe("applyImport — wireframe comparison lane (screen pages)", () => {
       { componentId: "Screen/Home", group: "Screens", images: [
         { variant: "ideal", path: "home", state: "default", theme: "light", width: 100, height: 200 },
         { variant: "layout", path: "home-wire", state: "default", theme: "light", width: 100, height: 200 },
-      ], greenlines: [], redlines: [] },
+      ], greenlines: [], redlines: [{ role: "Column", bounds: { x: 4, y: 4, width: 92, height: 192 }, cornerRadius: 8 }] },
     ],
   };
 
-  it("carries the layout wireframe as a compare lane in the plan", () => {
+  const screenCard = (fake: ReturnType<typeof createFakeFigma>): FakeNode =>
+    descendants(
+      catalogRoots(fake).find((r) => r.getSharedPluginData("designParity", "scope") === "screen:Screen/Home")!,
+      isCard("Screen/Home"),
+    )[0]!;
+
+  it("carries the layout wireframe and its redlines as a compare lane in the plan", () => {
     const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
     const home = plan.groups[0]!.components[0]!;
     expect(home.images.map((i) => i.path)).toEqual(["home"]); // ideal only
     expect(home.compare?.map((i) => i.path)).toEqual(["home-wire"]); // layout wireframe
+    expect(home.compareRedlines).toHaveLength(1); // the wireframe's spacing spec
+  });
+
+  it("draws the spacing redlines on the wireframe lane, not the code lane", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["home", "home-wire"]));
+
+    const card = screenCard(fake);
+    const dashed = (predName: (n: string) => boolean): FakeNode[] =>
+      descendants(card, (n) => n.dashPattern !== undefined && predName(n.parent?.name ?? ""));
+    // The wireframe cell carries the dashed redline; the code (ideal) cell does not.
+    expect(dashed((name) => name.includes("wireframe")).length).toBeGreaterThanOrEqual(1);
+    expect(dashed((name) => !name.includes("wireframe")).length).toBe(0);
   });
 
   it("places the code render and the wireframe side by side on the screen card", async () => {

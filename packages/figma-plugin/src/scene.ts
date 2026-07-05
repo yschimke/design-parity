@@ -25,6 +25,8 @@
  */
 import type { FigmaVariableCollection, FigmaVariableType } from "@design-parity/catalog-export/figma";
 
+import type { Redline } from "@design-parity/catalog-export";
+
 import { redlineLabel, redlineRgb, severityRgb } from "./annotations.js";
 import { buildDesignMap } from "./designMap.js";
 import { REFERENCE_PAGE, type ParityDirection } from "./direction.js";
@@ -804,35 +806,40 @@ function renderCard(
         box.strokeWeight = 2;
         cell.appendChild(box);
       }
-      for (const r of component.redlines) {
-        const label = redlineLabel(r);
-        const box = figma.createRectangle();
-        box.name = `layout: ${label || r.role || "node"}`;
-        box.x = r.bounds.x;
-        box.y = r.bounds.y;
-        box.resize(Math.max(1, r.bounds.width), Math.max(1, r.bounds.height));
-        box.fills = [];
-        box.strokes = [{ type: "SOLID", color: redlineRgb() }];
-        box.strokeWeight = 1;
-        box.dashPattern = [4, 3];
-        if (r.cornerRadius !== undefined) box.cornerRadius = r.cornerRadius;
-        cell.appendChild(box);
-        if (label) {
-          const tag = figma.createText();
-          tag.fontName = { family: "Inter", style: "Regular" };
-          tag.fontSize = 9;
-          tag.characters = label;
-          tag.x = r.bounds.x + 2;
-          tag.y = r.bounds.y + 2;
-          tag.fills = [{ type: "SOLID", color: redlineRgb() }];
-          cell.appendChild(tag);
-        }
-      }
+      drawRedlines(figma, cell, component.redlines);
     }
     row.appendChild(cell);
     placedImages += 1;
   });
   return { row, placedImages };
+}
+
+/** Draw the spacing redline (box + spec label) overlay onto a render cell. */
+function drawRedlines(figma: FigmaApi, cell: FigmaNode, redlines: readonly Redline[]): void {
+  for (const r of redlines) {
+    const label = redlineLabel(r);
+    const box = figma.createRectangle();
+    box.name = `layout: ${label || r.role || "node"}`;
+    box.x = r.bounds.x;
+    box.y = r.bounds.y;
+    box.resize(Math.max(1, r.bounds.width), Math.max(1, r.bounds.height));
+    box.fills = [];
+    box.strokes = [{ type: "SOLID", color: redlineRgb() }];
+    box.strokeWeight = 1;
+    box.dashPattern = [4, 3];
+    if (r.cornerRadius !== undefined) box.cornerRadius = r.cornerRadius;
+    cell.appendChild(box);
+    if (label) {
+      const tag = figma.createText();
+      tag.fontName = { family: "Inter", style: "Regular" };
+      tag.fontSize = 9;
+      tag.characters = label;
+      tag.x = r.bounds.x + 2;
+      tag.y = r.bounds.y + 2;
+      tag.fills = [{ type: "SOLID", color: redlineRgb() }];
+      cell.appendChild(tag);
+    }
+  }
 }
 
 /**
@@ -853,18 +860,22 @@ function renderScreenCard(
   if (placedImages === 0) return { row, placedImages };
 
   let placed = placedImages;
-  for (const image of component.compare ?? []) {
+  (component.compare ?? []).forEach((image, i) => {
     const bytes = bytesByPath.get(image.path);
-    if (!bytes) continue;
+    if (!bytes) return;
     const hash = figma.createImage(bytes).hash;
     const cell = figma.createFrame();
     cell.name = `${component.componentId} — wireframe · ${image.key}`;
     cell.resize(image.width, image.height);
     cell.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
     stamp(cell, ROLE.image, { componentId: component.componentId });
+    // The wireframe's natural overlay: the spacing redlines, on the first cell.
+    if (i === 0 && component.compareRedlines) {
+      drawRedlines(figma, cell, component.compareRedlines);
+    }
     row.appendChild(cell);
     placed += 1;
-  }
+  });
   return { row, placedImages: placed };
 }
 
