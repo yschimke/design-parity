@@ -84,7 +84,7 @@ Each of these is a discrete work item; none is just a layout change:
 | Need | Where | Note |
 | --- | --- | --- |
 | **Figma variables** on the Tokens page | delivery branch + importer | **Done.** `writeCatalog` emits `figma-variables.json`, and the importer creates a native variable collection (light/dark modes) from the DTCG tokens **and** routes the theme-foundation showcases to a dedicated `Themes / Tokens` page (`scene.ts` `buildScopes`, `scope: tokens`) — not just the theme *picture*. |
-| **Multi-state × breakpoint renders** | renderer + `catalog.spec.json` | Component sets need every `state × breakpoint` rendered. Today the catalog renders **one image per component**; `breakpoints` exists in the spec but isn't multi-rendered. Requires the compose-preview override matrix to fan out and the spec to declare the states per component. |
+| **Multi-state × breakpoint renders** | renderer + `catalog.spec.json` | The importer now **assembles a native component set from whatever renders a component carries** (`renderComponentSet`), and `CatalogSpecVariant` lets the spec declare extra state previews. The remaining gap is the renderer fanning out the full `state × breakpoint` matrix (the compose-preview override matrix) so the sets have every cell, not just default + light/dark. |
 | **Screen-relationship metadata** | `catalog.spec.json` schema | Per-screen pages need to know which entries are *main screens* and their related secondaries/dialogs — a screen graph (`screens: [{ id, title?, related: […] }]`). **Schema done** — `CatalogSpec.screens` → `CatalogMeta` → `CatalogManifest.screens`, carried through the generator (`catalog-export`), with `screenGraphIssues` validating refs. **Importer routing done** — a code-led import with `screens` lays out one page per main screen (+ related) plus a catalog remainder page, each its own reconcile scope (`figma-plugin/src/scene.ts` `buildPerScreen`). |
 | **Reconcile engine** | importer | Match-by-`componentId`, in-place render refresh, add/stale. Replaces the delete-and-rebuild. **Done in the plugin** (`figma-plugin/src/reconcile.ts` + `scene.ts`). |
 | **Confirmation gate** | importer / trigger | design-led first-touch must confirm before writing into a designer-owned file. **Done in the plugin** (`direction.ts` + `scene.ts`): design-led dry-runs and writes to a separate `Code renders (reference)` page only on confirm. The direction is stamped into `catalog.json` from the repo's `.design-parity.json` by the generator. |
@@ -107,16 +107,17 @@ Each of these is a discrete work item; none is just a layout change:
     (`generate-design-catalog.mjs` → `catalog-export` manifest `direction`), and
     the plugin's Mode selector defaults to **From catalog** and honours it (with
     manual override). v2a is complete.
-- **v2b** — page structure: `Themes/Tokens` (with Figma variables), `Components`,
-  per-screen pages. Needs `figma-variables.json` on the delivery branch and the
-  screen-graph spec field. *In progress:* the **screen-graph spec field**, the
-  **per-screen importer routing**, and the **Themes/Tokens page** are done — a
-  code-led import lays out a `Themes / Tokens` page (theme showcases + the native
-  variable collection), one page per main screen (+ related), and a catalog
-  remainder, each its own reconcile scope (`scene.ts` `buildScopes`). Still to
-  come — the `Components` set page (native component sets).
-- **v3** — native component sets with `state × breakpoint` variants. Needs the
-  renderer to emit the multi-state/breakpoint matrix.
+- **v2b — done.** Page structure: a code-led import lays out a `Themes / Tokens`
+  page (theme showcases + the native variable collection), one page per main
+  screen (+ related), and a **`Components`** page where each library component is
+  a **native Figma component set** (`state=…, theme=…, size=…` variant
+  properties) — each page its own reconcile scope (`scene.ts` `buildScopes` /
+  `renderComponentSet`). Built on the screen-graph spec field
+  (`CatalogSpec.screens`) and `figma-variables.json` (already on the delivery
+  branch).
+- **v3** — the sets carry only the states/breakpoints the catalog currently
+  renders (default + light/dark). Filling the full `state × breakpoint` matrix
+  needs the renderer to emit it — see below.
 
 ## Open questions
 

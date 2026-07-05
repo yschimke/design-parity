@@ -14,7 +14,7 @@ import type {
 } from "../src/scene.js";
 
 export interface FakeNode extends FigmaNode {
-  kind: "frame" | "rect" | "text" | "page";
+  kind: "frame" | "rect" | "text" | "page" | "component" | "component-set";
   children: FakeNode[];
   parent?: FakeNode;
   width?: number;
@@ -105,6 +105,13 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
     createFrame: () => make("frame"),
     createRectangle: () => make("rect"),
     createText: () => make("text"),
+    createComponent: () => make("component"),
+    combineAsVariants(components: FigmaNode[], parent: FigmaNode): FigmaNode {
+      const set = make("component-set");
+      for (const component of components) set.appendChild(component); // reparents into the set
+      parent.appendChild(set);
+      return set;
+    },
     createImage(bytes: Uint8Array): { hash: string } {
       const hash = `img${state.images.length}`;
       state.images.push({ hash, bytes });

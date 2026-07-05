@@ -28,7 +28,7 @@ import type { FigmaVariableCollection, FigmaVariableType } from "@design-parity/
 import { redlineLabel, redlineRgb, severityRgb } from "./annotations.js";
 import { buildDesignMap } from "./designMap.js";
 import { REFERENCE_PAGE, type ParityDirection } from "./direction.js";
-import type { ImportPlan, PlannedComponent, PlannedGroup } from "./plan.js";
+import type { ImportPlan, PlannedComponent, PlannedGroup, PlannedImage } from "./plan.js";
 import { reconcile, type ExistingCard } from "./reconcile.js";
 import type { DesignMap } from "@design-parity/core";
 
@@ -125,6 +125,10 @@ export interface FigmaApi {
   createFrame(): FigmaNode;
   createRectangle(): FigmaNode;
   createText(): FigmaNode;
+  /** A Figma COMPONENT node — one variant of a component set (real Figma API). */
+  createComponent(): FigmaNode;
+  /** Combine components into a variant COMPONENT_SET under `parent` (real Figma API). */
+  combineAsVariants(components: FigmaNode[], parent: FigmaNode): FigmaNode;
   createImage(bytes: Uint8Array): { hash: string };
   variables: {
     createVariableCollection(name: string): FigmaVariableCollectionNode;
@@ -334,11 +338,25 @@ function createScopePage(
 }
 
 /** Build the section/card tree for `groups` under a fresh `root`. */
+/**
+ * Renders one component into its **reconcile unit**: a node stamped
+ * `role=card` + `componentId`, whose `role=image` descendants carry the renders
+ * (so {@link refreshCardImages} can update either shape in place). Two shapes:
+ * {@link renderCard} (a flat image row) and {@link renderComponentSet} (a native
+ * Figma component set). Returns the unit + how many renders it placed.
+ */
+type RenderUnit = (
+  figma: FigmaApi,
+  component: PlannedComponent,
+  bytesByPath: Map<string, Uint8Array>,
+) => { row: FigmaNode; placedImages: number };
+
 function buildCardsInto(
   figma: FigmaApi,
   root: FigmaNode,
   groups: readonly PlannedGroup[],
   bytesByPath: Map<string, Uint8Array>,
+  renderUnit: RenderUnit = renderCard,
 ): { placed: number; nodeIds: Record<string, string> } {
   let placed = 0;
   // componentId → the card frame the plugin placed, for correspondence authoring.
@@ -346,7 +364,7 @@ function buildCardsInto(
   for (const group of groups) {
     const section = renderSection(figma, group.name);
     for (const component of group.components) {
-      const { row, placedImages } = renderCard(figma, component, bytesByPath);
+      const { row, placedImages } = renderUnit(figma, component, bytesByPath);
       if (placedImages > 0) {
         placed += placedImages;
         nodeIds[component.componentId] = row.id;
@@ -405,6 +423,7 @@ function reconcileCardsInto(
   root: FigmaNode,
   groups: readonly PlannedGroup[],
   bytesByPath: Map<string, Uint8Array>,
+  renderUnit: RenderUnit = renderCard,
 ): { updated: number; added: number; stale: number; nodeIds: Record<string, string> } {
   // Index the board's stamped cards by componentId (first stamp wins).
   const cardNodes = new Map<string, FigmaNode>();
@@ -446,7 +465,7 @@ function reconcileCardsInto(
   }
   for (const componentId of actions.add) {
     const { component, group } = planned.get(componentId)!;
-    const { row, placedImages } = renderCard(figma, component, bytesByPath);
+    const { row, placedImages } = renderUnit(figma, component, bytesByPath);
     if (placedImages === 0) continue;
     let section = sections.get(group);
     if (!section) {
@@ -536,7 +555,13 @@ async function buildScopes(
   }
 
   const used = new Set<string>();
-  const scopes: Array<{ scope: string; pageName: string; rootName: string; groups: PlannedGroup[] }> = [];
+  const scopes: Array<{
+    scope: string;
+    pageName: string;
+    rootName: string;
+    groups: PlannedGroup[];
+    renderUnit?: RenderUnit;
+  }> = [];
 
   // Tokens scope first: the theme-foundation showcases get their own
   // `Themes / Tokens` page (the native Figma variable collection, created once
@@ -567,12 +592,20 @@ async function buildScopes(
     scopes.push({ scope: `screen:${screen.id}`, pageName: name, rootName: name, groups: [{ name, components }] });
   }
 
-  // Remainder: components on no screen keep the flat catalog page (by group).
+  // Remainder: everything not a theme or on a screen becomes the component
+  // library — a `Components` page where each component is a native Figma
+  // component set (its states/themes/sizes become variant properties).
   const remainder = plan.groups
     .map((group) => ({ name: group.name, components: group.components.filter((c) => !used.has(c.componentId)) }))
     .filter((group) => group.components.length > 0);
   if (remainder.length > 0) {
-    scopes.push({ scope: "catalog", pageName: `${plan.title} — Catalog`, rootName: plan.title, groups: remainder });
+    scopes.push({
+      scope: "components",
+      pageName: "Components",
+      rootName: "Components",
+      groups: remainder,
+      renderUnit: renderComponentSet,
+    });
   }
 
   const nodeIds: Record<string, string> = {};
@@ -583,11 +616,11 @@ async function buildScopes(
   let anyReconciled = false;
   let anyFresh = false;
   const roots: FigmaNode[] = [];
-  for (const { scope, pageName, rootName, groups } of scopes) {
+  for (const { scope, pageName, rootName, groups, renderUnit } of scopes) {
     const existing = findCatalogRoot(figma, plan.system, direction, scope);
     if (existing) {
       figma.currentPage = existing.page;
-      const r = reconcileCardsInto(figma, existing.root, groups, bytesByPath);
+      const r = reconcileCardsInto(figma, existing.root, groups, bytesByPath, renderUnit);
       updated += r.updated;
       added += r.added;
       stale += r.stale;
@@ -596,7 +629,7 @@ async function buildScopes(
       anyReconciled = true;
     } else {
       const root = createScopePage(figma, plan.system, direction, scope, pageName, rootName);
-      const r = buildCardsInto(figma, root, groups, bytesByPath);
+      const r = buildCardsInto(figma, root, groups, bytesByPath, renderUnit);
       placed += r.placed;
       Object.assign(nodeIds, r.nodeIds);
       roots.push(root);
@@ -732,6 +765,54 @@ function renderCard(
     placedImages += 1;
   });
   return { row, placedImages };
+}
+
+/**
+ * The variant-property name Figma parses a component's axes from, e.g.
+ * `state=default, theme=light, size=compact`. Figma reads variant properties
+ * straight off each COMPONENT's name inside a set.
+ */
+function variantName(image: PlannedImage): string {
+  const parts: string[] = [`state=${image.state ?? "default"}`];
+  if (image.theme) parts.push(`theme=${image.theme}`);
+  if (image.size) parts.push(`size=${image.size}`);
+  return parts.join(", ");
+}
+
+/**
+ * Render one component as a native Figma **component set**: one COMPONENT per
+ * render (named with its variant properties) combined into a set. The set is the
+ * reconcile unit (`role=card`), its variant components the `role=image` cells —
+ * so {@link refreshCardImages} refreshes them in place on a re-import just like a
+ * flat card. Overlays aren't drawn here; the set is the reusable library form.
+ */
+function renderComponentSet(
+  figma: FigmaApi,
+  component: PlannedComponent,
+  bytesByPath: Map<string, Uint8Array>,
+): { row: FigmaNode; placedImages: number } {
+  const variants: FigmaNode[] = [];
+  for (const image of component.images) {
+    const bytes = bytesByPath.get(image.path);
+    if (!bytes) continue;
+    const hash = figma.createImage(bytes).hash;
+    const variant = figma.createComponent();
+    variant.name = variantName(image);
+    variant.resize(image.width, image.height);
+    variant.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+    stamp(variant, ROLE.image, { componentId: component.componentId });
+    variants.push(variant);
+  }
+  if (variants.length === 0) {
+    // No bytes for this component — hand back an empty frame the caller drops.
+    return { row: figma.createFrame(), placedImages: 0 };
+  }
+  // Combine into a set under the current page; the caller reparents it into its
+  // group section (appendChild moves it), exactly like a flat card.
+  const set = figma.combineAsVariants(variants, figma.currentPage);
+  set.name = component.componentId;
+  stamp(set, ROLE.card, { componentId: component.componentId });
+  return { row: set, placedImages: variants.length };
 }
 
 /** Emit the design-map correspondence (code componentId → placed frame). */

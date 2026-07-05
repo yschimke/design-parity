@@ -42,6 +42,11 @@ export interface PlannedImage {
   path: string;
   width: number;
   height: number;
+  /** The image's variant axes, kept structured so the Components page can name
+   *  a native component set's variant properties (`state=…, theme=…, size=…`). */
+  state?: string;
+  theme?: string;
+  size?: string;
 }
 
 /** One component frame: its images in a row plus its a11y annotation layer. */
@@ -147,13 +152,19 @@ function planImages(
   const variant = opts.variant ?? "ideal";
   return component.images
     .filter((image) => image.variant === variant)
-    .map((image) => ({
-      key: imageKey(image),
-      url: resolveImageUrl(opts.baseUrl, image.path),
-      path: image.path,
-      width: image.width,
-      height: image.height,
-    }));
+    .map((image) => {
+      const planned: PlannedImage = {
+        key: imageKey(image),
+        url: resolveImageUrl(opts.baseUrl, image.path),
+        path: image.path,
+        width: image.width,
+        height: image.height,
+      };
+      if (image.state !== undefined) planned.state = image.state;
+      if (image.theme !== undefined) planned.theme = image.theme;
+      if (image.size !== undefined) planned.size = image.size;
+      return planned;
+    });
 }
 
 /**
