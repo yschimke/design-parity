@@ -51,8 +51,9 @@ core and the two runtime files stay thin:
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
 | [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared colour + label helpers for the greenline (severity) and redline (spacing spec) layers — one place so the SVG preview and Figma paints match. |
+| [`src/scene.ts`](src/scene.ts) | main-thread logic (tested) | `applyImport(figma, plan, images)` — builds the page: frames, image fills, greenline/redline overlays, variable collection; emits the `design-map.json`. Takes an **injected** `FigmaApi`, so it runs headlessly against a fake (see [Testing before Figma](#testing-before-figma)). |
 | [`figma/ui.ts`](figma/ui.ts) | UI iframe | Fetches `catalog.json` + tokens + PNG bytes, runs the planner, posts the plan to the main thread. |
-| [`figma/code.ts`](figma/code.ts) | main thread | Executes the plan against the scene: frames, image fills, greenline/redline overlays, variable collection; collects the placed node ids and emits the `design-map.json`. Mechanical. |
+| [`figma/code.ts`](figma/code.ts) | main thread | Thin bootstrap: wires the UI and hands the real `figma` to `applyImport`. |
 | [`figma/ui.html`](figma/ui.html) | UI iframe | Markup; esbuild inlines the compiled `ui.ts` into it. |
 | [`figma/manifest.json`](figma/manifest.json) | — | Figma plugin manifest (network allowlist, entry points). |
 
@@ -73,7 +74,7 @@ construction.
 
 ```sh
 npm run build   --workspace @design-parity/figma-plugin   # tsc: the pure core → dist/
-npm run test    --workspace @design-parity/figma-plugin   # vitest: plan + dtcg
+npm run test    --workspace @design-parity/figma-plugin   # vitest: planner, dtcg, preview, scene
 npm run build:plugin --workspace @design-parity/figma-plugin  # esbuild: figma/ → dist/plugin/
 ```
 
@@ -81,6 +82,26 @@ npm run build:plugin --workspace @design-parity/figma-plugin  # esbuild: figma/ 
 `dist/plugin/ui.html`. In Figma: *Plugins → Development → Import plugin from
 manifest…* and pick [`figma/manifest.json`](figma/manifest.json) (it points at
 the bundled output).
+
+## Testing before Figma
+
+A Figma plugin can't run under Node, so the scene the plugin builds is verified
+**headlessly** before it's ever loaded in Figma. The main-thread logic lives in
+[`src/scene.ts`](src/scene.ts) as `applyImport(figma, plan, images)`, which takes
+the scene API as an **injected** `FigmaApi` (a structural subset of Figma's
+`PluginAPI`). [`test/scene.test.ts`](test/scene.test.ts) drives it against a fake
+([`test/fakeFigma.ts`](test/fakeFigma.ts)) that records every created node,
+image, variable, and font load, then asserts the exact tree — frame hierarchy,
+image fills, greenline/redline rects and their strokes, the variable collection's
+modes + values, and the emitted `design-map.json`. This catches wrong API calls,
+ordering, and null handling (e.g. an unsaved file's `fileKey`) up front.
+
+What's left for a manual Figma smoke test is only genuinely runtime-specific:
+real font metrics, image decoding, and Figma's auto-parenting. To run it, feed
+the plugin a catalog without publishing anything: serve a fixture directory
+locally (`npx serve ./catalog`) and add `"http://localhost:*"` to the manifest's
+`networkAccess.devAllowedDomains` (dev-only), or point it at a
+`raw.githubusercontent.com` branch already in `allowedDomains`.
 
 ## Using it
 
