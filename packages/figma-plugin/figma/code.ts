@@ -9,7 +9,9 @@
  */
 import { applyImport, type FetchedImage, type FigmaApi } from "../src/scene.js";
 import type { ParityDirection } from "../src/direction.js";
+import { placeLiveRender } from "../src/live.js";
 import type { ImportPlan } from "../src/plan.js";
+import type { RenderSource } from "../src/render.js";
 
 /** The message the UI posts once it has resolved the plan and all image bytes. */
 interface ImportMessage {
@@ -22,13 +24,37 @@ interface ImportMessage {
   confirm?: boolean;
 }
 
-type UiMessage = ImportMessage | { type: "cancel" };
+/** The override editor posts this once it has fetched one preview's live render. */
+interface PlaceLiveMessage {
+  type: "placeLive";
+  /** The render request — stamped on the node as provenance for a later Refresh. */
+  source: RenderSource;
+  bytes: Uint8Array;
+  /** The node name; defaults to the preview id. */
+  name?: string;
+}
+
+type UiMessage = ImportMessage | PlaceLiveMessage | { type: "cancel" };
 
 figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   if (msg.type === "cancel") {
     figma.closePlugin();
+    return;
+  }
+  if (msg.type === "placeLive") {
+    try {
+      const node = placeLiveRender(figma as unknown as FigmaApi, msg.source, msg.bytes, {
+        name: msg.name,
+      });
+      figma.ui.postMessage({ type: "livePlaced", name: node.name });
+      figma.notify(`Placed “${node.name}”.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "liveError", message });
+      figma.notify(`Place failed: ${message}`, { error: true });
+    }
     return;
   }
   if (msg.type === "import") {

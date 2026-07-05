@@ -44,6 +44,8 @@ export {
   LIVE_ROLE,
 } from "./live.js";
 export type { PlaceLiveOptions, LiveRenderSize } from "./live.js";
+export { knobControls, EDITOR_AXES } from "./editor.js";
+export type { KnobControl, AxisControl } from "./editor.js";
 export {
   previewsUrl,
   parsePreviewsResponse,

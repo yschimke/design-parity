@@ -5,15 +5,16 @@
   h1 { font-size: 13px; margin: 0 0 4px; }
   p.hint { margin: 0 0 12px; opacity: 0.7; }
   label { display: block; font-weight: 600; margin-bottom: 4px; }
-  input { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px;
+  input, select { width: 100%; box-sizing: border-box; padding: 8px; border-radius: 6px;
           border: 1px solid rgba(128,128,128,0.4); background: transparent; color: inherit; }
+  .field { margin-top: 12px; }
   .row { display: flex; gap: 8px; margin-top: 12px; }
   button { flex: 1; padding: 8px; border-radius: 6px; border: 0; cursor: pointer; font-weight: 600; }
-  button[type="submit"] { background: #0d99ff; color: #fff; }
+  button[type="submit"], .primary { background: #0d99ff; color: #fff; }
   #confirm { background: #ffb020; color: #111; }
   #confirm[hidden] { display: none; }
-  #cancel { background: rgba(128,128,128,0.2); color: inherit; }
-  #status { margin-top: 12px; font-variant-numeric: tabular-nums; min-height: 16px; opacity: 0.85; }
+  #cancel, .secondary { background: rgba(128,128,128,0.2); color: inherit; }
+  #status, #editor-status { margin-top: 12px; font-variant-numeric: tabular-nums; min-height: 16px; opacity: 0.85; }
   code { font-size: 11px; opacity: 0.6; word-break: break-all; }
   #result { margin-top: 12px; }
   #result[hidden] { display: none; }
@@ -23,38 +24,103 @@
   #designmap { width: 100%; box-sizing: border-box; height: 132px; font-family: ui-monospace, monospace;
                font-size: 11px; padding: 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4);
                background: transparent; color: inherit; resize: vertical; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid rgba(128,128,128,0.3); }
+  .tab { flex: 0 0 auto; background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 4px;
+         margin-right: 12px; font-weight: 600; opacity: 0.6; cursor: pointer; color: inherit; }
+  .tab[aria-selected="true"] { opacity: 1; border-bottom-color: #0d99ff; }
+  .view[hidden] { display: none; }
+
+  /* Override editor */
+  #knobs:empty, #axes:empty { display: none; }
+  .knob { margin-top: 10px; }
+  .knob label { display: flex; align-items: baseline; justify-content: space-between; }
+  .knob label .kind { font-weight: 400; opacity: 0.5; font-size: 10px; }
+  .knob.bool label { justify-content: flex-start; gap: 8px; }
+  .knob.bool input { width: auto; }
+  .group-title { font-weight: 600; margin: 16px 0 0; opacity: 0.8; }
 </style>
 
-<h1>Import a design-parity catalog</h1>
-<p class="hint">Paste the raw root of a published <code>design-artifacts/&lt;system&gt;</code> branch — the folder containing <code>catalog.json</code>.</p>
+<div class="tabs" role="tablist">
+  <button class="tab" id="tab-catalog" data-view="catalog" role="tab" aria-selected="true">Catalog import</button>
+  <button class="tab" id="tab-editor" data-view="editor" role="tab" aria-selected="false">Override editor</button>
+</div>
 
-<form id="form">
-  <label for="base">Catalog base URL</label>
-  <input id="base" name="base" type="url" placeholder="https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compose-m3" />
-  <label for="variant" style="margin-top:12px">Variant</label>
-  <select id="variant" name="variant" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(128,128,128,0.4);background:transparent;color:inherit">
-    <option value="ideal">Ideal render + a11y greenlines</option>
-    <option value="layout">Layout wireframe</option>
-  </select>
-  <label for="mode" style="margin-top:12px">Mode</label>
-  <select id="mode" name="mode" style="width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid rgba(128,128,128,0.4);background:transparent;color:inherit">
-    <option value="auto">From catalog — the repo's parity direction</option>
-    <option value="code-led">Code-led — build / refresh the catalog</option>
-    <option value="design-led">Design-led — reference page, confirm before writing</option>
-  </select>
-  <div class="row">
-    <button type="submit">Import</button>
-    <button id="confirm" type="button" hidden>Confirm write</button>
-    <button id="cancel" type="button">Close</button>
-  </div>
-</form>
-<p id="status"></p>
+<!-- View 1: import a whole design-parity catalog (sticker sheet). -->
+<section id="view-catalog" class="view">
+  <h1>Import a design-parity catalog</h1>
+  <p class="hint">Paste the raw root of a published <code>design-artifacts/&lt;system&gt;</code> branch — the folder containing <code>catalog.json</code>.</p>
 
-<section id="result" hidden>
-  <div class="head">
-    <label for="designmap">Correspondence — <code>design-map.json</code></label>
-    <button id="copy" type="button">Copy</button>
+  <form id="form">
+    <label for="base">Catalog base URL</label>
+    <input id="base" name="base" type="url" placeholder="https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compose-m3" />
+    <div class="field">
+      <label for="variant">Variant</label>
+      <select id="variant" name="variant">
+        <option value="ideal">Ideal render + a11y greenlines</option>
+        <option value="layout">Layout wireframe</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="mode">Mode</label>
+      <select id="mode" name="mode">
+        <option value="auto">From catalog — the repo's parity direction</option>
+        <option value="code-led">Code-led — build / refresh the catalog</option>
+        <option value="design-led">Design-led — reference page, confirm before writing</option>
+      </select>
+    </div>
+    <div class="row">
+      <button type="submit">Import</button>
+      <button id="confirm" type="button" hidden>Confirm write</button>
+      <button id="cancel" type="button">Close</button>
+    </div>
+  </form>
+  <p id="status"></p>
+
+  <section id="result" hidden>
+    <div class="head">
+      <label for="designmap">Correspondence — <code>design-map.json</code></label>
+      <button id="copy" type="button">Copy</button>
+    </div>
+    <textarea id="designmap" readonly spellcheck="false"></textarea>
+    <p class="hint" id="result-hint" style="margin:4px 0 0">Commit this to a consumer repo so the resolver maps these code components to the imported frames.</p>
+  </section>
+</section>
+
+<!-- View 2: instantiate one live component, editing its overrides. -->
+<section id="view-editor" class="view" hidden>
+  <h1>Import a component with overrides</h1>
+  <p class="hint">Point at a <code>compose-preview serve</code> host, pick a component, edit its knobs, and place a live render. Needs <code>serveSchema: compose-preview-serve/v2</code>.</p>
+
+  <form id="editor-form">
+    <label for="server">Preview server</label>
+    <input id="server" name="server" type="url" placeholder="https://preview.coo.ee" />
+    <div class="field">
+      <label for="system">System</label>
+      <input id="system" name="system" type="text" placeholder="compose-m3" />
+    </div>
+    <div class="field">
+      <label for="token">Token <span style="font-weight:400;opacity:0.5">(if the server is gated)</span></label>
+      <input id="token" name="token" type="text" placeholder="optional" />
+    </div>
+    <div class="row">
+      <button type="submit" class="primary">Load previews</button>
+    </div>
+  </form>
+
+  <div id="editor-pick" hidden>
+    <div class="field">
+      <label for="preview">Component</label>
+      <select id="preview"></select>
+    </div>
+    <div id="knobs"></div>
+    <p class="group-title">Display axes</p>
+    <div id="axes"></div>
+    <div class="row">
+      <button id="place" type="button" class="primary">Place live render</button>
+    </div>
   </div>
-  <textarea id="designmap" readonly spellcheck="false"></textarea>
-  <p class="hint" id="result-hint" style="margin:4px 0 0">Commit this to a consumer repo so the resolver maps these code components to the imported frames.</p>
+
+  <p id="editor-status"></p>
 </section>
