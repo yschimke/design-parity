@@ -333,6 +333,57 @@ describe("applyImport — Components page (native component sets)", () => {
   });
 });
 
+describe("applyImport — Figma spec header (screen pages)", () => {
+  const manifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    screens: [{ id: "Screen/Home", title: "Home", related: ["Dialog/Confirm"] }],
+    components: [
+      { componentId: "Screen/Home", group: "Screens", images: [{ variant: "ideal", path: "home", state: "default", theme: "light", width: 100, height: 200 }], greenlines: [], redlines: [] },
+      { componentId: "Dialog/Confirm", group: "Dialogs", images: [{ variant: "ideal", path: "dialog", state: "default", theme: "light", width: 100, height: 80 }], greenlines: [], redlines: [] },
+    ],
+  };
+
+  const specFrame = (fake: ReturnType<typeof createFakeFigma>): FakeNode | undefined =>
+    fake.state.nodes.find(
+      (n) => n.kind === "frame" && n.getSharedPluginData("designParity", "role") === "spec" && n.getSharedPluginData("designParity", "componentId") === "Screen/Home",
+    );
+  const specSeedHash = (frame: FakeNode): string =>
+    (descendants(frame, (n) => (n.fills ?? []).some((f) => f.type === "IMAGE"))[0]!.fills!.find((f) => f.type === "IMAGE")! as { imageHash: string }).imageHash;
+
+  it("seeds a designer-owned Figma spec frame from the main screen's render", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["home", "dialog"]));
+
+    const spec = specFrame(fake);
+    expect(spec).toBeDefined();
+    expect(spec!.name).toBe("Figma spec — Screen/Home");
+    // It carries a seeded render, but is NOT a card/image node (so reconcile skips it).
+    expect(descendants(spec!, (n) => (n.fills ?? []).some((f) => f.type === "IMAGE"))).toHaveLength(1);
+    expect(descendants(spec!, (n) => n.getSharedPluginData("designParity", "role") === "image")).toHaveLength(0);
+  });
+
+  it("never re-seeds or refreshes the spec on a re-import (designer owns it)", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["home", "dialog"]));
+    const before = specFrame(fake)!;
+    const beforeId = before.id;
+    const beforeHash = specSeedHash(before);
+
+    const result = await applyImport(fake.figma, plan, bytesFor(["home", "dialog"]));
+
+    expect(result.reconciled).toBe(true);
+    // Exactly one spec frame still, same node, same seeded fill (untouched).
+    const specs = fake.state.nodes.filter((n) => n.kind === "frame" && n.getSharedPluginData("designParity", "role") === "spec");
+    expect(specs).toHaveLength(1);
+    expect(specs[0]!.id).toBe(beforeId);
+    expect(specSeedHash(specs[0]!)).toBe(beforeHash);
+  });
+});
+
 describe("applyImport — design-led mode gate", () => {
   it("dry-runs without writing anything until confirmed", async () => {
     const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });

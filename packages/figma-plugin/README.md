@@ -177,8 +177,12 @@ refreshes each page in place independently:
   projected from the DTCG tokens) is the machine-readable half of this page and
   is created once per file.
 - **One page per main screen** — from the catalog's screen graph
-  (`catalog.json`'s `screens: [{ id, title?, related }]`): the screen's card plus
-  its related secondaries/dialogs (as in-context renders).
+  (`catalog.json`'s `screens: [{ id, title?, related }]`). The page **leads with a
+  `Figma spec` frame** seeded once from the screen's code render — stamped
+  `role=spec`, which the reconcile never touches, so the designer takes it over
+  and it becomes the design intent. Below it sit the screen's card plus its
+  related secondaries/dialogs as the live **code renders**, refreshed on every
+  re-import — so the page reads as a spec-vs-code diff.
 - **`Components`** — the remainder (everything not a theme or on a screen) as the
   component library: each component is a **native Figma component set**, one
   `COMPONENT` per render named with its variant properties (`state=…, theme=…,
