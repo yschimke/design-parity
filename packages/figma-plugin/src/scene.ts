@@ -937,6 +937,10 @@ function variantName(image: PlannedImage): string {
   const parts: string[] = [`state=${image.state ?? "default"}`];
   if (image.theme) parts.push(`theme=${image.theme}`);
   if (image.size) parts.push(`size=${image.size}`);
+  // Extra axes (e.g. content=icon+label), sorted for a stable property order.
+  for (const [key, value] of Object.entries(image.props ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    parts.push(`${key}=${value}`);
+  }
   return parts.join(", ");
 }
 

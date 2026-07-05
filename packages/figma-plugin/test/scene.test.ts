@@ -506,6 +506,38 @@ describe("applyImport — Figma spec header (screen pages)", () => {
   });
 });
 
+describe("applyImport — variant props axis (label vs icon+label)", () => {
+  // Themes present ⇒ structured layout so Button/Filled lands on the Components
+  // page as a set. It carries a content axis beyond state/theme.
+  const manifest: CatalogManifest = {
+    schema: "design-parity-catalog/v1",
+    system: "compose-m3",
+    title: "Compose Material 3",
+    components: [
+      { componentId: "Theme/Light", group: "Themes", images: [{ variant: "ideal", path: "tl", state: "default", theme: "light", width: 300, height: 400 }], greenlines: [], redlines: [] },
+      { componentId: "Button/Filled", group: "Buttons", images: [
+        { variant: "ideal", path: "bl", state: "default", theme: "light", width: 200, height: 72 },
+        { variant: "ideal", path: "bi", state: "default", theme: "light", props: { content: "icon+label" }, width: 220, height: 72 },
+      ], greenlines: [], redlines: [] },
+    ],
+  };
+
+  it("turns a content prop into a component-set variant property", async () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x" });
+    const fake = createFakeFigma({ fileKey: "ABC" });
+    await applyImport(fake.figma, plan, bytesFor(["tl", "bl", "bi"]));
+
+    const set = fake.state.nodes.find(
+      (n) => n.kind === "component-set" && n.getSharedPluginData("designParity", "componentId") === "Button/Filled",
+    )!;
+    const names = set.children.filter((c) => c.kind === "component").map((c) => c.name).sort();
+    expect(names).toEqual([
+      "state=default, theme=light",
+      "state=default, theme=light, content=icon+label",
+    ]);
+  });
+});
+
 describe("applyImport — design-led mode gate", () => {
   it("dry-runs without writing anything until confirmed", async () => {
     const plan = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });

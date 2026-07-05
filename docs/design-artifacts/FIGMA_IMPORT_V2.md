@@ -70,8 +70,11 @@ Instead of one board, the file gets **pages**:
    projected from the system's DTCG token set.
 2. **`Components`** — each component as a native Figma **component set**: states
    become **variant properties** (e.g. `ContactList` → `state = Empty | Few |
-   Many`), with **breakpoint** as a second variant axis (`compact | medium |
-   expanded`). One instance per cell; the set is the reusable artifact.
+   Many`), with **breakpoint** as a second axis (`compact | medium | expanded`)
+   and **arbitrary named axes** beyond those via a variant's `props` — e.g.
+   `content = label | icon+label` — so a component varies along content/config
+   axes, not only its state (`CatalogSpecVariant.props` → `Image.props` →
+   `variantName`). One instance per cell; the set is the reusable artifact.
 3. **`<Screen>` (one page each)** — each *main screen* with its **directly
    related secondary screens and dialogs** grouped on the same page (e.g.
    `Scanner` page = the scanner + its permission dialog + its empty/populated

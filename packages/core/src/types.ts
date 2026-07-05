@@ -33,6 +33,13 @@ export interface Image {
   theme?: Theme;
   /** Logical breakpoint label, e.g. `"compact"`, `"medium"`, `"expanded"`. */
   size?: string;
+  /**
+   * Extra named variant axes beyond `state`/`theme`/`size` — e.g.
+   * `{ content: "icon+label" }` or `{ density: "compact" }`. Each becomes a
+   * variant property on the Figma component set, so a component can vary along
+   * axes the fixed fields don't name. Absent for the plain default render.
+   */
+  props?: Record<string, string>;
   /** Repo-relative path or `data:` URI to the PNG. */
   uri: string;
   width: number;

@@ -28,10 +28,26 @@ import type { Catalog, CatalogScreen, ComponentReference } from "./types.js";
  */
 export interface CatalogSpecVariant {
   /** State this variant renders, e.g. `"pressed"`, `"focused"`, `"disabled"`. */
-  state: string;
-  /** The `@Preview` **function name** that renders this state. */
+  state?: string;
+  /**
+   * Extra named variant axes for this render beyond `state` — e.g.
+   * `{ content: "icon+label" }`, `{ density: "compact" }`. Each becomes a
+   * variant property on the component set alongside `state`/`theme`/`size`, so a
+   * component can vary along content/config axes, not only its state.
+   */
+  props?: Record<string, string>;
+  /** The `@Preview` **function name** that renders this variant. */
   preview: string;
   caption?: string;
+}
+
+/** A short label for a variant, for coverage reports: its state and/or props. */
+function variantLabel(variant: CatalogSpecVariant): string {
+  const parts = [
+    ...(variant.state ? [variant.state] : []),
+    ...Object.entries(variant.props ?? {}).map(([k, v]) => `${k}=${v}`),
+  ];
+  return parts.join(", ") || variant.preview;
 }
 
 /** One component slot in a {@link CatalogSpec} group. */
@@ -215,11 +231,14 @@ export function catalogFromCandidates(
       for (const variant of component.variants ?? []) {
         const variantCandidate = byFunction.get(variant.preview);
         if (!variantCandidate || variantCandidate.images.length === 0) {
-          missing.push(`${component.componentId} [${variant.state}]`);
+          missing.push(`${component.componentId} [${variantLabel(variant)}]`);
           continue;
         }
         for (const image of variantCandidate.images) {
-          ideal.push({ ...image, state: variant.state });
+          const tagged = { ...image };
+          if (variant.state !== undefined) tagged.state = variant.state;
+          if (variant.props) tagged.props = { ...image.props, ...variant.props };
+          ideal.push(tagged);
         }
       }
       const source: ComponentSource = {
