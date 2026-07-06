@@ -77,13 +77,19 @@ construction.
 ```sh
 npm run build   --workspace @design-parity/figma-plugin   # tsc: the pure core → dist/
 npm run test    --workspace @design-parity/figma-plugin   # vitest: planner, dtcg, preview, scene
-npm run build:plugin --workspace @design-parity/figma-plugin  # esbuild: figma/ → dist/plugin/
+npm run build:plugin --workspace @design-parity/figma-plugin  # esbuild: figma/ → figma/dist/plugin/
 ```
 
-`build:plugin` emits `dist/plugin/code.js` and a self-contained
-`dist/plugin/ui.html`. In Figma: *Plugins → Development → Import plugin from
-manifest…* and pick [`figma/manifest.json`](figma/manifest.json) (it points at
-the bundled output).
+`build:plugin` emits `figma/dist/plugin/code.js` and a self-contained
+`figma/dist/plugin/ui.html`.
+
+To load the development plugin in Figma, import this local manifest:
+
+```text
+packages/figma-plugin/figma/manifest.json
+```
+
+Figma path: *Plugins → Development → Import plugin from manifest…*.
 
 ## Testing before Figma
 
@@ -107,12 +113,16 @@ locally (`npx serve ./catalog`) and add `"http://localhost:*"` to the manifest's
 
 ## Using it
 
-Run the plugin and paste the raw root of a published
-`design-artifacts/<system>` branch — the folder containing `catalog.json`, e.g.
+Run the plugin. The **Catalog base URL** is pre-filled with the default Compose
+Material 3 catalog:
 
+```text
+https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3
 ```
-https://raw.githubusercontent.com/yschimke/design-parity/design-artifacts/compose-m3
-```
+
+That URL is the raw root of a published `design-artifacts/<system>` branch — the
+folder containing `catalog.json`. Do not append `/catalog.json`; the plugin does
+that itself.
 
 Pick the **Ideal render** (with a11y greenlines) or the **Layout wireframe**
 (with spacing redlines) variant, then Import. The plugin fetches the manifest,

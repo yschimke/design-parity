@@ -6,6 +6,26 @@ The code→design direction ends at a `design-artifacts/<system>` delivery branc
 last hop: turning that published catalog into an importable **Figma sticker
 sheet** — one file per design system — and keeping it fresh.
 
+## Development plugin import
+
+For the in-Figma catalog importer in this repo, load the development plugin from
+the local manifest:
+
+```text
+packages/figma-plugin/figma/manifest.json
+```
+
+Figma path: *Plugins → Development → Import plugin from manifest…*.
+
+Inside the plugin, use this default **Catalog base URL**:
+
+```text
+https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3
+```
+
+This is the raw root containing `catalog.json`; do not append `/catalog.json`.
+The plugin appends it when fetching the catalog.
+
 It is deliberately a **runbook for an agent session** (Claude Code with the Figma
 MCP), not a headless script: placing images and laying out the board require the
 Figma MCP tools `upload_assets` and `use_figma`, which only exist inside an agent

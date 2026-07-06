@@ -9,3 +9,5 @@ coverage/
 .DS_Store
 *.log
 .compose-preview-history/
+packages/baseline/test/fixtures/**/.gradle/
+packages/baseline/test/fixtures/**/build/

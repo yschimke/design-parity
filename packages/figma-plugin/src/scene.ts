@@ -128,6 +128,8 @@ export interface FigmaApi {
   /** The document node; its `children` are the file's pages (real Figma API). */
   root: { children: readonly FigmaNode[] };
   currentPage: FigmaNode;
+  loadAllPagesAsync(): Promise<void>;
+  setCurrentPageAsync(page: FigmaNode): Promise<void>;
   loadFontAsync(font: { family: string; style: string }): Promise<void>;
   createPage(): FigmaNode;
   createFrame(): FigmaNode;
@@ -222,6 +224,9 @@ export async function applyImport(
 ): Promise<ImportResult> {
   await figma.loadFontAsync({ family: "Inter", style: "Regular" });
   await figma.loadFontAsync({ family: "Inter", style: "Semi Bold" });
+  // With documentAccess: "dynamic-page", page children cannot be inspected until
+  // pages are explicitly loaded. Reconcile/dry-run scans existing pages.
+  await figma.loadAllPagesAsync();
 
   const bytesByPath = new Map(images.map((i) => [i.path, i.bytes]));
   const direction: ParityDirection = opts.direction ?? "code-led";
@@ -322,17 +327,17 @@ function dryRun(
  * one screen). `rootName` labels the root frame; `scope` distinguishes screen
  * boards from the catalog board so a re-import reconciles the right one.
  */
-function createScopePage(
+async function createScopePage(
   figma: FigmaApi,
   system: string,
   direction: ParityDirection,
   scope: string,
   pageName: string,
   rootName: string,
-): FigmaNode {
+): Promise<FigmaNode> {
   const page = figma.createPage();
   page.name = pageName;
-  figma.currentPage = page;
+  await figma.setCurrentPageAsync(page);
 
   const root = figma.createFrame();
   root.name = rootName;
@@ -401,7 +406,7 @@ async function buildFresh(
   direction: ParityDirection,
   pageName: string,
 ): Promise<ImportResult> {
-  const root = createScopePage(figma, plan.system, direction, "catalog", pageName, plan.title);
+  const root = await createScopePage(figma, plan.system, direction, "catalog", pageName, plan.title);
   const { placed, nodeIds } = buildCardsInto(figma, root, plan.groups, bytesByPath);
 
   let variableNote = "";
@@ -522,7 +527,7 @@ async function reconcileInto(
   plan: ImportPlan,
   bytesByPath: Map<string, Uint8Array>,
 ): Promise<ImportResult> {
-  figma.currentPage = page;
+  await figma.setCurrentPageAsync(page);
   const { updated, added, stale, nodeIds } = reconcileCardsInto(figma, root, plan.groups, bytesByPath);
   figma.viewport.scrollAndZoomIntoView([root]);
 
@@ -651,7 +656,7 @@ async function buildScopes(
   for (const { scope, pageName, rootName, groups, renderUnit, refreshUnit, specSeed } of scopes) {
     const existing = findCatalogRoot(figma, plan.system, direction, scope);
     if (existing) {
-      figma.currentPage = existing.page;
+      await figma.setCurrentPageAsync(existing.page);
       const r = reconcileCardsInto(figma, existing.root, groups, bytesByPath, renderUnit, refreshUnit);
       updated += r.updated;
       added += r.added;
@@ -660,7 +665,7 @@ async function buildScopes(
       roots.push(existing.root);
       anyReconciled = true;
     } else {
-      const root = createScopePage(figma, plan.system, direction, scope, pageName, rootName);
+      const root = await createScopePage(figma, plan.system, direction, scope, pageName, rootName);
       // The Figma-spec header goes first on a screen page, before the code
       // renders — seeded from code once, then owned by the designer.
       if (specSeed) {
