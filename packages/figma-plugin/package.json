@@ -17,7 +17,7 @@
     "build": "tsc --build",
     "build:plugin": "node esbuild.mjs",
     "preview": "node docs/canvas-preview.mjs",
-    "test": "vitest run"
+    "test": "vitest run --root ../.. packages/figma-plugin/test"
   },
   "dependencies": {
     "@design-parity/catalog-export": "^0.1.24",

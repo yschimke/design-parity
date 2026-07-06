@@ -1,8 +1,8 @@
 {
   "name": "design-parity — Catalog Import",
   "api": "1.0.0",
-  "main": "../dist/plugin/code.js",
-  "ui": "../dist/plugin/ui.html",
+  "main": "./dist/plugin/code.js",
+  "ui": "./dist/plugin/ui.html",
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
   "networkAccess": {

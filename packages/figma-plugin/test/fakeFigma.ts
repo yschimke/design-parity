@@ -106,6 +106,10 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
     fileKey: opts.fileKey,
     root: { get children(): readonly FigmaNode[] { return pages; } },
     currentPage: undefined as unknown as FigmaNode,
+    async loadAllPagesAsync(): Promise<void> {},
+    async setCurrentPageAsync(page: FigmaNode): Promise<void> {
+      figma.currentPage = page;
+    },
     async loadFontAsync(font: { family: string; style: string }): Promise<void> {
       state.fontsLoaded.push(font);
     },

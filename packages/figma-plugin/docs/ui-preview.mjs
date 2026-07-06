@@ -3,7 +3,7 @@
  *
  * Unlike the *canvas* the plugin builds (see canvas-preview.mjs — an offline SVG
  * proof), the plugin's own **iframe UI** is real HTML, so it renders headlessly:
- * this loads the built `dist/plugin/ui.html` in Chromium and screenshots each
+ * this loads the built `figma/dist/plugin/ui.html` in Chromium and screenshots each
  * tab. The override-editor tab is driven through its real load path with a
  * stubbed `/api/previews` response so the knob controls actually render.
  *
@@ -25,7 +25,7 @@ import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
 const docs = new URL(".", import.meta.url);
-const html = readFileSync(new URL("../dist/plugin/ui.html", import.meta.url), "utf8");
+const html = readFileSync(new URL("../figma/dist/plugin/ui.html", import.meta.url), "utf8");
 // setContent/goto both need a real document for the inlined <script> + our stub;
 // a temp file gives a stable file:// URL that evaluateOnNewDocument applies to.
 const tmp = join(tmpdir(), "design-parity-ui-preview.html");

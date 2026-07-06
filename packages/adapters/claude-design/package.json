@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "test": "vitest run"
+    "test": "vitest run --root ../../.. packages/adapters/claude-design/test"
   },
   "dependencies": {
     "@design-parity/core": "^0.1.24"

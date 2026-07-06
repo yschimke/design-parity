@@ -2,8 +2,8 @@
  * Bundle the Figma-runtime glue. Two IIFE bundles, no code-splitting (Figma
  * loads a single `code.js` and a single `ui.html`):
  *
- * - `figma/code.ts`  → `dist/plugin/code.js`   (main thread)
- * - `figma/ui.ts`    → inlined into `dist/plugin/ui.html` (UI iframe)
+ * - `figma/code.ts`  → `figma/dist/plugin/code.js`   (main thread)
+ * - `figma/ui.ts`    → inlined into `figma/dist/plugin/ui.html` (UI iframe)
  *
  * Run after `tsc --build` so `@design-parity/*` deps resolve to their `dist`.
  * A tiny resolve shim maps NodeNext-style `./x.js` imports to their `.ts`
@@ -14,7 +14,9 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const OUT = "dist/plugin";
+// Figma requires manifest entrypoints to live in the manifest directory or one
+// of its subdirectories, so the plugin bundle is emitted under `figma/`.
+const OUT = "figma/dist/plugin";
 
 const tsResolve = {
   name: "ts-resolve",

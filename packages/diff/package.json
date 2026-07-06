@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "test": "vitest run"
+    "test": "vitest run --root ../.. packages/diff/test"
   },
   "dependencies": {
     "@design-parity/checks": "^0.1.24",

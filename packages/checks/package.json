@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "vitest run"
+    "test": "vitest run --root ../.. packages/checks/test"
   },
   "dependencies": {
     "@design-parity/core": "^0.1.24",
