@@ -1,0 +1,167 @@
+import { describe, expect, it } from "vitest";
+
+import type { CatalogManifest, CatalogManifestImage } from "@design-parity/catalog-export";
+
+import {
+  indexCatalog,
+  selectCatalogImage,
+  selectCatalogWireframe,
+} from "../src/catalogPick.js";
+
+function image(over: Partial<CatalogManifestImage>): CatalogManifestImage {
+  return {
+    variant: "ideal",
+    path: "images/x.png",
+    state: "default",
+    width: 200,
+    height: 72,
+    ...over,
+  };
+}
+
+/** A catalog with a rich Button (variant + theme + size + a content prop) and a
+ *  single-render Switch, plus one layout-only wireframe. */
+const manifest: CatalogManifest = {
+  schema: "design-parity-catalog/v1",
+  system: "compose-m3",
+  title: "Compose Material 3",
+  components: [
+    {
+      componentId: "Button/Filled",
+      group: "Buttons",
+      caption: "The primary action.",
+      wireframe: "wireframes/button-filled.svg",
+      greenlines: [],
+      redlines: [],
+      images: [
+        image({ path: "b/default-light-compact.png", state: "default", theme: "light", size: "compact" }),
+        image({ path: "b/default-dark-compact.png", state: "default", theme: "dark", size: "compact" }),
+        image({ path: "b/default-light-medium.png", state: "default", theme: "light", size: "medium" }),
+        image({ path: "b/pressed-light-compact.png", state: "pressed", theme: "light", size: "compact" }),
+        image({
+          path: "b/iconlabel-light-compact.png",
+          state: "default",
+          theme: "light",
+          size: "compact",
+          props: { content: "icon+label" },
+        }),
+        // A layout wireframe render — never offered by the ideal-only picker.
+        image({ variant: "layout", path: "b/layout.png", state: "default", theme: "light" }),
+      ],
+    },
+    {
+      componentId: "Switch/On",
+      group: "Selection",
+      greenlines: [],
+      redlines: [],
+      images: [image({ path: "s/on.png", state: "on", theme: "light" })],
+    },
+  ],
+};
+
+describe("indexCatalog", () => {
+  it("exposes the state axis as the variant, and theme/size/props as dimensions", () => {
+    const index = indexCatalog(manifest);
+    expect(index.system).toBe("compose-m3");
+
+    const button = index.components.find((c) => c.componentId === "Button/Filled")!;
+    expect(button.group).toBe("Buttons");
+    expect(button.caption).toBe("The primary action.");
+    expect(button.hasWireframe).toBe(true);
+
+    // Variant = the `state` axis, in first-seen order.
+    expect(button.variant).toEqual({ key: "state", label: "Variant", values: ["default", "pressed"] });
+
+    // Dimensions: theme, size, then the extra `content` prop axis, labelled.
+    expect(button.dimensions).toEqual([
+      { key: "theme", label: "Theme", values: ["light", "dark"] },
+      { key: "size", label: "Size", values: ["compact", "medium"] },
+      { key: "prop:content", label: "Content", values: ["icon+label"] },
+    ]);
+  });
+
+  it("omits an axis with a single value and a missing variant/wireframe", () => {
+    const index = indexCatalog(manifest);
+    const sw = index.components.find((c) => c.componentId === "Switch/On")!;
+    // One state, one theme, no size/props ⇒ no variant, no dimensions.
+    expect(sw.variant).toBeUndefined();
+    expect(sw.dimensions).toEqual([]);
+    expect(sw.hasWireframe).toBe(false);
+  });
+
+  it("drops components with no ideal render", () => {
+    const layoutOnly: CatalogManifest = {
+      ...manifest,
+      components: [
+        {
+          componentId: "Ghost",
+          greenlines: [],
+          redlines: [],
+          images: [image({ variant: "layout", path: "g/layout.png" })],
+        },
+      ],
+    };
+    expect(indexCatalog(layoutOnly).components).toEqual([]);
+  });
+});
+
+describe("selectCatalogImage", () => {
+  const base = "https://cdn.example/compose-m3";
+
+  it("resolves the first image matching every specified axis", () => {
+    const picked = selectCatalogImage(
+      manifest,
+      { componentId: "Button/Filled", variant: "default", dimensions: { theme: "dark", size: "compact" } },
+      base,
+    );
+    expect(picked?.image.path).toBe("b/default-dark-compact.png");
+    expect(picked?.url).toBe("https://cdn.example/compose-m3/b/default-dark-compact.png");
+  });
+
+  it("treats an omitted / blank axis as 'any' — first match wins", () => {
+    const picked = selectCatalogImage(manifest, { componentId: "Button/Filled" }, base);
+    expect(picked?.image.path).toBe("b/default-light-compact.png");
+
+    const blank = selectCatalogImage(
+      manifest,
+      { componentId: "Button/Filled", variant: "", dimensions: { theme: "", size: "medium" } },
+      base,
+    );
+    expect(blank?.image.path).toBe("b/default-light-medium.png");
+  });
+
+  it("matches a prop-axis dimension", () => {
+    const picked = selectCatalogImage(
+      manifest,
+      { componentId: "Button/Filled", dimensions: { "prop:content": "icon+label" } },
+      base,
+    );
+    expect(picked?.image.path).toBe("b/iconlabel-light-compact.png");
+  });
+
+  it("returns undefined for an unknown component or an impossible combination", () => {
+    expect(selectCatalogImage(manifest, { componentId: "Nope" }, base)).toBeUndefined();
+    expect(
+      selectCatalogImage(
+        manifest,
+        { componentId: "Button/Filled", variant: "pressed", dimensions: { theme: "dark" } },
+        base,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("never selects a layout image (ideal-only)", () => {
+    const picked = selectCatalogImage(manifest, { componentId: "Button/Filled" }, base);
+    expect(picked?.image.variant).toBe("ideal");
+  });
+});
+
+describe("selectCatalogWireframe", () => {
+  it("resolves the wireframe URL when present, else undefined", () => {
+    expect(selectCatalogWireframe(manifest, "Button/Filled", "https://cdn.example/compose-m3")).toBe(
+      "https://cdn.example/compose-m3/wireframes/button-filled.svg",
+    );
+    expect(selectCatalogWireframe(manifest, "Switch/On", "https://cdn.example/compose-m3")).toBeUndefined();
+    expect(selectCatalogWireframe(manifest, "Nope", "https://cdn.example/compose-m3")).toBeUndefined();
+  });
+});

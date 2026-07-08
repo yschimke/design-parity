@@ -1,0 +1,216 @@
+/**
+ * The pure **single-component picker** — the model behind "insert one component"
+ * instead of dumping the whole catalog.
+ *
+ * `buildImportPlan` (plan.ts) is the bulk flow: every component onto a sheet.
+ * This module is the selective flow: index a {@link CatalogManifest} into the
+ * choices a designer picks from — a component, an optional **variant** (the
+ * component's own state axis), and optional **dimensions** (the presentation
+ * axes the catalog actually carries: theme, size, and any extra `props` axis
+ * such as content / locale / font-scale) — then resolve a concrete selection to
+ * the single image (or wireframe) to place.
+ *
+ * Pure: no `figma`, no `fetch`. The UI reflects {@link CatalogIndex} into
+ * dropdowns and hands a {@link PickSelection} back to {@link selectCatalogImage};
+ * `insert.ts` places the resolved bytes. Which axes a given catalog exposes is
+ * data-driven — a catalog rendered with only light/dark yields just a Theme
+ * dimension; one rendered across breakpoints/locales yields those too — so the
+ * plugin "picks useful dimensions for each catalog" without hardcoding a system.
+ */
+import type {
+  CatalogManifest,
+  CatalogManifestComponent,
+  CatalogManifestImage,
+} from "@design-parity/catalog-export";
+
+import { resolveImageUrl } from "./plan.js";
+
+/** The prefix that tags a dimension key derived from an image `props` axis. */
+export const PROP_AXIS_PREFIX = "prop:";
+
+/**
+ * One pickable axis: its stable key, a human label for the dropdown, and the
+ * distinct values found across the component's `ideal` images (first-seen order,
+ * so the picker is deterministic and matches the catalog's declaration order).
+ */
+export interface PickAxis {
+  /** `"state"` for the variant axis; `"theme"` / `"size"`; or `prop:<name>`. */
+  key: string;
+  /** Human label for the control (e.g. `"Variant"`, `"Theme"`, `"Content"`). */
+  label: string;
+  /** Distinct values in first-seen order. */
+  values: string[];
+}
+
+/** One component a designer can insert, with the axes it can be narrowed by. */
+export interface PickComponent {
+  componentId: string;
+  group?: string;
+  caption?: string;
+  /**
+   * The component's own **variant** axis — its `state` values (`default`,
+   * `pressed`, `disabled`, …). Absent when the component has a single state.
+   */
+  variant?: PickAxis;
+  /**
+   * The presentation **dimensions** the catalog carries for this component —
+   * theme, size, and any extra `props` axis — each an optional narrower. Empty
+   * when the component renders in a single theme/size with no prop axes.
+   */
+  dimensions: PickAxis[];
+  /** Whether a wireframe SVG exists, so the UI can offer the SVG format. */
+  hasWireframe: boolean;
+}
+
+/** The catalog indexed for selective insertion — the picker's whole view model. */
+export interface CatalogIndex {
+  system: string;
+  title: string;
+  components: PickComponent[];
+}
+
+/**
+ * A resolved selection from the picker: the chosen component, an optional
+ * variant (state), and optional dimension values keyed by {@link PickAxis.key}.
+ * A blank / omitted axis means "any" — the first matching image is used.
+ */
+export interface PickSelection {
+  componentId: string;
+  /** Chosen `state`; omitted / blank ⇒ any state. */
+  variant?: string;
+  /** Chosen dimension values, keyed by axis key; blank entries are ignored. */
+  dimensions?: Record<string, string>;
+}
+
+/** A resolved image to place: the manifest entry plus its absolute URL. */
+export interface PickedImage {
+  image: CatalogManifestImage;
+  url: string;
+}
+
+/** Human label for an axis key (`prop:content` → `Content`, `theme` → `Theme`). */
+function axisLabel(key: string): string {
+  const name = key.startsWith(PROP_AXIS_PREFIX) ? key.slice(PROP_AXIS_PREFIX.length) : key;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** The value an image carries on a given axis key (undefined ⇒ not set). */
+function axisValue(image: CatalogManifestImage, key: string): string | undefined {
+  if (key === "state") return image.state;
+  if (key === "theme") return image.theme;
+  if (key === "size") return image.size;
+  if (key.startsWith(PROP_AXIS_PREFIX)) return image.props?.[key.slice(PROP_AXIS_PREFIX.length)];
+  return undefined;
+}
+
+/** Collect the distinct values for an axis across images, in first-seen order. */
+function distinctValues(images: CatalogManifestImage[], key: string): string[] {
+  const seen: string[] = [];
+  for (const image of images) {
+    const value = axisValue(image, key);
+    if (value !== undefined && !seen.includes(value)) seen.push(value);
+  }
+  return seen;
+}
+
+/**
+ * Whether an axis offers a real choice — more than one *effective* state. A
+ * `props` axis some images lack has an implicit "absent" state, so a single
+ * declared value (`content: icon+label` vs the label-only default) still counts;
+ * a fully-populated axis (theme, size) needs two declared values to be worth a
+ * dropdown.
+ */
+function isMeaningfulAxis(images: CatalogManifestImage[], key: string, values: string[]): boolean {
+  const someAbsent = images.some((image) => axisValue(image, key) === undefined);
+  return values.length + (someAbsent ? 1 : 0) > 1;
+}
+
+/** The `ideal` (shipping-render) images — the surface single-insert draws from. */
+function idealImages(component: CatalogManifestComponent): CatalogManifestImage[] {
+  return component.images.filter((image) => image.variant === "ideal");
+}
+
+/** Build the {@link PickComponent} for one manifest component (pure). */
+function indexComponent(component: CatalogManifestComponent): PickComponent {
+  const images = idealImages(component);
+
+  // The variant axis is `state`; only expose it when there's a real choice.
+  const states = distinctValues(images, "state");
+  const variant: PickAxis | undefined =
+    states.length > 1 ? { key: "state", label: "Variant", values: states } : undefined;
+
+  // Dimensions: theme, size, then every extra `props` axis the images carry.
+  // Preserve first-seen prop-key order so the UI is deterministic.
+  const propKeys: string[] = [];
+  for (const image of images) {
+    for (const key of Object.keys(image.props ?? {})) {
+      if (!propKeys.includes(key)) propKeys.push(key);
+    }
+  }
+  const dimensionKeys = ["theme", "size", ...propKeys.map((k) => `${PROP_AXIS_PREFIX}${k}`)];
+  const dimensions: PickAxis[] = [];
+  for (const key of dimensionKeys) {
+    const values = distinctValues(images, key);
+    if (isMeaningfulAxis(images, key, values)) dimensions.push({ key, label: axisLabel(key), values });
+  }
+
+  const out: PickComponent = {
+    componentId: component.componentId,
+    dimensions,
+    hasWireframe: component.wireframe !== undefined,
+  };
+  if (component.group !== undefined) out.group = component.group;
+  if (component.caption !== undefined) out.caption = component.caption;
+  if (variant) out.variant = variant;
+  return out;
+}
+
+/**
+ * Index a manifest into the picker's view model: one {@link PickComponent} per
+ * catalog component, each carrying the variant + dimension axes it can be
+ * narrowed by. Components with no `ideal` render are dropped (nothing to place).
+ */
+export function indexCatalog(manifest: CatalogManifest): CatalogIndex {
+  const components = manifest.components
+    .filter((component) => idealImages(component).length > 0)
+    .map(indexComponent);
+  return { system: manifest.system, title: manifest.title, components };
+}
+
+/**
+ * Resolve a {@link PickSelection} to the single `ideal` image to place: the
+ * first image matching every *specified* axis (variant + non-blank dimensions);
+ * unspecified axes are "any". Returns `undefined` when the component is unknown
+ * or nothing matches the requested combination.
+ */
+export function selectCatalogImage(
+  manifest: CatalogManifest,
+  selection: PickSelection,
+  baseUrl: string,
+): PickedImage | undefined {
+  const component = manifest.components.find((c) => c.componentId === selection.componentId);
+  if (!component) return undefined;
+
+  const constraints: [string, string][] = [];
+  if (selection.variant) constraints.push(["state", selection.variant]);
+  for (const [key, value] of Object.entries(selection.dimensions ?? {})) {
+    if (value) constraints.push([key, value]);
+  }
+
+  const image = idealImages(component).find((candidate) =>
+    constraints.every(([key, value]) => axisValue(candidate, key) === value),
+  );
+  if (!image) return undefined;
+  return { image, url: resolveImageUrl(baseUrl, image.path) };
+}
+
+/** The absolute URL of a component's wireframe SVG, or `undefined` when it has none. */
+export function selectCatalogWireframe(
+  manifest: CatalogManifest,
+  componentId: string,
+  baseUrl: string,
+): string | undefined {
+  const component = manifest.components.find((c) => c.componentId === componentId);
+  if (!component?.wireframe) return undefined;
+  return resolveImageUrl(baseUrl, component.wireframe);
+}

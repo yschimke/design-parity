@@ -47,6 +47,8 @@ core and the two runtime files stay thin:
 | Path | Realm | Role |
 | --- | --- | --- |
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
+| [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
+| [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` — place one picked component as a raster render or the wireframe vector, stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
@@ -124,13 +126,42 @@ That URL is the raw root of a published `design-artifacts/<system>` branch — t
 folder containing `catalog.json`. Do not append `/catalog.json`; the plugin does
 that itself.
 
-Pick the **Ideal render** (with a11y greenlines) or the **Layout wireframe**
-(with spacing redlines) variant, then Import. The plugin fetches the manifest,
-its DTCG token file, and every PNG for that variant, then lays out a
-`<system> — Catalog` page with the matching annotation layer and a variable
-collection (light/dark become Figma modes). Add your own live-preview host to
-the manifest's `networkAccess.allowedDomains` to import from
-`compose-preview serve` instead of GitHub.
+Press **Load catalog**. The plugin fetches the manifest (and its DTCG token
+file) and reveals two ways to bring the system onto the canvas — insert *one*
+component, or import the whole sheet. Add your own live-preview host to the
+manifest's `networkAccess.allowedDomains` to load from `compose-preview serve`
+instead of GitHub.
+
+### Insert one component (selective)
+
+Instead of dumping the entire catalog, pick exactly what you want:
+
+- **Component** — any component in the loaded catalog.
+- **Variant** *(optional)* — the component's own state axis (`default`,
+  `pressed`, `disabled`, …). Hidden when the component has a single state.
+- **Dimensions** *(optional)* — the presentation axes the catalog actually
+  carries for that component: **theme**, **size**, and any extra `props` axis
+  (e.g. **content** = `icon+label`). These are **data-driven per catalog** — a
+  system rendered only light/dark exposes just a Theme dimension; one rendered
+  across breakpoints/locales/font-scales exposes those too — so the picker only
+  ever offers combinations that exist. Any dimension left on **Any** is a
+  wildcard (the first matching render is used).
+- **Insert as** — **PNG** (the shipping raster render for the chosen
+  variant/dimensions) or **SVG** (the component's editable wireframe vector).
+  SVG is offered only when the catalog ships a wireframe for that component.
+
+**Insert component** places just that one node on the current page, stamped with
+its `componentId` (so it's identifiable) but with no refresh source — a catalog
+render is a static, published artifact.
+
+### Import the whole catalog (sticker sheet)
+
+**Or import the whole catalog** is the original bulk flow. Pick the **Ideal
+render** (with a11y greenlines) or the **Layout wireframe** (with spacing
+redlines) variant and the **Mode**, then Import. The plugin fetches every PNG for
+that variant and lays out a `<system> — Catalog` page with the matching
+annotation layer and a variable collection (light/dark become Figma modes),
+reconciling in place on re-import (see below).
 
 ### Re-import reconciles in place — identity, not position
 

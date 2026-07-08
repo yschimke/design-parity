@@ -8,6 +8,7 @@
  * exhaustive `PluginAPI` to the structural subset the builder needs.
  */
 import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
+import { placeCatalogPng, placeCatalogSvg, type InsertSize } from "../src/insert.js";
 import type { ParityDirection } from "../src/direction.js";
 import {
   placeLiveRender,
@@ -53,6 +54,26 @@ interface PlaceLiveSvgMessage {
   name?: string;
 }
 
+/** The UI posts this to insert one picked catalog component as a raster (PNG). */
+interface InsertPngMessage {
+  type: "insertPng";
+  bytes: Uint8Array;
+  /** The node name (component + chosen axes). */
+  name: string;
+  /** The catalog `componentId`, stamped for identity. */
+  componentId: string;
+  /** The render's pixel size, so the frame matches the image. */
+  size: InsertSize;
+}
+
+/** The UI posts this to insert one picked catalog component as a vector (wireframe SVG). */
+interface InsertSvgMessage {
+  type: "insertSvg";
+  svg: string;
+  name: string;
+  componentId: string;
+}
+
 /** The UI asks to refresh every live render in the current selection. */
 interface RefreshMessage {
   type: "refresh";
@@ -95,6 +116,8 @@ interface FillSlotMessage {
 
 type UiMessage =
   | ImportMessage
+  | InsertPngMessage
+  | InsertSvgMessage
   | PlaceLiveMessage
   | PlaceLiveSvgMessage
   | RefreshMessage
@@ -121,6 +144,37 @@ figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   if (msg.type === "cancel") {
     figma.closePlugin();
+    return;
+  }
+  if (msg.type === "insertPng") {
+    try {
+      const node = placeCatalogPng(figma as unknown as FigmaApi, msg.bytes, {
+        name: msg.name,
+        componentId: msg.componentId,
+        size: msg.size,
+      });
+      figma.ui.postMessage({ type: "inserted", name: node.name });
+      figma.notify(`Inserted “${node.name}”.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "insertError", message });
+      figma.notify(`Insert failed: ${message}`, { error: true });
+    }
+    return;
+  }
+  if (msg.type === "insertSvg") {
+    try {
+      const node = placeCatalogSvg(figma as unknown as FigmaApi, msg.svg, {
+        name: msg.name,
+        componentId: msg.componentId,
+      });
+      figma.ui.postMessage({ type: "inserted", name: node.name });
+      figma.notify(`Inserted “${node.name}” (SVG).`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "insertError", message });
+      figma.notify(`Insert failed: ${message}`, { error: true });
+    }
     return;
   }
   if (msg.type === "placeLive") {

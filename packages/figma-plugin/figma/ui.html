@@ -47,10 +47,10 @@
   <button class="tab" id="tab-editor" data-view="editor" role="tab" aria-selected="false">Override editor</button>
 </div>
 
-<!-- View 1: import a whole design-parity catalog (sticker sheet). -->
+<!-- View 1: browse a design-parity catalog — insert one component, or the whole sheet. -->
 <section id="view-catalog" class="view">
-  <h1>Import a design-parity catalog</h1>
-  <p class="hint">Paste the raw root of a published <code>design-artifacts/&lt;system&gt;</code> branch — the folder containing <code>catalog.json</code>.</p>
+  <h1>Insert from a design-parity catalog</h1>
+  <p class="hint">Paste the raw root of a published <code>design-artifacts/&lt;system&gt;</code> branch — the folder containing <code>catalog.json</code> — and load it.</p>
 
   <form id="form">
     <label for="base">Catalog base URL</label>
@@ -61,6 +61,41 @@
       value="https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3"
       placeholder="https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3"
     />
+    <div class="row">
+      <button type="submit">Load catalog</button>
+      <button id="cancel" type="button">Close</button>
+    </div>
+  </form>
+  <p id="status"></p>
+
+  <!-- Selective single-component insert (revealed once a catalog loads). -->
+  <section id="catalog-pick" hidden>
+    <p class="group-title">Insert a component</p>
+    <div class="field">
+      <label for="pick-component">Component</label>
+      <select id="pick-component"></select>
+    </div>
+    <p class="hint" id="pick-caption" style="margin:4px 0 0"></p>
+    <div class="field" id="pick-variant-field" hidden>
+      <label for="pick-variant">Variant <span style="font-weight:400;opacity:0.5">(optional)</span></label>
+      <select id="pick-variant"></select>
+    </div>
+    <div id="pick-dimensions"></div>
+    <div class="field">
+      <label for="pick-format">Insert as</label>
+      <select id="pick-format">
+        <option value="png">PNG — raster render</option>
+        <option value="svg">SVG — editable wireframe vector</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="insert" type="button" class="primary">Insert component</button>
+    </div>
+  </section>
+
+  <!-- Whole-catalog import (the reconcile / design-map flow). -->
+  <section id="catalog-bulk" hidden>
+    <p class="group-title">Or import the whole catalog</p>
     <div class="field">
       <label for="variant">Variant</label>
       <select id="variant" name="variant">
@@ -77,20 +112,18 @@
       </select>
     </div>
     <div class="row">
-      <button type="submit">Import</button>
+      <button id="import-all" type="button" class="secondary">Import whole catalog</button>
       <button id="confirm" type="button" hidden>Confirm write</button>
-      <button id="cancel" type="button">Close</button>
     </div>
-  </form>
-  <p id="status"></p>
 
-  <section id="result" hidden>
-    <div class="head">
-      <label for="designmap">Correspondence — <code>design-map.json</code></label>
-      <button id="copy" type="button">Copy</button>
-    </div>
-    <textarea id="designmap" readonly spellcheck="false"></textarea>
-    <p class="hint" id="result-hint" style="margin:4px 0 0">Commit this to a consumer repo so the resolver maps these code components to the imported frames.</p>
+    <section id="result" hidden>
+      <div class="head">
+        <label for="designmap">Correspondence — <code>design-map.json</code></label>
+        <button id="copy" type="button">Copy</button>
+      </div>
+      <textarea id="designmap" readonly spellcheck="false"></textarea>
+      <p class="hint" id="result-hint" style="margin:4px 0 0">Commit this to a consumer repo so the resolver maps these code components to the imported frames.</p>
+    </section>
   </section>
 </section>
 
