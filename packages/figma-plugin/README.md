@@ -134,6 +134,8 @@ instead of GitHub.
 
 ### Insert one component (selective)
 
+![The single-component picker — component, variant, dimensions, and PNG/SVG format](docs/ui-pick-component.png)
+
 Instead of dumping the entire catalog, pick exactly what you want:
 
 - **Component** — any component in the loaded catalog.
@@ -146,6 +148,8 @@ Instead of dumping the entire catalog, pick exactly what you want:
   across breakpoints/locales/font-scales exposes those too — so the picker only
   ever offers combinations that exist. Any dimension left on **Any** is a
   wildcard (the first matching render is used).
+
+  ![Switch/On exposes only a Theme dimension — no Variant/Size/Content, because those axes are single-valued for it](docs/ui-pick-switch.png)
 - **Insert as** — **PNG** (the shipping raster render for the chosen
   variant/dimensions) or **SVG** (the component's editable wireframe vector).
   SVG is offered only when the catalog ships a wireframe for that component.
