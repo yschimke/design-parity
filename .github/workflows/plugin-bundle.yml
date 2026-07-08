@@ -1,0 +1,74 @@
+name: figma-plugin-bundle
+
+# Builds the Figma plugin into a self-contained, importable bundle so people can
+# install it in their local Figma without cloning the repo or running a build:
+#
+# - every push / PR touching the plugin uploads a `figma-plugin` workflow
+#   artifact (a zip of `dist/plugin/`);
+# - each published GitHub release also gets a `design-parity-figma-plugin.zip`
+#   asset attached.
+#
+# Install: download → unzip → Figma desktop → Plugins → Development →
+# Import plugin from manifest… → pick the unzipped `manifest.json`. No
+# Community publish / registration needed for a locally imported plugin.
+on:
+  push:
+    branches: [main]
+    paths: [packages/figma-plugin/**, .github/workflows/plugin-bundle.yml]
+  pull_request:
+    paths: [packages/figma-plugin/**, .github/workflows/plugin-bundle.yml]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Build the workspace deps to dist (the plugin bundle resolves
+      # @design-parity/* from there), then typecheck the figma/ glue and bundle.
+      - run: npm run build
+      - name: Typecheck the Figma glue
+        run: npx tsc -p packages/figma-plugin/figma/tsconfig.json
+      - name: Bundle the plugin
+        run: npm run build:plugin --workspace @design-parity/figma-plugin
+      - name: Upload importable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: figma-plugin
+          path: packages/figma-plugin/figma/dist/plugin
+          if-no-files-found: error
+
+  attach-to-release:
+    needs: bundle
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload the release asset
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run build:plugin --workspace @design-parity/figma-plugin
+      - name: Zip and attach the bundle to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          cd packages/figma-plugin/figma/dist/plugin
+          zip -r "$RUNNER_TEMP/design-parity-figma-plugin.zip" manifest.json code.js ui.html
+          gh release upload "$TAG" "$RUNNER_TEMP/design-parity-figma-plugin.zip" \
+            --clobber --repo "$GITHUB_REPOSITORY"

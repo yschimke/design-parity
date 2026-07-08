@@ -37,6 +37,29 @@ Figma plugin is built-and-uploaded, so it carries no npm version tag and is
 excluded from the release-please publish lane. `"version"` tracks the monorepo
 for coherence only.
 
+## Install in your local Figma
+
+You don't need the repo, `npm`, or a Community listing to run this — a
+locally imported plugin needs no plugin `id`, no publish, and no review. Grab
+the prebuilt, self-contained bundle and import it:
+
+1. **Download the bundle.** Either the `design-parity-figma-plugin.zip` asset on
+   the [latest release](https://github.com/yschimke/design-parity/releases/latest),
+   or the `figma-plugin` artifact from a recent
+   [`figma-plugin-bundle`](https://github.com/yschimke/design-parity/actions/workflows/plugin-bundle.yml)
+   run. Unzip it — you get a folder with `manifest.json`, `code.js`, and
+   `ui.html`.
+2. **Import it.** In the Figma **desktop** app: *Plugins → Development → Import
+   plugin from manifest…* and pick the unzipped `manifest.json`.
+3. **Run it.** *Plugins → Development → design-parity — Catalog Import.*
+
+That's it — it stays a private development plugin on your machine. (Importing
+from a manifest is desktop-only; the browser app can't load local plugins.)
+
+Publishing to the **Figma Community** is a separate, manual step — see
+[Publishing](#publishing-to-the-figma-community) — and *does* require
+registration.
+
 ## Layout — two realms, one testable core
 
 A Figma plugin runs in two sandboxes: a **main thread** with the `figma` scene
@@ -80,16 +103,21 @@ npm run test    --workspace @design-parity/figma-plugin   # vitest: planner, dtc
 npm run build:plugin --workspace @design-parity/figma-plugin  # esbuild: figma/ → figma/dist/plugin/
 ```
 
-`build:plugin` emits `figma/dist/plugin/code.js` and a self-contained
-`figma/dist/plugin/ui.html`.
+`build:plugin` emits `figma/dist/plugin/` as a **self-contained, importable
+bundle**: `code.js`, a self-contained `ui.html`, and a flattened `manifest.json`
+(entrypoints rewritten to `./code.js` / `./ui.html`). That's exactly what the
+[`figma-plugin-bundle`](../../.github/workflows/plugin-bundle.yml) workflow zips
+and ships (see [Install in your local Figma](#install-in-your-local-figma)).
 
-To load the development plugin in Figma, import this local manifest:
+To load it from the source tree, import either manifest in the Figma **desktop**
+app (*Plugins → Development → Import plugin from manifest…*):
 
 ```text
-packages/figma-plugin/figma/manifest.json
+packages/figma-plugin/figma/manifest.json            # dev entry (points at ./dist/plugin)
+packages/figma-plugin/figma/dist/plugin/manifest.json # the flattened bundle
 ```
 
-Figma path: *Plugins → Development → Import plugin from manifest…*.
+Both work after a build; the dev entry is the one to keep loaded while iterating.
 
 ## Testing before Figma
 
@@ -249,6 +277,31 @@ npm run preview --workspace @design-parity/figma-plugin   # rewrites the SVGs
 then re-rasterize the PNGs (the generator prints the `chromium --screenshot`
 command). Only the deterministic SVGs are gated; the PNGs are Chrome-rendered
 and refreshed alongside by hand.
+
+## Publishing to the Figma Community
+
+Local install (above) covers everyone who just wants to *run* the plugin.
+Listing it in the **Figma Community** is a separate, one-time-per-account manual
+step — Figma has **no publish API or CLI**, so this can't be automated in CI, and
+it **does require registration**:
+
+1. **Register (get a plugin `id`).** The source `manifest.json` has no `id` — a
+   Community plugin needs one, and only Figma can mint it. Import the manifest in
+   the desktop app, then *Publish*; Figma generates the `id` (or shows a
+   **Generate ID** button on an "Invalid ID" error). **Commit that `id` into
+   [`figma/manifest.json`](figma/manifest.json)** so every future build carries
+   it — updates are matched to the listing by `id`.
+2. **Publish.** *Plugins → Manage plugins → (this plugin) → Publish*, or right on
+   the manifest. Fill in the listing (name, description, icon, cover art) and
+   the data-security self-assessment. The **first** submission goes through
+   Figma's **review**; you're emailed the decision.
+3. **Update.** After approval, publishing new versions is immediate — no
+   re-review. Build the bundle (`npm run build:plugin`) and *Publish new
+   version* against the same `manifest.json`.
+
+Because publishing is human-in-Figma, CI's role is only to keep a reproducible,
+reviewed bundle ready to upload — see the
+[`figma-plugin-bundle`](../../.github/workflows/plugin-bundle.yml) workflow.
 
 ## Roadmap
 

@@ -5,6 +5,12 @@
  * - `figma/code.ts`  → `figma/dist/plugin/code.js`   (main thread)
  * - `figma/ui.ts`    → inlined into `figma/dist/plugin/ui.html` (UI iframe)
  *
+ * It also writes a flattened `figma/dist/plugin/manifest.json` (entrypoints
+ * `./code.js` / `./ui.html`) so `dist/plugin/` is a *self-contained* bundle: a
+ * user can grab that one folder — no repo, no `npm`, no build — and Import
+ * plugin from manifest… straight into their local Figma. (The source
+ * `figma/manifest.json` stays the dev entrypoint, pointing at `./dist/plugin`.)
+ *
  * Run after `tsc --build` so `@design-parity/*` deps resolve to their `dist`.
  * A tiny resolve shim maps NodeNext-style `./x.js` imports to their `.ts`
  * source so the glue can import the planner from `../src` directly.
@@ -47,4 +53,13 @@ await writeFile(
   `${OUT}/ui.html`,
   `${html}\n<script>\n${ui.outputFiles[0].text}\n</script>\n`,
 );
-console.log(`Wrote ${OUT}/code.js and ${OUT}/ui.html`);
+
+// Flatten the manifest so the emitted folder stands alone: entrypoints point at
+// their siblings, not back through `dist/plugin`. Everything else (network
+// allowlist, editorType, …) is carried through unchanged.
+const manifest = JSON.parse(await readFile("figma/manifest.json", "utf8"));
+await writeFile(
+  `${OUT}/manifest.json`,
+  JSON.stringify({ ...manifest, main: "./code.js", ui: "./ui.html" }, null, 2) + "\n",
+);
+console.log(`Wrote ${OUT}/{manifest.json,code.js,ui.html} — importable as-is`);
