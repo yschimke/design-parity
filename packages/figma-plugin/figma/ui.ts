@@ -15,6 +15,14 @@
  */
 import type { CatalogManifest } from "@design-parity/catalog-export";
 
+import {
+  indexCatalog,
+  selectCatalogImage,
+  selectCatalogWireframe,
+  type CatalogIndex,
+  type PickComponent,
+  type PickSelection,
+} from "../src/catalogPick.js";
 import { resolveDirection, type ParityDirection } from "../src/direction.js";
 import { readDtcgTokensLite } from "../src/dtcg.js";
 import { EDITOR_AXES, knobControls } from "../src/editor.js";
@@ -40,8 +48,30 @@ const result = document.getElementById("result") as HTMLElement;
 const designMapArea = document.getElementById("designmap") as HTMLTextAreaElement;
 const copyButton = document.getElementById("copy") as HTMLButtonElement;
 
+// Single-component picker controls.
+const catalogPickSection = document.getElementById("catalog-pick") as HTMLElement;
+const catalogBulkSection = document.getElementById("catalog-bulk") as HTMLElement;
+const componentSelect = document.getElementById("pick-component") as HTMLSelectElement;
+const pickCaption = document.getElementById("pick-caption") as HTMLParagraphElement;
+const pickVariantField = document.getElementById("pick-variant-field") as HTMLElement;
+const pickVariant = document.getElementById("pick-variant") as HTMLSelectElement;
+const pickDimensions = document.getElementById("pick-dimensions") as HTMLElement;
+const pickFormat = document.getElementById("pick-format") as HTMLSelectElement;
+const insertButton = document.getElementById("insert") as HTMLButtonElement;
+const importAllButton = document.getElementById("import-all") as HTMLButtonElement;
+
 /** The last resolved import, retained so a design-led confirm can re-send it. */
 let pending: { plan: ImportPlan; images: { path: string; bytes: Uint8Array }[]; direction: ParityDirection } | undefined;
+
+/** The loaded catalog: the base URL, its manifest + tokens, and the picker index. */
+let catalog:
+  | {
+      base: string;
+      manifest: CatalogManifest;
+      themeTokens?: ReturnType<typeof readDtcgTokensLite>;
+      index: CatalogIndex;
+    }
+  | undefined;
 
 function say(text: string): void {
   status.textContent = text;
@@ -74,6 +104,8 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
+// Step 1 — Load: fetch the catalog (+ tokens) and reveal the pickers. Nothing is
+// placed yet; the designer then either inserts one component or the whole sheet.
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const base = baseInput.value.trim().replace(/\/+$/, "");
@@ -93,6 +125,88 @@ form.addEventListener("submit", async (event) => {
       themeTokens = readDtcgTokensLite(doc);
     }
 
+    const index = indexCatalog(manifest);
+    if (index.components.length === 0) {
+      say("Catalog has no importable renders.");
+      catalogPickSection.hidden = true;
+      catalogBulkSection.hidden = true;
+      return;
+    }
+
+    catalog = { base, manifest, themeTokens, index };
+    populateComponents(index);
+    confirmButton.hidden = true;
+    result.hidden = true;
+    catalogPickSection.hidden = false;
+    catalogBulkSection.hidden = false;
+    say(`Loaded ${index.title} — ${index.components.length} component${index.components.length === 1 ? "" : "s"}. Pick one to insert, or import the whole catalog.`);
+  } catch (err) {
+    say(err instanceof Error ? err.message : String(err));
+  }
+});
+
+// Step 2a — Insert one component: resolve the picked variant + dimensions to a
+// single render (PNG) or the wireframe (SVG), fetch it, and post it to place.
+insertButton.addEventListener("click", async () => {
+  if (!catalog) return;
+  const component = selectedComponent();
+  if (!component) return;
+
+  const selection: PickSelection = {
+    componentId: component.componentId,
+    dimensions: collectDimensions(),
+  };
+  if (component.variant && pickVariant.value) selection.variant = pickVariant.value;
+
+  const name = insertName(component, selection);
+  try {
+    if (pickFormat.value === "svg") {
+      const url = selectCatalogWireframe(catalog.manifest, component.componentId, catalog.base);
+      if (!url) {
+        say("This component has no wireframe SVG — insert it as PNG instead.");
+        return;
+      }
+      say(`Fetching ${name} (SVG)…`);
+      const svg = await fetchText(url);
+      parent.postMessage(
+        { pluginMessage: { type: "insertSvg", svg, name, componentId: component.componentId } },
+        "*",
+      );
+    } else {
+      const picked = selectCatalogImage(catalog.manifest, selection, catalog.base);
+      if (!picked) {
+        say("No render matches that combination — adjust the variant or dimensions.");
+        return;
+      }
+      say(`Fetching ${name}…`);
+      const bytes = await fetchBytes(picked.url);
+      parent.postMessage(
+        {
+          pluginMessage: {
+            type: "insertPng",
+            bytes,
+            name,
+            componentId: component.componentId,
+            size: { width: picked.image.width, height: picked.image.height },
+          },
+        },
+        "*",
+      );
+    }
+  } catch (err) {
+    say(err instanceof Error ? err.message : String(err));
+  }
+});
+
+// Step 2b — Import the whole catalog: the original sticker-sheet flow, now run
+// from the already-loaded manifest (the reconcile / design-map path).
+importAllButton.addEventListener("click", () => void importWholeCatalog());
+
+async function importWholeCatalog(): Promise<void> {
+  if (!catalog) return;
+  const { base, manifest, themeTokens } = catalog;
+
+  try {
     const variant = variantInput.value === "layout" ? "layout" : "ideal";
     const plan = buildImportPlan(manifest, { baseUrl: base, themeTokens, variant });
     if (plan.imageCount === 0) {
@@ -136,7 +250,96 @@ form.addEventListener("submit", async (event) => {
   } catch (err) {
     say(err instanceof Error ? err.message : String(err));
   }
-});
+}
+
+/** The {@link PickComponent} currently chosen in the component dropdown. */
+function selectedComponent(): PickComponent | undefined {
+  return catalog?.index.components.find((c) => c.componentId === componentSelect.value);
+}
+
+/** Fill the component dropdown and render the first component's controls. */
+function populateComponents(index: CatalogIndex): void {
+  componentSelect.replaceChildren();
+  for (const component of index.components) {
+    const option = document.createElement("option");
+    option.value = component.componentId;
+    option.textContent = component.group
+      ? `${component.group} / ${component.componentId}`
+      : component.componentId;
+    componentSelect.append(option);
+  }
+  renderPickControls();
+}
+
+componentSelect.addEventListener("change", renderPickControls);
+
+/** Render the variant + dimension controls and format options for the selection. */
+function renderPickControls(): void {
+  const component = selectedComponent();
+  pickCaption.textContent = component?.caption ?? "";
+
+  // Variant (the component's state axis) — hidden when there's no choice.
+  if (component?.variant) {
+    fillSelect(pickVariant, component.variant.values, "Default");
+    pickVariantField.hidden = false;
+  } else {
+    pickVariantField.hidden = true;
+  }
+
+  // One dimension select per axis the catalog carries for this component.
+  pickDimensions.replaceChildren();
+  for (const axis of component?.dimensions ?? []) {
+    const field = document.createElement("div");
+    field.className = "field";
+    const label = document.createElement("label");
+    const id = `dim-${axis.key}`;
+    label.htmlFor = id;
+    label.innerHTML = `${axis.label} <span style="font-weight:400;opacity:0.5">(optional)</span>`;
+    const select = document.createElement("select");
+    select.id = id;
+    select.dataset.key = axis.key;
+    fillSelect(select, axis.values, "Any");
+    field.append(label, select);
+    pickDimensions.append(field);
+  }
+
+  // SVG is the wireframe vector — only offered when the component ships one.
+  const svgOption = pickFormat.querySelector('option[value="svg"]') as HTMLOptionElement | null;
+  if (svgOption) svgOption.disabled = !component?.hasWireframe;
+  if (!component?.hasWireframe && pickFormat.value === "svg") pickFormat.value = "png";
+}
+
+/** Populate a select with an "any/default" blank option followed by the values. */
+function fillSelect(select: HTMLSelectElement, values: string[], blankLabel: string): void {
+  select.replaceChildren();
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = blankLabel;
+  select.append(blank);
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+}
+
+/** Read the chosen dimension values (blank entries dropped by the resolver). */
+function collectDimensions(): Record<string, string> {
+  const dimensions: Record<string, string> = {};
+  for (const select of Array.from(pickDimensions.querySelectorAll<HTMLSelectElement>("select[data-key]"))) {
+    if (select.value) dimensions[select.dataset.key!] = select.value;
+  }
+  return dimensions;
+}
+
+/** A layer name for an inserted component: id · variant · each chosen dimension. */
+function insertName(component: PickComponent, selection: PickSelection): string {
+  const parts = [component.componentId];
+  if (selection.variant) parts.push(selection.variant);
+  for (const value of Object.values(selection.dimensions ?? {})) parts.push(value);
+  return parts.join(" · ");
+}
 
 confirmButton.addEventListener("click", () => {
   if (!pending) return;
@@ -177,6 +380,8 @@ window.onmessage = (event: MessageEvent) => {
     }
   }
   if (msg.type === "error") say(`Import failed: ${msg.message}`);
+  if (msg.type === "inserted") say(`Inserted “${msg.name}”. Pick another, or import the whole catalog.`);
+  if (msg.type === "insertError") say(`Insert failed: ${msg.message}`);
   if (msg.type === "livePlaced") {
     editorSay(`Placed “${msg.name}”. Edit the knobs and place again for another variant.`);
   }

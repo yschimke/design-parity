@@ -86,6 +86,26 @@ export {
   SLOT_CONTAINER_ROLE,
 } from "./structure.js";
 export type { PlacedSlot } from "./structure.js";
+export {
+  indexCatalog,
+  selectCatalogImage,
+  selectCatalogWireframe,
+  PROP_AXIS_PREFIX,
+} from "./catalogPick.js";
+export type {
+  CatalogIndex,
+  PickComponent,
+  PickAxis,
+  PickSelection,
+  PickedImage,
+} from "./catalogPick.js";
+export {
+  placeCatalogPng,
+  placeCatalogSvg,
+  isCatalogInsert,
+  INSERT_ROLE,
+} from "./insert.js";
+export type { InsertOptions, InsertPngOptions, InsertSize } from "./insert.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
