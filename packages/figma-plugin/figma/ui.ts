@@ -16,6 +16,7 @@
 import type { CatalogManifest } from "@design-parity/catalog-export";
 
 import {
+  componentSetCells,
   indexCatalog,
   selectCatalogImage,
   selectCatalogWireframe,
@@ -84,6 +85,7 @@ const pickVariant = document.getElementById("pick-variant") as HTMLSelectElement
 const pickDimensions = document.getElementById("pick-dimensions") as HTMLElement;
 const pickFormat = document.getElementById("pick-format") as HTMLSelectElement;
 const insertButton = document.getElementById("insert") as HTMLButtonElement;
+const insertSetButton = document.getElementById("insert-set") as HTMLButtonElement;
 const importAllButton = document.getElementById("import-all") as HTMLButtonElement;
 
 /** The catalog registry (built-ins + custom + last pick). Seeded on startup from
@@ -293,6 +295,43 @@ insertButton.addEventListener("click", async () => {
         "*",
       );
     }
+  } catch (err) {
+    say(err instanceof Error ? err.message : String(err));
+  }
+});
+
+// Step 2a′ — Insert every variant of the picked component as one native Figma
+// component set (the reusable library form). Ignores the variant/dimension
+// narrowing — the set carries all of the component's ideal renders.
+insertSetButton.addEventListener("click", async () => {
+  if (!catalog) return;
+  const component = selectedComponent();
+  if (!component) return;
+
+  const cells = componentSetCells(catalog.manifest, component.componentId, catalog.base);
+  if (cells.length === 0) {
+    say("This component has no renders to place.");
+    return;
+  }
+
+  try {
+    const fetched: { name: string; bytes: Uint8Array; width: number; height: number }[] = [];
+    let done = 0;
+    for (const cell of cells) {
+      say(`Fetching ${component.componentId} variants… ${++done}/${cells.length}`);
+      fetched.push({ name: cell.name, bytes: await fetchBytes(cell.url), width: cell.width, height: cell.height });
+    }
+    parent.postMessage(
+      {
+        pluginMessage: {
+          type: "insertComponentSet",
+          componentId: component.componentId,
+          name: component.componentId,
+          cells: fetched,
+        },
+      },
+      "*",
+    );
   } catch (err) {
     say(err instanceof Error ? err.message : String(err));
   }

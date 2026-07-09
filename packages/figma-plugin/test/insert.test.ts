@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { INSERT_ROLE, isCatalogInsert, placeCatalogPng, placeCatalogSvg } from "../src/insert.js";
+import {
+  INSERT_ROLE,
+  isCatalogInsert,
+  placeCatalogComponentSet,
+  placeCatalogPng,
+  placeCatalogSvg,
+} from "../src/insert.js";
 import { STAMP } from "../src/scene.js";
 import { createFakeFigma, type FakeNode } from "./fakeFigma.js";
 
@@ -47,6 +53,56 @@ describe("placeCatalogPng", () => {
     const fake = paged();
     const plain = fake.figma.createFrame();
     expect(isCatalogInsert(plain)).toBe(false);
+  });
+});
+
+describe("placeCatalogComponentSet", () => {
+  const cells = [
+    { name: "state=default, theme=light", bytes: new Uint8Array([1]), width: 200, height: 72 },
+    { name: "state=default, theme=dark", bytes: new Uint8Array([2]), width: 200, height: 72 },
+    { name: "state=pressed, theme=light", bytes: new Uint8Array([3]), width: 200, height: 72 },
+  ];
+
+  it("builds a stamped component set with one variant per cell", () => {
+    const fake = paged();
+    const set = placeCatalogComponentSet(fake.figma, { componentId: "Button/Filled", cells });
+
+    expect(set.name).toBe("Button/Filled");
+    expect(isCatalogInsert(set)).toBe(true);
+    expect(set.getSharedPluginData(STAMP, "componentId")).toBe("Button/Filled");
+    expect((set as FakeNode).kind).toBe("component-set");
+
+    const variants = (set as FakeNode).children;
+    expect(variants).toHaveLength(3);
+    expect(variants.map((v) => v.name)).toEqual([
+      "state=default, theme=light",
+      "state=default, theme=dark",
+      "state=pressed, theme=light",
+    ]);
+    expect(variants.every((v) => v.kind === "component")).toBe(true);
+    expect(variants[0]!.fills).toEqual([{ type: "IMAGE", scaleMode: "FILL", imageHash: "img0" }]);
+    expect((variants[0] as FakeNode).width).toBe(200);
+
+    // Parented on the current page and framed in the viewport.
+    expect((fake.figma.currentPage as FakeNode).children).toContain(set);
+    expect(fake.state.scrolledInto.at(-1)).toEqual([set]);
+  });
+
+  it("names from componentId fallback and places a single-variant set", () => {
+    const fake = paged();
+    const set = placeCatalogComponentSet(fake.figma, {
+      name: "Switch",
+      cells: [cells[0]!],
+    });
+    expect(set.name).toBe("Switch");
+    expect((set as FakeNode).children).toHaveLength(1);
+  });
+
+  it("throws when there are no cells to place", () => {
+    const fake = paged();
+    expect(() => placeCatalogComponentSet(fake.figma, { componentId: "X", cells: [] })).toThrow(
+      /no renders/i,
+    );
   });
 });
 

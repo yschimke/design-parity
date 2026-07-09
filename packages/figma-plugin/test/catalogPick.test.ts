@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CatalogManifest, CatalogManifestImage } from "@design-parity/catalog-export";
 
 import {
+  componentSetCells,
   indexCatalog,
   selectCatalogImage,
   selectCatalogWireframe,
@@ -153,6 +154,35 @@ describe("selectCatalogImage", () => {
   it("never selects a layout image (ideal-only)", () => {
     const picked = selectCatalogImage(manifest, { componentId: "Button/Filled" }, base);
     expect(picked?.image.variant).toBe("ideal");
+  });
+});
+
+describe("componentSetCells", () => {
+  const base = "https://cdn.example/compose-m3";
+
+  it("returns one named cell per ideal render, ideal-only, with resolved URLs", () => {
+    const cells = componentSetCells(manifest, "Button/Filled", base);
+    // Five ideal images (the layout render is excluded).
+    expect(cells).toHaveLength(5);
+    expect(cells.every((c) => !c.path.includes("layout"))).toBe(true);
+    expect(cells[0]).toEqual({
+      path: "b/default-light-compact.png",
+      url: "https://cdn.example/compose-m3/b/default-light-compact.png",
+      name: "state=default, theme=light, size=compact",
+      width: 200,
+      height: 72,
+    });
+    // The prop-axis cell names its extra axis, sorted after state/theme/size.
+    expect(cells.find((c) => c.path.includes("iconlabel"))!.name).toBe(
+      "state=default, theme=light, size=compact, content=icon+label",
+    );
+  });
+
+  it("names a single-axis component minimally and returns [] for unknown ids", () => {
+    expect(componentSetCells(manifest, "Switch/On", base).map((c) => c.name)).toEqual([
+      "state=on, theme=light",
+    ]);
+    expect(componentSetCells(manifest, "Nope", base)).toEqual([]);
   });
 });
 

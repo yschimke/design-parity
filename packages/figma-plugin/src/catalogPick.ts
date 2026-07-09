@@ -214,3 +214,51 @@ export function selectCatalogWireframe(
   if (!component?.wireframe) return undefined;
   return resolveImageUrl(baseUrl, component.wireframe);
 }
+
+/** One variant cell of a component set: the render plus its Figma variant-property name. */
+export interface ComponentSetCell {
+  /** Bundle-relative source path (for dedup / diagnostics). */
+  path: string;
+  /** Absolute URL the UI fetches the PNG bytes from. */
+  url: string;
+  /** Figma variant-property string, e.g. `state=default, theme=light, size=compact`. */
+  name: string;
+  width: number;
+  height: number;
+}
+
+/** The Figma variant-property name for a manifest image (mirrors `scene.ts` `variantName`). */
+function variantPropsName(image: CatalogManifestImage): string {
+  const parts = [`state=${image.state ?? "default"}`];
+  if (image.theme) parts.push(`theme=${image.theme}`);
+  if (image.size) parts.push(`size=${image.size}`);
+  // Extra axes (e.g. content=icon+label), sorted for a stable property order.
+  for (const [key, value] of Object.entries(image.props ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+    parts.push(`${key}=${value}`);
+  }
+  return parts.join(", ");
+}
+
+/**
+ * The cells of a native Figma **component set** for one component: every `ideal`
+ * render as a `{ path, url, name, width, height }`, `name` being its
+ * variant-property string. Empty when the component is unknown or carries no
+ * ideal render. The whole-catalog Components page builds the same set per
+ * component (`scene.ts` `renderComponentSet`); this exposes it for a single-
+ * component insert without importing the whole catalog.
+ */
+export function componentSetCells(
+  manifest: CatalogManifest,
+  componentId: string,
+  baseUrl: string,
+): ComponentSetCell[] {
+  const component = manifest.components.find((c) => c.componentId === componentId);
+  if (!component) return [];
+  return idealImages(component).map((image) => ({
+    path: image.path,
+    url: resolveImageUrl(baseUrl, image.path),
+    name: variantPropsName(image),
+    width: image.width,
+    height: image.height,
+  }));
+}
