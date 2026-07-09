@@ -74,6 +74,18 @@ interface InsertSvgMessage {
   componentId: string;
 }
 
+/** On startup the UI asks for the persisted catalog registry (custom + last pick). */
+interface RequestRegistryMessage {
+  type: "requestRegistry";
+}
+
+/** The UI persists the catalog registry (custom entries + last selection). */
+interface SaveRegistryMessage {
+  type: "saveRegistry";
+  /** The `StoredRegistry` blob — an opaque payload the main thread just stores. */
+  stored: unknown;
+}
+
 /** The UI asks to refresh every live render in the current selection. */
 interface RefreshMessage {
   type: "refresh";
@@ -118,6 +130,8 @@ type UiMessage =
   | ImportMessage
   | InsertPngMessage
   | InsertSvgMessage
+  | RequestRegistryMessage
+  | SaveRegistryMessage
   | PlaceLiveMessage
   | PlaceLiveSvgMessage
   | RefreshMessage
@@ -139,11 +153,23 @@ const refreshTargets = new Map<string, FigmaNode>();
 // hop so a `fillSlot` fills the right one.
 const slotTargets = new Map<string, FigmaNode>();
 
+/** clientStorage key the catalog registry (custom entries + last pick) persists under. */
+const REGISTRY_KEY = "design-parity/catalog-registry";
+
 figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   if (msg.type === "cancel") {
     figma.closePlugin();
+    return;
+  }
+  if (msg.type === "requestRegistry") {
+    const stored = await figma.clientStorage.getAsync(REGISTRY_KEY);
+    figma.ui.postMessage({ type: "registry", stored: stored ?? undefined });
+    return;
+  }
+  if (msg.type === "saveRegistry") {
+    await figma.clientStorage.setAsync(REGISTRY_KEY, msg.stored);
     return;
   }
   if (msg.type === "insertPng") {

@@ -115,22 +115,28 @@ locally (`npx serve ./catalog`) and add `"http://localhost:*"` to the manifest's
 
 ## Using it
 
-Run the plugin. The **Catalog base URL** is pre-filled with the default Compose
-Material 3 catalog:
+![The catalog dropdown — pick a registered catalog, or register your own](docs/ui-catalog-registry.png)
 
-```text
-https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3
-```
+Run the plugin and pick a catalog from the **Catalog** dropdown. Three are built
+in — **Compose Material 3**, **RemoteCompose Material 3**, and **Wear Material
+3** — each pointing at its published `design-artifacts/<system>` branch. Your
+last pick is remembered across sessions (persisted in `figma.clientStorage`), so
+the dropdown re-opens on the catalog you used last.
 
-That URL is the raw root of a published `design-artifacts/<system>` branch — the
-folder containing `catalog.json`. Do not append `/catalog.json`; the plugin does
-that itself.
+### Register your own catalog
+
+Press **＋** to register another catalog: give it a name and the raw root of its
+published bundle (the folder containing `catalog.json` — do *not* append
+`/catalog.json`; the plugin does that itself). It's added to the dropdown,
+selected, and persisted; the **🗑** button removes a custom catalog (the built-ins
+can't be removed). Only hosts in the manifest's `networkAccess.allowedDomains`
+(`raw.githubusercontent.com` and the `preview.coo.ee` demo by default) can be
+fetched — add your own live-preview host there to register a `compose-preview
+serve` catalog.
 
 Press **Load catalog**. The plugin fetches the manifest (and its DTCG token
 file) and reveals two ways to bring the system onto the canvas — insert *one*
-component, or import the whole sheet. Add your own live-preview host to the
-manifest's `networkAccess.allowedDomains` to load from `compose-preview serve`
-instead of GitHub.
+component, or import the whole sheet.
 
 ### Insert one component (selective)
 

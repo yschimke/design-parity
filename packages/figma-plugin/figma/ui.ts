@@ -23,6 +23,16 @@ import {
   type PickComponent,
   type PickSelection,
 } from "../src/catalogPick.js";
+import {
+  dehydrateRegistry,
+  hydrateRegistry,
+  registerCatalog,
+  removeCatalog,
+  selectCatalog,
+  selectedCatalog,
+  type CatalogRegistry,
+  type StoredRegistry,
+} from "../src/catalogs.js";
 import { resolveDirection, type ParityDirection } from "../src/direction.js";
 import { readDtcgTokensLite } from "../src/dtcg.js";
 import { EDITOR_AXES, knobControls } from "../src/editor.js";
@@ -38,7 +48,14 @@ import { buildSlotsUrl, parseSlotsResponse } from "../src/slots.js";
 import { slotSizeAxes } from "../src/structure.js";
 
 const form = document.getElementById("form") as HTMLFormElement;
-const baseInput = document.getElementById("base") as HTMLInputElement;
+const catalogSelect = document.getElementById("catalog") as HTMLSelectElement;
+const toggleRegisterButton = document.getElementById("toggle-register") as HTMLButtonElement;
+const removeCatalogButton = document.getElementById("remove-catalog") as HTMLButtonElement;
+const registerPanel = document.getElementById("register") as HTMLElement;
+const regLabelInput = document.getElementById("reg-label") as HTMLInputElement;
+const regUrlInput = document.getElementById("reg-url") as HTMLInputElement;
+const regAddButton = document.getElementById("reg-add") as HTMLButtonElement;
+const regCancelButton = document.getElementById("reg-cancel") as HTMLButtonElement;
 const variantInput = document.getElementById("variant") as HTMLSelectElement;
 const modeInput = document.getElementById("mode") as HTMLSelectElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
@@ -59,6 +76,11 @@ const pickDimensions = document.getElementById("pick-dimensions") as HTMLElement
 const pickFormat = document.getElementById("pick-format") as HTMLSelectElement;
 const insertButton = document.getElementById("insert") as HTMLButtonElement;
 const importAllButton = document.getElementById("import-all") as HTMLButtonElement;
+
+/** The catalog registry (built-ins + custom + last pick). Seeded on startup from
+ *  clientStorage; re-persisted on every change. Starts from the code defaults so
+ *  the dropdown is usable even before the main thread's stored blob arrives. */
+let registry: CatalogRegistry = hydrateRegistry(undefined);
 
 /** The last resolved import, retained so a design-led confirm can re-send it. */
 let pending: { plan: ImportPlan; images: { path: string; bytes: Uint8Array }[]; direction: ParityDirection } | undefined;
@@ -104,15 +126,84 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
-// Step 1 — Load: fetch the catalog (+ tokens) and reveal the pickers. Nothing is
-// placed yet; the designer then either inserts one component or the whole sheet.
+// ── Catalog registry ────────────────────────────────────────────────────────
+
+/** Persist the registry (custom entries + last pick) via the main thread. */
+function persistRegistry(): void {
+  const stored: StoredRegistry = dehydrateRegistry(registry);
+  parent.postMessage({ pluginMessage: { type: "saveRegistry", stored } }, "*");
+}
+
+/** Re-fill the catalog dropdown from the registry and reflect the remembered pick. */
+function renderCatalogOptions(): void {
+  catalogSelect.replaceChildren();
+  for (const source of registry.catalogs) {
+    const option = document.createElement("option");
+    option.value = source.id;
+    option.textContent = source.builtin ? source.label : `${source.label} (custom)`;
+    catalogSelect.append(option);
+  }
+  if (registry.lastSelectedId) catalogSelect.value = registry.lastSelectedId;
+  // Only custom catalogs can be removed.
+  removeCatalogButton.hidden = !selectedCatalog(registry) || !!selectedCatalog(registry)?.builtin;
+}
+
+catalogSelect.addEventListener("change", () => {
+  registry = selectCatalog(registry, catalogSelect.value);
+  removeCatalogButton.hidden = !!selectedCatalog(registry)?.builtin;
+  persistRegistry();
+});
+
+toggleRegisterButton.addEventListener("click", () => {
+  registerPanel.hidden = !registerPanel.hidden;
+  if (!registerPanel.hidden) regLabelInput.focus();
+});
+
+regCancelButton.addEventListener("click", () => {
+  registerPanel.hidden = true;
+  regLabelInput.value = "";
+  regUrlInput.value = "";
+});
+
+regAddButton.addEventListener("click", () => {
+  try {
+    registry = registerCatalog(registry, { label: regLabelInput.value, baseUrl: regUrlInput.value });
+    renderCatalogOptions();
+    persistRegistry();
+    registerPanel.hidden = true;
+    regLabelInput.value = "";
+    regUrlInput.value = "";
+    say(`Registered “${selectedCatalog(registry)?.label}”. Load it to browse its components.`);
+  } catch (err) {
+    say(err instanceof Error ? err.message : String(err));
+  }
+});
+
+removeCatalogButton.addEventListener("click", () => {
+  const current = selectedCatalog(registry);
+  if (!current || current.builtin) return;
+  registry = removeCatalog(registry, current.id);
+  renderCatalogOptions();
+  persistRegistry();
+  say(`Removed “${current.label}”.`);
+});
+
+// Ask the main thread for the persisted registry; it replies with a `registry`
+// message handled in `window.onmessage`. Render the code defaults immediately so
+// the dropdown works before that round-trip completes.
+renderCatalogOptions();
+parent.postMessage({ pluginMessage: { type: "requestRegistry" } }, "*");
+
+// Step 1 — Load: fetch the selected catalog (+ tokens) and reveal the pickers.
+// Nothing is placed yet; the designer then inserts one component or the whole sheet.
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const base = baseInput.value.trim().replace(/\/+$/, "");
-  if (!base) {
-    say("Enter a catalog base URL.");
+  const source = selectedCatalog(registry);
+  if (!source) {
+    say("Pick a catalog to load.");
     return;
   }
+  const base = source.baseUrl.replace(/\/+$/, "");
 
   try {
     say("Fetching catalog.json…");
@@ -378,6 +469,12 @@ window.onmessage = (event: MessageEvent) => {
       designMapArea.value = msg.designMap;
       result.hidden = false;
     }
+  }
+  if (msg.type === "registry") {
+    // The persisted registry arrived — merge it with the code defaults and
+    // reflect the remembered pick. Absent / first-run ⇒ hydrate from defaults.
+    registry = hydrateRegistry(msg.stored as StoredRegistry | undefined);
+    renderCatalogOptions();
   }
   if (msg.type === "error") say(`Import failed: ${msg.message}`);
   if (msg.type === "inserted") say(`Inserted “${msg.name}”. Pick another, or import the whole catalog.`);

@@ -40,6 +40,12 @@
   .knob.bool label { justify-content: flex-start; gap: 8px; }
   .knob.bool input { width: auto; }
   .group-title { font-weight: 600; margin: 16px 0 0; opacity: 0.8; }
+
+  /* Register-a-catalog block */
+  .register { margin-top: 12px; padding: 12px; border-radius: 8px;
+              border: 1px solid rgba(128,128,128,0.35); background: rgba(128,128,128,0.06); }
+  .register[hidden] { display: none; }
+  .register label { margin-bottom: 6px; }
 </style>
 
 <div class="tabs" role="tablist">
@@ -50,17 +56,28 @@
 <!-- View 1: browse a design-parity catalog — insert one component, or the whole sheet. -->
 <section id="view-catalog" class="view">
   <h1>Insert from a design-parity catalog</h1>
-  <p class="hint">Paste the raw root of a published <code>design-artifacts/&lt;system&gt;</code> branch — the folder containing <code>catalog.json</code> — and load it.</p>
+  <p class="hint">Pick a registered catalog and load it. Built-ins point at the published <code>design-artifacts/&lt;system&gt;</code> branches; register your own to add it to the list.</p>
 
   <form id="form">
-    <label for="base">Catalog base URL</label>
-    <input
-      id="base"
-      name="base"
-      type="url"
-      value="https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3"
-      placeholder="https://raw.githubusercontent.com/yschimke/compose-ai-tools/refs/heads/design-artifacts/compose-m3"
-    />
+    <label for="catalog">Catalog</label>
+    <div class="row" style="margin-top:0">
+      <select id="catalog" style="flex:1"></select>
+      <button id="toggle-register" type="button" class="secondary" style="flex:0 0 auto; width:auto; padding:8px 12px" title="Register a catalog">＋</button>
+      <button id="remove-catalog" type="button" class="secondary" style="flex:0 0 auto; width:auto; padding:8px 12px" title="Remove this catalog" hidden>🗑</button>
+    </div>
+
+    <!-- Register a custom catalog (revealed by the ＋ button). -->
+    <div id="register" class="register" hidden>
+      <label for="reg-label">Register a catalog</label>
+      <input id="reg-label" type="text" placeholder="Name (e.g. My Design System)" />
+      <input id="reg-url" type="url" placeholder="https://…/design-artifacts/&lt;system&gt;" style="margin-top:8px" />
+      <p class="hint" style="margin:6px 0 0">The raw root that holds <code>catalog.json</code>. Only hosts in the plugin manifest's <code>allowedDomains</code> can be fetched.</p>
+      <div class="row">
+        <button id="reg-add" type="button" class="primary">Add catalog</button>
+        <button id="reg-cancel" type="button" class="secondary">Cancel</button>
+      </div>
+    </div>
+
     <div class="row">
       <button type="submit">Load catalog</button>
       <button id="cancel" type="button">Close</button>
