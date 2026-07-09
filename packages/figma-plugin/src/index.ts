@@ -121,6 +121,7 @@ export type {
 } from "./catalogs.js";
 export {
   indexCatalog,
+  groupComponents,
   selectCatalogImage,
   selectCatalogWireframe,
   componentSetCells,
@@ -128,6 +129,7 @@ export {
 } from "./catalogPick.js";
 export type {
   CatalogIndex,
+  ComponentGroup,
   PickComponent,
   PickAxis,
   PickSelection,
