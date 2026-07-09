@@ -4,6 +4,7 @@ import type { CatalogManifest, CatalogManifestImage } from "@design-parity/catal
 
 import {
   componentSetCells,
+  groupComponents,
   indexCatalog,
   selectCatalogImage,
   selectCatalogWireframe,
@@ -154,6 +155,37 @@ describe("selectCatalogImage", () => {
   it("never selects a layout image (ideal-only)", () => {
     const picked = selectCatalogImage(manifest, { componentId: "Button/Filled" }, base);
     expect(picked?.image.variant).toBe("ideal");
+  });
+});
+
+describe("groupComponents", () => {
+  const index = indexCatalog(manifest);
+
+  it("groups by group in first-seen order, no query", () => {
+    const groups = groupComponents(index);
+    expect(groups.map((g) => g.name)).toEqual(["Buttons", "Selection"]);
+    expect(groups[0]!.components.map((c) => c.componentId)).toEqual(["Button/Filled"]);
+    expect(groups[1]!.components.map((c) => c.componentId)).toEqual(["Switch/On"]);
+  });
+
+  it("filters by id, caption, or group (case-insensitive) and drops empty groups", () => {
+    expect(groupComponents(index, "switch").map((g) => g.name)).toEqual(["Selection"]);
+    // 'primary' only appears in Button/Filled's caption.
+    expect(groupComponents(index, "PRIMARY").map((g) => g.components[0]!.componentId)).toEqual([
+      "Button/Filled",
+    ]);
+    // Group-name match.
+    expect(groupComponents(index, "selection")[0]!.components[0]!.componentId).toBe("Switch/On");
+    // No match ⇒ no groups.
+    expect(groupComponents(index, "zzz")).toEqual([]);
+  });
+
+  it("falls back to an Ungrouped bucket for components with no group", () => {
+    const noGroup = indexCatalog({
+      ...manifest,
+      components: [{ componentId: "Loose", greenlines: [], redlines: [], images: [image({})] }],
+    });
+    expect(groupComponents(noGroup).map((g) => g.name)).toEqual(["Ungrouped"]);
   });
 });
 

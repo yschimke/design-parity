@@ -165,6 +165,44 @@ function indexComponent(component: CatalogManifestComponent): PickComponent {
   return out;
 }
 
+/** A group of pickable components under one header — for a grouped/searchable picker. */
+export interface ComponentGroup {
+  name: string;
+  components: PickComponent[];
+}
+
+/** Whether a component matches a lowercased query (its id, caption, or group). */
+function componentMatches(component: PickComponent, query: string): boolean {
+  if (!query) return true;
+  const haystack = [component.componentId, component.caption ?? "", component.group ?? ""]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+/**
+ * Group the indexed components by their `group` (fallback `"Ungrouped"`), in
+ * first-seen order, optionally filtered by a free-text `query` matched
+ * case-insensitively against each component's id, caption, and group. Empty
+ * groups are dropped. Powers the searchable, `<optgroup>`-grouped component picker.
+ */
+export function groupComponents(index: CatalogIndex, query = ""): ComponentGroup[] {
+  const q = query.trim().toLowerCase();
+  const order: string[] = [];
+  const byGroup = new Map<string, PickComponent[]>();
+  for (const component of index.components) {
+    if (!componentMatches(component, q)) continue;
+    const name = component.group ?? "Ungrouped";
+    const bucket = byGroup.get(name);
+    if (bucket) bucket.push(component);
+    else {
+      byGroup.set(name, [component]);
+      order.push(name);
+    }
+  }
+  return order.map((name) => ({ name, components: byGroup.get(name)! }));
+}
+
 /**
  * Index a manifest into the picker's view model: one {@link PickComponent} per
  * catalog component, each carrying the variant + dimension axes it can be

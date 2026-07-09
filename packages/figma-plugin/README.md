@@ -70,7 +70,7 @@ core and the two runtime files stay thin:
 | Path | Realm | Role |
 | --- | --- | --- |
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
-| [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to; `componentSetCells(manifest, id, base)` → the variant cells for a native component-set insert. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
+| [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `groupComponents(index, query)` → the search-filtered, group-bucketed list behind the picker dropdown; `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to; `componentSetCells(manifest, id, base)` → the variant cells for a native component-set insert. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
 | [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` / `placeCatalogComponentSet` — place one picked component as a raster render, the wireframe vector, or a native **component set** (all variants), stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
 | [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` (kind: new / edit / screen, target id, referenced components) from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
@@ -173,7 +173,9 @@ component, or import the whole sheet.
 
 Instead of dumping the entire catalog, pick exactly what you want:
 
-- **Component** — any component in the loaded catalog.
+- **Component** — any component in the loaded catalog. The dropdown is **grouped
+  by component group** (`<optgroup>`) and has a **search box** above it that
+  filters live by id, caption, or group — so a large catalog stays navigable.
 - **Variant** *(optional)* — the component's own state axis (`default`,
   `pressed`, `disabled`, …). Hidden when the component has a single state.
 - **Dimensions** *(optional)* — the presentation axes the catalog actually

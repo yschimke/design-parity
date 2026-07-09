@@ -17,6 +17,7 @@ import type { CatalogManifest } from "@design-parity/catalog-export";
 
 import {
   componentSetCells,
+  groupComponents,
   indexCatalog,
   selectCatalogImage,
   selectCatalogWireframe,
@@ -78,6 +79,7 @@ const copyButton = document.getElementById("copy") as HTMLButtonElement;
 // Single-component picker controls.
 const catalogPickSection = document.getElementById("catalog-pick") as HTMLElement;
 const catalogBulkSection = document.getElementById("catalog-bulk") as HTMLElement;
+const pickSearchInput = document.getElementById("pick-search") as HTMLInputElement;
 const componentSelect = document.getElementById("pick-component") as HTMLSelectElement;
 const pickCaption = document.getElementById("pick-caption") as HTMLParagraphElement;
 const pickVariantField = document.getElementById("pick-variant-field") as HTMLElement;
@@ -396,20 +398,40 @@ function selectedComponent(): PickComponent | undefined {
   return catalog?.index.components.find((c) => c.componentId === componentSelect.value);
 }
 
-/** Fill the component dropdown and render the first component's controls. */
-function populateComponents(index: CatalogIndex): void {
-  componentSelect.replaceChildren();
-  for (const component of index.components) {
-    const option = document.createElement("option");
-    option.value = component.componentId;
-    option.textContent = component.group
-      ? `${component.group} / ${component.componentId}`
-      : component.componentId;
-    componentSelect.append(option);
-  }
-  renderPickControls();
+/** Reset the search and (re)build the grouped component dropdown for a new catalog. */
+function populateComponents(_index: CatalogIndex): void {
+  pickSearchInput.value = "";
+  renderComponentOptions();
 }
 
+/**
+ * Rebuild the component dropdown as `<optgroup>`s (grouped by component group),
+ * filtered by the search box. Keeps the current selection when it's still
+ * visible, else selects the first match; then renders that component's controls.
+ */
+function renderComponentOptions(): void {
+  if (!catalog) return;
+  const previous = componentSelect.value;
+  const groups = groupComponents(catalog.index, pickSearchInput.value);
+  componentSelect.replaceChildren();
+  for (const group of groups) {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group.name;
+    for (const component of group.components) {
+      const option = document.createElement("option");
+      option.value = component.componentId;
+      option.textContent = component.componentId;
+      optgroup.append(option);
+    }
+    componentSelect.append(optgroup);
+  }
+  const values = groups.flatMap((g) => g.components.map((c) => c.componentId));
+  componentSelect.value = values.includes(previous) ? previous : values[0] ?? "";
+  renderPickControls();
+  if (values.length === 0) pickCaption.textContent = "No components match your search.";
+}
+
+pickSearchInput.addEventListener("input", renderComponentOptions);
 componentSelect.addEventListener("change", renderPickControls);
 
 /** Render the variant + dimension controls and format options for the selection. */
