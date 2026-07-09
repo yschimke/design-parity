@@ -9,6 +9,7 @@
  */
 import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
 import { placeCatalogPng, placeCatalogSvg, type InsertSize } from "../src/insert.js";
+import type { FrameLayout, FrameRead } from "../src/spec.js";
 import type { ParityDirection } from "../src/direction.js";
 import {
   placeLiveRender,
@@ -86,6 +87,11 @@ interface SaveRegistryMessage {
   stored: unknown;
 }
 
+/** The UI asks the main thread to read the current selection into a frame spec. */
+interface ProposeReadSelectionMessage {
+  type: "proposeReadSelection";
+}
+
 /** The UI asks to refresh every live render in the current selection. */
 interface RefreshMessage {
   type: "refresh";
@@ -132,6 +138,7 @@ type UiMessage =
   | InsertSvgMessage
   | RequestRegistryMessage
   | SaveRegistryMessage
+  | ProposeReadSelectionMessage
   | PlaceLiveMessage
   | PlaceLiveSvgMessage
   | RefreshMessage
@@ -156,6 +163,42 @@ const slotTargets = new Map<string, FigmaNode>();
 /** clientStorage key the catalog registry (custom entries + last pick) persists under. */
 const REGISTRY_KEY = "design-parity/catalog-registry";
 
+/** Read a selected node into a {@link FrameRead}: name, size, auto-layout spacing, and text. */
+function readFrame(node: SceneNode): FrameRead {
+  const read: FrameRead = {
+    name: node.name,
+    width: Math.round(node.width),
+    height: Math.round(node.height),
+    texts: [],
+    variables: [],
+  };
+
+  const layout: FrameLayout = {};
+  if ("layoutMode" in node && node.layoutMode !== "NONE") {
+    layout.paddingTop = node.paddingTop;
+    layout.paddingRight = node.paddingRight;
+    layout.paddingBottom = node.paddingBottom;
+    layout.paddingLeft = node.paddingLeft;
+    layout.gap = node.itemSpacing;
+  }
+  if ("cornerRadius" in node && typeof node.cornerRadius === "number" && node.cornerRadius > 0) {
+    layout.cornerRadius = node.cornerRadius;
+  }
+  if (Object.keys(layout).length > 0) read.layout = layout;
+
+  // Collect text content (the node itself, then up to a handful of descendants).
+  const texts: string[] = [];
+  const collect = (n: BaseNode): void => {
+    if (texts.length >= 12) return;
+    if (n.type === "TEXT" && n.characters.trim()) texts.push(n.characters);
+    if ("children" in n) for (const child of n.children) collect(child);
+  };
+  collect(node);
+  read.texts = texts;
+
+  return read;
+}
+
 figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
@@ -170,6 +213,35 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "saveRegistry") {
     await figma.clientStorage.setAsync(REGISTRY_KEY, msg.stored);
+    return;
+  }
+  if (msg.type === "proposeReadSelection") {
+    const node = figma.currentPage.selection[0];
+    if (!node) {
+      figma.ui.postMessage({ type: "selectionEmpty" });
+      figma.notify("Select a frame to propose a spec from.");
+      return;
+    }
+    try {
+      const read = readFrame(node);
+      // Export the frame as a PNG so the issue can carry the visual target.
+      let png: Uint8Array | undefined;
+      if ("exportAsync" in node) {
+        try {
+          png = await (node as SceneNode & ExportMixin).exportAsync({
+            format: "PNG",
+            constraint: { type: "SCALE", value: 2 },
+          });
+        } catch {
+          png = undefined;
+        }
+      }
+      figma.ui.postMessage({ type: "selectionRead", read, png });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "selectionEmpty" });
+      figma.notify(`Couldn't read the selection: ${message}`, { error: true });
+    }
     return;
   }
   if (msg.type === "insertPng") {

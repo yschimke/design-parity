@@ -16,6 +16,20 @@ export {
 } from "./plan.js";
 export { readDtcgTokensLite } from "./dtcg.js";
 export {
+  buildFrameSpec,
+  defaultComponentId,
+  specToIssueBody,
+  specToJson,
+  A11Y_CONTRACT,
+} from "./spec.js";
+export type {
+  FrameRead,
+  FrameLayout,
+  FrameSpec,
+  SpecOptions,
+  A11yContract,
+} from "./spec.js";
+export {
   buildRenderUrl,
   encodeSegment,
   nonBlankOverrides,

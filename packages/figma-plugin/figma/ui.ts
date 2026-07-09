@@ -35,6 +35,13 @@ import {
 } from "../src/catalogs.js";
 import { resolveDirection, type ParityDirection } from "../src/direction.js";
 import { readDtcgTokensLite } from "../src/dtcg.js";
+import {
+  buildFrameSpec,
+  defaultComponentId,
+  specToIssueBody,
+  specToJson,
+  type FrameRead,
+} from "../src/spec.js";
 import { EDITOR_AXES, knobControls } from "../src/editor.js";
 import { buildImportPlan, type ImportPlan, type PlannedImage } from "../src/plan.js";
 import {
@@ -470,6 +477,12 @@ window.onmessage = (event: MessageEvent) => {
       result.hidden = false;
     }
   }
+  if (msg.type === "selectionRead") {
+    onSelectionRead(msg.read as FrameRead, msg.png as Uint8Array | undefined);
+  }
+  if (msg.type === "selectionEmpty") {
+    proposeSay("Select a frame in Figma, then Read selection.");
+  }
   if (msg.type === "registry") {
     // The persisted registry arrived — merge it with the code defaults and
     // reflect the remembered pick. Absent / first-run ⇒ hydrate from defaults.
@@ -577,6 +590,7 @@ function dedupeImages(images: PlannedImage[]): PlannedImage[] {
 const views: Record<string, HTMLElement> = {
   catalog: document.getElementById("view-catalog") as HTMLElement,
   editor: document.getElementById("view-editor") as HTMLElement,
+  propose: document.getElementById("view-propose") as HTMLElement,
 };
 for (const tab of Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"))) {
   tab.addEventListener("click", () => {
@@ -852,4 +866,82 @@ placeSlotsButton.addEventListener("click", async () => {
   } catch (err) {
     editorSay(err instanceof Error ? err.message : String(err));
   }
+});
+
+// ── Propose spec ────────────────────────────────────────────────────────────
+
+const readSelectionButton = document.getElementById("read-selection") as HTMLButtonElement;
+const proposeStatus = document.getElementById("propose-status") as HTMLParagraphElement;
+const proposeOut = document.getElementById("propose-out") as HTMLElement;
+const specIdInput = document.getElementById("spec-id") as HTMLInputElement;
+const specNotesInput = document.getElementById("spec-notes") as HTMLInputElement;
+const downloadPngButton = document.getElementById("download-png") as HTMLButtonElement;
+const issueBodyArea = document.getElementById("issue-body") as HTMLTextAreaElement;
+const specJsonArea = document.getElementById("spec-json") as HTMLTextAreaElement;
+const copyIssueButton = document.getElementById("copy-issue") as HTMLButtonElement;
+const copySpecButton = document.getElementById("copy-spec") as HTMLButtonElement;
+
+/** The last frame the main thread read, plus its exported PNG (for download + rebuild). */
+let lastRead: FrameRead | undefined;
+let lastPng: Uint8Array | undefined;
+
+function proposeSay(text: string): void {
+  proposeStatus.textContent = text;
+}
+
+readSelectionButton.addEventListener("click", () => {
+  proposeSay("Reading the selection…");
+  parent.postMessage({ pluginMessage: { type: "proposeReadSelection" } }, "*");
+});
+
+/** A frame was read: seed the id from its name, reveal the output, render the spec. */
+function onSelectionRead(read: FrameRead, png: Uint8Array | undefined): void {
+  lastRead = read;
+  lastPng = png;
+  specIdInput.value = defaultComponentId(read.name);
+  downloadPngButton.hidden = !png;
+  proposeOut.hidden = false;
+  renderProposeSpec();
+  proposeSay(`Read “${read.name}”. Edit the target id / notes, then copy the issue.`);
+}
+
+/** Rebuild the issue body + spec.json from the last read and the editable fields. */
+function renderProposeSpec(): void {
+  if (!lastRead) return;
+  const spec = buildFrameSpec(lastRead, {
+    componentId: specIdInput.value,
+    notes: specNotesInput.value,
+  });
+  issueBodyArea.value = specToIssueBody(spec);
+  specJsonArea.value = specToJson(spec);
+}
+
+specIdInput.addEventListener("input", renderProposeSpec);
+specNotesInput.addEventListener("input", renderProposeSpec);
+
+/** Copy a textarea's contents (execCommand is the reliable path in a Figma iframe). */
+function copyArea(area: HTMLTextAreaElement, button: HTMLButtonElement): void {
+  area.select();
+  document.execCommand("copy");
+  const original = button.textContent;
+  button.textContent = "Copied";
+  setTimeout(() => (button.textContent = original), 1200);
+}
+
+copyIssueButton.addEventListener("click", () => copyArea(issueBodyArea, copyIssueButton));
+copySpecButton.addEventListener("click", () => copyArea(specJsonArea, copySpecButton));
+
+downloadPngButton.addEventListener("click", () => {
+  if (!lastPng || !lastRead) return;
+  // A Blob download link is the only way out of the sandbox for the exported bytes.
+  // Copy into a standalone ArrayBuffer so the Blob part is concretely typed.
+  const buffer = new ArrayBuffer(lastPng.byteLength);
+  new Uint8Array(buffer).set(lastPng);
+  const blob = new Blob([buffer], { type: "image/png" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${defaultComponentId(lastRead.name).replace(/\//g, "-")}.png`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 });

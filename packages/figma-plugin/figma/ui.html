@@ -18,12 +18,14 @@
   code { font-size: 11px; opacity: 0.6; word-break: break-all; }
   #result { margin-top: 12px; }
   #result[hidden] { display: none; }
-  #result .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-  #result label { margin: 0; }
-  #copy { flex: 0 0 auto; padding: 4px 10px; font-size: 11px; background: rgba(128,128,128,0.2); color: inherit; }
-  #designmap { width: 100%; box-sizing: border-box; height: 132px; font-family: ui-monospace, monospace;
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  #result label, .head label { margin: 0; }
+  #copy, #copy-issue, #copy-spec { flex: 0 0 auto; padding: 4px 10px; font-size: 11px; background: rgba(128,128,128,0.2); color: inherit; }
+  #designmap, #issue-body, #spec-json { width: 100%; box-sizing: border-box; height: 132px; font-family: ui-monospace, monospace;
                font-size: 11px; padding: 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4);
                background: transparent; color: inherit; resize: vertical; }
+  #issue-body { height: 220px; }
+  #propose-out[hidden] { display: none; }
 
   /* Tabs */
   .tabs { display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid rgba(128,128,128,0.3); }
@@ -51,6 +53,7 @@
 <div class="tabs" role="tablist">
   <button class="tab" id="tab-catalog" data-view="catalog" role="tab" aria-selected="true">Catalog import</button>
   <button class="tab" id="tab-editor" data-view="editor" role="tab" aria-selected="false">Override editor</button>
+  <button class="tab" id="tab-propose" data-view="propose" role="tab" aria-selected="false">Propose spec</button>
 </div>
 
 <!-- View 1: browse a design-parity catalog — insert one component, or the whole sheet. -->
@@ -194,4 +197,43 @@
   </div>
 
   <p id="editor-status"></p>
+</section>
+
+<!-- View 3: propose a spec — read a selected frame → a ready-to-file GitHub issue. -->
+<section id="view-propose" class="view" hidden>
+  <h1>Propose a spec → issue</h1>
+  <p class="hint">Select a frame in Figma and read it into a structured spec + a ready-to-file GitHub issue an agent can implement. The design→code start of the round-trip — the plugin emits an artifact, it never writes code.</p>
+
+  <div class="row" style="margin-top:0">
+    <button id="read-selection" type="button" class="primary">Read selection</button>
+  </div>
+  <p id="propose-status"></p>
+
+  <div id="propose-out" hidden>
+    <div class="field">
+      <label for="spec-id">Target component id</label>
+      <input id="spec-id" type="text" placeholder="e.g. Button/Filled" />
+    </div>
+    <div class="field">
+      <label for="spec-notes">Notes <span style="font-weight:400;opacity:0.5">(optional)</span></label>
+      <input id="spec-notes" type="text" placeholder="anything the implementer should know" />
+    </div>
+    <div class="row">
+      <button id="download-png" type="button" class="secondary" hidden>Download frame PNG</button>
+    </div>
+
+    <section id="issue-result">
+      <div class="head">
+        <label for="issue-body">GitHub issue body</label>
+        <button id="copy-issue" type="button">Copy</button>
+      </div>
+      <textarea id="issue-body" readonly spellcheck="false"></textarea>
+      <div class="head" style="margin-top:12px">
+        <label for="spec-json"><code>spec.json</code></label>
+        <button id="copy-spec" type="button">Copy</button>
+      </div>
+      <textarea id="spec-json" readonly spellcheck="false"></textarea>
+      <p class="hint" style="margin:4px 0 0">Open a new issue with the body above (attach the PNG), or hand both to an agent session to file. Once implemented and the catalog regenerates, the render lands beside this frame.</p>
+    </section>
+  </div>
 </section>

@@ -72,6 +72,7 @@ core and the two runtime files stay thin:
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
 | [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
 | [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` — place one picked component as a raster render or the wireframe vector, stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
+| [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
@@ -200,6 +201,31 @@ redlines) variant and the **Mode**, then Import. The plugin fetches every PNG fo
 that variant and lays out a `<system> — Catalog` page with the matching
 annotation layer and a variable collection (light/dark become Figma modes),
 reconciling in place on re-import (see below).
+
+## Propose a spec → issue (design → code)
+
+![The Propose-spec tab — read a frame into a spec and a ready-to-file GitHub issue](docs/ui-propose-spec.png)
+
+Every other flow here is **code → design** (render code, place it in Figma). The
+**Propose spec** tab is the *other* direction — the design → code *start* of the
+round-trip. Select a frame in Figma, press **Read selection**, and the plugin
+reads its name, size, auto-layout redlines (padding / gap / corner radius), and
+text into a structured spec, then renders:
+
+- a **GitHub issue body** (Markdown) — the frame, its redlines and text, and the
+  design-parity **a11y + i18n contract as an acceptance checklist** (WCAG AA
+  contrast, 48dp targets, text expansion, RTL, no hardcoded strings, dynamic
+  type) — plus a correspondence note tying it to a target component id;
+- a `spec.json` artifact;
+- the exported frame **PNG** (a download) to attach to the issue.
+
+Consistent with the repo's *verify, don't generate* stance
+([`PRINCIPLES.md`](../../docs/PRINCIPLES.md) §1), the plugin **emits an artifact,
+it never writes code** — you open the issue (or hand the body + PNG to an agent
+session to file), an agent implements it, and once the catalog regenerates the
+render lands back beside the frame, closing the loop. This is the first slice of
+[#222](https://github.com/yschimke/design-parity/issues/222); token/variable
+capture and automated routing-back are tracked there.
 
 ### Re-import reconciles in place — identity, not position
 
