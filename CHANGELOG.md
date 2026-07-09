@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.26](https://github.com/yschimke/design-parity/compare/v0.1.25...v0.1.26) (2026-07-09)
+
+
+### Features
+
+* **figma-plugin:** allow the preview.coo.ee serve host in the manifest ([#212](https://github.com/yschimke/design-parity/issues/212)) ([c6f6605](https://github.com/yschimke/design-parity/commit/c6f6605a31dd9bf2502ed1b0c65f68fb959951ce))
+* **figma-plugin:** fill a slot with a child rendered to its size ([#210](https://github.com/yschimke/design-parity/issues/210)) ([37a4787](https://github.com/yschimke/design-parity/commit/37a4787c61d1edd8bf6ac3faa6cd124a9e188eb9))
+* **figma-plugin:** insert a single catalog component by variant + dimension ([#215](https://github.com/yschimke/design-parity/issues/215)) ([b14bf49](https://github.com/yschimke/design-parity/commit/b14bf49cb166ae07ebc895c072b6124745e26176))
+* **figma-plugin:** insert a single component as a native Figma component set ([#223](https://github.com/yschimke/design-parity/issues/223)) ([151be09](https://github.com/yschimke/design-parity/commit/151be09f8bc41dbbf5307b728853ca9fb8e14b36))
+* **figma-plugin:** materialize preview slots as frames on canvas ([#208](https://github.com/yschimke/design-parity/issues/208)) ([7027fec](https://github.com/yschimke/design-parity/commit/7027fecf829d7e777bf3c8fdbbef47c59585fb1e))
+* **figma-plugin:** pick a catalog from a registry instead of pasting a URL ([#217](https://github.com/yschimke/design-parity/issues/217)) ([050932d](https://github.com/yschimke/design-parity/commit/050932d11bd213f3362c36cb6d73c145f0301925))
+* **figma-plugin:** propose a spec → GitHub issue from a selected frame ([#224](https://github.com/yschimke/design-parity/issues/224)) ([721fa4f](https://github.com/yschimke/design-parity/commit/721fa4f94ad2a309931d6bb59e67566108960a1c))
+* **figma-plugin:** searchable, grouped component picker ([#225](https://github.com/yschimke/design-parity/issues/225)) ([d0ae646](https://github.com/yschimke/design-parity/commit/d0ae646aeb540ef235c2faa31e21ed7ffb0892eb))
+* **figma-plugin:** ship an importable prebuilt bundle for local install ([#216](https://github.com/yschimke/design-parity/issues/216)) ([9c3953c](https://github.com/yschimke/design-parity/commit/9c3953c9eef7d963689a241ece1d72bb73da464d))
+* **figma-plugin:** wire the slot flow into the plugin UI ([#211](https://github.com/yschimke/design-parity/issues/211)) ([12bf22f](https://github.com/yschimke/design-parity/commit/12bf22fbcbb6133e3e0f345b84cc911e0078c872))
+
+
+### Bug Fixes
+
+* repair figma plugin import flow ([#214](https://github.com/yschimke/design-parity/issues/214)) ([446ae6a](https://github.com/yschimke/design-parity/commit/446ae6a9f30296db3fa28882ca54bd54200e0d85))
+
 ## [0.1.25](https://github.com/yschimke/design-parity/compare/v0.1.24...v0.1.25) (2026-07-05)
 
 
