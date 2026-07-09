@@ -87,6 +87,23 @@ export {
 } from "./structure.js";
 export type { PlacedSlot } from "./structure.js";
 export {
+  DEFAULT_CATALOGS,
+  normalizeBaseUrl,
+  hydrateRegistry,
+  dehydrateRegistry,
+  registerCatalog,
+  removeCatalog,
+  selectCatalog,
+  findCatalog,
+  selectedCatalog,
+} from "./catalogs.js";
+export type {
+  CatalogSource,
+  CatalogRegistry,
+  StoredRegistry,
+  RegisterInput,
+} from "./catalogs.js";
+export {
   indexCatalog,
   selectCatalogImage,
   selectCatalogWireframe,
