@@ -9,12 +9,21 @@
  * code — it emits a committed, reviewable artifact + a tracking issue, exactly
  * the way the `design-map.json` panel hands its scaffold off today.
  *
+ * A proposal isn't always "edit one component". It's one of three **kinds** —
+ * a **new** component, an **edit** to an existing one, or a **screen** composed
+ * of several — and a frame is often built *from* existing components, which ride
+ * along as reference **context** (`uses`) rather than collapsing into the target.
+ *
  * Pure: no `figma`, no `fetch`. The main thread reads the selected frame into a
- * {@link FrameRead} (structural plain data) and posts it; the UI builds the
- * {@link FrameSpec} and renders {@link specToIssueBody} / {@link specToJson} for
- * the designer to copy. The a11y + i18n **contract** the implementation must meet
- * is baked in as acceptance criteria — leading with a11y/i18n, per `PRINCIPLES.md` §2.
+ * {@link FrameRead} (structural plain data, incl. the component instances it
+ * uses) and posts it; the UI builds the {@link FrameSpec} and renders
+ * {@link specToIssueBody} / {@link specToJson} for the designer to copy. The a11y
+ * + i18n **contract** the implementation must meet is baked in as acceptance
+ * criteria — leading with a11y/i18n, per `PRINCIPLES.md` §2.
  */
+
+/** What a proposal is: a brand-new component, an edit to an existing one, or a screen. */
+export type SpecKind = "new" | "edit" | "screen";
 
 /** Auto-layout spacing read off a frame (dp). Fields present only when known. */
 export interface FrameLayout {
@@ -38,6 +47,8 @@ export interface FrameRead {
   texts: string[];
   /** Names of bound Figma variables/tokens, best-effort (may be empty). */
   variables: string[];
+  /** Component instances used within the frame — the building blocks, as context. */
+  components: string[];
 }
 
 /** The a11y + i18n contract every proposed implementation must meet. */
@@ -66,26 +77,34 @@ export const A11Y_CONTRACT: A11yContract = {
   ],
 };
 
-/** The resolved spec: the frame's shape plus the target id, notes, and contract. */
+/** The resolved spec: the frame's shape plus the kind, target id, uses, and contract. */
 export interface FrameSpec {
+  /** Whether this proposes a new component, an edit, or a screen. */
+  kind: SpecKind;
   /** Suggested GitHub issue title. */
   title: string;
-  /** Target component id the implementation binds to (designer-editable). */
-  componentId: string;
+  /** The target this binds to: a component id (new/edit) or a screen id (screen). */
+  targetId: string;
   name: string;
   width: number;
   height: number;
   layout?: FrameLayout;
   texts: string[];
   variables: string[];
+  /** Existing components this frame uses / references, as context for the implementer. */
+  uses: string[];
   a11y: A11yContract;
   notes?: string;
 }
 
 /** Overrides a designer supplies on top of the raw frame read. */
 export interface SpecOptions {
-  /** Target component id; defaults to a slug of the frame name. */
-  componentId?: string;
+  /** Proposal kind; defaults to {@link suggestKind}. */
+  kind?: SpecKind;
+  /** Target component/screen id; defaults to a slug of the frame name. */
+  targetId?: string;
+  /** Referenced components (context); defaults to the frame's detected instances. */
+  uses?: string[];
   /** Free-text notes for the implementer. */
   notes?: string;
 }
@@ -95,31 +114,68 @@ export function defaultComponentId(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "Component";
   // Keep `/` groupers (catalog convention `Button/Filled`); PascalCase each segment.
-  return trimmed
-    .split("/")
-    .map((segment) =>
-      segment
-        .split(/[^a-zA-Z0-9]+/)
-        .filter(Boolean)
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(""),
-    )
-    .filter(Boolean)
-    .join("/") || "Component";
+  return (
+    trimmed
+      .split("/")
+      .map((segment) =>
+        segment
+          .split(/[^a-zA-Z0-9]+/)
+          .filter(Boolean)
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(""),
+      )
+      .filter(Boolean)
+      .join("/") || "Component"
+  );
+}
+
+/**
+ * A sensible default {@link SpecKind} for a read: a frame built from two or more
+ * distinct components reads as a **screen**; otherwise a **new** component. The
+ * designer overrides this (e.g. to `edit`) in the UI.
+ */
+export function suggestKind(read: FrameRead): SpecKind {
+  return dedupe(read.components).length >= 2 ? "screen" : "new";
+}
+
+/** Dedupe strings, trimming blanks, preserving first-seen order. */
+function dedupe(values: string[]): string[] {
+  const seen: string[] = [];
+  for (const raw of values) {
+    const value = raw.trim();
+    if (value && !seen.includes(value)) seen.push(value);
+  }
+  return seen;
+}
+
+const KIND_LABEL: Record<SpecKind, string> = {
+  new: "New component",
+  edit: "Component edit",
+  screen: "Screen",
+};
+
+/** The suggested issue title for a kind + target. */
+function specTitle(kind: SpecKind, targetId: string): string {
+  if (kind === "edit") return `Edit ${targetId} to match the Figma spec`;
+  if (kind === "screen") return `New screen: ${targetId}`;
+  return `New component: ${targetId}`;
 }
 
 /** Build the {@link FrameSpec} from a raw read plus optional designer overrides (pure). */
 export function buildFrameSpec(read: FrameRead, opts: SpecOptions = {}): FrameSpec {
   const name = read.name.trim() || "Untitled frame";
-  const componentId = opts.componentId?.trim() || defaultComponentId(name);
+  const kind = opts.kind ?? suggestKind(read);
+  const targetId = opts.targetId?.trim() || defaultComponentId(name);
   const spec: FrameSpec = {
-    title: `Implement ${componentId} to match the Figma spec`,
-    componentId,
+    kind,
+    title: specTitle(kind, targetId),
+    targetId,
     name,
     width: read.width,
     height: read.height,
     texts: read.texts.map((t) => t.trim()).filter(Boolean),
-    variables: read.variables.filter(Boolean),
+    variables: dedupe(read.variables),
+    uses: dedupe(opts.uses ?? read.components),
     a11y: A11Y_CONTRACT,
   };
   if (read.layout && Object.keys(read.layout).length > 0) spec.layout = read.layout;
@@ -143,21 +199,42 @@ function paddingLine(layout: FrameLayout): string | undefined {
   return parts.length > 0 ? `${parts.join(" · ")} dp` : undefined;
 }
 
+/** The kind-specific intro sentence for the issue body. */
+function introLine(spec: FrameSpec): string {
+  if (spec.kind === "edit") {
+    return `Update the **existing** component \`${spec.targetId}\` to match this Figma frame, keeping the design-parity **a11y + i18n contract** below.`;
+  }
+  if (spec.kind === "screen") {
+    return "Implement a **screen** composed of the components below, matching this Figma frame and meeting the design-parity **a11y + i18n contract**.";
+  }
+  return "Implement a **new** Compose component matching this Figma frame, and meeting the design-parity **a11y + i18n contract** below.";
+}
+
+/** The kind-specific correspondence note. */
+function correspondenceLine(spec: FrameSpec): string {
+  if (spec.kind === "edit") {
+    return `Existing component id: \`${spec.targetId}\`. Update it to match; the refreshed render lands beside this frame on the next catalog import — closing the round-trip.`;
+  }
+  if (spec.kind === "screen") {
+    return `Screen id: \`${spec.targetId}\`. Built from the components listed above; the screen render lands beside this frame on the next catalog import — closing the round-trip.`;
+  }
+  return `Proposed component id: \`${spec.targetId}\`. Once built and the catalog renders it, its render lands beside this frame via the design-parity Figma import — closing the round-trip.`;
+}
+
 /**
  * Render the spec as a GitHub **issue body** (Markdown): the frame, its layout
- * redlines and text, then the a11y + i18n contract as an acceptance checklist and
- * the correspondence note. Sections with no data are omitted. The exported frame
- * PNG is attached separately (the plugin offers it as a download).
+ * redlines, text, and the **components it's built from** (context), then the a11y
+ * + i18n contract as an acceptance checklist and a kind-aware correspondence note.
+ * Sections with no data are omitted (a screen always shows its uses block). The
+ * exported frame PNG is attached separately (the plugin offers it as a download).
  */
 export function specToIssueBody(spec: FrameSpec): string {
   const lines: string[] = [];
-  lines.push(`## Design spec: \`${spec.componentId}\``);
+  lines.push(`## ${KIND_LABEL[spec.kind]} spec: \`${spec.targetId}\``);
   lines.push("");
-  lines.push(
-    "A designer authored this frame in Figma. Implement it as a Compose component/screen matching the frame, and meeting the design-parity **a11y + i18n contract** below.",
-  );
+  lines.push(`A designer authored this frame in Figma. ${introLine(spec)}`);
   lines.push("");
-  lines.push(`> **Attach the exported frame PNG** (the Propose-spec panel offers it as a download) so the visual target is in this issue.`);
+  lines.push("> **Attach the exported frame PNG** (the Propose-spec panel offers it as a download) so the visual target is in this issue.");
   lines.push("");
   lines.push(`**Frame:** \`${spec.name}\` — ${spec.width}×${spec.height} dp`);
 
@@ -168,6 +245,16 @@ export function specToIssueBody(spec: FrameSpec): string {
     if (pad) lines.push(`- Padding: ${pad}`);
     if (spec.layout.gap !== undefined) lines.push(`- Gap between children: ${spec.layout.gap} dp`);
     if (spec.layout.cornerRadius !== undefined) lines.push(`- Corner radius: ${spec.layout.cornerRadius} dp`);
+  }
+
+  if (spec.uses.length > 0 || spec.kind === "screen") {
+    lines.push("");
+    lines.push(spec.kind === "screen" ? "### Components used" : "### Components referenced (context)");
+    if (spec.uses.length > 0) {
+      for (const use of spec.uses) lines.push(`- \`${use}\``);
+    } else {
+      lines.push("_List the existing components this screen composes._");
+    }
   }
 
   if (spec.texts.length > 0) {
@@ -193,9 +280,7 @@ export function specToIssueBody(spec: FrameSpec): string {
 
   lines.push("");
   lines.push("### Correspondence");
-  lines.push(
-    `Target component id: \`${spec.componentId}\`. Once implemented and the catalog regenerates, its render lands beside this frame via the design-parity Figma import — closing the round-trip.`,
-  );
+  lines.push(correspondenceLine(spec));
 
   if (spec.notes) {
     lines.push("");

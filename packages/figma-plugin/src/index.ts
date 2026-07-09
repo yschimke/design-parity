@@ -18,6 +18,7 @@ export { readDtcgTokensLite } from "./dtcg.js";
 export {
   buildFrameSpec,
   defaultComponentId,
+  suggestKind,
   specToIssueBody,
   specToJson,
   A11Y_CONTRACT,
@@ -26,6 +27,7 @@ export type {
   FrameRead,
   FrameLayout,
   FrameSpec,
+  SpecKind,
   SpecOptions,
   A11yContract,
 } from "./spec.js";

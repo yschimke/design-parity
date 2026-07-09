@@ -211,8 +211,20 @@
 
   <div id="propose-out" hidden>
     <div class="field">
-      <label for="spec-id">Target component id</label>
+      <label for="spec-kind">Kind</label>
+      <select id="spec-kind">
+        <option value="new">New component</option>
+        <option value="edit">Edit existing component</option>
+        <option value="screen">Screen (composed of components)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="spec-id" id="spec-id-label">Component id</label>
       <input id="spec-id" type="text" placeholder="e.g. Button/Filled" />
+    </div>
+    <div class="field">
+      <label for="spec-uses">Components referenced <span style="font-weight:400;opacity:0.5">(comma-separated context)</span></label>
+      <input id="spec-uses" type="text" placeholder="e.g. Button/Filled, TopAppBar" />
     </div>
     <div class="field">
       <label for="spec-notes">Notes <span style="font-weight:400;opacity:0.5">(optional)</span></label>

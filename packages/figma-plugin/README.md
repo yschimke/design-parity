@@ -72,7 +72,7 @@ core and the two runtime files stay thin:
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
 | [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
 | [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` — place one picked component as a raster render or the wireframe vector, stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
-| [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
+| [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` (kind: new / edit / screen, target id, referenced components) from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
@@ -209,13 +209,24 @@ reconciling in place on re-import (see below).
 Every other flow here is **code → design** (render code, place it in Figma). The
 **Propose spec** tab is the *other* direction — the design → code *start* of the
 round-trip. Select a frame in Figma, press **Read selection**, and the plugin
-reads its name, size, auto-layout redlines (padding / gap / corner radius), and
-text into a structured spec, then renders:
+reads its name, size, auto-layout redlines (padding / gap / corner radius), text,
+and the **component instances it's built from** into a structured spec.
 
-- a **GitHub issue body** (Markdown) — the frame, its redlines and text, and the
-  design-parity **a11y + i18n contract as an acceptance checklist** (WCAG AA
-  contrast, 48dp targets, text expansion, RTL, no hardcoded strings, dynamic
-  type) — plus a correspondence note tying it to a target component id;
+A proposal isn't always an edit to one component, so you pick a **Kind**:
+
+- **New component** — build a brand-new component from this frame;
+- **Edit existing component** — update a component that already exists;
+- **Screen** — a screen composed of several components (auto-suggested when the
+  frame uses ≥2 components).
+
+The components the frame instantiates are detected and prefilled into
+**Components referenced** (editable) — carried as *context* for the implementer,
+not collapsed into the target. From that the plugin renders:
+
+- a **GitHub issue body** (Markdown) — kind-aware framing, the frame, its redlines
+  and text, the **components it uses**, and the design-parity **a11y + i18n
+  contract as an acceptance checklist** (WCAG AA contrast, 48dp targets, text
+  expansion, RTL, no hardcoded strings, dynamic type), plus a correspondence note;
 - a `spec.json` artifact;
 - the exported frame **PNG** (a download) to attach to the issue.
 

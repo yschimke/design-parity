@@ -163,14 +163,21 @@ const slotTargets = new Map<string, FigmaNode>();
 /** clientStorage key the catalog registry (custom entries + last pick) persists under. */
 const REGISTRY_KEY = "design-parity/catalog-registry";
 
-/** Read a selected node into a {@link FrameRead}: name, size, auto-layout spacing, and text. */
-function readFrame(node: SceneNode): FrameRead {
+/**
+ * Read a selected node into a {@link FrameRead}: name, size, auto-layout spacing,
+ * text, and the **component instances it's built from** (the building blocks,
+ * carried as reference context — a frame is often composed of existing
+ * components, and a screen especially so). Async because resolving an instance's
+ * main component is async under `documentAccess: dynamic-page`.
+ */
+async function readFrame(node: SceneNode): Promise<FrameRead> {
   const read: FrameRead = {
     name: node.name,
     width: Math.round(node.width),
     height: Math.round(node.height),
     texts: [],
     variables: [],
+    components: [],
   };
 
   const layout: FrameLayout = {};
@@ -186,15 +193,32 @@ function readFrame(node: SceneNode): FrameRead {
   }
   if (Object.keys(layout).length > 0) read.layout = layout;
 
-  // Collect text content (the node itself, then up to a handful of descendants).
+  // Walk once, collecting text content and every component instance.
   const texts: string[] = [];
-  const collect = (n: BaseNode): void => {
-    if (texts.length >= 12) return;
-    if (n.type === "TEXT" && n.characters.trim()) texts.push(n.characters);
-    if ("children" in n) for (const child of n.children) collect(child);
+  const instances: InstanceNode[] = [];
+  const walk = (n: BaseNode): void => {
+    if (n.type === "TEXT" && n.characters.trim() && texts.length < 12) texts.push(n.characters);
+    if (n.type === "INSTANCE") instances.push(n);
+    if ("children" in n) for (const child of n.children) walk(child);
   };
-  collect(node);
+  walk(node);
   read.texts = texts;
+
+  // Resolve each instance to its component (or component-set) name — the frame's
+  // building blocks. Best-effort: a failed resolve is skipped, deduped, capped.
+  const components: string[] = [];
+  for (const instance of instances.slice(0, 30)) {
+    try {
+      const main = await instance.getMainComponentAsync();
+      if (!main) continue;
+      const parent = main.parent;
+      const name = parent && parent.type === "COMPONENT_SET" ? parent.name : main.name;
+      if (name && !components.includes(name)) components.push(name);
+    } catch {
+      // Ignore an instance whose main component can't be resolved.
+    }
+  }
+  read.components = components;
 
   return read;
 }
@@ -223,7 +247,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       return;
     }
     try {
-      const read = readFrame(node);
+      const read = await readFrame(node);
       // Export the frame as a PNG so the issue can carry the visual target.
       let png: Uint8Array | undefined;
       if ("exportAsync" in node) {

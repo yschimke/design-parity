@@ -40,7 +40,9 @@ import {
   defaultComponentId,
   specToIssueBody,
   specToJson,
+  suggestKind,
   type FrameRead,
+  type SpecKind,
 } from "../src/spec.js";
 import { EDITOR_AXES, knobControls } from "../src/editor.js";
 import { buildImportPlan, type ImportPlan, type PlannedImage } from "../src/plan.js";
@@ -873,7 +875,10 @@ placeSlotsButton.addEventListener("click", async () => {
 const readSelectionButton = document.getElementById("read-selection") as HTMLButtonElement;
 const proposeStatus = document.getElementById("propose-status") as HTMLParagraphElement;
 const proposeOut = document.getElementById("propose-out") as HTMLElement;
+const specKindSelect = document.getElementById("spec-kind") as HTMLSelectElement;
+const specIdLabel = document.getElementById("spec-id-label") as HTMLLabelElement;
 const specIdInput = document.getElementById("spec-id") as HTMLInputElement;
+const specUsesInput = document.getElementById("spec-uses") as HTMLInputElement;
 const specNotesInput = document.getElementById("spec-notes") as HTMLInputElement;
 const downloadPngButton = document.getElementById("download-png") as HTMLButtonElement;
 const issueBodyArea = document.getElementById("issue-body") as HTMLTextAreaElement;
@@ -894,29 +899,45 @@ readSelectionButton.addEventListener("click", () => {
   parent.postMessage({ pluginMessage: { type: "proposeReadSelection" } }, "*");
 });
 
-/** A frame was read: seed the id from its name, reveal the output, render the spec. */
+/** A frame was read: seed the kind/id/uses, reveal the output, render the spec. */
 function onSelectionRead(read: FrameRead, png: Uint8Array | undefined): void {
   lastRead = read;
   lastPng = png;
+  specKindSelect.value = suggestKind(read);
   specIdInput.value = defaultComponentId(read.name);
+  specUsesInput.value = read.components.join(", ");
+  updateIdLabel();
   downloadPngButton.hidden = !png;
   proposeOut.hidden = false;
   renderProposeSpec();
-  proposeSay(`Read “${read.name}”. Edit the target id / notes, then copy the issue.`);
+  proposeSay(`Read “${read.name}”. Pick the kind, edit the id / references, then copy the issue.`);
+}
+
+/** Label the id field for the current kind (a screen has a screen id). */
+function updateIdLabel(): void {
+  specIdLabel.textContent = specKindSelect.value === "screen" ? "Screen id" : "Component id";
 }
 
 /** Rebuild the issue body + spec.json from the last read and the editable fields. */
 function renderProposeSpec(): void {
   if (!lastRead) return;
+  const uses = specUsesInput.value.split(",").map((s) => s.trim()).filter(Boolean);
   const spec = buildFrameSpec(lastRead, {
-    componentId: specIdInput.value,
+    kind: specKindSelect.value as SpecKind,
+    targetId: specIdInput.value,
+    uses,
     notes: specNotesInput.value,
   });
   issueBodyArea.value = specToIssueBody(spec);
   specJsonArea.value = specToJson(spec);
 }
 
+specKindSelect.addEventListener("change", () => {
+  updateIdLabel();
+  renderProposeSpec();
+});
 specIdInput.addEventListener("input", renderProposeSpec);
+specUsesInput.addEventListener("input", renderProposeSpec);
 specNotesInput.addEventListener("input", renderProposeSpec);
 
 /** Copy a textarea's contents (execCommand is the reliable path in a Figma iframe). */
