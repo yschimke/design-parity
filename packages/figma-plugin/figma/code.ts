@@ -8,7 +8,13 @@
  * exhaustive `PluginAPI` to the structural subset the builder needs.
  */
 import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
-import { placeCatalogPng, placeCatalogSvg, type InsertSize } from "../src/insert.js";
+import {
+  placeCatalogComponentSet,
+  placeCatalogPng,
+  placeCatalogSvg,
+  type InsertSetCell,
+  type InsertSize,
+} from "../src/insert.js";
 import type { FrameLayout, FrameRead } from "../src/spec.js";
 import type { ParityDirection } from "../src/direction.js";
 import {
@@ -75,6 +81,15 @@ interface InsertSvgMessage {
   componentId: string;
 }
 
+/** The UI posts this to insert one component as a native Figma component set (all variants). */
+interface InsertComponentSetMessage {
+  type: "insertComponentSet";
+  componentId: string;
+  name: string;
+  /** One fetched cell per ideal render, named with its variant properties. */
+  cells: InsertSetCell[];
+}
+
 /** On startup the UI asks for the persisted catalog registry (custom + last pick). */
 interface RequestRegistryMessage {
   type: "requestRegistry";
@@ -136,6 +151,7 @@ type UiMessage =
   | ImportMessage
   | InsertPngMessage
   | InsertSvgMessage
+  | InsertComponentSetMessage
   | RequestRegistryMessage
   | SaveRegistryMessage
   | ProposeReadSelectionMessage
@@ -292,6 +308,22 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       });
       figma.ui.postMessage({ type: "inserted", name: node.name });
       figma.notify(`Inserted “${node.name}” (SVG).`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "insertError", message });
+      figma.notify(`Insert failed: ${message}`, { error: true });
+    }
+    return;
+  }
+  if (msg.type === "insertComponentSet") {
+    try {
+      const node = placeCatalogComponentSet(figma as unknown as FigmaApi, {
+        componentId: msg.componentId,
+        name: msg.name,
+        cells: msg.cells,
+      });
+      figma.ui.postMessage({ type: "inserted", name: node.name });
+      figma.notify(`Inserted “${node.name}” set (${msg.cells.length} variant${msg.cells.length === 1 ? "" : "s"}).`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       figma.ui.postMessage({ type: "insertError", message });

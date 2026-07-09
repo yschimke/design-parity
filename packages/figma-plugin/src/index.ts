@@ -123,6 +123,7 @@ export {
   indexCatalog,
   selectCatalogImage,
   selectCatalogWireframe,
+  componentSetCells,
   PROP_AXIS_PREFIX,
 } from "./catalogPick.js";
 export type {
@@ -131,14 +132,22 @@ export type {
   PickAxis,
   PickSelection,
   PickedImage,
+  ComponentSetCell,
 } from "./catalogPick.js";
 export {
   placeCatalogPng,
   placeCatalogSvg,
+  placeCatalogComponentSet,
   isCatalogInsert,
   INSERT_ROLE,
 } from "./insert.js";
-export type { InsertOptions, InsertPngOptions, InsertSize } from "./insert.js";
+export type {
+  InsertOptions,
+  InsertPngOptions,
+  InsertSize,
+  InsertSetCell,
+  InsertSetOptions,
+} from "./insert.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";

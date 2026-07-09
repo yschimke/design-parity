@@ -70,8 +70,8 @@ core and the two runtime files stay thin:
 | Path | Realm | Role |
 | --- | --- | --- |
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
-| [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
-| [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` — place one picked component as a raster render or the wireframe vector, stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
+| [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to; `componentSetCells(manifest, id, base)` → the variant cells for a native component-set insert. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
+| [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` / `placeCatalogComponentSet` — place one picked component as a raster render, the wireframe vector, or a native **component set** (all variants), stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
 | [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` (kind: new / edit / screen, target id, referenced components) from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
@@ -169,7 +169,7 @@ component, or import the whole sheet.
 
 ### Insert one component (selective)
 
-![The single-component picker — component, variant, dimensions, and PNG/SVG format](docs/ui-pick-component.png)
+![The single-component picker — component, variant, dimensions, PNG/SVG format, plus "insert all variants as a component set"](docs/ui-pick-component.png)
 
 Instead of dumping the entire catalog, pick exactly what you want:
 
@@ -192,6 +192,13 @@ Instead of dumping the entire catalog, pick exactly what you want:
 **Insert component** places just that one node on the current page, stamped with
 its `componentId` (so it's identifiable) but with no refresh source — a catalog
 render is a static, published artifact.
+
+**Insert all variants (set)** places the *whole* component as a native Figma
+**component set** instead — one `COMPONENT` per render, named with its variant
+properties (`state=…, theme=…, size=…`), combined into one set. It's the reusable
+library form (the same set the whole-catalog *Components* page builds), and it
+ignores the variant/dimension pickers — the set carries every `ideal` render the
+catalog ships for that component.
 
 ### Import the whole catalog (sticker sheet)
 

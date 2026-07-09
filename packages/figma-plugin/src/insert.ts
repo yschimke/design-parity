@@ -76,6 +76,47 @@ export function placeCatalogPng(
   return node;
 }
 
+/** One fetched variant cell for {@link placeCatalogComponentSet}. */
+export interface InsertSetCell {
+  /** Figma variant-property name, e.g. `state=default, theme=light`. */
+  name: string;
+  bytes: Uint8Array;
+  width: number;
+  height: number;
+}
+
+/** Options for {@link placeCatalogComponentSet}. */
+export interface InsertSetOptions extends InsertOptions {
+  cells: InsertSetCell[];
+}
+
+/**
+ * Place a whole component as a native Figma **component set**: one `COMPONENT`
+ * per fetched cell (image fill, named with its variant properties), combined into
+ * a set stamped with the {@link INSERT_ROLE} identity. Mirrors the whole-catalog
+ * Components page (`scene.ts` `renderComponentSet`) for a single picked component
+ * — the reusable library form of the render. `combineAsVariants` parents the set
+ * on the current page; this names, stamps, and zooms it. Throws when there are no
+ * cells to place.
+ */
+export function placeCatalogComponentSet(figma: FigmaApi, opts: InsertSetOptions): FigmaNode {
+  if (opts.cells.length === 0) throw new Error("No renders to place for this component.");
+  const variants: FigmaNode[] = [];
+  for (const cell of opts.cells) {
+    const hash = figma.createImage(cell.bytes).hash;
+    const variant = figma.createComponent();
+    variant.name = cell.name;
+    variant.resize(cell.width, cell.height);
+    variant.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: hash }];
+    variants.push(variant);
+  }
+  const set = figma.combineAsVariants(variants, figma.currentPage);
+  set.name = opts.name ?? opts.componentId ?? "Component";
+  stampInsert(set, opts);
+  figma.viewport.scrollAndZoomIntoView([set]);
+  return set;
+}
+
 /**
  * Place a single catalog component as an **editable vector**: Figma parses the
  * wireframe SVG into a real frame of shapes (not a flat raster), stamped with the
