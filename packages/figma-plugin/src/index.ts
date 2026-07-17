@@ -152,6 +152,8 @@ export type {
   InsertSetOptions,
 } from "./insert.js";
 export { stripLocalRoot, rewriteManifestAssets } from "./localCatalog.js";
+export { diagnoseServerLoad } from "./serverHelp.js";
+export type { ServerHelp, ServerIssue, ServerLoadOutcome } from "./serverHelp.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";

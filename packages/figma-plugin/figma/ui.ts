@@ -56,6 +56,7 @@ import {
   type Preview,
 } from "../src/previews.js";
 import { buildRenderUrl } from "../src/render.js";
+import { diagnoseServerLoad, type ServerLoadOutcome } from "../src/serverHelp.js";
 import { buildSlotsUrl, parseSlotsResponse } from "../src/slots.js";
 import { slotSizeAxes } from "../src/structure.js";
 
@@ -743,6 +744,10 @@ const formatSelect = document.getElementById("format") as HTMLSelectElement;
 const refreshButton = document.getElementById("refresh") as HTMLButtonElement;
 const refreshAtSizeButton = document.getElementById("refresh-size") as HTMLButtonElement;
 const editorStatus = document.getElementById("editor-status") as HTMLParagraphElement;
+const editorHelp = document.getElementById("editor-help") as HTMLElement;
+const editorHelpTitle = document.getElementById("editor-help-title") as HTMLParagraphElement;
+const editorHelpDetail = document.getElementById("editor-help-detail") as HTMLParagraphElement;
+const editorHelpSteps = document.getElementById("editor-help-steps") as HTMLOListElement;
 
 /** Progress counters for an in-flight Refresh (main thread reports each node done). */
 let refreshExpected = 0;
@@ -755,6 +760,22 @@ function editorSay(text: string): void {
   editorStatus.textContent = text;
 }
 
+/** Render the educational panel for a failed load, and hide the picker. */
+function showServerHelp(outcome: ServerLoadOutcome): void {
+  const help = diagnoseServerLoad(outcome);
+  editorHelpTitle.textContent = help.title;
+  editorHelpDetail.textContent = help.detail;
+  editorHelpSteps.replaceChildren();
+  for (const step of help.steps) {
+    const li = document.createElement("li");
+    li.textContent = step;
+    editorHelpSteps.append(li);
+  }
+  editorHelp.hidden = false;
+  editorPick.hidden = true;
+  editorSay(help.title);
+}
+
 editorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const serverBase = serverInput.value.trim().replace(/\/+$/, "");
@@ -765,23 +786,42 @@ editorForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  editorSay("Loading previews…");
+  editorHelp.hidden = true;
+
+  // Fetch by hand (not fetchJson) so we can classify the failure — unreachable
+  // host vs HTTP error vs non-serve host — into an educational message.
+  let res: Response;
   try {
-    editorSay("Loading previews…");
-    const body = await fetchJson<unknown>(previewsUrl(serverBase, system, token || undefined));
-    const response = parsePreviewsResponse(body);
-    if (!response || response.previews.length === 0) {
-      editorSay("No previews at that server / system.");
-      editorPick.hidden = true;
-      return;
-    }
-    loaded = { previews: response.previews, serverBase, system, token };
-    populatePreviews(response.previews);
-    editorPick.hidden = false;
-    editorSay(`${response.previews.length} component${response.previews.length === 1 ? "" : "s"} — pick one, edit its knobs, and place.`);
+    res = await fetch(previewsUrl(serverBase, system, token || undefined));
   } catch (err) {
-    editorSay(err instanceof Error ? err.message : String(err));
-    editorPick.hidden = true;
+    showServerHelp({ serverBase, system, networkError: err instanceof Error ? err.message : String(err) });
+    return;
   }
+  if (!res.ok) {
+    showServerHelp({ serverBase, system, httpStatus: res.status });
+    return;
+  }
+
+  let response: ReturnType<typeof parsePreviewsResponse>;
+  try {
+    response = parsePreviewsResponse(await res.json());
+  } catch {
+    response = undefined;
+  }
+  if (!response) {
+    showServerHelp({ serverBase, system, badSchema: true });
+    return;
+  }
+  if (response.previews.length === 0) {
+    showServerHelp({ serverBase, system, emptyPreviews: true });
+    return;
+  }
+
+  loaded = { previews: response.previews, serverBase, system, token };
+  populatePreviews(response.previews);
+  editorPick.hidden = false;
+  editorSay(`${response.previews.length} component${response.previews.length === 1 ? "" : "s"} — pick one, edit its knobs, and place.`);
 });
 
 function populatePreviews(previews: Preview[]): void {

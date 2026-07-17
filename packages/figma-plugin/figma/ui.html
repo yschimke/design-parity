@@ -43,6 +43,15 @@
   .knob.bool input { width: auto; }
   .group-title { font-weight: 600; margin: 16px 0 0; opacity: 0.8; }
 
+  /* Server-not-running education */
+  .help { margin-top: 12px; padding: 12px; border-radius: 8px;
+          border: 1px solid rgba(255,176,32,0.5); background: rgba(255,176,32,0.10); }
+  .help[hidden] { display: none; }
+  .help-title { font-weight: 600; margin: 0 0 4px; }
+  .help-detail { margin: 0 0 8px; opacity: 0.85; }
+  .help ol { margin: 0; padding-left: 18px; }
+  .help li { margin: 4px 0; }
+
   /* Register-a-catalog block */
   .register { margin-top: 12px; padding: 12px; border-radius: 8px;
               border: 1px solid rgba(128,128,128,0.35); background: rgba(128,128,128,0.06); }
@@ -172,6 +181,13 @@
       <button type="submit" class="primary">Load previews</button>
     </div>
   </form>
+
+  <!-- Educational panel shown when no compose-preview serve host is reachable. -->
+  <div id="editor-help" class="help" hidden>
+    <p class="help-title" id="editor-help-title"></p>
+    <p class="help-detail" id="editor-help-detail"></p>
+    <ol id="editor-help-steps"></ol>
+  </div>
 
   <div id="editor-pick" hidden>
     <div class="field">
