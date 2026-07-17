@@ -154,9 +154,11 @@ export interface PlanOptions {
   redlines?: boolean;
 }
 
-/** Resolve a manifest image path against the base URL (absolute paths pass through). */
+/** Resolve a manifest image path against the base URL (absolute paths pass through).
+ *  `blob:` passes through too, so a **local catalog** can rewrite its asset paths to
+ *  object URLs and reuse the same fetch-based flow with no base. */
 export function resolveImageUrl(baseUrl: string, path: string): string {
-  if (/^(https?:|data:)/i.test(path)) return path;
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
   const root = baseUrl.replace(/\/+$/, "");
   const rel = path.replace(/^\/+/, "");
   return `${root}/${rel}`;

@@ -150,6 +150,7 @@ export type {
   InsertSetCell,
   InsertSetOptions,
 } from "./insert.js";
+export { stripLocalRoot, rewriteManifestAssets } from "./localCatalog.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
 export { planToSvg } from "./preview.js";
