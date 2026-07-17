@@ -7,6 +7,7 @@ import {
   knobKey,
   knobValue,
   nonBlankOverrides,
+  withRenderSize,
   type RenderSource,
 } from "../src/render.js";
 
@@ -86,5 +87,30 @@ describe("override helpers", () => {
       ["a", "1"],
       ["d", "x"],
     ]);
+  });
+});
+
+describe("withRenderSize", () => {
+  const source: RenderSource = {
+    serverBase: "http://h:1",
+    token: "t",
+    previewId: "Button/Filled",
+    overrides: { uiMode: "dark" },
+    format: "png",
+  };
+
+  it("pins widthPx/heightPx (rounded) without disturbing other overrides", () => {
+    const sized = withRenderSize(source, 240.4, 72.6);
+    expect(sized.overrides).toEqual({ uiMode: "dark", widthPx: "240", heightPx: "73" });
+    // Original is untouched.
+    expect(source.overrides).toEqual({ uiMode: "dark" });
+    // Feeds straight into the render URL.
+    expect(buildRenderUrl(sized)).toContain("widthPx=240&heightPx=73");
+  });
+
+  it("overwrites a previous size on a repeat resize", () => {
+    const once = withRenderSize(source, 100, 50);
+    const twice = withRenderSize(once, 300, 150);
+    expect(twice.overrides).toMatchObject({ widthPx: "300", heightPx: "150" });
   });
 });

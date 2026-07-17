@@ -93,6 +93,23 @@ export function nonBlankOverrides(overrides: Record<string, string>): [string, s
 }
 
 /**
+ * A copy of a {@link RenderSource} pinned to a pixel size — its `widthPx` /
+ * `heightPx` overrides set from a placed node's current on-canvas dimensions, so
+ * a re-render lays the component out **for that size** (not just scales the old
+ * raster). Rounded to whole pixels; the rest of the source is untouched.
+ */
+export function withRenderSize(source: RenderSource, width: number, height: number): RenderSource {
+  return {
+    ...source,
+    overrides: {
+      ...source.overrides,
+      widthPx: String(Math.round(width)),
+      heightPx: String(Math.round(height)),
+    },
+  };
+}
+
+/**
  * Build the `/render/<id>.<fmt>` URL for a {@link RenderSource} (pure). Mirrors
  * `ServeUrls.renderUrl`: the id is a percent-encoded path segment, the token and
  * each override *value* are percent-encoded (keys are passed through, as the

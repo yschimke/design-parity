@@ -211,6 +211,19 @@ that variant and lays out a `<system> — Catalog` page with the matching
 annotation layer and a variable collection (light/dark become Figma modes),
 reconciling in place on re-import (see below).
 
+## Re-render at the desired size (live)
+
+A placed **live render** (from the Override editor) is a raster, so scaling it up
+blurs. When you've dragged it to the size you actually want, **Refresh → At
+current size** re-renders it at its on-canvas dimensions: the plugin pins
+`widthPx` / `heightPx` (via [`withRenderSize`](src/render.ts)) from the node's
+current width/height and re-fetches, so the `compose-preview serve` host
+**re-lays-out** the component for that size — not just rescales the old pixels —
+and the node remembers the size for later refreshes. (For a *catalog* render that
+should scale losslessly, insert it as **SVG** instead.)
+
+![The Override editor's Refresh — "At current size" beside "Refresh selected"](docs/ui-rerender-size.png)
+
 ## Propose a spec → issue (design → code)
 
 ![The Propose-spec tab — read a frame into a spec and a ready-to-file GitHub issue](docs/ui-propose-spec.png)
