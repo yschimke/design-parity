@@ -125,9 +125,11 @@ export {
   groupComponents,
   selectCatalogImage,
   selectCatalogWireframe,
+  selectCatalogDesignVector,
   componentSetCells,
   PROP_AXIS_PREFIX,
 } from "./catalogPick.js";
+export { svgRasterHrefs, inlineSvgRasters } from "./svgRaster.js";
 export type {
   CatalogIndex,
   ComponentGroup,

@@ -19,12 +19,14 @@ import {
   componentSetCells,
   groupComponents,
   indexCatalog,
+  selectCatalogDesignVector,
   selectCatalogImage,
   selectCatalogWireframe,
   type CatalogIndex,
   type PickComponent,
   type PickSelection,
 } from "../src/catalogPick.js";
+import { inlineSvgRasters, svgRasterHrefs } from "../src/svgRaster.js";
 import {
   dehydrateRegistry,
   hydrateRegistry,
@@ -326,13 +328,8 @@ insertButton.addEventListener("click", async () => {
   const name = insertName(component, selection);
   try {
     if (pickFormat.value === "svg") {
-      const url = selectCatalogWireframe(catalog.manifest, component.componentId, catalog.base);
-      if (!url) {
-        say("This component has no wireframe SVG — insert it as PNG instead.");
-        return;
-      }
-      say(`Fetching ${name} (SVG)…`);
-      const svg = await fetchText(url);
+      const svg = await resolveInsertSvg(component, name);
+      if (svg === undefined) return; // resolveInsertSvg already reported why
       parent.postMessage(
         { pluginMessage: { type: "insertSvg", svg, name, componentId: component.componentId } },
         "*",
@@ -452,6 +449,64 @@ async function importWholeCatalog(): Promise<void> {
   } catch (err) {
     say(err instanceof Error ? err.message : String(err));
   }
+}
+
+/**
+ * Resolve the SVG text to insert for a component: the **editable design vector**
+ * (`figma/<slug>.svg`, the `compose/figma-svg` export) with its raster crops
+ * inlined so Figma can place it, falling back to the schematic **wireframe** when
+ * the design vector isn't published. Returns `undefined` (after reporting) when
+ * neither is available.
+ */
+async function resolveInsertSvg(component: PickComponent, name: string): Promise<string | undefined> {
+  if (!catalog) return undefined;
+
+  const vectorUrl = selectCatalogDesignVector(catalog.manifest, component.componentId, catalog.base);
+  if (vectorUrl) {
+    try {
+      say(`Fetching ${name} (design vector)…`);
+      return await inlineRasters(await fetchText(vectorUrl), vectorUrl);
+    } catch {
+      // Not published for this component (404) — fall through to the wireframe.
+    }
+  }
+
+  const wireframeUrl = selectCatalogWireframe(catalog.manifest, component.componentId, catalog.base);
+  if (wireframeUrl) {
+    try {
+      say(`Fetching ${name} (wireframe)…`);
+      return await fetchText(wireframeUrl);
+    } catch {
+      // Fall through to the no-vector message.
+    }
+  }
+
+  say("No SVG vector available for this component — insert it as PNG instead.");
+  return undefined;
+}
+
+/**
+ * Inline a design vector's external raster crops as `data:` URIs — Figma's
+ * `createNodeFromSvg` can't resolve external hrefs. Vector-only SVGs pass straight
+ * through. Crop URLs resolve next to the SVG (`figma/<slug>.figma-raster/<node>.png`).
+ */
+async function inlineRasters(svg: string, svgUrl: string): Promise<string> {
+  const hrefs = svgRasterHrefs(svg);
+  if (hrefs.length === 0) return svg;
+  const dir = svgUrl.replace(/[^/]+$/, "");
+  const dataUriByHref = new Map<string, string>();
+  for (const href of hrefs) {
+    const url = /^(https?:|data:)/i.test(href) ? href : dir + href;
+    dataUriByHref.set(href, bytesToDataUri(await fetchBytes(url), "image/png"));
+  }
+  return inlineSvgRasters(svg, dataUriByHref);
+}
+
+/** Encode raw bytes as a `data:` URI (base64) for inlining into an SVG. */
+function bytesToDataUri(bytes: Uint8Array, mime: string): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+  return `data:${mime};base64,${btoa(binary)}`;
 }
 
 /** The {@link PickComponent} currently chosen in the component dropdown. */

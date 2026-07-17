@@ -73,6 +73,7 @@ core and the two runtime files stay thin:
 | [`src/localCatalog.ts`](src/localCatalog.ts) | pure (tested) | `stripLocalRoot(path)` + `rewriteManifestAssets(manifest, urlFor)` — load a catalog from a **local folder** (offline) by rewriting its asset paths to `blob:` object URLs the existing fetch-based flow reuses. No `figma`, no `fetch`. |
 | [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `groupComponents(index, query)` → the search-filtered, group-bucketed list behind the picker dropdown; `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to; `componentSetCells(manifest, id, base)` → the variant cells for a native component-set insert. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
 | [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` / `placeCatalogComponentSet` — place one picked component as a raster render, the wireframe vector, or a native **component set** (all variants), stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
+| [`src/svgRaster.ts`](src/svgRaster.ts) | pure (tested) | `svgRasterHrefs(svg)` / `inlineSvgRasters(svg, map)` — find and inline a design vector's external raster crops as `data:` URIs so Figma's `createNodeFromSvg` can place a hybrid `compose/figma-svg` sticker. No `figma`, no `fetch`. |
 | [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` (kind: new / edit / screen, target id, referenced components) from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
@@ -202,8 +203,13 @@ Instead of dumping the entire catalog, pick exactly what you want:
 
   ![Switch/On exposes only a Theme dimension — no Variant/Size/Content, because those axes are single-valued for it](docs/ui-pick-switch.png)
 - **Insert as** — **PNG** (the shipping raster render for the chosen
-  variant/dimensions) or **SVG** (the component's editable wireframe vector).
-  SVG is offered only when the catalog ships a wireframe for that component.
+  variant/dimensions, a fixed-size raster) or **SVG** (the component's **editable
+  design vector** — the `compose/figma-svg` export at `figma/<slug>.svg`, which
+  **scales crisply to any size**). The SVG path prefers the design vector and
+  **falls back to the schematic wireframe** when a design vector isn't published;
+  a hybrid sticker's raster crops are inlined as `data:` URIs so Figma can place
+  it (`createNodeFromSvg` can't fetch external hrefs). SVG is offered whenever the
+  catalog ships a vector for the component.
 
 **Insert component** places just that one node on the current page, stamped with
 its `componentId` (so it's identifiable) but with no refresh source — a catalog
