@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # release-please commits/tags; publish job pushes the version sync
+  contents: write # release-please commits/tags the release
   pull-requests: write # release-please maintains the release PR
   id-token: write # OIDC trusted publishing + provenance
 
@@ -46,7 +46,9 @@ jobs:
         run: npm install -g npm@latest
       - run: npm ci
       # release-please bumps the root version; fan it out to every workspace
-      # package + internal dependency range before publishing.
+      # package + internal dependency range before publishing. This runs in the
+      # runner's working tree only and is not committed back (see the note after
+      # the publish step).
       - name: Sync workspace versions to the release
         run: npm run set-version "$(node -p "require('./package.json').version")"
       - run: npm run build
@@ -84,11 +86,11 @@ jobs:
             fi
           done
           exit $fail
-      - name: Commit the version sync back to main
-        run: |
-          if ! git diff --quiet; then
-            v="$(node -p "require('./package.json').version")"
-            git -c user.name='Yuri Schimke' -c user.email='yuri@schimke.ee' \
-              commit -am "chore: sync workspace versions to v$v [skip ci]"
-            git push origin HEAD:main
-          fi
+      # The version fan-out above stays in the runner's working tree only — we
+      # deliberately do NOT commit it back to main. The published packages carry
+      # the correct version (set-version derives it fresh from the tagged root
+      # version on every run), and the release-please manifest + git tag are the
+      # source of truth. This matches the sibling repos (compose-ai-tools,
+      # meshcore-mobile), whose release builds also derive the version from the
+      # tag and never push to main — a direct push would violate the shared
+      # "Protect Main" ruleset (PR + status checks required, no bot bypass).

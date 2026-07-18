@@ -100,8 +100,15 @@ tagging:
    out to every workspace package + internal `^` range, builds, tests, and
    `npm publish --workspaces`es over OIDC. The private root is skipped.
 
-The publish job commits the version fan-out back to `main` (authored as the repo
-owner, not a bot, to satisfy the human-authorship rule). Config lives in
+The fan-out runs in the release runner's working tree only — it is **not**
+committed back to `main`. The published packages carry the correct version
+(`set-version` re-derives it from the tagged root version on every run), and the
+git tag + [`.release-please-manifest.json`](./.release-please-manifest.json) are
+the source of truth; the workspace `package.json` versions on `main` are just a
+derived-at-publish detail. This matches the sibling repos (compose-ai-tools,
+meshcore-mobile), whose release builds likewise derive the version from the tag
+and never push to `main`. A direct push would violate the shared "Protect Main"
+ruleset (PR + status checks required, no bot bypass) anyway. Config lives in
 [`release-please-config.json`](./release-please-config.json) +
 [`.release-please-manifest.json`](./.release-please-manifest.json); a single
 component at `.` with `include-component-in-tag: false` gives the one shared
