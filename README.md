@@ -77,6 +77,11 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
   [`REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md). Importing a
   delivery branch into Figma (one file per system) is documented in
   [`FIGMA_IMPORT.md`](./docs/design-artifacts/FIGMA_IMPORT.md).
+- [Feedback integration](./docs/feedback-integration.md) — design sketch for
+  turning a finding into durable feedback (GitHub issue / pinned Figma comment):
+  the fingerprint key, direction-default routing with human override, the delivery
+  surfaces (unattended, static prefilled links, interactive via the trusted preview
+  host), and the auth model.
 - [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
 
 ## Use
