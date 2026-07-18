@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.27](https://github.com/yschimke/design-parity/compare/v0.1.26...v0.1.27) (2026-07-18)
+
+
+### Features
+
+* **catalog-export:** carry a component section for tabbed catalog pages ([#233](https://github.com/yschimke/design-parity/issues/233)) ([3d95de3](https://github.com/yschimke/design-parity/commit/3d95de3aad2c72ba8544900694f0c024518977b0))
+* **figma-plugin:** bridge a picked catalog component into live customization ([#232](https://github.com/yschimke/design-parity/issues/232)) ([10cbfaf](https://github.com/yschimke/design-parity/commit/10cbfaf82702d59e62ed021342a0b4c960627fb5))
+* **figma-plugin:** insert the editable design vector (figma-svg), not the wireframe ([#227](https://github.com/yschimke/design-parity/issues/227)) ([c138dfd](https://github.com/yschimke/design-parity/commit/c138dfd8205dff05195764dcd55f2d4f0b607b92))
+* **figma-plugin:** load a catalog from a local folder (offline, no server) ([#229](https://github.com/yschimke/design-parity/issues/229)) ([032fb48](https://github.com/yschimke/design-parity/commit/032fb489d3d3e236311790c63c0c60943e84ec27))
+* **figma-plugin:** re-render a live node at its current on-canvas size ([#230](https://github.com/yschimke/design-parity/issues/230)) ([71aced3](https://github.com/yschimke/design-parity/commit/71aced350c89c2f2cc890099491242a16414bb7f))
+* **figma-plugin:** teach the user when no preview server is reachable ([#228](https://github.com/yschimke/design-parity/issues/228)) ([f77d818](https://github.com/yschimke/design-parity/commit/f77d818b0576473810bb2ee5f70ca71db494479e))
+
 ## [0.1.26](https://github.com/yschimke/design-parity/compare/v0.1.25...v0.1.26) (2026-07-09)
 
 
