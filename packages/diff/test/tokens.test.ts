@@ -124,7 +124,13 @@ describe("diffTokens", () => {
   });
 
   it("flags an absent token: numeric is a hard error, unmappable colour is advisory (#102)", () => {
-    const findings = diffTokens(spec, { spacing: { padding: 16 } }, defaultDiffConfig);
+    // The candidate resolved *some* radius and colour (so both groups are
+    // verifiable), just not the ones the spec names.
+    const findings = diffTokens(
+      spec,
+      { spacing: { padding: 16 }, radius: { other: 20 }, colors: { fg: "#000000" } },
+      defaultDiffConfig,
+    );
     // radius.corner (numeric) stays strict → error; colors.label maps to no
     // Material role and didn't value-match → non-blocking advisory.
     expect(findings).toHaveLength(2);
@@ -285,8 +291,10 @@ describe("diffTokens", () => {
     it("reports a colour that maps to no Material role as advisory, not missing (#102)", () => {
       // `label` is not a colour role; with no value match it's unverifiable, so
       // a non-blocking advisory rather than a false `missing` error.
+      // The candidate resolved *some* colour (so the group is verifiable), just
+      // not one that lines up with `label`.
       const designSpec: DesignTokens = { colors: { label: "#FFFFFF" } };
-      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      const findings = diffTokens(designSpec, { colors: { bg: "#000000" } }, defaultDiffConfig);
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({
         severity: "info",
@@ -295,22 +303,56 @@ describe("diffTokens", () => {
     });
 
     it("keeps a role-mapped colour the candidate lacks as a hard error (#102)", () => {
-      // `onSurface` IS a Material role; the candidate genuinely lacking it is a
-      // real gap, not an unmappable one.
+      // `onSurface` IS a Material role; a candidate that resolved other colours
+      // but genuinely lacks this one is a real gap, not an unmappable one.
       const designSpec: DesignTokens = { colors: { onSurface: "#161D1B" } };
-      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      const findings = diffTokens(designSpec, { colors: { bg: "#000000" } }, defaultDiffConfig);
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({ severity: "error", detail: { actual: null } });
     });
 
     it("reports an unmappable typography token as advisory (#102)", () => {
       const designSpec: DesignTokens = { typography: { caption: { fontSize: 12 } } };
-      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      const findings = diffTokens(
+        designSpec,
+        { typography: { bodyLarge: { fontSize: 16 } } },
+        defaultDiffConfig,
+      );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({
         severity: "info",
         detail: { token: "typography.caption", unmapped: true },
       });
+    });
+
+    it("collapses a group the candidate resolved nothing for into one note, not N errors", () => {
+      // The geometry-only-capture case: the candidate surfaces no colours at all,
+      // so comparing the whole palette would emit an identical `missing` error per
+      // token. Instead of a dozen hard errors (and a false fail), one non-blocking
+      // note says compliance couldn't be evaluated — an extraction gap, not proof
+      // the candidate is wrong (issue #102, extended to whole groups).
+      const designSpec: DesignTokens = {
+        colors: { onSurface: "#161D1B", primary: "#006A60", secondary: "#4A635F" },
+      };
+      const findings = diffTokens(designSpec, {}, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        kind: "token",
+        severity: "info",
+        detail: { token: "colors.*", unverified: true, specCount: 3 },
+      });
+    });
+
+    it("still verifies a group the candidate did resolve, even if another is empty", () => {
+      // Colours are absent (→ one note) but radius is present and correct (→ no
+      // finding): the empty group must not suppress the group that can be checked.
+      const designSpec: DesignTokens = {
+        colors: { onSurface: "#161D1B", primary: "#006A60" },
+        radius: { corner: 16 },
+      };
+      const findings = diffTokens(designSpec, { radius: { corner: 16 } }, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ detail: { token: "colors.*", unverified: true } });
     });
 
     it("lets an explicit alias override the heuristic", () => {
