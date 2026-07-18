@@ -71,6 +71,7 @@ core and the two runtime files stay thin:
 | --- | --- | --- |
 | [`src/plan.ts`](src/plan.ts) | pure (tested) | `buildImportPlan(manifest, opts)` → an `ImportPlan` describing every frame, image URL, greenline/redline, and the Figma variable collection. No `figma`, no `fetch`. |
 | [`src/localCatalog.ts`](src/localCatalog.ts) | pure (tested) | `stripLocalRoot(path)` + `rewriteManifestAssets(manifest, urlFor)` — load a catalog from a **local folder** (offline) by rewriting its asset paths to `blob:` object URLs the existing fetch-based flow reuses. No `figma`, no `fetch`. |
+| [`src/liveBridge.ts`](src/liveBridge.ts) | pure (tested) | `liveBridgeTarget(id, system, livePreviewUrl?)` + `matchPreview(previews, target)` — the **catalog → live** handoff: derive the server/system/preview to tee up in the Override editor from a picked component (using the catalog's `livePreview` deep link when present, else a fuzzy match). No `figma`, no `fetch`. |
 | [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `groupComponents(index, query)` → the search-filtered, group-bucketed list behind the picker dropdown; `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to; `componentSetCells(manifest, id, base)` → the variant cells for a native component-set insert. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
 | [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` / `placeCatalogComponentSet` — place one picked component as a raster render, the wireframe vector, or a native **component set** (all variants), stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
 | [`src/svgRaster.ts`](src/svgRaster.ts) | pure (tested) | `svgRasterHrefs(svg)` / `inlineSvgRasters(svg, map)` — find and inline a design vector's external raster crops as `data:` URIs so Figma's `createNodeFromSvg` can place a hybrid `compose/figma-svg` sticker. No `figma`, no `fetch`. |
@@ -242,6 +243,20 @@ start a host, and that browsing/inserting published renders on the **Catalog
 import** tab works with **no server at all**.
 
 ![The Override editor's server-not-reachable guidance](docs/ui-server-help.png)
+
+## Customise live — the catalog → editor bridge
+
+Catalog renders are *baked* (fixed sizes/variants). To customise a component —
+tweak knobs, render at an arbitrary size — you need the live Override editor.
+**Customise live →** on a picked component bridges the two: it hands the
+component to the Override editor, prefilling the **server** and **system** from
+the catalog's `livePreview` deep link (when the catalog carries one — otherwise
+just the system, and you supply the host), switches tabs, loads previews, and
+**auto-selects** that component so you land ready to tweak + size + place. So
+browsing flows straight into live customization instead of re-entering
+everything by hand.
+
+![Customise live → hands the picked component to the Override editor, teed up](docs/ui-customise-live.png)
 
 ## Re-render at the desired size (live)
 

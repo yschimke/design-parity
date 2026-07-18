@@ -27,6 +27,7 @@ import {
   type PickSelection,
 } from "../src/catalogPick.js";
 import { inlineSvgRasters, svgRasterHrefs } from "../src/svgRaster.js";
+import { liveBridgeTarget, matchPreview, type LiveBridgeTarget } from "../src/liveBridge.js";
 import {
   dehydrateRegistry,
   hydrateRegistry,
@@ -92,6 +93,7 @@ const pickDimensions = document.getElementById("pick-dimensions") as HTMLElement
 const pickFormat = document.getElementById("pick-format") as HTMLSelectElement;
 const insertButton = document.getElementById("insert") as HTMLButtonElement;
 const insertSetButton = document.getElementById("insert-set") as HTMLButtonElement;
+const customiseLiveButton = document.getElementById("customise-live") as HTMLButtonElement;
 const importAllButton = document.getElementById("import-all") as HTMLButtonElement;
 const loadFolderButton = document.getElementById("load-folder") as HTMLButtonElement;
 const folderInput = document.getElementById("folder") as HTMLInputElement;
@@ -113,6 +115,9 @@ let catalog:
       index: CatalogIndex;
     }
   | undefined;
+
+/** A pending catalog→editor handoff: the component to select once previews load. */
+let pendingLiveTarget: LiveBridgeTarget | undefined;
 
 function say(text: string): void {
   status.textContent = text;
@@ -876,7 +881,51 @@ editorForm.addEventListener("submit", async (event) => {
   loaded = { previews: response.previews, serverBase, system, token };
   populatePreviews(response.previews);
   editorPick.hidden = false;
+
+  // If we arrived here via "Customise live →", select the handed-off component.
+  if (pendingLiveTarget) {
+    const match = matchPreview(response.previews, pendingLiveTarget);
+    if (match) {
+      previewSelect.value = match.id;
+      renderControls();
+      editorSay(`Customising “${match.label}” — edit its knobs, set a size, and Place.`);
+    } else {
+      editorSay(`Loaded ${response.previews.length} previews — pick “${pendingLiveTarget.componentId}” to customise.`);
+    }
+    pendingLiveTarget = undefined;
+    return;
+  }
+
   editorSay(`${response.previews.length} component${response.previews.length === 1 ? "" : "s"} — pick one, edit its knobs, and place.`);
+});
+
+// The catalog → live bridge: hand the picked component to the Override editor,
+// prefilling the server + system (from the catalog's livePreview deep link when
+// present) so browsing flows straight into live customization at any size.
+customiseLiveButton.addEventListener("click", () => {
+  if (!catalog) return;
+  const component = selectedComponent();
+  if (!component) return;
+
+  // Resolve the currently-picked variant/dimensions to its image's livePreview link.
+  const selection: PickSelection = { componentId: component.componentId, dimensions: collectDimensions() };
+  if (component.variant && pickVariant.value) selection.variant = pickVariant.value;
+  const picked = selectCatalogImage(catalog.manifest, selection, catalog.base);
+
+  const target = liveBridgeTarget(component.componentId, catalog.manifest.system, picked?.image.livePreview);
+  pendingLiveTarget = target;
+
+  // Prefill the editor and switch to it.
+  if (target.serverBase) serverInput.value = target.serverBase;
+  if (target.system) systemInput.value = target.system;
+  (document.getElementById("tab-editor") as HTMLButtonElement).click();
+
+  if (target.serverBase) {
+    // The catalog knew a host — load its previews and auto-select the component.
+    editorForm.requestSubmit();
+  } else {
+    editorSay(`Enter a compose-preview serve host, then Load previews to customise “${component.componentId}”.`);
+  }
 });
 
 function populatePreviews(previews: Preview[]): void {

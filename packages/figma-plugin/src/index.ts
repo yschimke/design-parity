@@ -153,6 +153,8 @@ export type {
   InsertSetCell,
   InsertSetOptions,
 } from "./insert.js";
+export { parseLivePreview, liveBridgeTarget, matchPreview } from "./liveBridge.js";
+export type { LiveBridgeTarget } from "./liveBridge.js";
 export { stripLocalRoot, rewriteManifestAssets } from "./localCatalog.js";
 export { diagnoseServerLoad } from "./serverHelp.js";
 export type { ServerHelp, ServerIssue, ServerLoadOutcome } from "./serverHelp.js";
