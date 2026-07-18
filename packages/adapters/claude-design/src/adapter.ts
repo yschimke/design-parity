@@ -33,6 +33,7 @@ import { loadDtcgTokens } from "@design-parity/core";
 
 import { parseHandoff, type HandoffManifest } from "./html-export.js";
 import { readPngSize } from "./png.js";
+import { readSvgSize } from "./svg.js";
 import { browserRasterizer, type Rasterizer } from "./rasterizer.js";
 import {
   puppeteerLayoutExtractor,
@@ -250,9 +251,13 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
       let height: number;
 
       if (variant.src) {
-        const pngPath = resolve(htmlDir, variant.src);
-        ({ width, height } = await readPngSize(pngPath));
-        uri = repoRelative(repoRoot, pngPath);
+        // A committed reference image is a PNG or a vector SVG; read its
+        // intrinsic size from the bytes either way (never the manifest).
+        const srcPath = resolve(htmlDir, variant.src);
+        ({ width, height } = /\.svg$/i.test(variant.src)
+          ? await readSvgSize(srcPath)
+          : await readPngSize(srcPath));
+        uri = repoRelative(repoRoot, srcPath);
       } else {
         const rendered = await this.#rasterize({
           htmlPath,

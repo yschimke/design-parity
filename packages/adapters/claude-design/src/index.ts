@@ -37,3 +37,5 @@ export {
 } from "./layout-extractor.js";
 
 export { readPngSize, parsePngSize, type PngSize } from "./png.js";
+
+export { readSvgSize, parseSvgSize, type SvgSize } from "./svg.js";
