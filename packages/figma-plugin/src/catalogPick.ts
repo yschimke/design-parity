@@ -253,6 +253,44 @@ export function selectCatalogWireframe(
   return resolveImageUrl(baseUrl, component.wireframe);
 }
 
+/** A filesystem-safe slug for a component id (matches `catalog-export`'s `slug`). */
+function componentSlug(componentId: string): string {
+  return (
+    componentId
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "x"
+  );
+}
+
+/**
+ * Bundle-relative path to a component's **editable design vector** — the
+ * `compose/figma-svg` export the delivery branch now ships at `figma/<slug>.svg`
+ * (a design-fidelity vector render, not the schematic wireframe). The slug matches
+ * the wireframe's, so when a wireframe path is present it's reused verbatim (just
+ * the `wireframes/` → `figma/` directory); otherwise it's derived from the id.
+ */
+function designVectorPath(component: CatalogManifestComponent): string {
+  if (component.wireframe) return component.wireframe.replace(/^wireframes\//, "figma/");
+  return `figma/${componentSlug(component.componentId)}.svg`;
+}
+
+/**
+ * The absolute URL of a component's **editable design vector** (`figma/<slug>.svg`,
+ * the `compose/figma-svg` export) by delivery-branch convention. Returned for any
+ * known component — the file's presence is confirmed at fetch time, with the
+ * wireframe as the fallback. `undefined` only when the component id is unknown.
+ */
+export function selectCatalogDesignVector(
+  manifest: CatalogManifest,
+  componentId: string,
+  baseUrl: string,
+): string | undefined {
+  const component = manifest.components.find((c) => c.componentId === componentId);
+  if (!component) return undefined;
+  return resolveImageUrl(baseUrl, designVectorPath(component));
+}
+
 /** One variant cell of a component set: the render plus its Figma variant-property name. */
 export interface ComponentSetCell {
   /** Bundle-relative source path (for dedup / diagnostics). */

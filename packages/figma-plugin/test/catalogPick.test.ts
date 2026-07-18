@@ -6,6 +6,7 @@ import {
   componentSetCells,
   groupComponents,
   indexCatalog,
+  selectCatalogDesignVector,
   selectCatalogImage,
   selectCatalogWireframe,
 } from "../src/catalogPick.js";
@@ -225,5 +226,27 @@ describe("selectCatalogWireframe", () => {
     );
     expect(selectCatalogWireframe(manifest, "Switch/On", "https://cdn.example/compose-m3")).toBeUndefined();
     expect(selectCatalogWireframe(manifest, "Nope", "https://cdn.example/compose-m3")).toBeUndefined();
+  });
+});
+
+describe("selectCatalogDesignVector", () => {
+  const base = "https://cdn.example/compose-m3";
+
+  it("reuses the wireframe's slug (wireframes/ → figma/) when a wireframe is present", () => {
+    // Button/Filled has wireframe = wireframes/button-filled.svg.
+    expect(selectCatalogDesignVector(manifest, "Button/Filled", base)).toBe(
+      "https://cdn.example/compose-m3/figma/button-filled.svg",
+    );
+  });
+
+  it("derives figma/<slug>.svg from the component id when there's no wireframe", () => {
+    // Switch/On has no wireframe; slug lowercases and replaces the slash.
+    expect(selectCatalogDesignVector(manifest, "Switch/On", base)).toBe(
+      "https://cdn.example/compose-m3/figma/switch-on.svg",
+    );
+  });
+
+  it("returns undefined only for an unknown component", () => {
+    expect(selectCatalogDesignVector(manifest, "Nope", base)).toBeUndefined();
   });
 });
