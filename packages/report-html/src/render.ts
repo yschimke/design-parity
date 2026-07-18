@@ -249,35 +249,73 @@ function variantMarkup(
   const cand: Panel = { label: "Candidate", src: candSrc };
   const diff: Panel = { label: "Diff", src: diffSrc };
 
-  // The overlay stacks reference under candidate; the slider sets candidate
-  // opacity so you can wipe between them. Only meaningful when both exist.
-  const overlay =
-    refSrc && candSrc
-      ? `<div class="overlay">
-           <div class="overlay-stack">
-             <img class="overlay-ref" src="${refSrc}" alt="reference" />
-             <img class="overlay-cand" src="${candSrc}" alt="candidate" data-overlay="${index}" />
-           </div>
-           <label class="overlay-control">
-             <span>reference</span>
-             <input type="range" min="0" max="100" value="100" data-slider="${index}" />
-             <span>candidate</span>
-           </label>
-         </div>`
+  // One view at a time, picked by a per-variant mode selector, so the three
+  // overlapping mechanisms (static diff panel + wipe slider + always-on labels)
+  // no longer all show at once. Side-by-side is the default — nothing annotated,
+  // no heatmap, no slider — until the reader opts into a mode.
+  const hasDiff = !!diffSrc;
+  const hasSlider = !!(refSrc && candSrc);
+
+  const sideView = `<div class="view pair" data-view-panel="${index}" data-view-value="side">
+              ${panelMarkup(ref, "reference", refTree, deltas)}
+              ${panelMarkup(cand, "candidate", candTree, deltas)}
+            </div>`;
+
+  // Differences: the pixel heatmap, with the layout-delta boxes available under
+  // the Layout toggle (they no longer draw unprompted).
+  const diffView = hasDiff
+    ? `<div class="view diff-view" data-view-panel="${index}" data-view-value="diff" hidden>
+              ${panelMarkup(diff, "diff", candTree, deltas, { diff: true })}
+            </div>`
+    : "";
+
+  // Slider: reference stacked under candidate, wiped by an opacity slider. Shown
+  // only in this mode, never alongside the diff heatmap.
+  const sliderView = hasSlider
+    ? `<div class="view slider-view" data-view-panel="${index}" data-view-value="slider" hidden>
+              <div class="overlay">
+                <div class="overlay-stack">
+                  <img class="overlay-ref" src="${refSrc}" alt="reference" />
+                  <img class="overlay-cand" src="${candSrc}" alt="candidate" data-overlay="${index}" />
+                </div>
+                <label class="overlay-control">
+                  <span>reference</span>
+                  <input type="range" min="0" max="100" value="100" data-slider="${index}" />
+                  <span>candidate</span>
+                </label>
+              </div>
+            </div>`
+    : "";
+
+  // The mode selector, offered only when there's more than one view to pick from.
+  const modes: { v: string; l: string }[] = [{ v: "side", l: "Side by side" }];
+  if (hasDiff) modes.push({ v: "diff", l: "Differences" });
+  if (hasSlider) modes.push({ v: "slider", l: "Slider" });
+  const modeSelect =
+    modes.length > 1
+      ? `<div class="mode-select" role="group" aria-label="View mode">${modes
+          .map(
+            (m, i) =>
+              `<label class="mode-toggle"><input type="radio" name="view-${index}" value="${m.v}" data-view="${index}"${i === 0 ? " checked" : ""} /> ${escapeHtml(m.l)}</label>`,
+          )
+          .join("")}</div>`
       : "";
+
+  // Mode selector + annotation-layer toggles share one control bar above the view.
+  const viewControls =
+    modeSelect || controls ? `<div class="view-controls">${modeSelect}${controls}</div>` : "";
 
   return `<section class="variant" id="${variantId(variant.key)}" data-variant="${escapeHtml(variant.key)}">
             <header class="variant-head">
               <h3>${escapeHtml(variant.key)}</h3>
               <div class="variant-meta">${meta}</div>
             </header>
-            <div class="triptych">
-              ${panelMarkup(ref, "reference", refTree, deltas)}
-              ${panelMarkup(cand, "candidate", candTree, deltas)}
-              ${panelMarkup(diff, "diff", candTree, deltas, { diff: true })}
+            ${viewControls}
+            <div class="views">
+              ${sideView}
+              ${diffView}
+              ${sliderView}
             </div>
-            ${controls}
-            ${overlay}
           </section>`;
 }
 
@@ -363,7 +401,15 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .matrix-cell{background:#0c0c11}
 .matrix-link{display:inline-block;line-height:0}
 .matrix-img{display:block;max-width:220px;max-height:200px;width:auto;height:auto;margin:0 auto;border-radius:6px;image-rendering:pixelated}
-.triptych{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.view-controls{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:12px}
+.mode-select{display:inline-flex;gap:2px;background:#0c0c11;border:1px solid #26262f;border-radius:8px;padding:3px}
+.mode-toggle{display:inline-flex;align-items:center;gap:6px;color:#9a9ab0;font-size:12px;cursor:pointer;padding:4px 12px;border-radius:6px}
+.mode-toggle:has(input:checked){background:#222230;color:#fff}
+.mode-toggle input{position:absolute;width:1px;height:1px;opacity:0;margin:0}
+.pair{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.diff-view,.slider-view{display:flex;justify-content:center}
+.views .view[hidden]{display:none}
+.diff-view .panel{max-width:360px}
 .panel{margin:0;border:1px solid #26262f;border-radius:8px;overflow:hidden;background:#0c0c11}
 .panel figcaption{padding:6px 10px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#9a9ab0;border-bottom:1px solid #26262f}
 .panel-body{display:flex;align-items:center;justify-content:center;min-height:64px;padding:10px}
@@ -374,8 +420,7 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .anno{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .anno g[data-layer]{display:none}
 .anno g[data-layer].on{display:inline}
-.anno g.anno-diff{display:inline}
-.anno-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 14px;border:1px solid #26262f;border-radius:10px;background:#15151c}
+.anno-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .anno-controls-label{color:#9a9ab0;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
 .anno-toggle{display:flex;align-items:center;gap:6px;color:#c9c9dd;font-size:13px;cursor:pointer}
 .overlay{margin-top:14px}
@@ -402,9 +447,25 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .match{color:#7ee29a}
 .differ{color:#e8c66b}
 .no-findings{color:#7ee29a;margin:0}
-@media (max-width:760px){.triptych{grid-template-columns:1fr}}`;
+@media (max-width:760px){.pair{grid-template-columns:1fr}}`;
 
 const SCRIPT = `(function(){
+  var modes=document.querySelectorAll('input[data-view]');
+  for(var m=0;m<modes.length;m++){
+    (function(radio){
+      var id=radio.getAttribute('data-view');
+      var scope=radio.closest('.variant')||document;
+      function apply(){
+        if(!radio.checked) return;
+        var views=scope.querySelectorAll('[data-view-panel="'+id+'"]');
+        for(var k=0;k<views.length;k++){
+          views[k].hidden=(views[k].getAttribute('data-view-value')!==radio.value);
+        }
+      }
+      radio.addEventListener('change',apply);
+      apply();
+    })(modes[m]);
+  }
   var sliders=document.querySelectorAll('input[data-slider]');
   for(var i=0;i<sliders.length;i++){
     (function(slider){

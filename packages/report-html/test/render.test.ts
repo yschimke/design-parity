@@ -158,16 +158,40 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     // Layers ship hidden; the inline script toggles them on.
     expect(html).toContain(".anno g[data-layer]{display:none}");
     expect(html).toContain("data-anno-layer");
-    // The toggle bar sits inside the variant, between its triptych (the diff is
-    // the last panel) and the overlay slider.
-    expect(html.indexOf('class="anno-controls"')).toBeGreaterThan(
-      html.indexOf('data-role="diff"'),
+    // The control bar (mode selector + annotation toggles) sits above the views
+    // it governs, ahead of the slider.
+    expect(html.indexOf('class="view-controls"')).toBeLessThan(
+      html.indexOf('class="views"'),
     );
     expect(html.indexOf('class="anno-controls"')).toBeLessThan(
       html.indexOf('class="overlay"'),
     );
     // Each toggle scopes to its own variant.
     expect(html).toContain("closest('.variant')");
+  });
+
+  it("offers one mutually-exclusive view mode selector instead of showing every view at once", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      diffImages: [{ key: "default/light/compact", png: ONE_PX_PNG }],
+      repoRoot,
+    });
+    // A radio group scoped per variant with Side by side / Differences / Slider.
+    expect(html).toContain('class="mode-select"');
+    expect(html).toContain('type="radio"');
+    expect(html).toContain("Side by side");
+    expect(html).toContain("Differences");
+    expect(html).toContain("Slider");
+    // Side-by-side is the default; the diff heatmap and the slider are the same
+    // widget hidden behind their own modes, never shown together.
+    expect(html).toMatch(/value="side"[^>]*checked/);
+    expect(html).toContain('data-view-value="diff" hidden');
+    expect(html).toContain('data-view-value="slider" hidden');
+    // The mode script hides the non-selected views by their panel id.
+    expect(html).toContain("data-view-panel");
   });
 
   it("adds a layout-delta layer + toggle when the verdict carries layout findings", async () => {
