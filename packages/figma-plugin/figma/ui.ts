@@ -37,6 +37,7 @@ import {
 } from "../src/catalogs.js";
 import { resolveDirection, type ParityDirection } from "../src/direction.js";
 import { readDtcgTokensLite } from "../src/dtcg.js";
+import { rewriteManifestAssets, stripLocalRoot } from "../src/localCatalog.js";
 import {
   buildFrameSpec,
   defaultComponentId,
@@ -89,6 +90,8 @@ const pickFormat = document.getElementById("pick-format") as HTMLSelectElement;
 const insertButton = document.getElementById("insert") as HTMLButtonElement;
 const insertSetButton = document.getElementById("insert-set") as HTMLButtonElement;
 const importAllButton = document.getElementById("import-all") as HTMLButtonElement;
+const loadFolderButton = document.getElementById("load-folder") as HTMLButtonElement;
+const folderInput = document.getElementById("folder") as HTMLInputElement;
 
 /** The catalog registry (built-ins + custom + last pick). Seeded on startup from
  *  clientStorage; re-persisted on every change. Starts from the code defaults so
@@ -238,12 +241,70 @@ form.addEventListener("submit", async (event) => {
     }
 
     catalog = { base, manifest, themeTokens, index };
-    populateComponents(index);
-    confirmButton.hidden = true;
-    result.hidden = true;
-    catalogPickSection.hidden = false;
-    catalogBulkSection.hidden = false;
-    say(`Loaded ${index.title} — ${index.components.length} component${index.components.length === 1 ? "" : "s"}. Pick one to insert, or import the whole catalog.`);
+    revealLoadedCatalog(
+      index,
+      `Loaded ${index.title} — ${index.components.length} component${index.components.length === 1 ? "" : "s"}. Pick one to insert, or import the whole catalog.`,
+    );
+  } catch (err) {
+    say(err instanceof Error ? err.message : String(err));
+  }
+});
+
+/** Reveal the picker + bulk sections for a freshly loaded catalog. */
+function revealLoadedCatalog(index: CatalogIndex, message: string): void {
+  populateComponents(index);
+  confirmButton.hidden = true;
+  result.hidden = true;
+  catalogPickSection.hidden = false;
+  catalogBulkSection.hidden = false;
+  say(message);
+}
+
+// Step 1′ — Load from a local folder: read a catalog directory the designer picks
+// (no server, no network). Each file becomes a `blob:` object URL, the manifest's
+// asset paths are rewritten to those URLs, and — since `resolveImageUrl` passes
+// `blob:` through — every downstream insert/import fetches the local bytes as-is.
+loadFolderButton.addEventListener("click", () => folderInput.click());
+
+folderInput.addEventListener("change", async () => {
+  const files = Array.from(folderInput.files ?? []);
+  folderInput.value = ""; // allow re-picking the same folder later
+  if (files.length === 0) return;
+
+  try {
+    say("Reading folder…");
+    const byPath = new Map<string, File>();
+    for (const file of files) byPath.set(stripLocalRoot(file.webkitRelativePath || file.name), file);
+
+    const catalogFile = byPath.get("catalog.json");
+    if (!catalogFile) {
+      say("No catalog.json in that folder — pick a design-artifacts catalog root.");
+      return;
+    }
+
+    const raw = JSON.parse(await catalogFile.text()) as CatalogManifest;
+    const manifest = rewriteManifestAssets(raw, (path) => {
+      const file = byPath.get(path);
+      return file ? URL.createObjectURL(file) : undefined;
+    });
+
+    let themeTokens;
+    if (raw.tokensFile) {
+      const tokenFile = byPath.get(raw.tokensFile);
+      if (tokenFile) themeTokens = readDtcgTokensLite(JSON.parse(await tokenFile.text()));
+    }
+
+    const index = indexCatalog(manifest);
+    if (index.components.length === 0) {
+      say("That folder's catalog has no importable renders.");
+      return;
+    }
+
+    catalog = { base: "", manifest, themeTokens, index };
+    revealLoadedCatalog(
+      index,
+      `Loaded ${index.title} from folder — ${index.components.length} component${index.components.length === 1 ? "" : "s"}, fully offline. Pick one to insert.`,
+    );
   } catch (err) {
     say(err instanceof Error ? err.message : String(err));
   }

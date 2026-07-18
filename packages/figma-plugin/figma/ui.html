@@ -83,8 +83,11 @@
 
     <div class="row">
       <button type="submit">Load catalog</button>
+      <button id="load-folder" type="button" class="secondary" title="Load a catalog from a local folder — fully offline, no server">Load folder…</button>
       <button id="cancel" type="button">Close</button>
     </div>
+    <input id="folder" type="file" webkitdirectory directory multiple hidden />
+    <p class="hint" style="margin:6px 0 0"><strong>Load folder…</strong> reads a catalog from a local <code>design-artifacts</code> directory (the folder holding <code>catalog.json</code>) — fully offline, no server or network.</p>
   </form>
   <p id="status"></p>
 
