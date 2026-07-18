@@ -190,12 +190,23 @@ export function diffTokens(
   if (!specInput) return findings;
   const spec = alias ? applyAlias(specInput, alias) : specInput;
 
-  for (const [name, want] of Object.entries(spec.spacing ?? {})) {
-    numericFinding("spacing", name, want, candidate.spacing, config.spacingTolerance, findings);
+  if (unverifiableGroup(spec.spacing, candidate.spacing)) {
+    findings.push(groupUnverified("spacing", Object.keys(spec.spacing!).length));
+  } else {
+    for (const [name, want] of Object.entries(spec.spacing ?? {})) {
+      numericFinding("spacing", name, want, candidate.spacing, config.spacingTolerance, findings);
+    }
   }
-  for (const [name, want] of Object.entries(spec.radius ?? {})) {
-    numericFinding("radius", name, want, candidate.radius, config.radiusTolerance, findings);
+  if (unverifiableGroup(spec.radius, candidate.radius)) {
+    findings.push(groupUnverified("radius", Object.keys(spec.radius!).length));
+  } else {
+    for (const [name, want] of Object.entries(spec.radius ?? {})) {
+      numericFinding("radius", name, want, candidate.radius, config.radiusTolerance, findings);
+    }
   }
+  if (unverifiableGroup(spec.colors, candidate.colors)) {
+    findings.push(groupUnverified("colors", Object.keys(spec.colors!).length));
+  } else
   for (const [name, want] of Object.entries(spec.colors ?? {})) {
     // Match a spec colour against the candidate in three tiers, most precise
     // first. (1) Exact name — the explicit alias map has already canonicalised
@@ -235,6 +246,10 @@ export function diffTokens(
         },
       });
     }
+  }
+  if (unverifiableGroup(spec.typography, candidate.typography)) {
+    findings.push(groupUnverified("typography", Object.keys(spec.typography!).length));
+    return findings;
   }
   for (const [name, want] of Object.entries(spec.typography ?? {})) {
     // Exact name first, then the Material type-scale role a design-vocabulary
@@ -366,6 +381,36 @@ export function colorsEqual(a: string, b: string): boolean {
   const pb = parseHexColor(b);
   if (!pa || !pb) return a.toLowerCase() === b.toLowerCase();
   return pa.rgb === pb.rgb && pa.alpha === pb.alpha;
+}
+
+/**
+ * A group the spec declares but the candidate resolved *nothing* for (e.g. a
+ * geometry-only capture surfaces no colours or radii at all). Comparing the
+ * spec's whole palette against an empty candidate group turns every token into
+ * an identical `missing` hard error — dozens of findings that say nothing beyond
+ * "the candidate reported no <group>", and drag the verdict to a fail on what is
+ * an *extraction gap*, not evidence the candidate's values are wrong. This is the
+ * group-level analogue of {@link advisory} (issue #102): when there's nothing to
+ * line the spec up against, we can't verify — we don't accuse.
+ */
+function unverifiableGroup(
+  spec: Record<string, unknown> | undefined,
+  candidate: Record<string, unknown> | undefined,
+): boolean {
+  const specHas = spec !== undefined && Object.keys(spec).length > 0;
+  const candHas = candidate !== undefined && Object.keys(candidate).length > 0;
+  return specHas && !candHas;
+}
+
+/** One non-blocking note standing in for a whole unverifiable token group. */
+function groupUnverified(group: string, specCount: number): Finding {
+  const tokens = `${specCount} spec token${specCount === 1 ? "" : "s"}`;
+  return {
+    kind: "token",
+    severity: "info",
+    message: `${group}: candidate resolved no ${group} tokens; compliance not evaluated (${tokens})`,
+    detail: { token: `${group}.*`, expected: null, actual: null, unverified: true, specCount },
+  };
 }
 
 function missing(group: string, name: string, want: string): Finding {
