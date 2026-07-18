@@ -119,6 +119,15 @@ to that filename.
 Internal deps use concrete `^` ranges, **not** the `workspace:` protocol — npm
 (unlike pnpm/yarn) doesn't rewrite `workspace:` on publish.
 
+The release-please action is pinned to the same `v5.0.0` commit the sibling
+repos run, and every workflow action is pinned by commit SHA (supply-chain
+hardening, matching compose-ai-tools). If release-please's in-place rebase of
+the open release PR ever fails and leaves the PR conflicting on
+`.release-please-manifest.json`, [`release-pr-heal.yml`](./.github/workflows/release-pr-heal.yml)
+(scheduled, ported from compose-ai-tools) resolves that lone manifest conflict
+automatically by keeping the newest version per key; any other conflict is left
+for a human.
+
 ## Design facts (verified — do not re-derive)
 
 - **Figma is the keystone**: the only source with a machine-resolvable

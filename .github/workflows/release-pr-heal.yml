@@ -1,0 +1,165 @@
+name: Release PR Heal
+
+# Auto-heals a release-please PR that has gone into merge conflict, so a wedged
+# release doesn't need a human to hand-resolve the manifest.
+#
+# WHY THIS EXISTS
+# ---------------
+# release-please normally rebases its open release PR on every push to main, but
+# that in-place rebase can itself fail (e.g. `Error adding to tree`). When it
+# does, the PR's manifest snapshot goes stale and the PR sits CONFLICTING until
+# someone fixes it by hand. This job is that hand: it merges main into the
+# release branch and resolves the manifest by taking each package's NEWEST
+# version — exactly the correct release-please resolution.
+#
+# design-parity's manifest has a single key (`.`), so conflicts here are rare —
+# this is a low-probability safety net ported from the sibling repos, not a
+# hot path. The resolver is generic (per-key semver max) so it stays correct if
+# more packages are ever declared.
+#
+# SAFETY RAILS
+# ------------
+#   * Only touches branches named `release-please--…` (release-please's own).
+#   * Only auto-resolves when the release-please manifest file is the *sole*
+#     conflicted file. Any other conflict (CHANGELOG, an extra-file, more than
+#     one file) is left untouched and surfaced as a job failure for a human.
+#   * Manifest resolution is a strict per-key semver max — never invents or
+#     downgrades a version; if either side isn't plain `X.Y.Z`, it bails.
+#   * Commits as github-actions[bot], which by house rule only ever lands on
+#     branches and never reaches squash-authored main (see AGENTS.md).
+
+on:
+  schedule:
+    # Every 6 hours, offset off the hour to dodge cron congestion. release-please
+    # itself runs on every push to main; this is the fallback for when its
+    # in-place rebase couldn't apply.
+    - cron: "31 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-pr-heal
+  cancel-in-progress: false
+
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the resolved merge to the release branch
+      pull-requests: read # list open release PRs + their mergeable state
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # need full history to merge main into the release branch
+
+      - name: Heal conflicting release-please PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Only heal genuine release-please PRs. The branch name is NOT enough:
+          # it's contributor-controlled, so a human or fork PR from a branch named
+          # `release-please--…` could otherwise get merged + pushed by this job's
+          # contents-write token, or fail the `git fetch origin "$branch"` below
+          # (fork heads aren't on origin). Require BOTH the `release-please--`
+          # prefix AND author `github-actions[bot]` (unspoofable), and reject
+          # cross-repository (fork) heads.
+          #
+          # release-please reports mergeable as MERGEABLE / CONFLICTING / UNKNOWN.
+          # UNKNOWN means GitHub is still computing it — skip this run rather than
+          # guess; the next scheduled run re-checks.
+          mapfile -t branches < <(
+            gh pr list --state open --limit 50 \
+              --json number,headRefName,mergeable,author,isCrossRepository \
+              --jq '.[]
+                    | select(.headRefName | startswith("release-please--"))
+                    | select(.author.login == "github-actions[bot]")
+                    | select(.isCrossRepository == false)
+                    | select(.mergeable == "CONFLICTING")
+                    | "\(.number)\t\(.headRefName)"'
+          )
+
+          if [ "${#branches[@]}" -eq 0 ]; then
+            echo "No conflicting release-please PRs. Nothing to heal."
+            exit 0
+          fi
+
+          failures=0
+          for entry in "${branches[@]}"; do
+            num="${entry%%$'\t'*}"
+            branch="${entry#*$'\t'}"
+            echo "::group::Healing PR #${num} (${branch})"
+
+            git fetch --no-tags origin "main" "${branch}"
+            git checkout -B "${branch}" "origin/${branch}"
+
+            if git merge --no-edit origin/main; then
+              echo "PR #${num}: merged main cleanly (no conflict to resolve). Pushing."
+              git push origin "HEAD:${branch}"
+              echo "::endgroup::"
+              continue
+            fi
+
+            conflicted="$(git diff --name-only --diff-filter=U)"
+            # Auto-resolve only a LONE release-please manifest conflict. A multi-file
+            # value won't match the exact pattern and falls to the human path, as does
+            # any non-manifest conflict (CHANGELOG, extra-file).
+            case "${conflicted}" in
+              .release-please-manifest.json) ;;
+              *)
+                echo "::warning::PR #${num} conflict isn't a lone release manifest — leaving for a human:"
+                echo "${conflicted}"
+                git merge --abort
+                failures=$((failures + 1))
+                echo "::endgroup::"
+                continue
+                ;;
+            esac
+
+            # Resolve the manifest by taking each package's newest version.
+            #   stage :2 = ours   (the release branch)
+            #   stage :3 = theirs (main)
+            git show ":2:${conflicted}" > /tmp/ours.json
+            git show ":3:${conflicted}" > /tmp/theirs.json
+
+            python3 - /tmp/ours.json /tmp/theirs.json > "${conflicted}" <<'PY'
+          import json, sys
+
+          def parse(v):
+              parts = v.split(".")
+              if len(parts) != 3 or not all(p.isdigit() for p in parts):
+                  sys.exit(f"non-semver version {v!r} in manifest — refusing to auto-resolve")
+              return tuple(int(p) for p in parts)
+
+          ours = json.load(open(sys.argv[1]))
+          theirs = json.load(open(sys.argv[2]))
+
+          if set(ours) != set(theirs):
+              sys.exit(f"manifest key sets differ ({sorted(ours)} vs {sorted(theirs)}) — refusing to auto-resolve")
+
+          merged = {}
+          for key in ours:
+              merged[key] = ours[key] if parse(ours[key]) >= parse(theirs[key]) else theirs[key]
+
+          # release-please writes the manifest with 2-space indent + trailing newline.
+          sys.stdout.write(json.dumps(merged, indent=2) + "\n")
+          PY
+
+            git add "${conflicted}"
+            git commit --no-edit -m "chore: resolve release manifest conflict (keep newest version per package)"
+            git push origin "HEAD:${branch}"
+            echo "PR #${num}: manifest conflict auto-resolved and pushed."
+            echo "::endgroup::"
+          done
+
+          if [ "${failures}" -gt 0 ]; then
+            echo "::error::${failures} release PR(s) had conflicts outside the manifest and need manual attention."
+            exit 1
+          fi

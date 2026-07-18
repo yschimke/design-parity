@@ -28,7 +28,7 @@ jobs:
       # Exchanged by the action for a short-lived Claude GitHub App token.
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           # Full history so recent commits can be matched against issues.
           fetch-depth: 0
@@ -44,7 +44,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --description "Deferred review feedback filed by weekly triage" \
             --color BFD4F2 --force
-      - uses: anthropics/claude-code-action@v1.0.163
+      - uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
         with:
           # Bills the Claude subscription's included usage.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
