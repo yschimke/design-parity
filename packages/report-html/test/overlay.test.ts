@@ -85,7 +85,7 @@ describe("annotationSvg", () => {
     expect(svg).toContain('stroke="#e8a23a"');
   });
 
-  it("diff mode draws only the differing elements, always-on (no toggle layer)", () => {
+  it("diff mode draws only the differing elements, under the toggleable layout layer", () => {
     const tree: SemanticTree = {
       root: {
         role: "group",
@@ -97,9 +97,10 @@ describe("annotationSvg", () => {
       },
     };
     const svg = annotationSvg(tree, [{ label: "Title", dx: 0, dy: -8, dw: 0, dh: 0 }], { diff: true });
-    // Always-on group (no data-layer so the toggle controls can't hide it).
-    expect(svg).toContain('<g class="anno-diff">');
-    expect(svg).not.toContain("data-layer");
+    // Gated by the same `layout` toggle as the panels — hidden until selected,
+    // not the old always-on `anno-diff` group.
+    expect(svg).toContain('<g data-layer="layout">');
+    expect(svg).not.toContain("anno-diff");
     // Only the matched (differing) element, with its drift; no box/typography layers.
     expect(svg).toContain("Δpos 0,-8 · Δsize 0,0");
     expect(svg).not.toContain("Body");

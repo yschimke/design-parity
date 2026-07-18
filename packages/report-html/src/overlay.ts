@@ -235,12 +235,13 @@ export function annotationSvg(
 
   const svgOpen = `<svg class="anno" viewBox="${r(frame.x)} ${r(frame.y)} ${r(frame.width)} ${r(frame.height)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`;
 
-  // Diff panel: surface *which* elements differ, not just which pixels. Draw only
-  // the layout deltas, in an always-on group (no `data-layer`, so the toggle
-  // controls don't hide it) — the diff view's whole job is to show differences.
+  // Diff panel: surface *which* elements differ, not just which pixels. Draw the
+  // layout deltas under the same toggleable `layout` layer the side-by-side panels
+  // use, so the report's Layout toggle governs them here too — the delta boxes stay
+  // hidden until the reader opts into them, rather than always cluttering the diff.
   if (opts?.diff) {
     if (!layout) return "";
-    return `${svgOpen}<g class="anno-diff">${layout}</g></svg>`;
+    return `${svgOpen}<g data-layer="layout">${layout}</g></svg>`;
   }
 
   const boxes = nodes
