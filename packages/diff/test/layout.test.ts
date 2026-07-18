@@ -94,6 +94,35 @@ describe("diffLayout", () => {
     expect(f[0]?.detail).toMatchObject({ label: "Go", dy: -20 });
   });
 
+  it("ignores a text node's content-driven width delta (glyph box vs fill-width row)", () => {
+    // A section header at the same place, but the candidate reports the full-width
+    // row while the reference measured the tight text — a huge Δwidth, no shift.
+    const ref = tree(["Channels (1)", 0, 100, 80, 24]);
+    const filled = tree(["Channels (1)", 0, 100, 360, 24]); // Δwidth -280, same y/height
+    expect(diffLayout(ref, filled, defaultDiffConfig)).toEqual([]);
+  });
+
+  it("still flags a text node's real vertical drift, width aside", () => {
+    const ref = tree(["Channels (1)", 0, 100, 80, 24]);
+    const drifted = tree(["Channels (1)", 0, 112, 360, 24]); // 12dp lower + wider
+    const f = diffLayout(ref, drifted, defaultDiffConfig);
+    expect(f).toHaveLength(1);
+    expect(f[0]?.detail).toMatchObject({ label: "Channels (1)", dy: -12, dw: -280 });
+  });
+
+  it("still flags a role-bearing object's width/size delta", () => {
+    // An icon button (carries a role) is real geometry — its box is gated in full.
+    const ref: SemanticTree = {
+      root: { children: [{ label: "Menu", role: "button", bounds: { x: 0, y: 100, width: 48, height: 48 } }] },
+    };
+    const smaller: SemanticTree = {
+      root: { children: [{ label: "Menu", role: "button", bounds: { x: 0, y: 100, width: 32, height: 48 } }] },
+    };
+    const f = diffLayout(ref, smaller, defaultDiffConfig);
+    expect(f).toHaveLength(1);
+    expect(f[0]?.detail).toMatchObject({ label: "Menu", dw: 16 });
+  });
+
   it("does not scale when a frame is absent on either side", () => {
     // No root bounds ⇒ assume a shared space; a uniformly 2× candidate is NOT
     // normalised away, so its drift is reported (we only de-densify with frames).

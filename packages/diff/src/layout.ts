@@ -122,7 +122,20 @@ export function diffLayout(
     const dy = Math.round(r.bounds.y - c.bounds.y);
     const dw = Math.round(r.bounds.width - c.bounds.width);
     const dh = Math.round(r.bounds.height - c.bounds.height);
-    const worst = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dw), Math.abs(dh));
+    // A text node's width — and the horizontal shift a width change induces — is
+    // content-/fill-dependent, not a layout property: the reference measures the
+    // tight glyph box while the candidate may report a fill-width row (or a
+    // different sample string), so a section header lines up vertically yet reads
+    // a huge `Δwidth`. Gate text on vertical position + height only, where a real
+    // shift/resize still lands but a "same place, wider box" doesn't. Objects —
+    // controls/graphics that carry a role — keep their full box, where width and
+    // position are genuine geometry. (Verified against a real DeviceBodyPreview
+    // diff: the vertical drift there is real relative drift, not a frame artifact,
+    // so only the content-width axis is relaxed.)
+    const isText = r.role === undefined;
+    const worst = isText
+      ? Math.max(Math.abs(dy), Math.abs(dh))
+      : Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dw), Math.abs(dh));
     if (worst > tol) {
       findings.push({
         kind: "layout",
