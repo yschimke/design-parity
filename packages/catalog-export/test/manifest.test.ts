@@ -54,6 +54,7 @@ describe("toCatalogManifest", () => {
     components: [
       {
         componentId: "Button/Filled",
+        section: "Components",
         group: "Buttons",
         caption: "Primary action",
         reference: { source: "figma", url: "https://figma.com/..." },
@@ -105,11 +106,23 @@ describe("toCatalogManifest", () => {
       ["ideal", "images/button-filled/ideal__default__light.png"],
       ["layout", "images/button-filled/layout__default__light.png"],
     ]);
+    expect(c.section).toBe("Components");
     expect(c.group).toBe("Buttons");
     expect(c.caption).toBe("Primary action");
     expect(c.reference?.source).toBe("figma");
     expect(c.tokens).toEqual({ radius: { container: 20 } });
     expect(c.greenlines).toHaveLength(1);
+  });
+
+  it("omits section when the component declares none", () => {
+    const noSection: Catalog = {
+      ...catalog,
+      components: [
+        { ...catalog.components[0]!, section: undefined },
+        ...catalog.components.slice(1),
+      ],
+    };
+    expect(toCatalogManifest(noSection).components[0]!.section).toBeUndefined();
   });
 
   it("stamps the parity direction when given and omits it otherwise", () => {

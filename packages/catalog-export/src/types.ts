@@ -132,6 +132,15 @@ export interface Redline {
 export interface CatalogComponent {
   /** Stable component id, e.g. `"Button/Filled"`. */
   componentId: string;
+  /**
+   * Top-level **section** the component belongs to — the coarse bucket a preview
+   * host renders as a tab (e.g. `"Themes"`, `"Components"`, `"Screens"`,
+   * `"Animations"`), sitting one level above {@link group}. Additive and
+   * open-ended: absent ⇒ the component is untabbed (a flat catalog); a consumer
+   * that understands sections tabs the catalog and shows {@link group} as a
+   * sub-heading within the tab. Set from the catalog spec's per-group `section`.
+   */
+  section?: string;
   /** Human group for sheet layout, e.g. `"Buttons"`. */
   group?: string;
   /** Optional one-line intent / usage note. */

@@ -29,6 +29,8 @@ import type {
 /** Normalized input for one component (the output of candidate's mappers). */
 export interface ComponentSource {
   componentId: string;
+  /** Top-level section (tab) this component belongs to; see {@link CatalogComponent.section}. */
+  section?: string;
   group?: string;
   caption?: string;
   reference?: ComponentReference;
@@ -59,6 +61,7 @@ export function buildComponent(source: ComponentSource): CatalogComponent {
     greenlines: buildGreenlines(source.findings, source.semantics),
     redlines: buildRedlines(source.semantics),
   };
+  if (source.section !== undefined) component.section = source.section;
   if (source.group !== undefined) component.group = source.group;
   if (source.caption !== undefined) component.caption = source.caption;
   if (source.reference !== undefined) component.reference = source.reference;
