@@ -51,6 +51,12 @@ export interface CatalogManifestImage {
 /** One component entry in the manifest. */
 export interface CatalogManifestComponent {
   componentId: string;
+  /**
+   * Top-level section (tab) this component belongs to — see
+   * {@link CatalogComponent.section}. A preview host groups components by
+   * `section` into tabs, with {@link group} as the sub-heading inside a tab.
+   */
+  section?: string;
   group?: string;
   caption?: string;
   reference?: ComponentReference;
@@ -232,6 +238,7 @@ function manifestComponent(
     greenlines: component.greenlines,
     redlines: component.redlines,
   };
+  if (component.section !== undefined) out.section = component.section;
   if (component.group !== undefined) out.group = component.group;
   if (component.caption !== undefined) out.caption = component.caption;
   if (component.reference !== undefined) out.reference = component.reference;
