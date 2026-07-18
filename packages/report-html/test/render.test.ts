@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { readFile } from "node:fs/promises";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 import type {
   CandidateRender,
@@ -324,5 +326,52 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain("radius 4dp vs spec 8dp");
     expect(html).toContain("findings only");
     expect(html).not.toMatch(/https?:\/\//);
+  });
+});
+
+describe("renderHtmlReport with an SVG reference", () => {
+  const componentId = "ui/Card.kt#VectorCard";
+  const candidate: CandidateRender = {
+    componentId,
+    images: [{ state: "default", uri: "data:image/png;base64,AAAA", width: 240, height: 160 }],
+    semantics: { root: { role: "group" } },
+  };
+  const verdict: Verdict = { componentId, status: "pass", findings: [] };
+
+  it("inlines a committed .svg reference crisply and prefers vector rendering", () => {
+    const dir = mkdtempSync(join(tmpdir(), "dp-svg-"));
+    writeFileSync(
+      join(dir, "card.svg"),
+      '<svg viewBox="0 0 240 160"><rect width="240" height="160" rx="8" fill="#74F8E5"/></svg>',
+    );
+    const reference: DesignReference = {
+      componentId,
+      source: "claude-design",
+      linkMethod: "manifest",
+      referenceImages: [{ state: "default", uri: "card.svg", width: 240, height: 160 }],
+    };
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot: dir });
+
+    // The .svg is inlined with the vector mime, not mis-wrapped as image/png.
+    expect(html).toContain("data:image/svg+xml;base64,");
+    // The reference panel image opts out of the pixelated rendering PNGs get.
+    expect(html).toMatch(/<img class="panel-img is-vector"[^>]*data-role="reference"/);
+    expect(html).toContain(".matrix-img.is-vector,.panel-img.is-vector{image-rendering:auto}");
+  });
+
+  it("passes a data:image/svg reference through untouched and marks it vector", () => {
+    const svg = Buffer.from('<svg viewBox="0 0 10 10"></svg>').toString("base64");
+    const reference: DesignReference = {
+      componentId,
+      source: "claude-design",
+      linkMethod: "manifest",
+      referenceImages: [
+        { state: "default", uri: `data:image/svg+xml;base64,${svg}`, width: 10, height: 10 },
+      ],
+    };
+    const html = renderHtmlReport({ reference, candidate, verdict });
+    expect(html).toMatch(/<img class="panel-img is-vector"[^>]*data-role="reference"/);
+    // A raster PNG candidate in the same report keeps the pixelated default.
+    expect(html).toMatch(/<img class="panel-img"[^>]*data-role="candidate"/);
   });
 });

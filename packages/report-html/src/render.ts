@@ -16,7 +16,7 @@ import { cwd } from "node:process";
 import type { Image, SemanticNode, SemanticTree, Verdict } from "@design-parity/core";
 
 import { groupFindings, tokenDelta } from "./findings.js";
-import { escapeHtml, pngDataUri } from "./html.js";
+import { escapeHtml, isSvgSource, pngDataUri, svgDataUri } from "./html.js";
 import { annotationSvg, type LayoutDelta } from "./overlay.js";
 import type { DiffImage, ReportInput } from "./types.js";
 import { pairVariants, type Variant } from "./variants.js";
@@ -39,7 +39,9 @@ function inlineFromDisk(root: string, img: Image | undefined): string | undefine
   // A source may already hand us a `data:` URI; pass it through untouched.
   if (img.uri.startsWith("data:")) return img.uri;
   const bytes = readFileSync(resolve(root, img.uri));
-  return pngDataUri(bytes);
+  // A committed reference may ship as vector SVG (crisp at any zoom) rather than
+  // a rasterised PNG; wrap it with the matching mime so the browser renders it.
+  return isSvgSource(img.uri) ? svgDataUri(bytes) : pngDataUri(bytes);
 }
 
 /** Column order for the theme matrix: light first, then dark, then any extras. */
@@ -118,8 +120,9 @@ function matrixMarkup(rendered: Rendered[]): string {
           const r = rowsByKey.get(k)?.find((x) => x.variant.theme === theme);
           if (!r)
             return `<td class="matrix-cell"><span class="panel-empty">—</span></td>`;
+          const vector = r.candSrc && isSvgSource(r.candSrc) ? " is-vector" : "";
           const inner = r.candSrc
-            ? `<a class="matrix-link" href="#${variantId(r.variant.key)}"><img class="matrix-img" src="${r.candSrc}" alt="${escapeHtml(r.variant.key)} candidate render" loading="lazy" /></a>`
+            ? `<a class="matrix-link" href="#${variantId(r.variant.key)}"><img class="matrix-img${vector}" src="${r.candSrc}" alt="${escapeHtml(r.variant.key)} candidate render" loading="lazy" /></a>`
             : `<span class="panel-empty">no candidate</span>`;
           return `<td class="matrix-cell">${inner}</td>`;
         })
@@ -152,7 +155,8 @@ function panelMarkup(
 ): string {
   let inner: string;
   if (panel.src) {
-    const img = `<img class="panel-img" data-role="${role}" src="${panel.src}" alt="${escapeHtml(panel.label)}" />`;
+    const vector = isSvgSource(panel.src) ? " is-vector" : "";
+    const img = `<img class="panel-img${vector}" data-role="${role}" src="${panel.src}" alt="${escapeHtml(panel.label)}" />`;
     // When the panel has a semantic tree, overlay its annotation layers. The
     // image defines the box; the SVG is stretched over it (see .panel-figure).
     const anno = annotationSvg(tree, deltas, opts);
@@ -414,6 +418,7 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .panel figcaption{padding:6px 10px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#9a9ab0;border-bottom:1px solid #26262f}
 .panel-body{display:flex;align-items:center;justify-content:center;min-height:64px;padding:10px}
 .panel-img{max-width:100%;height:auto;image-rendering:pixelated}
+.matrix-img.is-vector,.panel-img.is-vector{image-rendering:auto}
 .panel-empty{color:#666;font-size:12px;padding:20px}
 .panel-figure{position:relative;display:inline-block;line-height:0;max-width:100%}
 .panel-figure .panel-img{display:block}
