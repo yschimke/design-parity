@@ -38,6 +38,7 @@ export {
   isSupportedOverrideKey,
   knobKey,
   knobValue,
+  withRenderSize,
   SUPPORTED_OVERRIDE_KEYS,
   KNOB_PREFIX,
 } from "./render.js";

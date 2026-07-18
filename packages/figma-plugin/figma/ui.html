@@ -193,9 +193,10 @@
   </div>
 
   <p class="group-title">Refresh</p>
-  <p class="hint" style="margin-top:4px">Select placed live renders on the canvas, then re-render them against the latest code — overrides and all.</p>
+  <p class="hint" style="margin-top:4px">Select placed live renders on the canvas, then re-render them against the latest code — overrides and all. <strong>At current size</strong> re-renders each at its on-canvas dimensions, so the component re-lays-out for the size you dragged it to.</p>
   <div class="row">
     <button id="refresh" type="button" class="secondary">Refresh selected</button>
+    <button id="refresh-size" type="button" class="secondary" title="Re-render each selected live render at its current on-canvas size">At current size</button>
   </div>
 
   <p id="editor-status"></p>

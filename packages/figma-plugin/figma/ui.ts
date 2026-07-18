@@ -680,6 +680,7 @@ const placeSlotsButton = document.getElementById("place-slots") as HTMLButtonEle
 const slotsPanel = document.getElementById("slots-panel") as HTMLElement;
 const formatSelect = document.getElementById("format") as HTMLSelectElement;
 const refreshButton = document.getElementById("refresh") as HTMLButtonElement;
+const refreshAtSizeButton = document.getElementById("refresh-size") as HTMLButtonElement;
 const editorStatus = document.getElementById("editor-status") as HTMLParagraphElement;
 
 /** Progress counters for an in-flight Refresh (main thread reports each node done). */
@@ -821,6 +822,11 @@ function collectAxes(): Record<string, string> {
 refreshButton.addEventListener("click", () => {
   editorSay("Refreshing selection…");
   parent.postMessage({ pluginMessage: { type: "refresh" } }, "*");
+});
+
+refreshAtSizeButton.addEventListener("click", () => {
+  editorSay("Re-rendering at current size…");
+  parent.postMessage({ pluginMessage: { type: "refreshAtSize" } }, "*");
 });
 
 /**

@@ -24,8 +24,9 @@ import {
   refreshLiveRender,
   refreshLiveSvg,
 } from "../src/live.js";
+import { readRenderSource, stampRenderSource } from "../src/provenance.js";
 import type { ImportPlan } from "../src/plan.js";
-import type { RenderSource } from "../src/render.js";
+import { withRenderSize, type RenderSource } from "../src/render.js";
 import type { PreviewSlots } from "../src/slots.js";
 import { fillSlot, placeSlots } from "../src/structure.js";
 
@@ -112,6 +113,11 @@ interface RefreshMessage {
   type: "refresh";
 }
 
+/** The UI asks to re-render every selected live render at its current on-canvas size. */
+interface RefreshAtSizeMessage {
+  type: "refreshAtSize";
+}
+
 /** The UI posts back the freshly fetched bytes for one PNG refresh job (a fill swap). */
 interface ApplyRefreshMessage {
   type: "applyRefresh";
@@ -158,6 +164,7 @@ type UiMessage =
   | PlaceLiveMessage
   | PlaceLiveSvgMessage
   | RefreshMessage
+  | RefreshAtSizeMessage
   | ApplyRefreshMessage
   | ApplyRefreshSvgMessage
   | PlaceWithSlotsMessage
@@ -369,6 +376,27 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       jobs: jobs.map((j) => ({ nodeId: j.node.id, url: j.url, format: j.format })),
     });
     if (jobs.length === 0) figma.notify("Select a live render to refresh.");
+    return;
+  }
+  if (msg.type === "refreshAtSize") {
+    // Re-stamp each selected live node with its current on-canvas size, then plan
+    // the refresh as usual — planRefresh reads the now-sized provenance, so the
+    // server re-renders (re-lays-out) the component for that size, and the node
+    // remembers the size for later plain refreshes.
+    const selection = figma.currentPage.selection;
+    for (const scene of selection) {
+      const node = scene as unknown as FigmaNode;
+      const source = readRenderSource(node);
+      if (source) stampRenderSource(node, withRenderSize(source, scene.width, scene.height));
+    }
+    const jobs = planRefresh(selection as unknown as FigmaNode[]);
+    refreshTargets.clear();
+    for (const job of jobs) refreshTargets.set(job.node.id, job.node);
+    figma.ui.postMessage({
+      type: "refreshJobs",
+      jobs: jobs.map((j) => ({ nodeId: j.node.id, url: j.url, format: j.format })),
+    });
+    if (jobs.length === 0) figma.notify("Select a placed live render to re-render at its current size.");
     return;
   }
   if (msg.type === "applyRefresh") {
