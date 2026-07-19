@@ -126,16 +126,23 @@ beforeAll(async () => {
   );
 });
 
+// A 160×48 vector reference (the adapter now imports SVG by default).
+const svg160x48 = (fill: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" width="160" height="48"><rect width="160" height="48" rx="8" fill="${fill}"/></svg>`;
+
 /** Happy-path fetch: structure, variables, and a light/dark image each. */
 const okFetch: FetchLike = async (url) => {
   if (url.includes("/variables/local")) return jsonRes(variables);
   if (url.includes("/nodes?")) return jsonRes({ nodes: { "1:42": { document: node, styles } } });
+  const fmt = url.includes("format=svg") ? "svg" : "png";
   if (url.includes("/v1/images/") && url.includes("1%3A42"))
-    return jsonRes({ err: null, images: { "1:42": "https://img.test/light.png" } });
+    return jsonRes({ err: null, images: { "1:42": `https://img.test/light.${fmt}` } });
   if (url.includes("/v1/images/") && url.includes("1%3A43"))
-    return jsonRes({ err: null, images: { "1:43": "https://img.test/dark.png" } });
+    return jsonRes({ err: null, images: { "1:43": `https://img.test/dark.${fmt}` } });
   if (url === "https://img.test/light.png") return new Response(lightPng);
   if (url === "https://img.test/dark.png") return new Response(darkPng);
+  if (url === "https://img.test/light.svg") return new Response(svg160x48("#645AFF"));
+  if (url === "https://img.test/dark.svg") return new Response(svg160x48("#8A82FF"));
   return new Response("not found", { status: 404 });
 };
 
@@ -194,10 +201,37 @@ describe("FigmaAdapter.resolve (happy path)", () => {
       golden.referenceImages.map(shape),
     );
 
-    // every rendered image was actually written to disk
+    // every rendered image was actually written to disk, as a vector .svg
     for (const img of result.referenceImages) {
       await expect(access(img.uri)).resolves.toBeUndefined();
+      expect(img.uri.endsWith(".svg")).toBe(true);
     }
+  });
+});
+
+describe("FigmaAdapter.resolve (png format override)", () => {
+  it("keeps the legacy PNG raster import when imageFormat is 'png'", async () => {
+    const outDir = await mkdtemp(join(tmpdir(), "figma-out-png-"));
+    let requestedFormat: string | undefined;
+    const spyFetch: FetchLike = async (url, init) => {
+      if (url.includes("/v1/images/")) requestedFormat = /format=(\w+)/.exec(url)?.[1];
+      return okFetch(url, init);
+    };
+    const adapter = createFigmaAdapter({
+      fetch: spyFetch,
+      baseUrl: BASE,
+      outDir,
+      imageFormat: "png",
+      resolveTargets: () => [targets[0]!],
+    });
+    const result = await adapter.resolve(
+      "ui/Button.kt#PrimaryButton",
+      "figma:AbCdEf123456/1:42",
+      await ctx(),
+    );
+    expect(requestedFormat).toBe("png");
+    expect(result.referenceImages[0]!.uri.endsWith(".png")).toBe(true);
+    expect(result.referenceImages[0]).toMatchObject({ width: 160, height: 48 });
   });
 });
 

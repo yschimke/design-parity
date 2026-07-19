@@ -115,15 +115,23 @@ export class FigmaRestClient {
     }
   }
 
-  /** `GET /v1/images/:key?ids=&format=png&scale=` then download the result. */
+  /**
+   * `GET /v1/images/:key?ids=&format=…` then download the result. `png` honours
+   * `scale`; `svg` is resolution-free so `scale` is omitted (Figma ignores it).
+   */
   async renderImage(
     fileKey: string,
     nodeId: string,
-    opts: { scale?: number } = {},
+    opts: { scale?: number; format?: "png" | "svg" } = {},
   ): Promise<RenderedImage> {
+    const format = opts.format ?? "png";
     const scale = opts.scale ?? 2;
+    const query =
+      format === "svg"
+        ? `format=svg`
+        : `format=png&scale=${scale}`;
     const res = await this.#get<ImagesResponse>(
-      `/v1/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&format=png&scale=${scale}`,
+      `/v1/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&${query}`,
     );
     const url = res.images[nodeId];
     if (!url) {

@@ -21,6 +21,7 @@ import {
 import { FigmaBadRefError, FigmaNodeNotFoundError } from "./errors.js";
 import { formatFigmaRef, isFigmaRef, parseFigmaRef, type FigmaRef } from "./figma-ref.js";
 import { pngSize } from "./png.js";
+import { svgSize } from "./svg.js";
 import { normalizeReference } from "./normalize.js";
 import {
   FigmaRestClient,
@@ -43,10 +44,16 @@ export interface FigmaAdapterOptions {
   fetch?: FetchLike;
   /** API base override (tests). */
   baseUrl?: string;
-  /** Directory rendered PNGs are written to. Defaults under the repo root. */
+  /** Directory rendered references are written to. Defaults under the repo root. */
   outDir?: string;
-  /** Image render scale (Figma `scale`). Defaults to 2. */
+  /** Image render scale (Figma `scale`, PNG only). Defaults to 2. */
   imageScale?: number;
+  /**
+   * Reference image format. `svg` (default) imports the design as resolution-free
+   * vector — crisp in the report, rasterised on the fly for the pixel diff; `png`
+   * keeps the legacy raster export at {@link FigmaAdapterOptions.imageScale}.
+   */
+  imageFormat?: "png" | "svg";
   /** Code Connect JSON to consult when `ref` is not a figma handle. */
   codeConnectPath?: string;
   /**
@@ -98,15 +105,18 @@ export class FigmaAdapter implements ReferenceAdapter {
     const outDir = this.#opts.outDir ?? join(ctx.repoRoot, ".design-parity", "cache", "figma");
     await mkdir(outDir, { recursive: true });
 
+    const format = this.#opts.imageFormat ?? "svg";
     const referenceImages: Image[] = [];
     for (const target of targets) {
       const rendered = await client.renderImage(figmaRef.fileKey, target.nodeId, {
         scale: this.#opts.imageScale,
+        format,
       });
-      const { width, height } = pngSize(rendered.bytes);
+      const { width, height } =
+        format === "svg" ? svgSize(rendered.bytes) : pngSize(rendered.bytes);
       const file = join(
         outDir,
-        `${slug(componentId)}--${target.theme ?? target.state ?? "default"}--${target.size ?? "default"}.png`,
+        `${slug(componentId)}--${target.theme ?? target.state ?? "default"}--${target.size ?? "default"}.${format}`,
       );
       await writeFile(file, rendered.bytes);
 
