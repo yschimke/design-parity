@@ -19,6 +19,7 @@
   "dependencies": {
     "@design-parity/checks": "^0.1.24",
     "@design-parity/core": "^0.1.24",
+    "@resvg/resvg-js": "^2.6.2",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0"
   },

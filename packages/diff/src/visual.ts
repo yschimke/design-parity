@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { normalizeSize, type Image } from "@design-parity/core";
+import { Resvg } from "@resvg/resvg-js";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
@@ -93,12 +94,45 @@ function decodeDataUri(uri: string): Buffer {
   return Buffer.from(uri.slice(comma + 1), "base64");
 }
 
+/**
+ * Rasterisation scale for a vector reference. A 2× render mirrors the Figma
+ * adapter's previous `scale=2` PNG export, so switching a reference to SVG
+ * leaves the pixel diff's dimensions (and its tolerances) unchanged.
+ */
+const SVG_RASTER_SCALE = 2;
+
+/** Whether the bytes are a PNG (magic `89 50 4E 47`); anything else is SVG markup. */
+function isPng(buf: Buffer): boolean {
+  return buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+}
+
+/**
+ * Rasterise an SVG reference so the pixel diff (which is inherently raster) can
+ * compare it. resvg is deterministic — same markup in, same pixels out — and
+ * self-contained (no headless browser). The report itself still shows the SVG
+ * as crisp vector; this bitmap exists only for pixelmatch. Rendered at
+ * {@link SVG_RASTER_SCALE} to match the old PNG export's density.
+ */
+function rasterizeSvg(buf: Buffer): Raster {
+  const resvg = new Resvg(buf.toString("utf8"), {
+    fitTo: { mode: "zoom", value: SVG_RASTER_SCALE },
+    font: { loadSystemFonts: true },
+  });
+  const img = resvg.render();
+  return { width: img.width, height: img.height, data: Buffer.from(img.pixels) };
+}
+
 async function readRaster(repoRoot: string, uri: string): Promise<Raster> {
-  // A source may hand us the PNG inline as a `data:` URI (e.g. a `.zip` bundle,
+  // A source may hand us the image inline as a `data:` URI (e.g. a `.zip` bundle,
   // which has no standalone repo file); decode it rather than reading from disk.
   const buf = uri.startsWith("data:")
     ? decodeDataUri(uri)
     : await readFile(resolve(repoRoot, uri));
+  // A committed reference may be vector SVG (crisp in the report); rasterise it
+  // so pixelmatch has a bitmap. PNGs (every candidate render) decode directly.
+  if (!isPng(buf)) {
+    return rasterizeSvg(buf);
+  }
   const png = PNG.sync.read(buf);
   return { width: png.width, height: png.height, data: png.data };
 }

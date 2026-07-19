@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 
 import type { CandidateRender, DesignReference, Image } from "@design-parity/core";
+import { Resvg } from "@resvg/resvg-js";
 
 import { diff } from "../src/index.js";
 import { diffImagePair } from "../src/visual.js";
@@ -75,5 +76,26 @@ describe("readRaster honors data: URIs", () => {
     // No repoRoot needed: both images are inline data: URIs.
     const { verdict } = await diff(reference, candidate);
     expect(verdict.visualScores?.["default/light"]).toBe(0);
+  });
+});
+
+describe("readRaster rasterizes an SVG reference for the pixel diff", () => {
+  const SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" width="160" height="48"><rect width="160" height="48" rx="8" fill="#645AFF"/></svg>';
+
+  it("compares an SVG reference against its own 2x raster as identical (320x96)", async () => {
+    const svgUri = `data:image/svg+xml;base64,${Buffer.from(SVG).toString("base64")}`;
+    // The candidate is the SVG's deterministic 2x resvg render — a real PNG.
+    const png = new Resvg(SVG, { fitTo: { mode: "zoom", value: 2 } }).render().asPng();
+    const pngUri = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+
+    const ref: Image = { state: "default", uri: svgUri, width: 160, height: 48 };
+    const cand: Image = { state: "default", uri: pngUri, width: 320, height: 96 };
+    const result = await diffImagePair("/nonexistent", ref, cand, defaultDiffConfig);
+
+    // The SVG was rasterised at 2x to match the raster candidate, pixel-identical.
+    expect(result.totalPixels).toBe(320 * 96);
+    expect(result.score).toBe(0);
+    expect(result.triptych.subarray(0, 4).toString("hex")).toBe("89504e47");
   });
 });
