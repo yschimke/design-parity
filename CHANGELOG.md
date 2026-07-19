@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.28](https://github.com/yschimke/design-parity/compare/v0.1.27...v0.1.28) (2026-07-19)
+
+
+### Features
+
+* **figma:** import references as SVG, rasterised on the fly for the pixel diff ([#241](https://github.com/yschimke/design-parity/issues/241)) ([75e3931](https://github.com/yschimke/design-parity/commit/75e39319267c5387656d5c1ce524b365c845d9e4))
+* **report:** one mutually-exclusive view mode per variant, gated diff labels ([#238](https://github.com/yschimke/design-parity/issues/238)) ([e3ef759](https://github.com/yschimke/design-parity/commit/e3ef759ca1e2dc2cebd507066ed7d5fe83ec8070))
+* **report:** render committed SVG references crisply, end to end ([#239](https://github.com/yschimke/design-parity/issues/239)) ([292d28d](https://github.com/yschimke/design-parity/commit/292d28da843522940eeb650430165902f3a6b2ba))
+
+
+### Bug Fixes
+
+* **diff:** collapse unverifiable token groups instead of N missing errors ([#235](https://github.com/yschimke/design-parity/issues/235)) ([42d7566](https://github.com/yschimke/design-parity/commit/42d756616840aea7a1612fd9145c8b9fa86a9eb3))
+* **diff:** gate text layout on vertical position + height, not content width ([#240](https://github.com/yschimke/design-parity/issues/240)) ([8fffef0](https://github.com/yschimke/design-parity/commit/8fffef000e754cfacfa34893858385a496559224))
+
 ## [0.1.27](https://github.com/yschimke/design-parity/compare/v0.1.26...v0.1.27) (2026-07-18)
 
 
