@@ -7,6 +7,7 @@ import {
   validateDesignMap,
   designMapSchema,
   findByCode,
+  findAllByCode,
   entryRefs,
   entryPreviewIds,
 } from "../src/index.js";
@@ -191,5 +192,28 @@ describe("design-map schema", () => {
     await expect(loadDesignMap(fixture("nope.json"))).rejects.toThrow(
       /cannot read/,
     );
+  });
+
+  it("findAllByCode returns every entry for a code, in order (#106)", () => {
+    const map = {
+      components: [
+        { code: "ui/Card.kt#OfferCard", source: "stitch" as const, ref: "stitch:a" },
+        { code: "ui/Button.kt#Primary", source: "figma" as const, ref: "figma:K/1:1" },
+        {
+          code: "ui/Card.kt#OfferCard",
+          source: "claude-design" as const,
+          ref: "design/offer.html",
+        },
+      ],
+    };
+    // findByCode still returns just the first match…
+    expect(findByCode(map, "ui/Card.kt#OfferCard")?.source).toBe("stitch");
+    // …while findAllByCode returns both same-code entries in declaration order.
+    expect(findAllByCode(map, "ui/Card.kt#OfferCard").map((e) => e.source)).toEqual([
+      "stitch",
+      "claude-design",
+    ]);
+    expect(findAllByCode(map, "ui/Button.kt#Primary")).toHaveLength(1);
+    expect(findAllByCode(map, "nope#none")).toEqual([]);
   });
 });

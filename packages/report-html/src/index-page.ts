@@ -19,7 +19,7 @@
  * Output is deterministic: same input → byte-identical strings. No timestamps,
  * random ids, or `Date.now()` — entries render in the order given.
  */
-import type { VerdictStatus } from "@design-parity/core";
+import type { DesignSource, VerdictStatus } from "@design-parity/core";
 
 import { escapeHtml } from "./html.js";
 
@@ -29,6 +29,12 @@ export type IndexStatus = VerdictStatus | "skipped" | "error";
 export interface IndexEntry {
   /** Component id, e.g. `ui/DeviceBody.kt#DeviceBodyPreview`. */
   code: string;
+  /**
+   * The design source this row was diffed against. Shown as a "Source" column
+   * when any entry carries one — the head-to-head view when a single code is
+   * diffed against several sources in one run (issue #106).
+   */
+  source?: DesignSource;
   /** Verdict status, or why the component produced no verdict. */
   status: IndexStatus;
   /** Path to the component's `report.html`, relative to the branch root. */
@@ -151,25 +157,32 @@ export function renderReadme(input: IndexInput): string {
   }
 
   const hasHistory = !!(input.repoSlug && input.branch);
+  // The Source column only appears when a row carries a source (issue #106), so
+  // single-source boards render exactly as before.
+  const hasSource = input.entries.some((e) => e.source);
+  const header = ["Component"];
+  if (hasSource) header.push("Source");
+  header.push("Status", "Report");
+  if (hasHistory) header.push("History");
   lines.push(
-    hasHistory ? "| Component | Status | Report | History |" : "| Component | Status | Report |",
-    hasHistory ? "| --- | --- | --- | --- |" : "| --- | --- | --- |",
+    `| ${header.join(" | ")} |`,
+    `| ${header.map(() => "---").join(" | ")} |`,
   );
   for (const e of input.entries) {
-    const status = `${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]}`;
-    const report = e.reportPath
-      ? `[report](${previewHref(e.reportPath, input)})`
-      : "—";
-    const history =
-      e.reportPath && historyHref(e.reportPath, input)
-        ? `[history](${historyHref(e.reportPath, input)})`
-        : "—";
-    const name = mdCell(shortCode(e.code));
-    lines.push(
-      hasHistory
-        ? `| ${name} | ${status} | ${report} | ${history} |`
-        : `| ${name} | ${status} | ${report} |`,
+    const cells = [mdCell(shortCode(e.code))];
+    if (hasSource) cells.push(e.source ? mdCell(e.source) : "—");
+    cells.push(`${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]}`);
+    cells.push(
+      e.reportPath ? `[report](${previewHref(e.reportPath, input)})` : "—",
     );
+    if (hasHistory) {
+      cells.push(
+        e.reportPath && historyHref(e.reportPath, input)
+          ? `[history](${historyHref(e.reportPath, input)})`
+          : "—",
+      );
+    }
+    lines.push(`| ${cells.join(" | ")} |`);
   }
   lines.push("");
   lines.push(
@@ -205,7 +218,12 @@ td.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break
 .status-error{background:#3a1820;color:#f08a9c}
 .muted{color:#666}`;
 
-function rowMarkup(e: IndexEntry, input: IndexInput, hasHistory: boolean): string {
+function rowMarkup(
+  e: IndexEntry,
+  input: IndexInput,
+  hasHistory: boolean,
+  hasSource: boolean,
+): string {
   const status = `<span class="status status-${e.status}">${STATUS_TEXT[e.status]}</span>`;
   const report = e.reportPath
     ? `<a href="${escapeHtml(previewHref(e.reportPath, input))}">report</a>`
@@ -217,8 +235,11 @@ function rowMarkup(e: IndexEntry, input: IndexInput, hasHistory: boolean): strin
   const historyCell = hasHistory
     ? `<td>${href ? `<a href="${escapeHtml(href)}">history</a>` : `<span class="muted">—</span>`}</td>`
     : "";
+  const sourceCell = hasSource
+    ? `<td>${e.source ? escapeHtml(e.source) : `<span class="muted">—</span>`}</td>`
+    : "";
   const code = `<td class="code" title="${escapeHtml(e.code)}">${escapeHtml(shortCode(e.code))}</td>`;
-  return `<tr><td>${preview}</td>${code}<td>${status}</td><td>${report}</td>${historyCell}</tr>`;
+  return `<tr><td>${preview}</td>${code}${sourceCell}<td>${status}</td><td>${report}</td>${historyCell}</tr>`;
 }
 
 /** Render the branch's self-contained `index.html` landing page. */
@@ -231,7 +252,10 @@ export function renderIndexHtml(input: IndexInput): string {
     ? `<img class="overview" src="./${escapeHtml(input.bundleImage)}" alt="Candidate overview" />`
     : "";
   const hasHistory = !!(input.repoSlug && input.branch);
-  const rows = input.entries.map((e) => rowMarkup(e, input, hasHistory)).join("\n");
+  const hasSource = input.entries.some((e) => e.source);
+  const rows = input.entries
+    .map((e) => rowMarkup(e, input, hasHistory, hasSource))
+    .join("\n");
 
   return `<!doctype html>
 <html lang="en">
@@ -249,7 +273,7 @@ export function renderIndexHtml(input: IndexInput): string {
 <main>
 ${overview}
 <table>
-<thead><tr><th>Preview</th><th>Component</th><th>Status</th><th>Report</th>${hasHistory ? "<th>History</th>" : ""}</tr></thead>
+<thead><tr><th>Preview</th><th>Component</th>${hasSource ? "<th>Source</th>" : ""}<th>Status</th><th>Report</th>${hasHistory ? "<th>History</th>" : ""}</tr></thead>
 <tbody>
 ${rows}
 </tbody>

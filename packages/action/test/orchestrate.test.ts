@@ -18,6 +18,7 @@ import {
   renderBootstrapNotice,
   REPORT_MARKER,
   CMP_PROMOTION,
+  specTokenKey,
   type AdapterRegistry,
 } from "../src/index.js";
 
@@ -136,7 +137,9 @@ describe("orchestrate (golden figma button vs candidate)", () => {
       linkMethod: "code-connect",
       referenceImages: [],
     };
-    const declared = new Map([[corr.code, { colors: { onSurface: "#161D1B" } }]]);
+    const declared = new Map([
+      [specTokenKey(corr.code, corr.source), { colors: { onSurface: "#161D1B" } }],
+    ]);
     const report = await orchestrate({
       repoRoot,
       registry: reg(adapterReturning(bare)),
@@ -213,6 +216,57 @@ describe("run output artifacts (#49, #50)", () => {
         expect(p).toContain(join(outDir, "ui-Tile-kt-LightOn"));
         expect(pathsB).not.toContain(p);
       }
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("diffs one code against several sources into per-source dirs (#106)", async () => {
+    const { reference, candidate } = await load();
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      // The same code handle bound to two sources — the head-to-head #106 asks
+      // for (Claude Design + Stitch on one screen).
+      const stitch: Correspondence = {
+        ...corr,
+        source: "stitch",
+        linkMethod: "manifest",
+      };
+      const claude: Correspondence = {
+        ...corr,
+        source: "claude-design",
+        linkMethod: "manifest",
+      };
+      const report = await orchestrate({
+        repoRoot,
+        registry: reg(adapterReturning(reference)),
+        correspondences: [stitch, claude],
+        candidate: () => candidate,
+        direction: "code-led",
+        outDir,
+        index: { repoSlug: "o/r", branch: "design-parity/main" },
+      });
+
+      // Two results, one per source, each keyed by (code, source) — no collision.
+      const [rS, rC] = report.results;
+      expect(rS!.source).toBe("stitch");
+      expect(rC!.source).toBe("claude-design");
+      expect(rS!.reportPath).toBe(
+        join(outDir, "ui-Button-kt-PrimaryButton-stitch", "report.html"),
+      );
+      expect(rC!.reportPath).toBe(
+        join(outDir, "ui-Button-kt-PrimaryButton-claude-design", "report.html"),
+      );
+      // Both reports were actually written to their own dirs (the second didn't
+      // overwrite the first).
+      expect(await readFile(rS!.reportPath!, "utf8")).toContain("<!doctype html>");
+      expect(await readFile(rC!.reportPath!, "utf8")).toContain("<!doctype html>");
+
+      // The landing page carries a Source column so the two rows are told apart.
+      const readme = await readFile(join(outDir, "README.md"), "utf8");
+      expect(readme).toContain("| Source |");
+      expect(readme).toContain("stitch");
+      expect(readme).toContain("claude-design");
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
