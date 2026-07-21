@@ -83,6 +83,60 @@ describe("indexCatalog", () => {
     ]);
   });
 
+  it("labels and captions the i18n dimensions (locale / direction / font-scale, #220)", () => {
+    // A catalog rendered across the i18n axes — they arrive as `props`, so the
+    // picker surfaces them data-driven; the plugin only makes the known ones
+    // read nicely (Font scale, not FontScale) and captions what each checks.
+    const i18nManifest: CatalogManifest = {
+      schema: "design-parity-catalog/v1",
+      system: "compose-m3",
+      title: "Compose Material 3",
+      components: [
+        {
+          componentId: "Button/Filled",
+          greenlines: [],
+          redlines: [],
+          images: [
+            image({ path: "a.png", props: { locale: "en", direction: "ltr", fontScale: "1.0" } }),
+            image({ path: "b.png", props: { locale: "ar", direction: "rtl", fontScale: "1.0" } }),
+            image({ path: "c.png", props: { locale: "en-XA", direction: "ltr", fontScale: "2.0" } }),
+          ],
+        },
+      ],
+    };
+
+    const button = indexCatalog(i18nManifest).components[0]!;
+    expect(button.dimensions).toEqual([
+      {
+        key: "prop:locale",
+        label: "Locale",
+        values: ["en", "ar", "en-XA"],
+        caption: "checks text expansion / truncation",
+      },
+      {
+        key: "prop:direction",
+        label: "Direction",
+        values: ["ltr", "rtl"],
+        caption: "checks RTL mirroring",
+      },
+      {
+        key: "prop:fontScale",
+        label: "Font scale",
+        values: ["1.0", "2.0"],
+        caption: "checks dynamic type",
+      },
+    ]);
+  });
+
+  it("leaves a non-i18n prop axis uncaptioned with the generic label", () => {
+    const button = indexCatalog(manifest).components.find(
+      (c) => c.componentId === "Button/Filled",
+    )!;
+    const content = button.dimensions.find((d) => d.key === "prop:content")!;
+    expect(content.label).toBe("Content");
+    expect(content.caption).toBeUndefined();
+  });
+
   it("omits an axis with a single value and a missing variant/wireframe", () => {
     const index = indexCatalog(manifest);
     const sw = index.components.find((c) => c.componentId === "Switch/On")!;

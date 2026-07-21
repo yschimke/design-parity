@@ -7,8 +7,8 @@
  * choices a designer picks from — a component, an optional **variant** (the
  * component's own state axis), and optional **dimensions** (the presentation
  * axes the catalog actually carries: theme, size, and any extra `props` axis
- * such as content / locale / font-scale) — then resolve a concrete selection to
- * the single image (or wireframe) to place.
+ * such as content, or the i18n dimensions locale / direction / font-scale) —
+ * then resolve a concrete selection to the single image (or wireframe) to place.
  *
  * Pure: no `figma`, no `fetch`. The UI reflects {@link CatalogIndex} into
  * dropdowns and hands a {@link PickSelection} back to {@link selectCatalogImage};
@@ -40,6 +40,13 @@ export interface PickAxis {
   label: string;
   /** Distinct values in first-seen order. */
   values: string[];
+  /**
+   * A short "what this checks" hint for the control, present only for axes the
+   * plugin recognises — the i18n dimensions (locale / direction / font-scale,
+   * issue #220). Lets the UI caption why inserting the axis matters (text
+   * expansion, RTL mirroring, dynamic type) without hardcoding a design system.
+   */
+  caption?: string;
 }
 
 /** One component a designer can insert, with the axes it can be narrowed by. */
@@ -88,10 +95,36 @@ export interface PickedImage {
   url: string;
 }
 
-/** Human label for an axis key (`prop:content` → `Content`, `theme` → `Theme`). */
+/**
+ * Friendlier label + a short "what this checks" caption for the **i18n
+ * dimensions** (issue #220). These arrive as `props` axes from the render matrix
+ * (locale / direction / font-scale), so the picker surfaces them data-driven;
+ * this table only makes the known ones read nicely — `fontScale` → `Font scale`
+ * rather than the default `FontScale`, and a caption a designer can act on. Any
+ * other axis falls back to the generic capitalised label.
+ */
+const I18N_AXIS_METADATA: Record<string, { label: string; caption: string }> = {
+  locale: { label: "Locale", caption: "checks text expansion / truncation" },
+  direction: { label: "Direction", caption: "checks RTL mirroring" },
+  fontScale: { label: "Font scale", caption: "checks dynamic type" },
+};
+
+/** The bare axis name behind a key (`prop:locale` → `locale`, `theme` → `theme`). */
+function axisName(key: string): string {
+  return key.startsWith(PROP_AXIS_PREFIX) ? key.slice(PROP_AXIS_PREFIX.length) : key;
+}
+
+/** Human label for an axis key (`prop:content` → `Content`, `prop:fontScale` → `Font scale`). */
 function axisLabel(key: string): string {
-  const name = key.startsWith(PROP_AXIS_PREFIX) ? key.slice(PROP_AXIS_PREFIX.length) : key;
+  const name = axisName(key);
+  const meta = I18N_AXIS_METADATA[name];
+  if (meta) return meta.label;
   return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** The i18n "what this checks" caption for an axis key, or `undefined`. */
+function axisCaption(key: string): string | undefined {
+  return I18N_AXIS_METADATA[axisName(key)]?.caption;
 }
 
 /** The value an image carries on a given axis key (undefined ⇒ not set). */
@@ -151,7 +184,11 @@ function indexComponent(component: CatalogManifestComponent): PickComponent {
   const dimensions: PickAxis[] = [];
   for (const key of dimensionKeys) {
     const values = distinctValues(images, key);
-    if (isMeaningfulAxis(images, key, values)) dimensions.push({ key, label: axisLabel(key), values });
+    if (!isMeaningfulAxis(images, key, values)) continue;
+    const axis: PickAxis = { key, label: axisLabel(key), values };
+    const caption = axisCaption(key);
+    if (caption) axis.caption = caption;
+    dimensions.push(axis);
   }
 
   const out: PickComponent = {

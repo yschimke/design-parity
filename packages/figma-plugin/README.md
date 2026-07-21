@@ -196,12 +196,26 @@ Instead of dumping the entire catalog, pick exactly what you want:
 - **Variant** *(optional)* — the component's own state axis (`default`,
   `pressed`, `disabled`, …). Hidden when the component has a single state.
 - **Dimensions** *(optional)* — the presentation axes the catalog actually
-  carries for that component: **theme**, **size**, and any extra `props` axis
-  (e.g. **content** = `icon+label`). These are **data-driven per catalog** — a
-  system rendered only light/dark exposes just a Theme dimension; one rendered
-  across breakpoints/locales/font-scales exposes those too — so the picker only
-  ever offers combinations that exist. Any dimension left on **Any** is a
-  wildcard (the first matching render is used).
+  carries for that component: **theme**, **size**, any extra `props` axis
+  (e.g. **content** = `icon+label`), and the **i18n dimensions** below when the
+  catalog renders them. These are **data-driven per catalog** — a system
+  rendered only light/dark exposes just a Theme dimension; one rendered across
+  breakpoints/locales/font-scales exposes those too — so the picker only ever
+  offers combinations that exist. Any dimension left on **Any** is a wildcard
+  (the first matching render is used).
+
+  The i18n axes (from the render matrix, design-parity #220) get friendlier
+  labels and a short "what this checks" caption so a designer can eyeball
+  truncation / mirroring / dynamic-type risk **at design time**:
+
+  | Axis (`props` key) | Label | Checks | Example values |
+  | --- | --- | --- | --- |
+  | `locale` | Locale | text expansion / truncation | `en`, `ar`, a pseudolocale (`en-XA`) |
+  | `direction` | Direction | RTL mirroring | `ltr`, `rtl` |
+  | `fontScale` | Font scale | dynamic type | `1.0`, `1.5`, `2.0` |
+
+  They surface automatically wherever the catalog emits them — no per-system
+  wiring — and any other `props` axis still appears with its generic label.
 
   ![Switch/On exposes only a Theme dimension — no Variant/Size/Content, because those axes are single-valued for it](docs/ui-pick-switch.png)
 - **Insert as** — **PNG** (the shipping raster render for the chosen
