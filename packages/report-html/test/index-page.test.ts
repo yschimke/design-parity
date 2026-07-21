@@ -99,6 +99,31 @@ describe("renderReadme", () => {
     expect(md).toContain("Rendered from the commit in [`SOURCE_COMMIT`](./SOURCE_COMMIT).");
   });
 
+  it("adds a Source column only when a row carries a source (#106)", () => {
+    // No source on any row → column absent, output unchanged.
+    expect(renderReadme(base)).not.toContain("| Source |");
+    const md = renderReadme({
+      ...base,
+      entries: [
+        {
+          code: "ui/Card.kt#OfferCard",
+          source: "stitch",
+          status: "pass",
+          reportPath: "ui-Card-kt-OfferCard-stitch/report.html",
+        },
+        {
+          code: "ui/Card.kt#OfferCard",
+          source: "claude-design",
+          status: "warn",
+          reportPath: "ui-Card-kt-OfferCard-claude-design/report.html",
+        },
+      ],
+    });
+    expect(md).toContain("| Component | Source | Status | Report |");
+    expect(md).toContain("| Card.kt#OfferCard | stitch |");
+    expect(md).toContain("| Card.kt#OfferCard | claude-design |");
+  });
+
   it("is deterministic", () => {
     expect(renderReadme(base)).toBe(renderReadme(base));
   });

@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 
 import type { DesignMap } from "@design-parity/core";
 
-import { loadSpecTokens } from "../src/index.js";
+import { loadSpecTokens, specTokenKey } from "../src/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
@@ -29,7 +29,7 @@ describe("loadSpecTokens", () => {
     };
     const { byCode, warnings } = await loadSpecTokens(designMap, repoRoot);
     expect(warnings).toEqual([]);
-    const tokens = byCode.get("ui/Offer.kt#OfferCard");
+    const tokens = byCode.get(specTokenKey("ui/Offer.kt#OfferCard", "bundle"));
     // The DTCG fixture resolves `color/brand` from the `{color.primary}` alias.
     expect(tokens?.colors?.["color/brand"]).toBe("#6750A4");
     expect(tokens?.radius?.["shape/corner-radius"]).toBe(12);
@@ -46,7 +46,34 @@ describe("loadSpecTokens", () => {
       components: [entry("a#One"), entry("b#Two")],
     };
     const { byCode } = await loadSpecTokens(designMap, repoRoot);
-    expect(byCode.get("a#One")).toBe(byCode.get("b#Two")); // same cached object
+    expect(byCode.get(specTokenKey("a#One", "bundle"))).toBe(
+      byCode.get(specTokenKey("b#Two", "bundle")),
+    ); // same cached object
+  });
+
+  it("keys spec tokens by source so same-code sources don't collide (#106)", async () => {
+    const designMap: DesignMap = {
+      components: [
+        {
+          code: "ui/Card.kt#OfferCard",
+          source: "stitch",
+          ref: "stitch:design/abc",
+          tokensFile: "fixtures/tokens.tokens.json",
+        },
+        {
+          code: "ui/Card.kt#OfferCard",
+          source: "claude-design",
+          ref: "design/offer.html",
+        },
+      ],
+    };
+    const { byCode } = await loadSpecTokens(designMap, repoRoot);
+    // Only the stitch entry declares a tokensFile; the claude-design entry for
+    // the same code keeps its own (empty) slot rather than inheriting it.
+    expect(byCode.get(specTokenKey("ui/Card.kt#OfferCard", "stitch"))).toBeDefined();
+    expect(
+      byCode.get(specTokenKey("ui/Card.kt#OfferCard", "claude-design")),
+    ).toBeUndefined();
   });
 
   it("warns and skips a component whose tokensFile is unreadable", async () => {

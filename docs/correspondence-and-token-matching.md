@@ -106,6 +106,20 @@ materialises a machine-readable design system in the repo, so the adapter's
 input is *committed-but-machine-generated* rather than fully hand-authored. See
 [claude-design-sync-impact.md](./claude-design-sync-impact.md).
 
+#### One code, **multiple sources** (issue #106)
+
+A code handle may bind more than one design source in the same run — declare one
+`design-map.json` entry per source with the same `code` (e.g. the same screen
+against both `stitch` and `claude-design`). The resolver fans the code out to one
+correspondence per source (`findAllByCode`), and the orchestrator diffs each
+independently, keying its report dir and landing-page row by `(code, source)` so
+the two verdicts sit side by side instead of colliding. Failures stay fail-soft
+per source. This is the head-to-head useful when **migrating between design
+tools**: run the candidate against the old and new source at once and watch one
+verdict converge as references move over. Code Connect still wins outright when
+present, so multi-source applies to manifest-bound sources. See
+[`examples/design-map.json`](../examples/design-map.json) (`ui/Card.kt#OfferCard`).
+
 ### 2.4 Gap — one preview, **multiple** design nodes
 
 Today a `DesignMapEntry` has a single `ref`, and `parseFigmaRef` yields one

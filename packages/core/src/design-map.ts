@@ -149,6 +149,20 @@ export function findByCode(
 }
 
 /**
+ * Look up **every** manifest entry for a code handle, in file order.
+ *
+ * A code can bind more than one design source — the same screen diffed against
+ * Claude Design *and* Stitch in a single run (issue #106) — by declaring one
+ * entry per source with the same {@link DesignMapEntry.code}. {@link findByCode}
+ * returns only the first such entry; this returns all of them, so the resolver
+ * can fan a code out to one correspondence per source. Returns `[]` when nothing
+ * matches.
+ */
+export function findAllByCode(map: DesignMap, code: string): DesignMapEntry[] {
+  return map.components.filter((c) => c.code === code);
+}
+
+/**
  * Normalize an entry's `ref` (string shorthand or variant list) to a
  * {@link RefVariant} list. A bare string becomes a single untagged variant.
  */

@@ -15,11 +15,25 @@ import { join } from "node:path";
 import {
   loadDtcgTokens,
   type DesignMap,
+  type DesignSource,
   type DesignTokens,
 } from "@design-parity/core";
 
+/**
+ * Composite lookup key for the spec-token map. One code can bind several design
+ * sources (issue #106), and each entry declares its own `tokensFile`, so the
+ * spec tokens are keyed by `(code, source)` — not code alone — to keep a second
+ * same-code entry from overwriting the first.
+ */
+export function specTokenKey(code: string, source: DesignSource): string {
+  return `${code} ${source}`;
+}
+
 export interface SpecTokens {
-  /** Code handle → the DTCG-declared spec tokens for that component. */
+  /**
+   * `(code, source)` → the DTCG-declared spec tokens for that component, keyed
+   * via {@link specTokenKey}.
+   */
   byCode: Map<string, DesignTokens>;
   /** Unreadable/invalid token files and per-token DTCG read warnings. */
   warnings: string[];
@@ -55,7 +69,7 @@ export async function loadSpecTokens(
       }
       cache.set(entry.tokensFile, tokens);
     }
-    if (tokens) byCode.set(entry.code, tokens);
+    if (tokens) byCode.set(specTokenKey(entry.code, entry.source), tokens);
   }
   return { byCode, warnings };
 }
