@@ -103,6 +103,23 @@ describe("catalogFromCandidates", () => {
     expect(catalog.meta.screens).toBeUndefined();
   });
 
+  it("carries optional display hints (surface + hero) through to catalog meta", () => {
+    const withDisplay: CatalogSpec = {
+      ...spec,
+      display: { surface: "dark", hero: "Button/Filled" },
+    };
+    const { catalog } = catalogFromCandidates(
+      [candidate("com.example.CKt", "FilledButton")],
+      withDisplay,
+    );
+    expect(catalog.meta.display).toEqual({ surface: "dark", hero: "Button/Filled" });
+  });
+
+  it("omits display from meta when the spec declares none", () => {
+    const { catalog } = catalogFromCandidates([candidate("com.example.CKt", "FilledButton")], spec);
+    expect(catalog.meta.display).toBeUndefined();
+  });
+
   it("reports spec components with no rendered preview as missing", () => {
     const { catalog, missing } = catalogFromCandidates(
       [candidate("com.example.CKt", "FilledButton")],
