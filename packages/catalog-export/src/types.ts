@@ -56,6 +56,33 @@ export interface CatalogMeta {
    * per-screen import. Additive; absent ⇒ the flat catalog with no screen pages.
    */
   screens?: CatalogScreen[];
+  /**
+   * Optional presentation hints for a viewer/index (e.g. the public preview
+   * server's front door). Declared by the system, so "what stage / which hero"
+   * lives with the catalog rather than being inferred by each consumer.
+   */
+  display?: CatalogDisplay;
+}
+
+/**
+ * How a catalog wants to be *presented* — the surface its stickers are drawn
+ * for, and which preview best represents it. Purely advisory: a consumer that
+ * doesn't understand these falls back to its own defaults.
+ */
+export interface CatalogDisplay {
+  /**
+   * The stage background surface the system's stickers are designed for —
+   * `"dark"` for a dark-first platform (Wear OS is black-watch-face-first), so a
+   * light-on-transparent sticker isn't shown on a washed-out white stage.
+   * Absent ⇒ the consumer's default (light).
+   */
+  surface?: "light" | "dark";
+  /**
+   * The representative preview to feature as the system's hero — a `componentId`
+   * (e.g. `"Template/TimeText"`) or a flattened preview id. Absent ⇒ the consumer
+   * picks one (e.g. prefer a screen, else a canonical component).
+   */
+  hero?: string;
 }
 
 /**
