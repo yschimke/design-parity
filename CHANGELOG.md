@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.29](https://github.com/yschimke/design-parity/compare/v0.1.28...v0.1.29) (2026-07-21)
+
+
+### Features
+
+* **adapter-claude-design:** live-render a prototype per viewport ([#85](https://github.com/yschimke/design-parity/issues/85)) ([#244](https://github.com/yschimke/design-parity/issues/244)) ([f08eaa3](https://github.com/yschimke/design-parity/commit/f08eaa3a4677a4ffc54fa68c6c159e86d954e621))
+* **figma-plugin:** label + caption the i18n picker dimensions ([#220](https://github.com/yschimke/design-parity/issues/220)) ([#245](https://github.com/yschimke/design-parity/issues/245)) ([c7cab60](https://github.com/yschimke/design-parity/commit/c7cab603b3ec072e09a7eedc90bcba64a13dac1c))
+* **resolver:** diff one code handle against multiple design sources ([#106](https://github.com/yschimke/design-parity/issues/106)) ([#243](https://github.com/yschimke/design-parity/issues/243)) ([498e304](https://github.com/yschimke/design-parity/commit/498e3042e224d230323d5a7b8562566bdb262687))
+
 ## [0.1.28](https://github.com/yschimke/design-parity/compare/v0.1.27...v0.1.28) (2026-07-19)
 
 
