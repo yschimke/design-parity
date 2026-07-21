@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.30](https://github.com/yschimke/design-parity/compare/v0.1.29...v0.1.30) (2026-07-21)
+
+
+### Features
+
+* **catalog-export:** carry optional display hints (surface + hero) through ([#247](https://github.com/yschimke/design-parity/issues/247)) ([f9b7c84](https://github.com/yschimke/design-parity/commit/f9b7c8471095f768567bc904f536ce0c0c2afc78))
+
 ## [0.1.29](https://github.com/yschimke/design-parity/compare/v0.1.28...v0.1.29) (2026-07-21)
 
 
