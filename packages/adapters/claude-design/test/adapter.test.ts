@@ -8,11 +8,15 @@ import { join, resolve } from "node:path";
 import type { AdapterContext, DesignReference } from "@design-parity/core";
 
 import { ClaudeDesignAdapter } from "../src/index.js";
-import type { Rasterizer } from "../src/index.js";
+import type { LiveRenderer, Rasterizer } from "../src/index.js";
 
 const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const ctx: AdapterContext = { repoRoot, env: {} };
 const fixturePng = resolve(repoRoot, "fixtures/claude-design/offer-card.light.png");
+const liveFixturePng = resolve(
+  repoRoot,
+  "fixtures/claude-design/offer-card.live.compact.png",
+);
 
 /** Write a synthetic export into a throwaway dir; returns its path + dir. */
 async function tempExport(
@@ -160,6 +164,111 @@ describe("ClaudeDesignAdapter.resolve", () => {
     expect(count).toBe(1);
     expect(result.referenceImages).toHaveLength(1);
     expect(result.referenceImages[0]?.state).toBe("default");
+  });
+});
+
+describe("ClaudeDesignAdapter live-render (live: ref, #85)", () => {
+  /** A deterministic live renderer that reports the committed golden capture. */
+  const goldenLive: LiveRenderer = async () => ({
+    pngPath: liveFixturePng,
+    width: 412,
+    height: 915,
+  });
+
+  it("live-renders a prototype to the golden reference via the live path", async () => {
+    const adapter = new ClaudeDesignAdapter({ liveRenderer: goldenLive });
+    const ref = await adapter.resolve(
+      "ui/Card.kt#OfferCard",
+      "live:fixtures/claude-design/offer-card.prototype.html",
+      ctx,
+    );
+
+    const golden = JSON.parse(
+      await readFile(
+        resolve(repoRoot, "fixtures/claude-design/offer-card.live.reference.json"),
+        "utf8",
+      ),
+    ) as DesignReference;
+
+    expect(ref).toEqual(golden);
+    // Same contract as every other shape — the diff engine can't tell it apart.
+    expect(ref.linkMethod).toBe("manifest");
+    expect(ref.source).toBe("claude-design");
+  });
+
+  it("captures one frame per configured viewport, each keyed by size", async () => {
+    const seen: string[] = [];
+    const stub: LiveRenderer = async (req) => {
+      seen.push(`${req.viewport.size}@${req.viewport.width}`);
+      return { pngPath: liveFixturePng, width: req.viewport.width, height: 800 };
+    };
+    const adapter = new ClaudeDesignAdapter({
+      liveRenderer: stub,
+      liveViewports: [
+        { size: "compact", width: 412 },
+        { size: "expanded", width: 1280 },
+      ],
+    });
+
+    const ref = await adapter.resolve(
+      "a#b",
+      "live:fixtures/claude-design/offer-card.prototype.html",
+      ctx,
+    );
+
+    expect(seen).toEqual(["compact@412", "expanded@1280"]);
+    expect(ref.referenceImages.map((i) => ({ size: i.size, width: i.width }))).toEqual([
+      { size: "compact", width: 412 },
+      { size: "expanded", width: 1280 },
+    ]);
+    expect(ref.referenceImages.every((i) => i.state === "default")).toBe(true);
+  });
+
+  it("resolves the prototype path relative to the repo root", async () => {
+    let seen: string | undefined;
+    const stub: LiveRenderer = async (req) => {
+      seen = req.prototypePath;
+      return { pngPath: liveFixturePng, width: 412, height: 915 };
+    };
+    const adapter = new ClaudeDesignAdapter({ liveRenderer: stub });
+    await adapter.resolve(
+      "a#b",
+      "live:fixtures/claude-design/offer-card.prototype.html",
+      ctx,
+    );
+    expect(seen).toBe(
+      resolve(repoRoot, "fixtures/claude-design/offer-card.prototype.html"),
+    );
+  });
+
+  it("throws a readable error when the prototype is missing", async () => {
+    const adapter = new ClaudeDesignAdapter({ liveRenderer: goldenLive });
+    await expect(
+      adapter.resolve("a#b", "live:fixtures/claude-design/nope.html", ctx),
+    ).rejects.toThrow(/cannot read prototype/);
+  });
+
+  it("throws when the live ref names no prototype path", async () => {
+    const adapter = new ClaudeDesignAdapter({ liveRenderer: goldenLive });
+    await expect(adapter.resolve("a#b", "live:", ctx)).rejects.toThrow(
+      /names no prototype path/,
+    );
+  });
+
+  it("leaves the static export path untouched — a plain ref never live-renders", async () => {
+    const explode: LiveRenderer = async () => {
+      throw new Error("live renderer must not run for a static export ref");
+    };
+    const adapter = new ClaudeDesignAdapter({
+      layoutExtractor: null,
+      liveRenderer: explode,
+    });
+    const ref = await adapter.resolve(
+      "ui/Card.kt#OfferCard",
+      "design/reference/offer-card.html",
+      ctx,
+    );
+    expect(ref.referenceImages[0]).toMatchObject({ width: 240, height: 160 });
   });
 });
 

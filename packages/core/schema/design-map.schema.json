@@ -69,7 +69,7 @@
           "enum": ["figma", "stitch", "claude-design", "bundle"]
         },
         "ref": {
-          "description": "Source-specific reference handle(s). A string binds a single node. A list of variant-tagged handles binds several nodes (a screen's states/themes/sizes in separate frames). Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export. Bundle: repo-relative path to a committed directory or '.zip' of reference PNGs plus a manifest.json.",
+          "description": "Source-specific reference handle(s). A string binds a single node. A list of variant-tagged handles binds several nodes (a screen's states/themes/sizes in separate frames). Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export, a '.json' DTCG token artifact, or a 'live:<path>' prototype the adapter live-renders per viewport instead of rasterizing a static export (issue #85). Bundle: repo-relative path to a committed directory or '.zip' of reference PNGs plus a manifest.json.",
           "oneOf": [
             { "type": "string", "minLength": 1 },
             {

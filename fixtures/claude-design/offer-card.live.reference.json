@@ -1,0 +1,15 @@
+{
+  "componentId": "ui/Card.kt#OfferCard",
+  "source": "claude-design",
+  "linkMethod": "manifest",
+  "ref": "live:fixtures/claude-design/offer-card.prototype.html",
+  "referenceImages": [
+    {
+      "state": "default",
+      "size": "compact",
+      "uri": "fixtures/claude-design/offer-card.live.compact.png",
+      "width": 412,
+      "height": 915
+    }
+  ]
+}

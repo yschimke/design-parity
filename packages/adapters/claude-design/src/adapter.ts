@@ -7,19 +7,23 @@
  * `design-map.json` by a repo-relative path. (Claude Code's `/design-sync` can
  * now emit those committed artifacts, but it is a governed read->plan->write
  * skill, not an API this adapter calls -- see docs/claude-design-sync-impact.md.)
- * This adapter resolves two committed ref shapes:
+ * This adapter resolves three committed ref shapes:
  *
- *   - an **HTML export** (any non-`.json` ref): resolve the path, parse the
- *     embedded handoff manifest (tokens + image variants), rasterize any raw-HTML
- *     variant headlessly, and normalize to a {@link DesignReference}; and
+ *   - an **HTML export** (any other ref): resolve the path, parse the embedded
+ *     handoff manifest (tokens + image variants), rasterize any raw-HTML variant
+ *     headlessly, and normalize to a {@link DesignReference};
  *   - a **synced token artifact** (a `.json` ref): a committed DTCG document
  *     emitted by `/design-sync`, loaded through core's DTCG reader into a
- *     token-only `DesignReference` (no images, no rasterise) — issue #149.
+ *     token-only `DesignReference` (no images, no rasterise) — issue #149; and
+ *   - a **live-render prototype** (a `live:`-prefixed ref): drive the actual
+ *     clickable prototype in a browser and capture it at each configured
+ *     viewport, instead of rasterizing a static export — a truer, multi-viewport
+ *     reference (issue #85). Opt-in; the default stays the static export path.
  *
- * Either way the result has `linkMethod: "manifest"` — the only link method
- * possible for a source with no read API.
+ * Every shape yields `linkMethod: "manifest"` — the only link method possible
+ * for a source with no read API.
  */
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 import type {
@@ -36,6 +40,12 @@ import { readPngSize } from "./png.js";
 import { readSvgSize } from "./svg.js";
 import { browserRasterizer, type Rasterizer } from "./rasterizer.js";
 import {
+  browserLiveRenderer,
+  DEFAULT_LIVE_VIEWPORTS,
+  type LiveRenderer,
+  type LiveViewport,
+} from "./live-renderer.js";
+import {
   puppeteerLayoutExtractor,
   type LayoutExtractor,
 } from "./layout-extractor.js";
@@ -47,6 +57,19 @@ export interface ClaudeDesignAdapterOptions {
    * never invoke it.
    */
   rasterizer?: Rasterizer;
+  /**
+   * How to live-render a prototype (a `live:`-prefixed ref) at each configured
+   * viewport. Defaults to {@link browserLiveRenderer} (headless Chrome/Chromium);
+   * a caller running Playwright or a hosted renderer injects its own. Only the
+   * live-render path invokes it — a plain committed-export ref never does.
+   */
+  liveRenderer?: LiveRenderer;
+  /**
+   * The viewports a live-render ref is captured at. Defaults to
+   * {@link DEFAULT_LIVE_VIEWPORTS} (a single compact frame); pass a wider matrix
+   * to capture several breakpoints, each keyed onto its `size` variant slot.
+   */
+  liveViewports?: LiveViewport[];
   /**
    * How to capture the reference's layout geometry for the structural layout
    * diff. Defaults to {@link puppeteerLayoutExtractor}; runs for every export
@@ -71,13 +94,32 @@ function isSyncedTokenRef(ref: string): boolean {
   return /\.json$/i.test(ref);
 }
 
+/** The scheme that opts a ref into live-render mode. */
+const LIVE_SCHEME = "live:";
+
+/**
+ * A `design-map.json` ref prefixed `live:` selects the **live-render** path:
+ * the adapter drives the referenced prototype in a browser and captures it at
+ * each configured viewport, instead of rasterizing a committed static export
+ * (issue #85). The prefix is the config-driven opt-in — the default (an
+ * unprefixed path) stays the lighter static path. Mirrors the `figma:` / `stitch:`
+ * ref schemes the other adapters key on.
+ */
+function isLiveRenderRef(ref: string): boolean {
+  return ref.startsWith(LIVE_SCHEME);
+}
+
 export class ClaudeDesignAdapter implements ReferenceAdapter {
   readonly source = "claude-design" as const;
   readonly #rasterize: Rasterizer;
+  readonly #liveRender: LiveRenderer;
+  readonly #liveViewports: LiveViewport[];
   readonly #extractLayout: LayoutExtractor | null;
 
   constructor(options: ClaudeDesignAdapterOptions = {}) {
     this.#rasterize = options.rasterizer ?? browserRasterizer;
+    this.#liveRender = options.liveRenderer ?? browserLiveRenderer;
+    this.#liveViewports = options.liveViewports ?? DEFAULT_LIVE_VIEWPORTS;
     this.#extractLayout =
       options.layoutExtractor === undefined
         ? puppeteerLayoutExtractor
@@ -102,6 +144,10 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
     ref: string,
     ctx: AdapterContext,
   ): Promise<DesignReference> {
+    if (isLiveRenderRef(ref)) {
+      return this.#resolveLiveRender(componentId, ref, ctx);
+    }
+
     if (isSyncedTokenRef(ref)) {
       return this.#resolveSyncedTokens(componentId, ref, ctx);
     }
@@ -195,6 +241,62 @@ export class ClaudeDesignAdapter implements ReferenceAdapter {
     };
     if (Object.keys(tokens).length > 0) reference.tokens = tokens;
     return reference;
+  }
+
+  /**
+   * Resolve a Claude Design reference by **live-rendering a prototype** at each
+   * configured viewport (a `live:`-prefixed ref, issue #85). Unlike the static
+   * export path, this drives the actual clickable prototype in a browser and
+   * captures one frame per viewport, each keyed onto its `size` variant slot so
+   * it pairs against the candidate's matching per-breakpoint render. Normalizes
+   * to the same {@link DesignReference} (`linkMethod: "manifest"`, no read API),
+   * so the diff engine stays source-agnostic.
+   *
+   * @throws if the ref carries no path, the prototype is unreadable, or every
+   *   configured viewport fails to render.
+   */
+  async #resolveLiveRender(
+    componentId: string,
+    ref: string,
+    ctx: AdapterContext,
+  ): Promise<DesignReference> {
+    const rawPath = ref.slice(LIVE_SCHEME.length);
+    if (rawPath.length === 0) {
+      throw new Error(
+        `claude-design: live-render ref '${ref}' names no prototype path`,
+      );
+    }
+    const prototypePath = isAbsolute(rawPath)
+      ? rawPath
+      : resolve(ctx.repoRoot, rawPath);
+    try {
+      await access(prototypePath);
+    } catch (cause) {
+      throw new Error(
+        `claude-design: cannot read prototype '${rawPath}' for live-render`,
+        { cause },
+      );
+    }
+
+    const referenceImages: Image[] = [];
+    for (const viewport of this.#liveViewports) {
+      const rendered = await this.#liveRender({ prototypePath, viewport });
+      referenceImages.push({
+        state: "default",
+        size: viewport.size,
+        uri: repoRelative(ctx.repoRoot, rendered.pngPath),
+        width: rendered.width,
+        height: rendered.height,
+      });
+    }
+
+    return {
+      componentId,
+      source: this.source,
+      linkMethod: "manifest",
+      ref,
+      referenceImages,
+    };
   }
 
   /** Tokens are inline, a sibling handoff JSON file, or absent. */

@@ -27,6 +27,16 @@ export {
 } from "./rasterizer.js";
 
 export {
+  browserLiveRenderer,
+  DEFAULT_LIVE_VIEWPORTS,
+  DEFAULT_VIEWPORT_HEIGHT,
+  type LiveRenderer,
+  type LiveRenderRequest,
+  type LiveRenderResult,
+  type LiveViewport,
+} from "./live-renderer.js";
+
+export {
   puppeteerLayoutExtractor,
   treeFromRects,
   tokensFromStyle,
