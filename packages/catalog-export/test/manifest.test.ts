@@ -125,6 +125,18 @@ describe("toCatalogManifest", () => {
     expect(toCatalogManifest(noSection).components[0]!.section).toBeUndefined();
   });
 
+  it("carries display hints (surface + hero) through, omitting when absent", () => {
+    expect(toCatalogManifest(catalog).display).toBeUndefined();
+    const withDisplay: Catalog = {
+      ...catalog,
+      meta: { ...catalog.meta, display: { surface: "dark", hero: "Template/TimeText" } },
+    };
+    expect(toCatalogManifest(withDisplay).display).toEqual({
+      surface: "dark",
+      hero: "Template/TimeText",
+    });
+  });
+
   it("stamps the parity direction when given and omits it otherwise", () => {
     expect(toCatalogManifest(catalog).direction).toBeUndefined();
     expect(toCatalogManifest(catalog, { direction: "design-led" }).direction).toBe("design-led");

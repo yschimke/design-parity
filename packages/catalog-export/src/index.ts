@@ -15,6 +15,7 @@
 export type {
   Catalog,
   CatalogComponent,
+  CatalogDisplay,
   CatalogMeta,
   CatalogScreen,
   ComponentReference,

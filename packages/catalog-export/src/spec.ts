@@ -17,7 +17,12 @@ import type { CandidateRender, DesignTokens } from "@design-parity/core";
 
 import { buildCatalog } from "./ingest.js";
 import type { ComponentSource } from "./ingest.js";
-import type { Catalog, CatalogScreen, ComponentReference } from "./types.js";
+import type {
+  Catalog,
+  CatalogDisplay,
+  CatalogScreen,
+  ComponentReference,
+} from "./types.js";
 
 /**
  * One extra **state variant** of a component: its own `@Preview` function whose
@@ -85,6 +90,12 @@ export interface CatalogSpec {
    * a component declared in {@link CatalogSpec.groups}; absent ⇒ flat catalog.
    */
   screens?: CatalogScreen[];
+  /**
+   * Optional presentation hints for a viewer/index — the stage surface the
+   * stickers are drawn for and the hero preview to feature. Carried onto the
+   * catalog's {@link CatalogMeta.display}. Additive; absent ⇒ consumer defaults.
+   */
+  display?: CatalogDisplay;
 }
 
 /**
@@ -260,6 +271,7 @@ export function catalogFromCandidates(
     ...(opts.renderer ? { renderer: opts.renderer } : {}),
     generatedAt: opts.generatedAt ?? new Date().toISOString(),
     ...(spec.screens ? { screens: spec.screens } : {}),
+    ...(spec.display ? { display: spec.display } : {}),
   };
 
   const catalog = buildCatalog(meta, sources, opts.themeTokens);
