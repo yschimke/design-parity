@@ -48,6 +48,7 @@ export {
   validateDesignMap,
   loadDesignMap,
   findByCode,
+  findAllByCode,
   entryRefs,
   entryPreviewIds,
 } from "./design-map.js";

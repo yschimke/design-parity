@@ -17,7 +17,7 @@
  * unresolved rather than guessing — never a crash.
  */
 import type { Correspondence, DesignMap, DesignSource } from "@design-parity/core";
-import { entryRefs, findByCode } from "@design-parity/core";
+import { entryRefs, findAllByCode } from "@design-parity/core";
 
 /**
  * Figma Code Connect links, indexed by code handle.
@@ -55,8 +55,20 @@ export interface ResolverInputs {
 
 /** Outcome of resolving one code component. */
 export interface ComponentResolution {
-  /** The resolved link, or `undefined` when nothing matched. */
+  /**
+   * The primary resolved link — the first of {@link correspondences} — or
+   * `undefined` when nothing matched. Retained for callers that expect a single
+   * link; when a code binds several design sources (issue #106) the full set is
+   * in {@link correspondences}.
+   */
   correspondence?: Correspondence;
+  /**
+   * Every resolved link for this code, in declaration order. Normally one; the
+   * manifest can bind one code to several design sources — the same screen
+   * diffed against Claude Design *and* Stitch — yielding one correspondence per
+   * source (issue #106). Empty when nothing matched.
+   */
+  correspondences: Correspondence[];
   /** Non-fatal diagnostics (e.g. an ambiguous convention match). */
   warnings: string[];
 }
@@ -102,36 +114,37 @@ export function resolveComponent(
   // 1. Code Connect — Figma's machine link, highest confidence.
   const ccRef = inputs.codeConnect?.[code];
   if (ccRef !== undefined) {
-    return {
-      correspondence: {
-        code,
-        source: "figma",
-        ref: ccRef,
-        linkMethod: "code-connect",
-        confidence: "high",
-      },
-      warnings: [],
+    const cc: Correspondence = {
+      code,
+      source: "figma",
+      ref: ccRef,
+      linkMethod: "code-connect",
+      confidence: "high",
     };
+    return { correspondence: cc, correspondences: [cc], warnings: [] };
   }
 
-  // 2. design-map.json — the committed manifest. A list `ref` binds several
-  // variant-tagged nodes; the primary (first) is the structure node and the
-  // full list is carried for the orchestrator to resolve and merge.
-  const entry = inputs.designMap ? findByCode(inputs.designMap, code) : undefined;
-  if (entry) {
-    const variants = entryRefs(entry);
-    const multi = Array.isArray(entry.ref);
-    return {
-      correspondence: {
+  // 2. design-map.json — the committed manifest. One code can declare several
+  // entries with distinct sources (the same screen diffed against Claude Design
+  // *and* Stitch); each becomes its own correspondence (issue #106). Within one
+  // entry, a list `ref` binds several variant-tagged nodes — the primary (first)
+  // is the structure node and the full list is carried for the orchestrator to
+  // resolve and merge.
+  const entries = inputs.designMap ? findAllByCode(inputs.designMap, code) : [];
+  if (entries.length > 0) {
+    const correspondences = entries.map((entry): Correspondence => {
+      const variants = entryRefs(entry);
+      const multi = Array.isArray(entry.ref);
+      return {
         code,
         source: entry.source,
         ref: variants[0]!.ref,
         ...(multi ? { refs: variants } : {}),
         linkMethod: "manifest",
         confidence: "high",
-      },
-      warnings: [],
-    };
+      };
+    });
+    return { correspondence: correspondences[0], correspondences, warnings: [] };
   }
 
   // 3. convention — best-effort name match, always low confidence.
@@ -142,22 +155,21 @@ export function resolveComponent(
 
     if (matches.length === 1) {
       const match = matches[0]!;
-      return {
-        correspondence: {
-          code,
-          source: match.source,
-          ref: match.ref,
-          linkMethod: "convention",
-          confidence: "low",
-        },
-        warnings: [],
+      const conv: Correspondence = {
+        code,
+        source: match.source,
+        ref: match.ref,
+        linkMethod: "convention",
+        confidence: "low",
       };
+      return { correspondence: conv, correspondences: [conv], warnings: [] };
     }
 
     if (matches.length > 1) {
       const refs = matches.map((m) => `${m.source}:${m.ref}`).join(", ");
       return {
         correspondence: undefined,
+        correspondences: [],
         warnings: [
           `convention: '${code}' matches ${matches.length} catalog entries (${refs}); ` +
             `add a design-map.json entry to disambiguate`,
@@ -167,7 +179,7 @@ export function resolveComponent(
   }
 
   // Nothing matched.
-  return { correspondence: undefined, warnings: [] };
+  return { correspondence: undefined, correspondences: [], warnings: [] };
 }
 
 /**
@@ -183,10 +195,13 @@ export function resolve(codes: string[], inputs: ResolverInputs): ResolveResult 
   const warnings: string[] = [];
 
   for (const code of codes) {
-    const { correspondence, warnings: w } = resolveComponent(code, inputs);
+    const { correspondences: resolved, warnings: w } = resolveComponent(
+      code,
+      inputs,
+    );
     warnings.push(...w);
-    if (correspondence) {
-      correspondences.push(correspondence);
+    if (resolved.length > 0) {
+      correspondences.push(...resolved);
     } else {
       unresolved.push(code);
     }

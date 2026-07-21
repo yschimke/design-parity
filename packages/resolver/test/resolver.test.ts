@@ -178,6 +178,55 @@ describe("multi-node manifest refs", () => {
   });
 });
 
+describe("multi-source manifest (issue #106)", () => {
+  const multiSource: DesignMap = {
+    components: [
+      { code: "ui/Card.kt#OfferCard", source: "stitch", ref: "stitch:design/abc" },
+      {
+        code: "ui/Card.kt#OfferCard",
+        source: "claude-design",
+        ref: "design/offer-card.html",
+      },
+    ],
+  };
+
+  it("resolveComponent returns one correspondence per source", () => {
+    const { correspondence, correspondences } = resolveComponent(
+      "ui/Card.kt#OfferCard",
+      { designMap: multiSource },
+    );
+    // The primary link is the first entry; the full set carries both sources.
+    expect(correspondence?.source).toBe("stitch");
+    expect(correspondences.map((c) => c.source)).toEqual([
+      "stitch",
+      "claude-design",
+    ]);
+    expect(correspondences.every((c) => c.code === "ui/Card.kt#OfferCard")).toBe(
+      true,
+    );
+    expect(correspondences.every((c) => c.linkMethod === "manifest")).toBe(true);
+  });
+
+  it("resolve fans one code out to a correspondence per source", () => {
+    const result = resolve(["ui/Card.kt#OfferCard"], { designMap: multiSource });
+    expect(result.unresolved).toEqual([]);
+    expect(result.correspondences).toHaveLength(2);
+    expect(result.correspondences.map((c) => c.source)).toEqual([
+      "stitch",
+      "claude-design",
+    ]);
+  });
+
+  it("Code Connect still wins over multi-source manifest entries", () => {
+    const { correspondences } = resolveComponent("ui/Card.kt#OfferCard", {
+      codeConnect: { "ui/Card.kt#OfferCard": "figma:KEY/1:1" },
+      designMap: multiSource,
+    });
+    expect(correspondences).toHaveLength(1);
+    expect(correspondences[0]!.linkMethod).toBe("code-connect");
+  });
+});
+
 describe("convention fallback", () => {
   const catalog: DesignCatalogEntry[] = [
     { source: "figma", ref: "figma:Lib/9:1", name: "PrimaryButton" },

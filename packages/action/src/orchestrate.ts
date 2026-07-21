@@ -42,6 +42,7 @@ import {
 
 import type { AdapterRegistry } from "./registry.js";
 import { resolveReference } from "./reference.js";
+import { specTokenKey } from "./specTokens.js";
 
 /** Supplies the candidate render for a component (compose-preview, or precomputed). */
 export type CandidateProvider = (
@@ -153,6 +154,23 @@ function sanitizeId(code: string): string {
   return code.replace(/[^a-z0-9_]+/gi, "-").replace(/^-+|-+$/g, "");
 }
 
+/**
+ * The output subdir slug for one correspondence. Normally the code alone
+ * (`ui-Card-kt-OfferCard`), so single-source layouts stay stable. When a code
+ * binds several sources in the same run (issue #106), the source is appended
+ * (`ui-Card-kt-OfferCard-stitch`) so the two (code, source) reports don't
+ * collide — each gets its own dir, page, and index row.
+ */
+function componentSlug(
+  corr: Correspondence,
+  codeCounts: ReadonlyMap<string, number>,
+): string {
+  const base = sanitizeId(corr.code);
+  return (codeCounts.get(corr.code) ?? 0) > 1
+    ? `${base}-${sanitizeId(corr.source)}`
+    : base;
+}
+
 /** Inline the candidate's first render (reality, not the mock) as a `data:` URI for the landing-page thumbnail. */
 function inlineCandidateThumb(
   root: string,
@@ -228,12 +246,24 @@ export async function orchestrate(
   // Signatures of design-system findings already reported this run (see below).
   const seenDesignSystem = new Set<string>();
 
+  // How many sources each code binds this run — a code diffed against more than
+  // one source (issue #106) has its output dir disambiguated by source.
+  const codeCounts = new Map<string, number>();
+  for (const c of options.correspondences) {
+    codeCounts.set(c.code, (codeCounts.get(c.code) ?? 0) + 1);
+  }
+  // The output slug chosen for each result, reused when building the index so a
+  // row's report link matches the dir the report was written to.
+  const slugByResult = new Map<ComponentResult, string>();
+
   for (const corr of options.correspondences) {
     const result: ComponentResult = {
       code: corr.code,
       source: corr.source,
       status: "ok",
     };
+    const slug = componentSlug(corr, codeCounts);
+    slugByResult.set(result, slug);
 
     try {
       const adapter = options.registry[corr.source];
@@ -249,7 +279,9 @@ export async function orchestrate(
       // A component can declare its spec tokens via a committed DTCG file
       // (design-map `tokensFile`, issue #89); merge them over whatever the
       // adapter resolved so a token-less source still has a spec to diff.
-      const declared = options.referenceTokens?.get(corr.code);
+      const declared = options.referenceTokens?.get(
+        specTokenKey(corr.code, corr.source),
+      );
       if (declared) reference.tokens = mergeReferenceTokens(reference.tokens, declared);
       result.reference = reference;
 
@@ -265,9 +297,10 @@ export async function orchestrate(
       result.candidate = candidate;
 
       // Each component writes into its own subdir so triptychs (keyed only by
-      // image variant) and the HTML page don't collide across components (#49).
+      // image variant) and the HTML page don't collide across components (#49),
+      // nor across sources when one code is diffed against several (#106).
       const componentOutDir = options.outDir
-        ? join(options.outDir, sanitizeId(corr.code))
+        ? join(options.outDir, slug)
         : undefined;
 
       // Renderer-native findings (daemon path) supersede the default checks
@@ -335,10 +368,12 @@ export async function orchestrate(
       const thumbnail = r.candidate
         ? inlineCandidateThumb(options.repoRoot, r.candidate)
         : undefined;
+      const slug = slugByResult.get(r);
       return {
         code: r.code,
+        ...(r.source ? { source: r.source } : {}),
         status: r.verdict?.status ?? (r.status === "error" ? "error" : "skipped"),
-        ...(r.reportPath ? { reportPath: `${sanitizeId(r.code)}/report.html` } : {}),
+        ...(r.reportPath && slug ? { reportPath: `${slug}/report.html` } : {}),
         ...(thumbnail ? { thumbnail } : {}),
       };
     });
