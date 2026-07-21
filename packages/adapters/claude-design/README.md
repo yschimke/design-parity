@@ -97,6 +97,46 @@ This is the richer of the two shapes: the token table comes straight from the
 synced design system rather than an export's embedded handoff block. See
 [docs/claude-design-sync-impact.md](../../../docs/claude-design-sync-impact.md).
 
+## Live-render a prototype (`live:` ref, #85)
+
+A committed export is a single flattened frame. When a `design-map.json` ref is
+prefixed **`live:`**, the adapter instead **drives the actual clickable
+prototype in a browser** and captures it at each configured **viewport** — a
+truer reference that also picks up whatever the static export flattened, and one
+that pairs per-cell against the candidate's device × breakpoint render matrix.
+
+```jsonc
+// design-map.json — opt one component into live-render
+{ "code": "ui/Card.kt#OfferCard", "source": "claude-design",
+  "ref": "live:design/prototypes/offer-card.html" }
+```
+
+- **Opt-in.** Only a `live:`-prefixed ref takes this path; every unprefixed ref
+  stays on the lighter **static-export** path, unchanged. Mirrors the `figma:` /
+  `stitch:` ref schemes.
+- **Multi-viewport.** Each configured `LiveViewport` becomes one `Image` keyed
+  by its `size` slot (`compact` / `medium` / `expanded`). The default is a single
+  compact frame; pass `liveViewports` for a wider matrix.
+- **Same contract.** The result is a normal `DesignReference` with
+  `linkMethod: "manifest"` — the diff engine can't tell it from a static export.
+- **Injectable renderer.** The default `browserLiveRenderer` drives headless
+  Chrome/Chromium on `PATH` (set `CHROME_BIN`), identical in spirit to the
+  rasterizer — no browser-automation dependency is bundled. A caller already
+  running **Playwright** (or a hosted renderer) injects its own `liveRenderer`:
+
+```ts
+new ClaudeDesignAdapter({
+  liveRenderer: myPlaywrightRenderer,
+  liveViewports: [
+    { size: "compact", width: 412 },
+    { size: "expanded", width: 1280 },
+  ],
+});
+```
+
+`resolve` throws a prefixed error when the `live:` ref names no path, the
+prototype is unreadable, or a configured viewport fails to render.
+
 ## Usage
 
 ```ts
