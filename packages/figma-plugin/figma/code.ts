@@ -29,6 +29,12 @@ import type { ImportPlan } from "../src/plan.js";
 import { withRenderSize, type RenderSource } from "../src/render.js";
 import type { PreviewSlots } from "../src/slots.js";
 import { fillSlot, placeSlots } from "../src/structure.js";
+import type { FigmaVariableCollection } from "@design-parity/catalog-export/figma";
+import {
+  bindImportedVariables,
+  preflightSvgFonts,
+  promoteNativeContainers,
+} from "./nativeSvg.js";
 
 /** The message the UI posts once it has resolved the plan and all image bytes. */
 interface ImportMessage {
@@ -80,6 +86,8 @@ interface InsertSvgMessage {
   svg: string;
   name: string;
   componentId: string;
+  /** Catalog theme palette; created/reused and bound to imported native properties. */
+  collection?: FigmaVariableCollection;
 }
 
 /** The UI posts this to insert one component as a native Figma component set (all variants). */
@@ -309,12 +317,34 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "insertSvg") {
     try {
-      const node = placeCatalogSvg(figma as unknown as FigmaApi, msg.svg, {
+      const fonts = await preflightSvgFonts(msg.svg);
+      let node = placeCatalogSvg(figma as unknown as FigmaApi, msg.svg, {
         name: msg.name,
         componentId: msg.componentId,
       });
+      const promoted = promoteNativeContainers(node as unknown as SceneNode);
+      // A picked catalog item is reusable by intent. Preserve the imported
+      // layers while giving it Figma's native main-component representation.
+      if ((node as unknown as SceneNode).type !== "COMPONENT") {
+        try {
+          node = figma.createComponentFromNode(node as unknown as SceneNode) as unknown as FigmaNode;
+          node.name = msg.name;
+          node.setSharedPluginData("designParity", "role", "catalog-insert");
+          node.setSharedPluginData("designParity", "componentId", msg.componentId);
+        } catch {
+          // Some SVG constructs cannot be componentized; the enhanced frame is
+          // still a valid editable import.
+        }
+      }
+      const bound = await bindImportedVariables(node as unknown as SceneNode, msg.svg, msg.collection);
       figma.ui.postMessage({ type: "inserted", name: node.name });
-      figma.notify(`Inserted “${node.name}” (SVG).`);
+      const details = [
+        promoted > 0 ? `${promoted} native container${promoted === 1 ? "" : "s"}` : "",
+        bound > 0 ? `${bound} token binding${bound === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(", ");
+      const missing = fonts.missing.length > 0 ? ` Missing fonts: ${fonts.missing.join(", ")}.` : "";
+      figma.notify(`Inserted “${node.name}” as an editable component${details ? ` (${details})` : ""}.${missing}`,
+        fonts.missing.length > 0 ? { timeout: 5000 } : undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       figma.ui.postMessage({ type: "insertError", message });

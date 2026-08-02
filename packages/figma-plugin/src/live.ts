@@ -17,6 +17,7 @@
 import { readRenderSource, stampRenderSource } from "./provenance.js";
 import { buildRenderUrl, type RenderFormat, type RenderSource } from "./render.js";
 import { STAMP, type FigmaApi, type FigmaNode } from "./scene.js";
+import { normalizeSvgRects } from "./nativeSvg.js";
 
 /** The `role` a standalone live-rendered node carries (distinct from catalog cells). */
 export const LIVE_ROLE = "live-render";
@@ -82,7 +83,7 @@ export function placeLiveSvg(
   svg: string,
   opts: PlaceLiveOptions = {},
 ): FigmaNode {
-  const node = figma.createNodeFromSvg(svg);
+  const node = figma.createNodeFromSvg(normalizeSvgRects(svg));
   node.name = opts.name ?? source.previewId;
   node.setSharedPluginData(STAMP, "role", LIVE_ROLE);
   stampRenderSource(node, source);
@@ -152,7 +153,7 @@ export function refreshLiveSvg(
 ): RenderSource | undefined {
   const source = readRenderSource(node);
   if (!source || source.format !== "svg") return undefined;
-  const replacement = figma.createNodeFromSvg(svg);
+  const replacement = figma.createNodeFromSvg(normalizeSvgRects(svg));
   replacement.name = node.name;
   if (node.x !== undefined) replacement.x = node.x;
   if (node.y !== undefined) replacement.y = node.y;

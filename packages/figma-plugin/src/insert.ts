@@ -16,6 +16,7 @@
  * headlessly against the fake node.
  */
 import { STAMP, type FigmaApi, type FigmaNode } from "./scene.js";
+import { normalizeSvgRects } from "./nativeSvg.js";
 
 /** The `role` a single inserted catalog component carries. */
 export const INSERT_ROLE = "catalog-insert";
@@ -129,7 +130,7 @@ export function placeCatalogSvg(
   svg: string,
   opts: InsertOptions = {},
 ): FigmaNode {
-  const node = figma.createNodeFromSvg(svg);
+  const node = figma.createNodeFromSvg(normalizeSvgRects(svg));
   node.name = opts.name ?? opts.componentId ?? "Component";
   stampInsert(node, opts);
   figma.viewport.scrollAndZoomIntoView([node]);
