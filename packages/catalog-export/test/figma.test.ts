@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toFigmaVariables } from "../src/figma.js";
+import { toFigmaTextStyles, toFigmaVariables } from "../src/figma.js";
 
 describe("toFigmaVariables", () => {
   it("uses a single default mode for an un-themed palette", () => {
@@ -34,5 +34,20 @@ describe("toFigmaVariables", () => {
     expect(accent?.valuesByMode).toEqual({ light: "#f0f", dark: "#f0f" });
     const gap = c.variables.find((v) => v.name === "spacing/gap");
     expect(gap?.valuesByMode).toEqual({ light: 4, dark: 4 });
+  });
+});
+
+describe("toFigmaTextStyles", () => {
+  it("preserves symbolic typography roles and Compose code syntax", () => {
+    expect(toFigmaTextStyles({ typography: {
+      labelLarge: { fontFamily: "Roboto", fontSize: 14, fontWeight: 500, lineHeight: 20 },
+    } })).toEqual([{
+      name: "typography/labelLarge",
+      fontFamily: "Roboto",
+      fontSize: 14,
+      fontWeight: 500,
+      lineHeight: 20,
+      androidCodeSyntax: "MaterialTheme.typography.labelLarge",
+    }]);
   });
 });

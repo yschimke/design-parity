@@ -34,6 +34,33 @@ export interface FigmaVariableCollection {
   variables: FigmaVariable[];
 }
 
+/** One named Figma text style projected from a symbolic typography token. */
+export interface FigmaTextStyleSpec {
+  name: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number | string;
+  fontStyle?: string;
+  lineHeight?: number;
+  letterSpacing?: number;
+  /** Native-code expression shown in Dev Mode. */
+  androidCodeSyntax: string;
+}
+
+/** Preserve typography role names so imports become reusable local text styles. */
+export function toFigmaTextStyles(tokens: DesignTokens): FigmaTextStyleSpec[] {
+  return Object.entries(tokens.typography ?? {}).map(([name, token]) => ({
+    name: `typography/${name}`,
+    ...(token.fontFamily !== undefined ? { fontFamily: token.fontFamily } : {}),
+    ...(token.fontSize !== undefined ? { fontSize: token.fontSize } : {}),
+    ...(token.fontWeight !== undefined ? { fontWeight: token.fontWeight } : {}),
+    ...(token.fontStyle !== undefined ? { fontStyle: token.fontStyle } : {}),
+    ...(token.lineHeight !== undefined ? { lineHeight: token.lineHeight } : {}),
+    ...(token.letterSpacing !== undefined ? { letterSpacing: token.letterSpacing } : {}),
+    androidCodeSyntax: `MaterialTheme.typography.${name}`,
+  }));
+}
+
 const DEFAULT_MODE = "value";
 
 /** Split a `"name.mode"` token key into its base name and optional mode. */

@@ -174,6 +174,8 @@ export { diagnoseServerLoad } from "./serverHelp.js";
 export type { ServerHelp, ServerIssue, ServerLoadOutcome } from "./serverHelp.js";
 export { buildDesignMap, figmaRef, componentIdToCode } from "./designMap.js";
 export type { DesignMapOptions } from "./designMap.js";
+export { planMappedUpgrades, rewriteMappedNodeIds } from "./upgrade.js";
+export type { UpgradeJob, UpgradePlan, UpgradeSkip } from "./upgrade.js";
 export { planToSvg } from "./preview.js";
 export {
   severityHex,

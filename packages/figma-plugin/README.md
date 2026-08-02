@@ -239,6 +239,8 @@ Instead of dumping the entire catalog, pick exactly what you want:
   - referenced local font faces are loaded before Figma parses editable text;
     unavailable families are reported instead of being silently treated as
     correct;
+  - symbolic typography roles become reusable local Text Styles and are bound
+    where the imported metrics identify one role unambiguously;
   - groups with a full-size background become native frames; clear rows and
     columns become Auto Layout with inferred per-edge padding and item spacing;
   - the inserted root becomes a native main component when Figma permits it.
@@ -251,11 +253,18 @@ its `componentId` (so it's identifiable) but with no refresh source — a catalo
 render is a static, published artifact.
 
 **Insert all variants (set)** places the *whole* component as a native Figma
-**component set** instead — one `COMPONENT` per render, named with its variant
-properties (`state=…, theme=…, size=…`), combined into one set. It's the reusable
-library form (the same set the whole-catalog *Components* page builds), and it
-ignores the variant/dimension pickers — the set carries every `ideal` render the
-catalog ships for that component.
+**component set** instead — one editable per-variant SVG `COMPONENT` per render,
+named with its native variant properties (`state=…, theme=…, size=…, locale=…,
+direction=…, fontScale=…`), combined into one set. A missing variant SVG falls
+back independently to its PNG, rather than making the whole set fail. Common
+text layers become native TEXT component properties. The component description
+leads with the catalog's accessibility/i18n notes, source and live-preview links
+appear in Dev Mode, and the relaunch action opens it back in Design Parity.
+
+Structured live containers are promoted to main components when possible, so
+declared child regions use Figma's native SLOT nodes; exact-size frames remain
+the compatibility fallback. The set carries every `ideal` render the catalog
+ships, making its stress-test matrix a reusable library asset.
 
 ### Import the whole catalog (sticker sheet)
 
@@ -265,6 +274,22 @@ redlines) variant and the **Mode**, then Import. The plugin fetches every PNG fo
 that variant and lays out a `<system> — Catalog` page with the matching
 annotation layer and a variable collection (light/dark become Figma modes),
 reconciling in place on re-import (see below).
+
+### Bulk-upgrade a legacy import
+
+After loading the matching catalog, choose the committed `design-map.json` under
+**Upgrade an existing mapped import**, then click **Bulk upgrade mapped nodes**.
+The map—not layer-name guessing—selects the old PNG/basic-SVG roots in the
+current Figma file. Each is replaced with the same editable per-variant component
+set used by a fresh import, while retaining its canvas position, rotation, parent
+order, and name.
+
+The upgrade is intentionally non-destructive around live library use: stale,
+cross-file, ambiguous, already-current, and unsupported mappings are reported and
+left untouched; a component with existing instances is skipped so instance
+overrides cannot be broken. Successful replacements change node IDs, so the
+plugin returns an updated correspondence document to copy back over
+`design-map.json`.
 
 ### Live customization needs a server
 
