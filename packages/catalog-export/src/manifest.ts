@@ -18,6 +18,7 @@ import type {
   Catalog,
   CatalogComponent,
   CatalogDisplay,
+  CatalogImage,
   CatalogScreen,
   ComponentReference,
   Greenline,
@@ -32,6 +33,8 @@ export interface CatalogManifestImage {
   variant: VariantKind;
   /** Bundle-relative PNG path (forward slashes). */
   path: string;
+  /** Compose preview that produced this render; used for exact mapped upgrades. */
+  previewId?: string;
   state: string;
   theme?: Theme;
   size?: string;
@@ -202,7 +205,7 @@ function manifestImages(
   ctx: ManifestContext,
 ): CatalogManifestImage[] {
   const out: CatalogManifestImage[] = [];
-  const push = (variant: VariantKind, images: Image[] | undefined): void => {
+  const push = (variant: VariantKind, images: CatalogImage[] | undefined): void => {
     for (const image of images ?? []) {
       const path = imagePath(component.componentId, variant, image);
       const entry: CatalogManifestImage = {
@@ -213,6 +216,7 @@ function manifestImages(
         height: image.height,
       };
       if (image.theme) entry.theme = image.theme;
+      if (image.previewId) entry.previewId = image.previewId;
       if (image.size) entry.size = image.size;
       if (image.props && Object.keys(image.props).length > 0) entry.props = image.props;
       if (ctx.previewServer) {

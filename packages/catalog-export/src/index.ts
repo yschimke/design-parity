@@ -20,6 +20,7 @@ export type {
   CatalogScreen,
   ComponentReference,
   ComponentVariants,
+  CatalogImage,
   Greenline,
   Redline,
   RedlinePadding,

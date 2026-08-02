@@ -12,7 +12,6 @@
 import type {
   DesignTokens,
   Finding,
-  Image,
   SemanticTree,
 } from "@design-parity/core";
 
@@ -22,6 +21,7 @@ import { buildWireframeSvg } from "./wireframe.js";
 import type {
   Catalog,
   CatalogComponent,
+  CatalogImage,
   CatalogMeta,
   ComponentReference,
 } from "./types.js";
@@ -35,9 +35,9 @@ export interface ComponentSource {
   caption?: string;
   reference?: ComponentReference;
   /** Ideal capture image(s) — one per state/theme/size. */
-  ideal: Image[];
+  ideal: CatalogImage[];
   /** Layout/wireframe image(s) from `compose/semantics-wireframe`. */
-  layout?: Image[];
+  layout?: CatalogImage[];
   /** Per-component resolved tokens (padding / radius / type used). */
   tokens?: DesignTokens;
   /** Component semantic tree (carries bounds + per-node tokens + themeTokens). */

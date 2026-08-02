@@ -35,6 +35,10 @@ For each component, in its primary modes (state × theme × size):
 - **A token set** — the system's resolved `colors` / `typography` / `radius`
   (shapes), exported as a W3C **DTCG** file plus a **Figma variable-collection**
   projection (light/dark as modes).
+- **Source identity** — every render retains the fully-qualified Compose
+  `previewId` that produced it. This is per image, so separate light/dark or
+  state previews remain machine-resolvable through `design-map.json` even when
+  the catalog uses a friendlier component id.
 
 The on-disk bundle is a superset of the `@design-parity/adapter-bundle`
 `manifest.json`, so a catalog round-trips back through the parity flow.

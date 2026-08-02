@@ -27,9 +27,14 @@ function nodeIdFromRef(ref: string, fileKey: string): string | undefined {
 }
 
 function componentFor(entry: DesignMapEntry, manifest: CatalogManifest): string | undefined {
-  if (typeof entry.previewId === "string") {
-    const exact = manifest.components.find((component) => component.componentId === entry.previewId);
-    if (exact) return exact.componentId;
+  if (entry.previewId !== undefined) {
+    const ids = typeof entry.previewId === "string"
+      ? [entry.previewId]
+      : entry.previewId.map((variant) => variant.previewId);
+    const matches = manifest.components.filter((component) =>
+      ids.every((id) => component.images.some((image) => image.previewId === id))
+    );
+    return matches.length === 1 ? matches[0]!.componentId : undefined;
   }
   return manifest.components.find((component) => componentIdToCode(component.componentId) === entry.code)?.componentId;
 }

@@ -95,8 +95,14 @@ export interface CatalogDisplay {
  *   padding / gaps / structure behind the pixels.
  */
 export interface ComponentVariants {
-  ideal: Image[];
-  layout?: Image[];
+  ideal: CatalogImage[];
+  layout?: CatalogImage[];
+}
+
+/** A catalog render plus the Compose preview that produced it. */
+export interface CatalogImage extends Image {
+  /** Fully-qualified compose-preview id; authoritative for design-map upgrades. */
+  previewId?: string;
 }
 
 /**

@@ -63,6 +63,7 @@ describe("toCatalogManifest", () => {
             {
               state: "default",
               theme: "light",
+              previewId: "com.example.ButtonKt.FilledButton",
               uri: "a",
               width: 100,
               height: 48,
@@ -106,6 +107,7 @@ describe("toCatalogManifest", () => {
       ["ideal", "images/button-filled/ideal__default__light.png"],
       ["layout", "images/button-filled/layout__default__light.png"],
     ]);
+    expect(c.images[0]!.previewId).toBe("com.example.ButtonKt.FilledButton");
     expect(c.section).toBe("Components");
     expect(c.group).toBe("Buttons");
     expect(c.caption).toBe("Primary action");
