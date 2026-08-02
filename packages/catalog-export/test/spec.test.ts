@@ -127,6 +127,9 @@ describe("catalogFromCandidates", () => {
     );
     expect(missing).toEqual(["Button/Text"]);
     expect(catalog.components.map((c) => c.componentId)).toEqual(["Button/Filled"]);
+    expect(catalog.components[0]!.variants.ideal[0]!.previewId).toBe(
+      "com.example.CKt.FilledButton",
+    );
   });
 
   it("folds a function's theme multipreview variants into one component", () => {
@@ -163,6 +166,10 @@ describe("catalogFromCandidates", () => {
     // Both theme captures land on the one sticker, not just the last one.
     expect(catalog.components[0]!.variants.ideal).toHaveLength(2);
     expect(catalog.components[0]!.variants.ideal.map((i) => i.theme).sort()).toEqual(["dark", "light"]);
+    expect(catalog.components[0]!.variants.ideal.map((i) => i.previewId).sort()).toEqual([
+      "com.example.CKt.FilledButton_Dark",
+      "com.example.CKt.FilledButton_Light",
+    ]);
     // The light tree is kept for tokens/greenlines.
     expect(catalog.themeTokens).toEqual({ colors: { primary: "#6750a4" } });
   });

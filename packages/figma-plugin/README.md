@@ -280,7 +280,10 @@ reconciling in place on re-import (see below).
 After loading the matching catalog, choose the committed `design-map.json` under
 **Upgrade an existing mapped import**, then click **Bulk upgrade mapped nodes**.
 The map—not layer-name guessing—selects the old PNG/basic-SVG roots in the
-current Figma file. Each is replaced with the same editable per-variant component
+current Figma file. Explicit scalar or variant-tagged Compose `previewId`s are
+matched against the source id retained on each catalog render; older generated
+maps fall back to their deterministic code handles. Each root is replaced with
+the same editable per-variant component
 set used by a fresh import, while retaining its canvas position, rotation, parent
 order, and name.
 

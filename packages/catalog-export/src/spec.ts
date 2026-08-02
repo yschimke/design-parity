@@ -17,6 +17,7 @@ import type { CandidateRender, DesignTokens } from "@design-parity/core";
 
 import { buildCatalog } from "./ingest.js";
 import type { ComponentSource } from "./ingest.js";
+import type { CatalogImage } from "./types.js";
 import type {
   Catalog,
   CatalogDisplay,
@@ -151,13 +152,22 @@ function mergeByFunction(
         : a.semantics;
   const merged: CandidateRender = {
     componentId: a.componentId,
-    images: [...a.images, ...b.images],
+    images: [...catalogImages(a), ...catalogImages(b)],
     semantics,
   };
   if (a.previewId ?? b.previewId) merged.previewId = a.previewId ?? b.previewId;
   if (a.functionName ?? b.functionName)
     merged.functionName = a.functionName ?? b.functionName;
   return merged;
+}
+
+/** Attach the renderer's authoritative preview id without widening core Image. */
+function catalogImages(candidate: CandidateRender): CatalogImage[] {
+  const previewId = candidate.previewId ?? candidate.componentId;
+  return candidate.images.map((image) => ({
+    ...image,
+    previewId: (image as CatalogImage).previewId ?? previewId,
+  }));
 }
 
 export interface FromCandidatesOptions {
@@ -238,14 +248,14 @@ export function catalogFromCandidates(
       // each variant's images are appended re-tagged with its `state` so the
       // single-component view can show them as secondary previews. A variant
       // preview that didn't render is reported as missing, keyed by state.
-      const ideal = [...candidate.images];
+      const ideal = catalogImages(candidate);
       for (const variant of component.variants ?? []) {
         const variantCandidate = byFunction.get(variant.preview);
         if (!variantCandidate || variantCandidate.images.length === 0) {
           missing.push(`${component.componentId} [${variantLabel(variant)}]`);
           continue;
         }
-        for (const image of variantCandidate.images) {
+        for (const image of catalogImages(variantCandidate)) {
           const tagged = { ...image };
           if (variant.state !== undefined) tagged.state = variant.state;
           if (variant.props) tagged.props = { ...image.props, ...variant.props };
