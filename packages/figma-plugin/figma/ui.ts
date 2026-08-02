@@ -14,6 +14,7 @@
  * `render.ts`); this file is fetch + DOM reflection + postMessage.
  */
 import type { CatalogManifest } from "@design-parity/catalog-export";
+import { toFigmaVariables } from "@design-parity/catalog-export/figma";
 
 import {
   componentSetCells,
@@ -337,7 +338,17 @@ insertButton.addEventListener("click", async () => {
       const svg = await resolveInsertSvg(component, name);
       if (svg === undefined) return; // resolveInsertSvg already reported why
       parent.postMessage(
-        { pluginMessage: { type: "insertSvg", svg, name, componentId: component.componentId } },
+        {
+          pluginMessage: {
+            type: "insertSvg",
+            svg,
+            name,
+            componentId: component.componentId,
+            collection: catalog.themeTokens
+              ? toFigmaVariables(catalog.themeTokens, catalog.index.title)
+              : undefined,
+          },
+        },
         "*",
       );
     } else {

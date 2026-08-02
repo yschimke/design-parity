@@ -130,6 +130,20 @@ export {
   PROP_AXIS_PREFIX,
 } from "./catalogPick.js";
 export { svgRasterHrefs, inlineSvgRasters } from "./svgRaster.js";
+export {
+  normalizeSvgRects,
+  svgFontRequests,
+  svgTokenAnnotations,
+  chooseAvailableFont,
+  inferAutoLayout,
+} from "./nativeSvg.js";
+export type {
+  SvgFontRequest,
+  SvgTokenAnnotation,
+  AvailableFont,
+  LayoutBox,
+  InferredAutoLayout,
+} from "./nativeSvg.js";
 export type {
   CatalogIndex,
   ComponentGroup,

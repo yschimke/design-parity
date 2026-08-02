@@ -33,6 +33,7 @@ import { REFERENCE_PAGE, type ParityDirection } from "./direction.js";
 import type { ImportPlan, PlannedComponent, PlannedGroup, PlannedImage } from "./plan.js";
 import { reconcile, type ExistingCard } from "./reconcile.js";
 import type { DesignMap } from "@design-parity/core";
+import { normalizeSvgRects } from "./nativeSvg.js";
 
 const PAD = 48;
 const GAP = 24;
@@ -874,7 +875,7 @@ function placeVectorWireframe(
   component: PlannedComponent,
 ): FigmaNode | undefined {
   if (!component.wireframeSvg) return undefined;
-  const node = figma.createNodeFromSvg(component.wireframeSvg);
+  const node = figma.createNodeFromSvg(normalizeSvgRects(component.wireframeSvg));
   node.name = `${component.componentId} — wireframe`;
   stamp(node, ROLE.wireframe, { componentId: component.componentId });
   if (component.compareRedlines) drawRedlines(figma, node, component.compareRedlines);

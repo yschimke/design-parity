@@ -75,6 +75,7 @@ core and the two runtime files stay thin:
 | [`src/catalogPick.ts`](src/catalogPick.ts) | pure (tested) | `indexCatalog(manifest)` → the **single-component** picker's view model (each component's variant + dimension axes); `groupComponents(index, query)` → the search-filtered, group-bucketed list behind the picker dropdown; `selectCatalogImage(manifest, selection, base)` → the one image a `PickSelection` resolves to; `componentSetCells(manifest, id, base)` → the variant cells for a native component-set insert. The selective counterpart of `buildImportPlan`. No `figma`, no `fetch`. |
 | [`src/insert.ts`](src/insert.ts) | main-thread logic (tested) | `placeCatalogPng` / `placeCatalogSvg` / `placeCatalogComponentSet` — place one picked component as a raster render, the wireframe vector, or a native **component set** (all variants), stamped with its identity (no refresh source; a catalog render is static). Injected `FigmaApi`, so it runs headlessly. |
 | [`src/svgRaster.ts`](src/svgRaster.ts) | pure (tested) | `svgRasterHrefs(svg)` / `inlineSvgRasters(svg, map)` — find and inline a design vector's external raster crops as `data:` URIs so Figma's `createNodeFromSvg` can place a hybrid `compose/figma-svg` sticker. No `figma`, no `fetch`. |
+| [`src/nativeSvg.ts`](src/nativeSvg.ts) | pure (tested) | Prepare editable vectors for native Figma import: clamp SVG pill radii to native rectangle radii, read font/token hints, and conservatively infer Auto Layout rows/columns from geometry. |
 | [`src/spec.ts`](src/spec.ts) | pure (tested) | `buildFrameSpec(read, opts)` → a `FrameSpec` (kind: new / edit / screen, target id, referenced components) from a selected frame's structural read; `specToIssueBody` / `specToJson` render the **Propose spec** artifacts (design→code). Bakes in the a11y + i18n acceptance contract. No `figma`, no `fetch`. |
 | [`src/serverHelp.ts`](src/serverHelp.ts) | pure (tested) | `diagnoseServerLoad(outcome)` → an educational `ServerHelp` (title + detail + fix-it steps) when the Override editor can't reach a `compose-preview serve` host — unreachable / HTTP error / non-serve host / empty system. No `figma`, no `fetch`. |
 | [`src/dtcg.ts`](src/dtcg.ts) | pure (tested) | Slim, browser-safe DTCG token reader (core's `readDtcgTokens` is Node-only — it loads the schema from disk). |
@@ -108,6 +109,7 @@ construction.
 npm run build   --workspace @design-parity/figma-plugin   # tsc: the pure core → dist/
 npm run test    --workspace @design-parity/figma-plugin   # vitest: planner, dtcg, preview, scene
 npm run build:plugin --workspace @design-parity/figma-plugin  # esbuild: figma/ → figma/dist/plugin/
+npx tsc -p packages/figma-plugin/figma/tsconfig.json          # type-check the real Plugin API glue
 ```
 
 `build:plugin` emits `figma/dist/plugin/` as a **self-contained, importable
@@ -226,6 +228,23 @@ Instead of dumping the entire catalog, pick exactly what you want:
   a hybrid sticker's raster crops are inlined as `data:` URIs so Figma can place
   it (`createNodeFromSvg` can't fetch external hrefs). SVG is offered whenever the
   catalog ships a vector for the component.
+
+  The SVG import is upgraded to Figma-native structure where the source is
+  losslessly representable:
+
+  - pills/circles become rectangles with editable corner radii instead of paths;
+  - the catalog palette is created or reused as a local variable collection,
+    and matching fills, strokes, radii, padding, and gaps are bound to the named
+    variables (including light/dark modes);
+  - referenced local font faces are loaded before Figma parses editable text;
+    unavailable families are reported instead of being silently treated as
+    correct;
+  - groups with a full-size background become native frames; clear rows and
+    columns become Auto Layout with inferred per-edge padding and item spacing;
+  - the inserted root becomes a native main component when Figma permits it.
+
+  Freeform/overlapping vector artwork remains absolute layout, and elliptical or
+  non-uniform corners remain paths: promoting either would change the visual.
 
 **Insert component** places just that one node on the current page, stamped with
 its `componentId` (so it's identifiable) but with no refresh source — a catalog
