@@ -247,10 +247,12 @@ export async function bindImportedTextStyles(
   let bound = 0;
   for (const text of root.findAll((node) => node.type === "TEXT") as TextNode[]) {
     if (text.fontName === figma.mixed || text.fontSize === figma.mixed) continue;
+    const fontName = text.fontName;
+    const fontSize = text.fontSize;
     const matches = styles.filter(({ spec, style }) =>
-      style.fontName.family.toLowerCase() === text.fontName.family.toLowerCase() &&
-      style.fontName.style.toLowerCase() === text.fontName.style.toLowerCase() &&
-      (spec.fontSize === undefined || Math.abs(spec.fontSize - Number(text.fontSize)) <= 0.5)
+      style.fontName.family.toLowerCase() === fontName.family.toLowerCase() &&
+      style.fontName.style.toLowerCase() === fontName.style.toLowerCase() &&
+      (spec.fontSize === undefined || Math.abs(spec.fontSize - Number(fontSize)) <= 0.5)
     );
     if (matches.length !== 1) continue;
     await text.setTextStyleIdAsync(matches[0]!.style.id);

@@ -15,6 +15,8 @@ import {
   type InsertSize,
 } from "../src/insert.js";
 import type { FrameLayout, FrameRead } from "../src/spec.js";
+import type { CatalogManifest } from "@design-parity/catalog-export";
+import type { DesignMap } from "@design-parity/core";
 import type { ParityDirection } from "../src/direction.js";
 import {
   placeLiveRender,
@@ -27,6 +29,7 @@ import { readRenderSource, stampRenderSource } from "../src/provenance.js";
 import type { ImportPlan } from "../src/plan.js";
 import { withRenderSize, type RenderSource } from "../src/render.js";
 import type { PreviewSlots } from "../src/slots.js";
+import { planMappedUpgrades, rewriteMappedNodeIds } from "../src/upgrade.js";
 import { fillSlot, placeSlots } from "../src/structure.js";
 import type {
   FigmaTextStyleSpec,
@@ -115,6 +118,25 @@ interface CatalogNodeMetadata {
   previewUrl?: string;
 }
 
+interface PlanMappedUpgradeMessage {
+  type: "planMappedUpgrade";
+  manifest: CatalogManifest;
+  map: DesignMap;
+  baseUrl: string;
+}
+
+interface ApplyMappedUpgradeMessage {
+  type: "applyMappedUpgrade";
+  jobs: Array<{
+    componentId: string;
+    nodeId: string;
+    cells: InsertSetCell[];
+    metadata?: CatalogNodeMetadata;
+  }>;
+  collection?: FigmaVariableCollection;
+  textStyles?: FigmaTextStyleSpec[];
+}
+
 /** On startup the UI asks for the persisted catalog registry (custom + last pick). */
 interface RequestRegistryMessage {
   type: "requestRegistry";
@@ -182,6 +204,8 @@ type UiMessage =
   | InsertPngMessage
   | InsertSvgMessage
   | InsertComponentSetMessage
+  | PlanMappedUpgradeMessage
+  | ApplyMappedUpgradeMessage
   | RequestRegistryMessage
   | SaveRegistryMessage
   | ProposeReadSelectionMessage
@@ -209,6 +233,7 @@ const slotTargets = new Map<string, FigmaNode>();
 
 /** clientStorage key the catalog registry (custom entries + last pick) persists under. */
 const REGISTRY_KEY = "design-parity/catalog-registry";
+let pendingUpgradeMap: { map: DesignMap; fileKey: string } | undefined;
 
 /** Add the context designers expect from a library component and Dev Mode. */
 async function applyCatalogMetadata(
@@ -227,6 +252,76 @@ async function applyCatalogMetadata(
     node.setSharedPluginData(STAMP, "previewUrl", metadata.previewUrl);
     await node.addDevResourceAsync(metadata.previewUrl, "Open live Compose preview");
   }
+}
+
+interface BuiltComponentSet {
+  node: ComponentSetNode;
+  editable: number;
+  tokenBindings: number;
+  styleBindings: number;
+  properties: number;
+  missingFonts: Set<string>;
+}
+
+/** Build one library component set without deciding where it lands on canvas. */
+async function buildEditableComponentSet(
+  componentId: string,
+  name: string,
+  cells: InsertSetCell[],
+  collection: FigmaVariableCollection | undefined,
+  textStyles: FigmaTextStyleSpec[] | undefined,
+  metadata: CatalogNodeMetadata | undefined,
+): Promise<BuiltComponentSet> {
+  if (cells.length === 0) throw new Error("No renders to place for this component.");
+  const variants: ComponentNode[] = [];
+  let editable = 0;
+  let tokenBindings = 0;
+  let styleBindings = 0;
+  const missingFonts = new Set<string>();
+  for (const cell of cells) {
+    let variant: ComponentNode;
+    if (cell.svg) {
+      const fonts = await preflightSvgFonts(cell.svg);
+      for (const family of fonts.missing) missingFonts.add(family);
+      let imported = placeCatalogSvg(figma as unknown as FigmaApi, cell.svg, {
+        name: cell.name,
+        componentId,
+      }) as unknown as SceneNode;
+      promoteNativeContainers(imported);
+      if (imported.type !== "COMPONENT") imported = figma.createComponentFromNode(imported);
+      variant = imported as ComponentNode;
+      tokenBindings += await bindImportedVariables(variant, cell.svg, collection);
+      styleBindings += await bindImportedTextStyles(variant, textStyles);
+      editable += 1;
+    } else if (cell.bytes) {
+      variant = figma.createComponent();
+      variant.resize(cell.width, cell.height);
+      variant.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: figma.createImage(cell.bytes).hash }];
+    } else {
+      throw new Error(`No SVG or PNG data for ${cell.name}.`);
+    }
+    variant.name = cell.name;
+    variants.push(variant);
+  }
+  const node = figma.combineAsVariants(variants, figma.currentPage);
+  node.name = name;
+  node.setSharedPluginData(STAMP, "role", "catalog-insert");
+  node.setSharedPluginData(STAMP, "componentId", componentId);
+  node.setSharedPluginData(STAMP, "nativeImportVersion", "2");
+  const properties = exposeCommonTextProperties(node);
+  await applyCatalogMetadata(node, metadata);
+  return { node, editable, tokenBindings, styleBindings, properties, missingFonts };
+}
+
+async function instanceCount(node: SceneNode): Promise<number> {
+  if (node.type === "COMPONENT") return (await node.getInstancesAsync()).length;
+  if (node.type !== "COMPONENT_SET") return node.type === "INSTANCE" ? 1 : 0;
+  const counts = await Promise.all(
+    node.children
+      .filter((child): child is ComponentNode => child.type === "COMPONENT")
+      .map((child) => child.getInstancesAsync().then((instances) => instances.length)),
+  );
+  return counts.reduce((sum, count) => sum + count, 0);
 }
 
 /**
@@ -294,6 +389,107 @@ figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   if (msg.type === "cancel") {
     figma.closePlugin();
+    return;
+  }
+  if (msg.type === "planMappedUpgrade") {
+    const fileKey = figma.fileKey;
+    if (!fileKey) {
+      figma.ui.postMessage({ type: "upgradeError", message: "Save this Figma file before using design-map refs." });
+      return;
+    }
+    try {
+      const plan = planMappedUpgrades(msg.manifest, msg.map, fileKey, msg.baseUrl);
+      pendingUpgradeMap = { map: msg.map, fileKey };
+      figma.ui.postMessage({ type: "upgradeJobs", ...plan });
+    } catch (err) {
+      figma.ui.postMessage({
+        type: "upgradeError",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return;
+  }
+  if (msg.type === "applyMappedUpgrade") {
+    if (!pendingUpgradeMap) {
+      figma.ui.postMessage({ type: "upgradeError", message: "The upgrade plan expired; choose the mapping file again." });
+      return;
+    }
+    const replacements: Record<string, string> = {};
+    const upgraded: string[] = [];
+    const skipped: Array<{ code: string; reason: string }> = [];
+    const placed: SceneNode[] = [];
+    for (const job of msg.jobs) {
+      let built: BuiltComponentSet | undefined;
+      try {
+        const target = await figma.getNodeByIdAsync(job.nodeId);
+        if (!target || !("x" in target) || !("remove" in target)) {
+          skipped.push({ code: job.componentId, reason: "mapped node no longer exists" });
+          continue;
+        }
+        const scene = target as SceneNode;
+        if (!["FRAME", "GROUP", "COMPONENT", "COMPONENT_SET"].includes(scene.type)) {
+          skipped.push({ code: job.componentId, reason: `mapped ${scene.type.toLowerCase()} is not an upgradeable import root` });
+          continue;
+        }
+        const stamped = scene.getSharedPluginData(STAMP, "componentId");
+        if (stamped && stamped !== job.componentId) {
+          skipped.push({ code: job.componentId, reason: `node belongs to ${stamped}, not this mapping` });
+          continue;
+        }
+        if (scene.getSharedPluginData(STAMP, "nativeImportVersion") === "2") {
+          skipped.push({ code: job.componentId, reason: "already uses the current native import" });
+          continue;
+        }
+        const instances = await instanceCount(scene);
+        if (instances > 0) {
+          skipped.push({ code: job.componentId, reason: `${instances} live instance${instances === 1 ? "" : "s"}; skipped to preserve overrides` });
+          continue;
+        }
+        const parent = scene.parent;
+        if (!parent || !("insertChild" in parent) || !("children" in parent)) {
+          skipped.push({ code: job.componentId, reason: "mapped node has no writable canvas parent" });
+          continue;
+        }
+        const index = parent.children.indexOf(scene);
+        const placement = {
+          x: scene.x,
+          y: scene.y,
+          rotation: "rotation" in scene ? scene.rotation : 0,
+          name: scene.name,
+        };
+        built = await buildEditableComponentSet(
+          job.componentId,
+          placement.name,
+          job.cells,
+          msg.collection,
+          msg.textStyles,
+          job.metadata,
+        );
+        parent.insertChild(Math.max(0, index), built.node);
+        built.node.x = placement.x;
+        built.node.y = placement.y;
+        built.node.rotation = placement.rotation;
+        scene.remove();
+        replacements[job.nodeId] = built.node.id;
+        upgraded.push(job.componentId);
+        placed.push(built.node);
+      } catch (err) {
+        built?.node.remove();
+        skipped.push({
+          code: job.componentId,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    const updatedMap = rewriteMappedNodeIds(
+      pendingUpgradeMap.map,
+      pendingUpgradeMap.fileKey,
+      replacements,
+    );
+    pendingUpgradeMap = undefined;
+    if (placed.length) figma.viewport.scrollAndZoomIntoView(placed);
+    figma.ui.postMessage({ type: "upgradeDone", upgraded, skipped, updatedMap });
+    figma.notify(`Upgraded ${upgraded.length} mapped component${upgraded.length === 1 ? "" : "s"}; skipped ${skipped.length}.`);
     return;
   }
   if (msg.type === "requestRegistry") {
@@ -377,6 +573,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
         ? exposeTextProperties(node as unknown as ComponentNode)
         : 0;
       if ((node as unknown as SceneNode).type === "COMPONENT") {
+        node.setSharedPluginData(STAMP, "nativeImportVersion", "2");
         await applyCatalogMetadata(node as unknown as ComponentNode, msg.metadata);
       }
       figma.ui.postMessage({ type: "inserted", name: node.name });
@@ -398,43 +595,15 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "insertComponentSet") {
     try {
-      if (msg.cells.length === 0) throw new Error("No renders to place for this component.");
-      const variants: ComponentNode[] = [];
-      let editable = 0;
-      let tokenBindings = 0;
-      let styleBindings = 0;
-      const missingFonts = new Set<string>();
-      for (const cell of msg.cells) {
-        let variant: ComponentNode;
-        if (cell.svg) {
-          const fonts = await preflightSvgFonts(cell.svg);
-          for (const family of fonts.missing) missingFonts.add(family);
-          let imported = placeCatalogSvg(figma as unknown as FigmaApi, cell.svg, {
-            name: cell.name,
-            componentId: msg.componentId,
-          }) as unknown as SceneNode;
-          promoteNativeContainers(imported);
-          if (imported.type !== "COMPONENT") imported = figma.createComponentFromNode(imported);
-          variant = imported as ComponentNode;
-          tokenBindings += await bindImportedVariables(variant, cell.svg, msg.collection);
-          styleBindings += await bindImportedTextStyles(variant, msg.textStyles);
-          editable += 1;
-        } else if (cell.bytes) {
-          variant = figma.createComponent();
-          variant.resize(cell.width, cell.height);
-          variant.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: figma.createImage(cell.bytes).hash }];
-        } else {
-          throw new Error(`No SVG or PNG data for ${cell.name}.`);
-        }
-        variant.name = cell.name;
-        variants.push(variant);
-      }
-      const node = figma.combineAsVariants(variants, figma.currentPage);
-      node.name = msg.name;
-      node.setSharedPluginData("designParity", "role", "catalog-insert");
-      node.setSharedPluginData("designParity", "componentId", msg.componentId);
-      const properties = exposeCommonTextProperties(node);
-      await applyCatalogMetadata(node, msg.metadata);
+      const built = await buildEditableComponentSet(
+        msg.componentId,
+        msg.name,
+        msg.cells,
+        msg.collection,
+        msg.textStyles,
+        msg.metadata,
+      );
+      const { node, editable, tokenBindings, styleBindings, properties, missingFonts } = built;
       figma.viewport.scrollAndZoomIntoView([node]);
       figma.ui.postMessage({ type: "inserted", name: node.name });
       const details = [

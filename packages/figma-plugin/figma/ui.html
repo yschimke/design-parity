@@ -153,6 +153,14 @@
       <button id="import-all" type="button" class="secondary">Import whole catalog</button>
       <button id="confirm" type="button" hidden>Confirm write</button>
     </div>
+    <div class="field" style="margin-top:10px">
+      <label for="upgrade-map">Upgrade an existing mapped import</label>
+      <input id="upgrade-map" type="file" accept="application/json,.json" />
+      <p class="hint" style="margin:4px 0 0">Choose its committed <code>design-map.json</code>. Only mapped nodes in this Figma file are replaced; nodes with live instances are skipped safely.</p>
+    </div>
+    <div class="row">
+      <button id="upgrade-mapped" type="button" class="secondary">Bulk upgrade mapped nodes</button>
+    </div>
 
     <section id="result" hidden>
       <div class="head">

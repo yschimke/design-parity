@@ -275,6 +275,22 @@ that variant and lays out a `<system> — Catalog` page with the matching
 annotation layer and a variable collection (light/dark become Figma modes),
 reconciling in place on re-import (see below).
 
+### Bulk-upgrade a legacy import
+
+After loading the matching catalog, choose the committed `design-map.json` under
+**Upgrade an existing mapped import**, then click **Bulk upgrade mapped nodes**.
+The map—not layer-name guessing—selects the old PNG/basic-SVG roots in the
+current Figma file. Each is replaced with the same editable per-variant component
+set used by a fresh import, while retaining its canvas position, rotation, parent
+order, and name.
+
+The upgrade is intentionally non-destructive around live library use: stale,
+cross-file, ambiguous, already-current, and unsupported mappings are reported and
+left untouched; a component with existing instances is skipped so instance
+overrides cannot be broken. Successful replacements change node IDs, so the
+plugin returns an updated correspondence document to copy back over
+`design-map.json`.
+
 ### Live customization needs a server
 
 The **Override editor** tab renders on demand (any size, any knobs), which needs

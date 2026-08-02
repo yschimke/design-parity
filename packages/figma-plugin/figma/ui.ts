@@ -14,6 +14,7 @@
  * `render.ts`); this file is fetch + DOM reflection + postMessage.
  */
 import type { CatalogManifest } from "@design-parity/catalog-export";
+import type { DesignMap } from "@design-parity/core";
 import { toFigmaTextStyles, toFigmaVariables } from "@design-parity/catalog-export/figma";
 
 import {
@@ -24,6 +25,7 @@ import {
   selectCatalogImage,
   selectCatalogWireframe,
   type CatalogIndex,
+  type ComponentSetCell,
   type PickComponent,
   type PickSelection,
 } from "../src/catalogPick.js";
@@ -98,6 +100,8 @@ const customiseLiveButton = document.getElementById("customise-live") as HTMLBut
 const importAllButton = document.getElementById("import-all") as HTMLButtonElement;
 const loadFolderButton = document.getElementById("load-folder") as HTMLButtonElement;
 const folderInput = document.getElementById("folder") as HTMLInputElement;
+const upgradeMapInput = document.getElementById("upgrade-map") as HTMLInputElement;
+const upgradeMappedButton = document.getElementById("upgrade-mapped") as HTMLButtonElement;
 
 /** The catalog registry (built-ins + custom + last pick). Seeded on startup from
  *  clientStorage; re-persisted on every change. Starts from the code defaults so
@@ -119,6 +123,7 @@ let catalog:
 
 /** A pending catalog→editor handoff: the component to select once previews load. */
 let pendingLiveTarget: LiveBridgeTarget | undefined;
+let upgradePlanSkipped: Array<{ code: string; reason: string }> = [];
 
 function say(text: string): void {
   status.textContent = text;
@@ -394,25 +399,7 @@ insertSetButton.addEventListener("click", async () => {
   }
 
   try {
-    const fetched: { name: string; bytes?: Uint8Array; svg?: string; width: number; height: number }[] = [];
-    let done = 0;
-    for (const cell of cells) {
-      say(`Fetching ${component.componentId} variants… ${++done}/${cells.length}`);
-      let svg: string | undefined;
-      if (cell.vectorUrl) {
-        try {
-          svg = await inlineRasters(await fetchText(cell.vectorUrl), cell.vectorUrl);
-        } catch {
-          // Older bundles may carry the PNG without the sibling SVG.
-        }
-      }
-      fetched.push({
-        name: cell.name,
-        ...(svg ? { svg } : { bytes: await fetchBytes(cell.url) }),
-        width: cell.width,
-        height: cell.height,
-      });
-    }
+    const fetched = await fetchComponentSetCells(cells, component.componentId);
     parent.postMessage(
       {
         pluginMessage: {
@@ -437,6 +424,35 @@ insertSetButton.addEventListener("click", async () => {
 // Step 2b — Import the whole catalog: the original sticker-sheet flow, now run
 // from the already-loaded manifest (the reconcile / design-map path).
 importAllButton.addEventListener("click", () => void importWholeCatalog());
+
+upgradeMappedButton.addEventListener("click", async () => {
+  if (!catalog) return;
+  const file = upgradeMapInput.files?.[0];
+  if (!file) {
+    say("Choose the existing import's design-map.json first.");
+    return;
+  }
+  try {
+    const value = JSON.parse(await file.text()) as Partial<DesignMap>;
+    if (!Array.isArray(value.components)) throw new Error("design-map.json must contain a components array.");
+    if (value.components.some((entry) =>
+      !entry || typeof entry !== "object" || typeof entry.code !== "string" || typeof entry.source !== "string"
+    )) {
+      throw new Error("Every mapping needs string code and source fields.");
+    }
+    say("Matching mapped Figma nodes to catalog components…");
+    parent.postMessage({
+      pluginMessage: {
+        type: "planMappedUpgrade",
+        manifest: catalog.manifest,
+        map: value as DesignMap,
+        baseUrl: catalog.base,
+      },
+    }, "*");
+  } catch (err) {
+    say(`Upgrade map invalid: ${err instanceof Error ? err.message : String(err)}`);
+  }
+});
 
 async function importWholeCatalog(): Promise<void> {
   if (!catalog) return;
@@ -546,6 +562,32 @@ async function inlineRasters(svg: string, svgUrl: string): Promise<string> {
     dataUriByHref.set(href, bytesToDataUri(await fetchBytes(url), "image/png"));
   }
   return inlineSvgRasters(svg, dataUriByHref);
+}
+
+async function fetchComponentSetCells(
+  cells: ComponentSetCell[],
+  componentId: string,
+): Promise<Array<{ name: string; bytes?: Uint8Array; svg?: string; width: number; height: number }>> {
+  const fetched: Array<{ name: string; bytes?: Uint8Array; svg?: string; width: number; height: number }> = [];
+  let done = 0;
+  for (const cell of cells) {
+    say(`Fetching ${componentId} variants… ${++done}/${cells.length}`);
+    let svg: string | undefined;
+    if (cell.vectorUrl) {
+      try {
+        svg = await inlineRasters(await fetchText(cell.vectorUrl), cell.vectorUrl);
+      } catch {
+        // Older bundles may carry the PNG without the sibling SVG.
+      }
+    }
+    fetched.push({
+      name: cell.name,
+      ...(svg ? { svg } : { bytes: await fetchBytes(cell.url) }),
+      width: cell.width,
+      height: cell.height,
+    });
+  }
+  return fetched;
 }
 
 /** Encode raw bytes as a `data:` URI (base64) for inlining into an SVG. */
@@ -710,6 +752,38 @@ copyButton.addEventListener("click", () => {
   setTimeout(() => (copyButton.textContent = "Copy"), 1200);
 });
 
+async function runMappedUpgradeJobs(
+  jobs: Array<{ componentId: string; nodeId: string; cells: ComponentSetCell[] }>,
+): Promise<void> {
+  if (!catalog) return;
+  if (!jobs.length) {
+    say(`No mapped nodes can be upgraded. ${upgradePlanSkipped.length} mapping${upgradePlanSkipped.length === 1 ? " was" : "s were"} skipped.`);
+    return;
+  }
+  try {
+    const fetched = [];
+    for (const job of jobs) {
+      fetched.push({
+        componentId: job.componentId,
+        nodeId: job.nodeId,
+        cells: await fetchComponentSetCells(job.cells, job.componentId),
+        metadata: catalogMetadata(job.componentId),
+      });
+    }
+    say(`Upgrading ${fetched.length} mapped component${fetched.length === 1 ? "" : "s"}…`);
+    parent.postMessage({ pluginMessage: {
+      type: "applyMappedUpgrade",
+      jobs: fetched,
+      collection: catalog.themeTokens
+        ? toFigmaVariables(catalog.themeTokens, catalog.index.title)
+        : undefined,
+      textStyles: catalog.themeTokens ? toFigmaTextStyles(catalog.themeTokens) : undefined,
+    } }, "*");
+  } catch (err) {
+    say(`Upgrade failed while fetching assets: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 window.onmessage = (event: MessageEvent) => {
   const msg = event.data.pluginMessage;
   if (!msg) return;
@@ -729,6 +803,18 @@ window.onmessage = (event: MessageEvent) => {
       result.hidden = false;
     }
   }
+  if (msg.type === "upgradeJobs") {
+    upgradePlanSkipped = msg.skipped;
+    void runMappedUpgradeJobs(msg.jobs);
+  }
+  if (msg.type === "upgradeDone") {
+    const skipped = [...upgradePlanSkipped, ...msg.skipped];
+    say(`Upgraded ${msg.upgraded.length} mapped component${msg.upgraded.length === 1 ? "" : "s"}; skipped ${skipped.length}. Updated correspondence is ready to copy.`);
+    designMapArea.value = JSON.stringify(msg.updatedMap, null, 2);
+    result.hidden = false;
+    upgradePlanSkipped = [];
+  }
+  if (msg.type === "upgradeError") say(`Upgrade failed: ${msg.message}`);
   if (msg.type === "selectionRead") {
     onSelectionRead(msg.read as FrameRead, msg.png as Uint8Array | undefined);
   }
