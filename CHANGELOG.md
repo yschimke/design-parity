@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.31](https://github.com/yschimke/design-parity/compare/v0.1.30...v0.1.31) (2026-08-02)
+
+
+### Features
+
+* **figma-plugin:** create first-class Figma library assets ([#253](https://github.com/yschimke/design-parity/issues/253)) ([7f26b3b](https://github.com/yschimke/design-parity/commit/7f26b3b7d16e44a46f12af0f7bda736985935664))
+* **figma-plugin:** import SVGs as native Figma components ([#250](https://github.com/yschimke/design-parity/issues/250)) ([18cf405](https://github.com/yschimke/design-parity/commit/18cf40545892ee186827ce14919563b8f302338c))
+
+
+### Bug Fixes
+
+* **catalog:** retain preview ids for mapped upgrades ([#255](https://github.com/yschimke/design-parity/issues/255)) ([2930222](https://github.com/yschimke/design-parity/commit/293022291f3bf536a9731bc59f2ef693bbd7a9d0))
+
 ## [0.1.30](https://github.com/yschimke/design-parity/compare/v0.1.29...v0.1.30) (2026-07-21)
 
 
