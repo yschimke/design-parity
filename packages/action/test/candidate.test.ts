@@ -11,8 +11,9 @@ const repoRoot = resolve(here, "../../..");
 const ctx: AdapterContext = { repoRoot, env: {} };
 
 // The candidate package's golden preview-bundle polyglot fixture. Its one
-// preview is id `ui.Button.PrimaryButton` with sourceFile `ui/Button.kt` +
-// functionName `PrimaryButton`.
+// preview has filename-safe id `ui.Button.PrimaryButton`, canonical raw id
+// `ui.Button.Primary Button`, and sourceFile `ui/Button.kt` + functionName
+// `PrimaryButton`.
 const bundleDir = resolve(repoRoot, "packages/candidate/test/fixtures");
 
 // The code handle the convention (`sourceFile#functionName`) derives for it.
@@ -31,7 +32,7 @@ describe("buildCandidateProvider", () => {
     // code-handle reference; the raw preview id is preserved on `previewId`.
     const candidate = await provider!(conventionHandle, ctx);
     expect(candidate?.componentId).toBe(conventionHandle);
-    expect(candidate?.previewId).toBe("ui.Button.PrimaryButton");
+    expect(candidate?.previewId).toBe("ui.Button.Primary Button");
     expect(candidate?.images[0]?.uri.startsWith("data:image/png;base64,")).toBe(
       true,
     );
@@ -49,7 +50,7 @@ describe("buildCandidateProvider", () => {
           code: "ui/Button.kt#Primary",
           source: "bundle",
           ref: "design/button",
-          previewId: "ui.Button.PrimaryButton",
+          previewId: "ui.Button.Primary Button",
         },
       ],
     };
@@ -61,7 +62,7 @@ describe("buildCandidateProvider", () => {
     // The explicit link wins over the convention.
     const candidate = await provider!("ui/Button.kt#Primary", ctx);
     expect(candidate?.componentId).toBe("ui/Button.kt#Primary");
-    expect(candidate?.previewId).toBe("ui.Button.PrimaryButton");
+    expect(candidate?.previewId).toBe("ui.Button.Primary Button");
     expect(candidate?.semantics.root.role).toBe("button");
   });
 
@@ -74,7 +75,7 @@ describe("buildCandidateProvider", () => {
           code: "ui/Button.kt#Primary",
           source: "bundle",
           ref: "design/button",
-          previewId: [{ previewId: "ui.Button.PrimaryButton" }],
+          previewId: [{ previewId: "ui.Button.Primary Button" }],
         },
       ],
     };
@@ -86,7 +87,7 @@ describe("buildCandidateProvider", () => {
     expect(warnings).toEqual([]);
     const candidate = await provider!("ui/Button.kt#Primary", ctx);
     expect(candidate?.componentId).toBe("ui/Button.kt#Primary");
-    expect(candidate?.previewId).toBe("ui.Button.PrimaryButton");
+    expect(candidate?.previewId).toBe("ui.Button.Primary Button");
   });
 
   it("returns no provider when no candidate input is configured", async () => {

@@ -11,7 +11,10 @@
  * custom PNG-chunk parsing.
  *
  * Zip layout this reader consumes:
- * - `bundle.json` — `{ schemaVersion, previewIds, coverPreviewId, classpath[] }`.
+ * - `bundle.json` — `{ schemaVersion, previewIds, rawPreviewIds,
+ *   coverPreviewId, classpath[] }`. `previewIds` are filename-safe bundle ids;
+ *   when present, the parallel `rawPreviewIds` array carries the canonical ids
+ *   emitted by discovery and used by `design-map.json`.
  * - `previews.json` — `{ schema, module, variant, previews: [{ id, functionName,
  *   className, sourceFile, params, captures[] }] }`. `id` = `<fqClass>.<function>
  *   [_<variant>]` and maps to `componentId`; `params` carries the `@Preview`
@@ -64,6 +67,8 @@ import { readPngSize } from "./png.js";
 export interface BundleManifest {
   schemaVersion?: number;
   previewIds?: string[];
+  /** Canonical discovery ids, positionally aligned with `previewIds`. */
+  rawPreviewIds?: string[];
   coverPreviewId?: string;
   classpath?: string[];
 }
@@ -289,6 +294,29 @@ export type ComponentIdResolver = (preview: {
 }) => string | ResolvedComponentId | undefined;
 
 /**
+ * Return the canonical discovery id for a sanitized bundle preview entry.
+ *
+ * compose-preview stores images and `previews.json` entries under filename-safe
+ * ids, while schema 8+ manifests retain the original ids in a parallel array.
+ * External correspondence (notably `design-map.json`) is authored against the
+ * original id, so only ZIP lookup should use {@link PreviewEntry.id}.
+ *
+ * Older bundles and malformed/misaligned arrays degrade to the entry id.
+ */
+export function rawPreviewIdForEntry(
+  bundle: PreviewBundle,
+  entry: PreviewEntry,
+): string {
+  const previewIds = bundle.manifest.previewIds;
+  const rawPreviewIds = bundle.manifest.rawPreviewIds;
+  if (!previewIds || !rawPreviewIds) return entry.id;
+  const index = previewIds.indexOf(entry.id);
+  if (index < 0) return entry.id;
+  const raw = rawPreviewIds[index];
+  return typeof raw === "string" && raw.length > 0 ? raw : entry.id;
+}
+
+/**
  * Build the {@link CandidateRender} for one preview. A preview with no explicit
  * `captures[]` is treated as a single default capture keyed on its `id`.
  *
@@ -347,8 +375,9 @@ export function previewToCandidate(
     }
   }
 
+  const rawPreviewId = rawPreviewIdForEntry(bundle, entry);
   const resolved = resolveComponentId?.({
-    id: entry.id,
+    id: rawPreviewId,
     ...(entry.sourceFile !== undefined ? { sourceFile: entry.sourceFile } : {}),
     ...(entry.functionName !== undefined
       ? { functionName: entry.functionName }
@@ -373,7 +402,7 @@ export function previewToCandidate(
   };
   // When a resolver ran, keep the raw preview id reconcilable alongside the
   // code-handle componentId (issue #44).
-  if (resolveComponentId) candidate.previewId = entry.id;
+  if (resolveComponentId) candidate.previewId = rawPreviewId;
   // Carry the function name so catalog assembly can fold a function's
   // theme/size multipreview variants (whose ids differ only by an appended
   // `_<mode>`) into one component, independent of any resolver.

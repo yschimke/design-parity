@@ -16,6 +16,7 @@ import {
   bundleToCandidates,
   loadPreviewBundle,
   previewToCandidate,
+  rawPreviewIdForEntry,
   mergeCandidateRenders,
   catalogTokensFromBundle,
   bundleCandidateSource,
@@ -90,10 +91,10 @@ describe("readPreviewBundle", () => {
     // With a resolver: componentId becomes the code handle; previewId retained.
     const [keyed] = bundleToCandidates(
       await readPreviewBundle(bundlePath),
-      (p) => (p.id === "ui.Button.PrimaryButton" ? "ui/Button.kt#PrimaryButton" : undefined),
+      (p) => (p.id === "ui.Button.Primary Button" ? "ui/Button.kt#PrimaryButton" : undefined),
     );
     expect(keyed!.componentId).toBe("ui/Button.kt#PrimaryButton");
-    expect(keyed!.previewId).toBe("ui.Button.PrimaryButton");
+    expect(keyed!.previewId).toBe("ui.Button.Primary Button");
 
     // Resolver declines (undefined): componentId falls back to the preview id,
     // but previewId is still set (a resolver ran).
@@ -102,7 +103,42 @@ describe("readPreviewBundle", () => {
       () => undefined,
     );
     expect(declined!.componentId).toBe("ui.Button.PrimaryButton");
-    expect(declined!.previewId).toBe("ui.Button.PrimaryButton");
+    expect(declined!.previewId).toBe("ui.Button.Primary Button");
+  });
+
+  it("uses rawPreviewIds for correspondence while reading sanitized asset paths", async () => {
+    const png = new Uint8Array(
+      await readFile(resolve(repoRoot, "fixtures/figma/button-primary.light.png")),
+    );
+    const sanitized = "app.ChatKt.ContactChatPreview_Contact_chat";
+    const raw = "app.ChatKt.ContactChatPreview_Contact chat";
+    const bundle: PreviewBundle = {
+      manifest: {
+        previewIds: [sanitized],
+        rawPreviewIds: [raw],
+      },
+      previews: [{ id: sanitized }],
+      entries: { [`previews/${sanitized}.png`]: png },
+    };
+
+    expect(rawPreviewIdForEntry(bundle, bundle.previews[0]!)).toBe(raw);
+    const candidate = previewToCandidate(bundle, bundle.previews[0]!, (preview) =>
+      preview.id === raw ? "ui/Chat.kt#ContactChat" : undefined,
+    );
+    expect(candidate.componentId).toBe("ui/Chat.kt#ContactChat");
+    expect(candidate.previewId).toBe(raw);
+    expect(candidate.images[0]?.uri.startsWith("data:image/png;base64,")).toBe(true);
+  });
+
+  it("falls back to the entry id for absent or misaligned rawPreviewIds", async () => {
+    const bundle = await readPreviewBundle(bundlePath);
+    const entry = bundle.previews[0]!;
+    const manifest = bundle.manifest;
+    bundle.manifest = {};
+    expect(rawPreviewIdForEntry(bundle, entry)).toBe(entry.id);
+
+    bundle.manifest = { ...manifest, rawPreviewIds: [""] };
+    expect(rawPreviewIdForEntry(bundle, entry)).toBe(entry.id);
   });
 
   it("assigns image theme from a name convention and an explicit hint (#48)", async () => {
