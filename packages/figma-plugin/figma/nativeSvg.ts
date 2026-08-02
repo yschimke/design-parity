@@ -1,5 +1,8 @@
 /** Figma-runtime enhancements for a layered SVG after `createNodeFromSvg`. */
-import type { FigmaVariableCollection } from "@design-parity/catalog-export/figma";
+import type {
+  FigmaTextStyleSpec,
+  FigmaVariableCollection,
+} from "@design-parity/catalog-export/figma";
 
 import { hexToRgba, STAMP } from "../src/scene.js";
 import {
@@ -186,6 +189,12 @@ async function ensureVariables(spec: FigmaVariableCollection): Promise<ImportedV
     );
     variable ??= figma.variables.createVariable(variableSpec.name, collection, variableSpec.resolvedType);
     variable.scopes = scopes(variableSpec.resolvedType, variableSpec.name);
+    const role = variableSpec.name.split("/").slice(1).join(".");
+    if (role && variableSpec.name.startsWith("color/")) {
+      variable.setVariableCodeSyntax("ANDROID", `MaterialTheme.colorScheme.${role}`);
+    } else if (role && variableSpec.name.startsWith("radius/")) {
+      variable.setVariableCodeSyntax("ANDROID", `MaterialTheme.shapes.${role}`);
+    }
     for (const [modeKey, value] of Object.entries(variableSpec.valuesByMode)) {
       const modeId = modeIds.get(modeKey) ?? collection.defaultModeId;
       variable.setValueForMode(modeId, valueFor(variableSpec.resolvedType, value));
@@ -194,6 +203,106 @@ async function ensureVariables(spec: FigmaVariableCollection): Promise<ImportedV
   }
   collection.setPluginData(STAMP, "tokens");
   return { collection, variables, modeIds };
+}
+
+function tokenWeight(value: number | string | undefined): number {
+  if (typeof value === "number") return value;
+  if (value !== undefined && Number.isFinite(Number(value))) return Number(value);
+  if (value && /bold/i.test(value)) return 700;
+  if (value && /medium/i.test(value)) return 500;
+  return 400;
+}
+
+/** Create/reuse local text styles and bind exact imported text metrics to them. */
+export async function bindImportedTextStyles(
+  root: SceneNode,
+  specs: readonly FigmaTextStyleSpec[] | undefined,
+): Promise<number> {
+  if (!specs?.length || !("findAll" in root)) return 0;
+  const available = (await figma.listAvailableFontsAsync()).map((font) => font.fontName);
+  const local = await figma.getLocalTextStylesAsync();
+  const styles: { spec: FigmaTextStyleSpec; style: TextStyle }[] = [];
+  for (const spec of specs) {
+    if (!spec.fontFamily) continue;
+    const font = chooseAvailableFont({
+      family: spec.fontFamily,
+      weight: tokenWeight(spec.fontWeight),
+      italic: /italic|oblique/i.test(spec.fontStyle ?? ""),
+    }, available);
+    if (!font) continue;
+    await figma.loadFontAsync(font);
+    let style = local.find((candidate) => candidate.name === spec.name);
+    style ??= figma.createTextStyle();
+    style.name = spec.name;
+    style.fontName = font;
+    if (spec.fontSize !== undefined) style.fontSize = spec.fontSize;
+    if (spec.lineHeight !== undefined) style.lineHeight = { unit: "PIXELS", value: spec.lineHeight };
+    if (spec.letterSpacing !== undefined) {
+      style.letterSpacing = { unit: "PIXELS", value: spec.letterSpacing };
+    }
+    style.description = `Code: ${spec.androidCodeSyntax}`;
+    styles.push({ spec, style });
+  }
+
+  let bound = 0;
+  for (const text of root.findAll((node) => node.type === "TEXT") as TextNode[]) {
+    if (text.fontName === figma.mixed || text.fontSize === figma.mixed) continue;
+    const matches = styles.filter(({ spec, style }) =>
+      style.fontName.family.toLowerCase() === text.fontName.family.toLowerCase() &&
+      style.fontName.style.toLowerCase() === text.fontName.style.toLowerCase() &&
+      (spec.fontSize === undefined || Math.abs(spec.fontSize - Number(text.fontSize)) <= 0.5)
+    );
+    if (matches.length !== 1) continue;
+    await text.setTextStyleIdAsync(matches[0]!.style.id);
+    bound += 1;
+  }
+  return bound;
+}
+
+/** Expose stable, common text layers on an imported component set as TEXT properties. */
+export function exposeCommonTextProperties(set: ComponentSetNode): number {
+  const variants = set.children.filter((child): child is ComponentNode => child.type === "COMPONENT");
+  if (variants.length === 0) return 0;
+  const maps = variants.map((variant) => {
+    const byName = new Map<string, TextNode[]>();
+    for (const text of variant.findAll((node) => node.type === "TEXT") as TextNode[]) {
+      const bucket = byName.get(text.name) ?? [];
+      bucket.push(text);
+      byName.set(text.name, bucket);
+    }
+    return byName;
+  });
+  let count = 0;
+  for (const [layerName, first] of maps[0]!) {
+    if (first.length !== 1 || !maps.every((map) => map.get(layerName)?.length === 1)) continue;
+    const texts = maps.map((map) => map.get(layerName)![0]!);
+    if (!texts.every((text) => text.characters === texts[0]!.characters)) continue;
+    const label = layerName.trim() && !/^text\s*\d*$/i.test(layerName) ? layerName.trim() : `Text ${count + 1}`;
+    const property = set.addComponentProperty(label, "TEXT", texts[0]!.characters);
+    for (const text of texts) text.componentPropertyReferences = { characters: property };
+    count += 1;
+  }
+  return count;
+}
+
+/** Expose uniquely named text layers on one main component. */
+export function exposeTextProperties(component: ComponentNode): number {
+  const byName = new Map<string, TextNode[]>();
+  for (const text of component.findAll((node) => node.type === "TEXT") as TextNode[]) {
+    const bucket = byName.get(text.name) ?? [];
+    bucket.push(text);
+    byName.set(text.name, bucket);
+  }
+  let count = 0;
+  for (const [layerName, texts] of byName) {
+    if (texts.length !== 1) continue;
+    const text = texts[0]!;
+    const label = layerName.trim() && !/^text\s*\d*$/i.test(layerName) ? layerName.trim() : `Text ${count + 1}`;
+    const property = component.addComponentProperty(label, "TEXT", text.characters);
+    text.componentPropertyReferences = { characters: property };
+    count += 1;
+  }
+  return count;
 }
 
 function rgbaKey(value: RGB | RGBA): string {

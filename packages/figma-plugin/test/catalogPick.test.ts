@@ -271,6 +271,21 @@ describe("componentSetCells", () => {
     ]);
     expect(componentSetCells(manifest, "Nope", base)).toEqual([]);
   });
+
+  it("pairs every nested render with its per-variant editable vector", () => {
+    const nested: CatalogManifest = {
+      ...manifest,
+      components: [{
+        componentId: "Button/Filled",
+        greenlines: [],
+        redlines: [],
+        images: [image({ path: "images/button-filled/default-light.png" })],
+      }],
+    };
+    expect(componentSetCells(nested, "Button/Filled", base)[0]).toMatchObject({
+      vectorUrl: "https://cdn.example/compose-m3/figma/button-filled/default-light.svg",
+    });
+  });
 });
 
 describe("selectCatalogWireframe", () => {
@@ -302,5 +317,24 @@ describe("selectCatalogDesignVector", () => {
 
   it("returns undefined only for an unknown component", () => {
     expect(selectCatalogDesignVector(manifest, "Nope", base)).toBeUndefined();
+  });
+
+  it("selects the vector for the concrete state/theme render", () => {
+    const nested: CatalogManifest = {
+      ...manifest,
+      components: [{
+        componentId: "Button/Filled",
+        greenlines: [],
+        redlines: [],
+        images: [
+          image({ path: "images/button-filled/default-light.png", theme: "light" }),
+          image({ path: "images/button-filled/default-dark.png", theme: "dark" }),
+        ],
+      }],
+    };
+    expect(selectCatalogDesignVector(nested, "Button/Filled", base, {
+      componentId: "Button/Filled",
+      dimensions: { theme: "dark" },
+    })).toBe("https://cdn.example/compose-m3/figma/button-filled/default-dark.svg");
   });
 });

@@ -110,6 +110,8 @@ export interface FigmaNode {
   setSharedPluginData(namespace: string, key: string, value: string): void;
   /** Read an identity stamp; returns `""` when unset (real Figma API). */
   getSharedPluginData(namespace: string, key: string): string;
+  /** Present on native COMPONENT nodes; creates a first-class component slot. */
+  createSlot?(): FigmaNode;
 }
 
 export interface FigmaVariableCollectionNode {

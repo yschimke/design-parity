@@ -66,6 +66,22 @@ describe("placeSlots", () => {
     expect(slotContainerPreviewId(container)).toBe("Plain");
     expect((container as FakeNode).children ?? []).toHaveLength(0);
   });
+
+  it("uses native component slots when the container supports them", () => {
+    const fake = createFakeFigma();
+    const container = fake.figma.createFrame();
+    let created = 0;
+    container.createSlot = () => {
+      created += 1;
+      const slot = fake.figma.createFrame();
+      container.appendChild(slot);
+      return slot;
+    };
+
+    const placed = placeSlots(fake.figma, container, slots);
+    expect(created).toBe(2);
+    expect((container as FakeNode).children).toEqual(placed.map((item) => item.node));
+  });
 });
 
 describe("fillSlot / slotSizeAxes", () => {

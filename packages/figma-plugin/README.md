@@ -239,6 +239,8 @@ Instead of dumping the entire catalog, pick exactly what you want:
   - referenced local font faces are loaded before Figma parses editable text;
     unavailable families are reported instead of being silently treated as
     correct;
+  - symbolic typography roles become reusable local Text Styles and are bound
+    where the imported metrics identify one role unambiguously;
   - groups with a full-size background become native frames; clear rows and
     columns become Auto Layout with inferred per-edge padding and item spacing;
   - the inserted root becomes a native main component when Figma permits it.
@@ -251,11 +253,18 @@ its `componentId` (so it's identifiable) but with no refresh source — a catalo
 render is a static, published artifact.
 
 **Insert all variants (set)** places the *whole* component as a native Figma
-**component set** instead — one `COMPONENT` per render, named with its variant
-properties (`state=…, theme=…, size=…`), combined into one set. It's the reusable
-library form (the same set the whole-catalog *Components* page builds), and it
-ignores the variant/dimension pickers — the set carries every `ideal` render the
-catalog ships for that component.
+**component set** instead — one editable per-variant SVG `COMPONENT` per render,
+named with its native variant properties (`state=…, theme=…, size=…, locale=…,
+direction=…, fontScale=…`), combined into one set. A missing variant SVG falls
+back independently to its PNG, rather than making the whole set fail. Common
+text layers become native TEXT component properties. The component description
+leads with the catalog's accessibility/i18n notes, source and live-preview links
+appear in Dev Mode, and the relaunch action opens it back in Design Parity.
+
+Structured live containers are promoted to main components when possible, so
+declared child regions use Figma's native SLOT nodes; exact-size frames remain
+the compatibility fallback. The set carries every `ideal` render the catalog
+ships, making its stress-test matrix a reusable library asset.
 
 ### Import the whole catalog (sticker sheet)
 

@@ -313,6 +313,19 @@ function designVectorPath(component: CatalogManifestComponent): string {
 }
 
 /**
+ * The vector alongside one concrete catalog render. compose-ai-tools publishes
+ * `images/<slug>/<variant>.png` and `figma/<slug>/<variant>.svg` from the same
+ * preview id, so keeping the image path as the source of truth preserves every
+ * state/theme/locale axis. Flat legacy catalogs continue to use the component
+ * level vector above.
+ */
+function imageDesignVectorPath(image: CatalogManifestImage): string | undefined {
+  if (!image.path.startsWith("images/") || !/\.png$/i.test(image.path)) return undefined;
+  const relative = image.path.slice("images/".length).replace(/\.png$/i, ".svg");
+  return relative.includes("/") ? `figma/${relative}` : undefined;
+}
+
+/**
  * The absolute URL of a component's **editable design vector** (`figma/<slug>.svg`,
  * the `compose/figma-svg` export) by delivery-branch convention. Returned for any
  * known component — the file's presence is confirmed at fetch time, with the
@@ -322,9 +335,15 @@ export function selectCatalogDesignVector(
   manifest: CatalogManifest,
   componentId: string,
   baseUrl: string,
+  selection?: PickSelection,
 ): string | undefined {
   const component = manifest.components.find((c) => c.componentId === componentId);
   if (!component) return undefined;
+  if (selection) {
+    const picked = selectCatalogImage(manifest, selection, baseUrl);
+    const path = picked && imageDesignVectorPath(picked.image);
+    if (path) return resolveImageUrl(baseUrl, path);
+  }
   return resolveImageUrl(baseUrl, designVectorPath(component));
 }
 
@@ -334,6 +353,8 @@ export interface ComponentSetCell {
   path: string;
   /** Absolute URL the UI fetches the PNG bytes from. */
   url: string;
+  /** Per-variant editable vector URL; fetch failure falls back to `url`. */
+  vectorUrl?: string;
   /** Figma variant-property string, e.g. `state=default, theme=light, size=compact`. */
   name: string;
   width: number;
@@ -367,11 +388,15 @@ export function componentSetCells(
 ): ComponentSetCell[] {
   const component = manifest.components.find((c) => c.componentId === componentId);
   if (!component) return [];
-  return idealImages(component).map((image) => ({
-    path: image.path,
-    url: resolveImageUrl(baseUrl, image.path),
-    name: variantPropsName(image),
-    width: image.width,
-    height: image.height,
-  }));
+  return idealImages(component).map((image) => {
+    const vectorPath = imageDesignVectorPath(image);
+    return {
+      path: image.path,
+      url: resolveImageUrl(baseUrl, image.path),
+      ...(vectorPath ? { vectorUrl: resolveImageUrl(baseUrl, vectorPath) } : {}),
+      name: variantPropsName(image),
+      width: image.width,
+      height: image.height,
+    };
+  });
 }

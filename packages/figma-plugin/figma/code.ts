@@ -7,9 +7,8 @@
  * `test/fakeFigma.ts`). The one `as unknown as FigmaApi` cast bridges Figma's
  * exhaustive `PluginAPI` to the structural subset the builder needs.
  */
-import { applyImport, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
+import { applyImport, STAMP, type FetchedImage, type FigmaApi, type FigmaNode } from "../src/scene.js";
 import {
-  placeCatalogComponentSet,
   placeCatalogPng,
   placeCatalogSvg,
   type InsertSetCell,
@@ -29,9 +28,15 @@ import type { ImportPlan } from "../src/plan.js";
 import { withRenderSize, type RenderSource } from "../src/render.js";
 import type { PreviewSlots } from "../src/slots.js";
 import { fillSlot, placeSlots } from "../src/structure.js";
-import type { FigmaVariableCollection } from "@design-parity/catalog-export/figma";
+import type {
+  FigmaTextStyleSpec,
+  FigmaVariableCollection,
+} from "@design-parity/catalog-export/figma";
 import {
+  bindImportedTextStyles,
   bindImportedVariables,
+  exposeCommonTextProperties,
+  exposeTextProperties,
   preflightSvgFonts,
   promoteNativeContainers,
 } from "./nativeSvg.js";
@@ -88,6 +93,8 @@ interface InsertSvgMessage {
   componentId: string;
   /** Catalog theme palette; created/reused and bound to imported native properties. */
   collection?: FigmaVariableCollection;
+  textStyles?: FigmaTextStyleSpec[];
+  metadata?: CatalogNodeMetadata;
 }
 
 /** The UI posts this to insert one component as a native Figma component set (all variants). */
@@ -97,6 +104,15 @@ interface InsertComponentSetMessage {
   name: string;
   /** One fetched cell per ideal render, named with its variant properties. */
   cells: InsertSetCell[];
+  collection?: FigmaVariableCollection;
+  textStyles?: FigmaTextStyleSpec[];
+  metadata?: CatalogNodeMetadata;
+}
+
+interface CatalogNodeMetadata {
+  descriptionMarkdown?: string;
+  documentationUrl?: string;
+  previewUrl?: string;
 }
 
 /** On startup the UI asks for the persisted catalog registry (custom + last pick). */
@@ -193,6 +209,25 @@ const slotTargets = new Map<string, FigmaNode>();
 
 /** clientStorage key the catalog registry (custom entries + last pick) persists under. */
 const REGISTRY_KEY = "design-parity/catalog-registry";
+
+/** Add the context designers expect from a library component and Dev Mode. */
+async function applyCatalogMetadata(
+  node: ComponentNode | ComponentSetNode,
+  metadata: CatalogNodeMetadata | undefined,
+): Promise<void> {
+  node.setRelaunchData({ open: "Open this component in Design Parity" });
+  if (!metadata) return;
+  if (metadata.descriptionMarkdown) node.descriptionMarkdown = metadata.descriptionMarkdown;
+  if (metadata.documentationUrl) {
+    node.documentationLinks = [{ uri: metadata.documentationUrl }];
+    node.setSharedPluginData(STAMP, "documentationUrl", metadata.documentationUrl);
+    await node.addDevResourceAsync(metadata.documentationUrl, "Design source");
+  }
+  if (metadata.previewUrl) {
+    node.setSharedPluginData(STAMP, "previewUrl", metadata.previewUrl);
+    await node.addDevResourceAsync(metadata.previewUrl, "Open live Compose preview");
+  }
+}
 
 /**
  * Read a selected node into a {@link FrameRead}: name, size, auto-layout spacing,
@@ -337,10 +372,19 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
         }
       }
       const bound = await bindImportedVariables(node as unknown as SceneNode, msg.svg, msg.collection);
+      const styled = await bindImportedTextStyles(node as unknown as SceneNode, msg.textStyles);
+      const properties = (node as unknown as SceneNode).type === "COMPONENT"
+        ? exposeTextProperties(node as unknown as ComponentNode)
+        : 0;
+      if ((node as unknown as SceneNode).type === "COMPONENT") {
+        await applyCatalogMetadata(node as unknown as ComponentNode, msg.metadata);
+      }
       figma.ui.postMessage({ type: "inserted", name: node.name });
       const details = [
         promoted > 0 ? `${promoted} native container${promoted === 1 ? "" : "s"}` : "",
         bound > 0 ? `${bound} token binding${bound === 1 ? "" : "s"}` : "",
+        styled > 0 ? `${styled} text style${styled === 1 ? "" : "s"}` : "",
+        properties > 0 ? `${properties} text propert${properties === 1 ? "y" : "ies"}` : "",
       ].filter(Boolean).join(", ");
       const missing = fonts.missing.length > 0 ? ` Missing fonts: ${fonts.missing.join(", ")}.` : "";
       figma.notify(`Inserted “${node.name}” as an editable component${details ? ` (${details})` : ""}.${missing}`,
@@ -354,13 +398,54 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "insertComponentSet") {
     try {
-      const node = placeCatalogComponentSet(figma as unknown as FigmaApi, {
-        componentId: msg.componentId,
-        name: msg.name,
-        cells: msg.cells,
-      });
+      if (msg.cells.length === 0) throw new Error("No renders to place for this component.");
+      const variants: ComponentNode[] = [];
+      let editable = 0;
+      let tokenBindings = 0;
+      let styleBindings = 0;
+      const missingFonts = new Set<string>();
+      for (const cell of msg.cells) {
+        let variant: ComponentNode;
+        if (cell.svg) {
+          const fonts = await preflightSvgFonts(cell.svg);
+          for (const family of fonts.missing) missingFonts.add(family);
+          let imported = placeCatalogSvg(figma as unknown as FigmaApi, cell.svg, {
+            name: cell.name,
+            componentId: msg.componentId,
+          }) as unknown as SceneNode;
+          promoteNativeContainers(imported);
+          if (imported.type !== "COMPONENT") imported = figma.createComponentFromNode(imported);
+          variant = imported as ComponentNode;
+          tokenBindings += await bindImportedVariables(variant, cell.svg, msg.collection);
+          styleBindings += await bindImportedTextStyles(variant, msg.textStyles);
+          editable += 1;
+        } else if (cell.bytes) {
+          variant = figma.createComponent();
+          variant.resize(cell.width, cell.height);
+          variant.fills = [{ type: "IMAGE", scaleMode: "FILL", imageHash: figma.createImage(cell.bytes).hash }];
+        } else {
+          throw new Error(`No SVG or PNG data for ${cell.name}.`);
+        }
+        variant.name = cell.name;
+        variants.push(variant);
+      }
+      const node = figma.combineAsVariants(variants, figma.currentPage);
+      node.name = msg.name;
+      node.setSharedPluginData("designParity", "role", "catalog-insert");
+      node.setSharedPluginData("designParity", "componentId", msg.componentId);
+      const properties = exposeCommonTextProperties(node);
+      await applyCatalogMetadata(node, msg.metadata);
+      figma.viewport.scrollAndZoomIntoView([node]);
       figma.ui.postMessage({ type: "inserted", name: node.name });
-      figma.notify(`Inserted “${node.name}” set (${msg.cells.length} variant${msg.cells.length === 1 ? "" : "s"}).`);
+      const details = [
+        editable > 0 ? `${editable} editable` : "",
+        tokenBindings > 0 ? `${tokenBindings} token bindings` : "",
+        styleBindings > 0 ? `${styleBindings} text styles` : "",
+        properties > 0 ? `${properties} text properties` : "",
+      ].filter(Boolean).join(", ");
+      const missing = missingFonts.size ? ` Missing fonts: ${[...missingFonts].join(", ")}.` : "";
+      figma.notify(`Inserted “${node.name}” set (${msg.cells.length} variants${details ? `; ${details}` : ""}).${missing}`,
+        missingFonts.size ? { timeout: 5000 } : undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       figma.ui.postMessage({ type: "insertError", message });
@@ -461,9 +546,19 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   }
   if (msg.type === "placeWithSlots") {
     try {
-      const container = placeLiveRender(figma as unknown as FigmaApi, msg.source, msg.bytes, {
+      let container = placeLiveRender(figma as unknown as FigmaApi, msg.source, msg.bytes, {
         name: msg.name,
       });
+      // Slots are an authoring contract, so make the container reusable and let
+      // placeSlots use ComponentNode.createSlot() instead of generic frames.
+      if (msg.slots.slots.length > 0 && (container as unknown as SceneNode).type !== "COMPONENT") {
+        try {
+          container = figma.createComponentFromNode(container as unknown as SceneNode) as unknown as FigmaNode;
+          container.name = msg.name ?? msg.source.previewId;
+        } catch {
+          // Unsupported nodes keep the exact-size frame fallback.
+        }
+      }
       const placed = placeSlots(figma as unknown as FigmaApi, container, msg.slots);
       slotTargets.clear();
       for (const slot of placed) slotTargets.set(slot.node.id, slot.node);

@@ -14,7 +14,7 @@
  * `render.ts`); this file is fetch + DOM reflection + postMessage.
  */
 import type { CatalogManifest } from "@design-parity/catalog-export";
-import { toFigmaVariables } from "@design-parity/catalog-export/figma";
+import { toFigmaTextStyles, toFigmaVariables } from "@design-parity/catalog-export/figma";
 
 import {
   componentSetCells,
@@ -335,7 +335,7 @@ insertButton.addEventListener("click", async () => {
   const name = insertName(component, selection);
   try {
     if (pickFormat.value === "svg") {
-      const svg = await resolveInsertSvg(component, name);
+      const svg = await resolveInsertSvg(component, selection, name);
       if (svg === undefined) return; // resolveInsertSvg already reported why
       parent.postMessage(
         {
@@ -347,6 +347,8 @@ insertButton.addEventListener("click", async () => {
             collection: catalog.themeTokens
               ? toFigmaVariables(catalog.themeTokens, catalog.index.title)
               : undefined,
+            textStyles: catalog.themeTokens ? toFigmaTextStyles(catalog.themeTokens) : undefined,
+            metadata: catalogMetadata(component.componentId, selection),
           },
         },
         "*",
@@ -392,11 +394,24 @@ insertSetButton.addEventListener("click", async () => {
   }
 
   try {
-    const fetched: { name: string; bytes: Uint8Array; width: number; height: number }[] = [];
+    const fetched: { name: string; bytes?: Uint8Array; svg?: string; width: number; height: number }[] = [];
     let done = 0;
     for (const cell of cells) {
       say(`Fetching ${component.componentId} variants… ${++done}/${cells.length}`);
-      fetched.push({ name: cell.name, bytes: await fetchBytes(cell.url), width: cell.width, height: cell.height });
+      let svg: string | undefined;
+      if (cell.vectorUrl) {
+        try {
+          svg = await inlineRasters(await fetchText(cell.vectorUrl), cell.vectorUrl);
+        } catch {
+          // Older bundles may carry the PNG without the sibling SVG.
+        }
+      }
+      fetched.push({
+        name: cell.name,
+        ...(svg ? { svg } : { bytes: await fetchBytes(cell.url) }),
+        width: cell.width,
+        height: cell.height,
+      });
     }
     parent.postMessage(
       {
@@ -405,6 +420,11 @@ insertSetButton.addEventListener("click", async () => {
           componentId: component.componentId,
           name: component.componentId,
           cells: fetched,
+          collection: catalog.themeTokens
+            ? toFigmaVariables(catalog.themeTokens, catalog.index.title)
+            : undefined,
+          textStyles: catalog.themeTokens ? toFigmaTextStyles(catalog.themeTokens) : undefined,
+          metadata: catalogMetadata(component.componentId),
         },
       },
       "*",
@@ -475,10 +495,19 @@ async function importWholeCatalog(): Promise<void> {
  * the design vector isn't published. Returns `undefined` (after reporting) when
  * neither is available.
  */
-async function resolveInsertSvg(component: PickComponent, name: string): Promise<string | undefined> {
+async function resolveInsertSvg(
+  component: PickComponent,
+  selection: PickSelection,
+  name: string,
+): Promise<string | undefined> {
   if (!catalog) return undefined;
 
-  const vectorUrl = selectCatalogDesignVector(catalog.manifest, component.componentId, catalog.base);
+  const vectorUrl = selectCatalogDesignVector(
+    catalog.manifest,
+    component.componentId,
+    catalog.base,
+    selection,
+  );
   if (vectorUrl) {
     try {
       say(`Fetching ${name} (design vector)…`);
@@ -633,6 +662,33 @@ function insertName(component: PickComponent, selection: PickSelection): string 
   if (selection.variant) parts.push(selection.variant);
   for (const value of Object.values(selection.dimensions ?? {})) parts.push(value);
   return parts.join(" · ");
+}
+
+/** Publishable/library context carried onto the native Figma component. */
+function catalogMetadata(componentId: string, selection?: PickSelection): {
+  descriptionMarkdown?: string;
+  documentationUrl?: string;
+  previewUrl?: string;
+} {
+  if (!catalog) return {};
+  const component = catalog.manifest.components.find((item) => item.componentId === componentId);
+  if (!component) return {};
+  const lines: string[] = [];
+  if (component.caption) lines.push(component.caption);
+  if (component.greenlines.length) {
+    lines.push("### Accessibility & internationalisation");
+    for (const item of component.greenlines.slice(0, 12)) {
+      lines.push(`- **${item.severity}:** ${item.message}`);
+    }
+  }
+  const picked = selection
+    ? selectCatalogImage(catalog.manifest, selection, catalog.base)?.image
+    : component.images.find((image) => image.variant === "ideal");
+  return {
+    ...(lines.length ? { descriptionMarkdown: lines.join("\n\n") } : {}),
+    ...(component.reference?.url ? { documentationUrl: component.reference.url } : {}),
+    ...(picked?.livePreview ? { previewUrl: picked.livePreview } : {}),
+  };
 }
 
 confirmButton.addEventListener("click", () => {

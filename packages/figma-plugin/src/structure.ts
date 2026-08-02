@@ -47,11 +47,14 @@ export function placeSlots(
   for (const slot of slots.slots) {
     const width = slotWidth(slot);
     const height = slotHeight(slot);
-    const frame = figma.createFrame();
+    // A component can own a first-class Figma SLOT property. Plain live frames
+    // retain the established frame fallback, so headless consumers and older
+    // Figma versions still get an exactly sized drop target.
+    const frame = container.createSlot?.() ?? figma.createFrame();
     frame.name = `slot:${slot.name}`;
     // Append first, then set position: once parented, x/y are relative to the
     // container, so the slot sits exactly where the semantics bounds put it.
-    container.appendChild(frame);
+    if (!container.createSlot) container.appendChild(frame);
     frame.x = slot.bounds.left;
     frame.y = slot.bounds.top;
     frame.resize(width, height);

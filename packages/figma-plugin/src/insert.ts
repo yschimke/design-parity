@@ -81,7 +81,10 @@ export function placeCatalogPng(
 export interface InsertSetCell {
   /** Figma variant-property name, e.g. `state=default, theme=light`. */
   name: string;
-  bytes: Uint8Array;
+  /** Raster fallback, used when this variant has no editable vector. */
+  bytes?: Uint8Array;
+  /** Self-contained editable vector for this exact variant. */
+  svg?: string;
   width: number;
   height: number;
 }
@@ -104,6 +107,7 @@ export function placeCatalogComponentSet(figma: FigmaApi, opts: InsertSetOptions
   if (opts.cells.length === 0) throw new Error("No renders to place for this component.");
   const variants: FigmaNode[] = [];
   for (const cell of opts.cells) {
+    if (!cell.bytes) throw new Error(`No raster bytes for ${cell.name}.`);
     const hash = figma.createImage(cell.bytes).hash;
     const variant = figma.createComponent();
     variant.name = cell.name;

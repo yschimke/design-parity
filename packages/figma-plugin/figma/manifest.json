@@ -5,6 +5,12 @@
   "ui": "./dist/plugin/ui.html",
   "editorType": ["figma"],
   "documentAccess": "dynamic-page",
+  "relaunchButtons": [
+    {
+      "command": "open",
+      "name": "Open in Design Parity"
+    }
+  ],
   "networkAccess": {
     "allowedDomains": [
       "https://raw.githubusercontent.com",
