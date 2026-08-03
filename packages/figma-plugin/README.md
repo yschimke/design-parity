@@ -151,6 +151,13 @@ the mapped-upgrade runtime likewise verifies safe skips, instance protection,
 placement/order preservation, failure cleanup, and refreshed node IDs. Pure
 geometry, token projection, slot, and upgrade planning have separate tests.
 
+Dialog changes carry visual evidence too. After bundling, run
+`npm run preview:ui --workspace @design-parity/figma-plugin` (set
+`CHROME_PATH` when Chrome is not auto-discovered) to drive the real catalog,
+live-preview, and handoff paths against offline fixtures and refresh the four
+committed `docs/ui-task-*.png` screenshots. The UI test requires one valid PNG
+per task, so a dialog PR cannot quietly drop its visual review surface.
+
 What's left for a manual Figma smoke test is only genuinely runtime-specific:
 real font metrics, image decoding, and Figma's auto-parenting. To run it, feed
 the plugin a catalog without publishing anything: serve a fixture directory
@@ -160,7 +167,19 @@ locally (`npx serve ./catalog`) and add `"http://localhost:*"` to the manifest's
 
 ## Using it
 
-![The catalog dropdown — pick a registered catalog, or register your own](docs/ui-catalog-registry.png)
+The dialog starts with four designer tasks instead of implementation-oriented
+feature tabs:
+
+| Add components | Manage library |
+| --- | --- |
+| ![Add components task](docs/ui-task-add.png) | ![Manage library task](docs/ui-task-library.png) |
+| **Customize live** | **Handoff to code** |
+| ![Customize live task](docs/ui-task-customize.png) | ![Handoff to code task](docs/ui-task-handoff.png) |
+
+**Add components** and **Manage library** share one catalog source at the top,
+so switching tasks never loses the loaded system. Server/authentication,
+render axes, import policy, and catalog registration sit behind contextual
+disclosures until the task needs them; each task keeps one dominant next action.
 
 Run the plugin and pick a catalog from the **Catalog** dropdown. Three are built
 in — **Compose Material 3**, **RemoteCompose Material 3**, and **Wear Material
@@ -170,23 +189,23 @@ the dropdown re-opens on the catalog you used last.
 
 ### Register your own catalog
 
-Press **＋** to register another catalog: give it a name and the raw root of its
+Open **Catalog options → Register source** to add another catalog: give it a name and the raw root of its
 published bundle (the folder containing `catalog.json` — do *not* append
 `/catalog.json`; the plugin does that itself). It's added to the dropdown,
-selected, and persisted; the **🗑** button removes a custom catalog (the built-ins
+selected, and persisted; **Remove** deletes a custom catalog (the built-ins
 can't be removed). Only hosts in the manifest's `networkAccess.allowedDomains`
 (`raw.githubusercontent.com` and the `preview.coo.ee` demo by default) can be
 fetched — add your own live-preview host there to register a `compose-preview
 serve` catalog.
 
-Press **Load catalog**. The plugin fetches the manifest (and its DTCG token
-file) and reveals two ways to bring the system onto the canvas — insert *one*
-component, or import the whole sheet.
+Press **Load**. The plugin fetches the manifest (and its DTCG token file), then
+populates both catalog-backed tasks: add one component, or manage the whole
+library.
 
 ### Load from a local folder (offline, no server)
 
 Browsing and inserting a catalog **doesn't need a server or even a network** —
-only the Override editor's live customization does. **Load folder…** reads a
+only **Customize live** does. **Catalog options → Load local folder…** reads a
 catalog straight from a local `design-artifacts` directory (the folder holding
 `catalog.json`) that you picked: each file becomes a `blob:` object URL, the
 manifest's asset paths are rewritten to those URLs, and — because
@@ -194,11 +213,11 @@ manifest's asset paths are rewritten to those URLs, and — because
 fetches the local bytes with the exact same flow as a remote render. So a
 freshly generated catalog drops into Figma with zero setup.
 
-![The catalog tab with the offline "Load folder…" option](docs/ui-load-folder.png)
-
 ### Insert one component (selective)
 
-![The single-component picker — component, variant, dimensions, PNG/SVG format, plus "insert all variants as a component set"](docs/ui-pick-component.png)
+Open **Add components**. The default view keeps component search and the main
+insert action visible; variant, dimension, and format controls live under
+**Render options**.
 
 Instead of dumping the entire catalog, pick exactly what you want:
 
@@ -258,11 +277,11 @@ Instead of dumping the entire catalog, pick exactly what you want:
   Freeform/overlapping vector artwork remains absolute layout, and elliptical or
   non-uniform corners remain paths: promoting either would change the visual.
 
-**Insert component** places just that one node on the current page, stamped with
+**Add selected component** places just that one node on the current page, stamped with
 its `componentId` (so it's identifiable) but with no refresh source — a catalog
 render is a static, published artifact.
 
-**Insert all variants (set)** places the *whole* component as a native Figma
+**Add all variants** places the *whole* component as a native Figma
 **component set** instead — one editable per-variant SVG `COMPONENT` per render,
 named with its native variant properties (`state=…, theme=…, size=…, locale=…,
 direction=…, fontScale=…`), combined into one set. A missing variant SVG falls
@@ -278,7 +297,7 @@ ships, making its stress-test matrix a reusable library asset.
 
 ### Import the whole catalog (sticker sheet)
 
-**Or import the whole catalog** is the original bulk flow. Pick the **Ideal
+Open **Manage library → Import or refresh the library**. Pick the **Ideal
 render** (with a11y greenlines) or the **Layout wireframe** (with spacing
 redlines) variant and the **Mode**, then Import. The plugin fetches every PNG for
 that variant and lays out a `<system> — Catalog` page with the matching
@@ -288,7 +307,7 @@ reconciling in place on re-import (see below).
 ### Bulk-upgrade a legacy import
 
 After loading the matching catalog, choose the committed `design-map.json` under
-**Upgrade an existing mapped import**, then click **Bulk upgrade mapped nodes**.
+**Upgrade existing mapped layers**, then click **Upgrade mapped layers**.
 The map—not layer-name guessing—selects the old PNG/basic-SVG roots in the
 current Figma file. Explicit scalar or variant-tagged Compose `previewId`s are
 matched against the source id retained on each catalog render; older generated
@@ -306,21 +325,21 @@ plugin returns an updated correspondence document to copy back over
 
 ### Live customization needs a server
 
-The **Override editor** tab renders on demand (any size, any knobs), which needs
+The **Customize live** task renders on demand (any size, any knobs), which needs
 a running [`compose-preview serve`](../../docs/design-artifacts) host —
 customizing + rendering Compose can't happen offline. When the plugin can't reach
 one, it doesn't just say "failed to fetch": it explains what's missing, how to
-start a host, and that browsing/inserting published renders on the **Catalog
-import** tab works with **no server at all**.
+start a host, and that browsing/inserting published renders in **Add components**
+works with **no server at all**.
 
 ![The Override editor's server-not-reachable guidance](docs/ui-server-help.png)
 
 ## Customise live — the catalog → editor bridge
 
 Catalog renders are *baked* (fixed sizes/variants). To customise a component —
-tweak knobs, render at an arbitrary size — you need the live Override editor.
-**Customise live →** on a picked component bridges the two: it hands the
-component to the Override editor, prefilling the **server** and **system** from
+tweak knobs, render at an arbitrary size — you need **Customize live**.
+**Customize live →** on a picked component bridges the two: it hands the
+component to that task, prefilling the **server** and **system** from
 the catalog's `livePreview` deep link (when the catalog carries one — otherwise
 just the system, and you supply the host), switches tabs, loads previews, and
 **auto-selects** that component so you land ready to tweak + size + place. So
@@ -331,7 +350,7 @@ everything by hand.
 
 ## Re-render at the desired size (live)
 
-A placed **live render** (from the Override editor) is a raster, so scaling it up
+A placed **live render** (from **Customize live**) is a raster, so scaling it up
 blurs. When you've dragged it to the size you actually want, **Refresh → At
 current size** re-renders it at its on-canvas dimensions: the plugin pins
 `widthPx` / `heightPx` (via [`withRenderSize`](src/render.ts)) from the node's
@@ -340,15 +359,11 @@ current width/height and re-fetches, so the `compose-preview serve` host
 and the node remembers the size for later refreshes. (For a *catalog* render that
 should scale losslessly, insert it as **SVG** instead.)
 
-![The Override editor's Refresh — "At current size" beside "Refresh selected"](docs/ui-rerender-size.png)
-
-## Propose a spec → issue (design → code)
-
-![The Propose-spec tab — read a frame into a spec and a ready-to-file GitHub issue](docs/ui-propose-spec.png)
+## Handoff to code (design → code)
 
 Every other flow here is **code → design** (render code, place it in Figma). The
-**Propose spec** tab is the *other* direction — the design → code *start* of the
-round-trip. Select a frame in Figma, press **Read selection**, and the plugin
+**Handoff to code** is the *other* direction — the design → code *start* of the
+round-trip. Select a frame in Figma, press **Create handoff from selection**, and the plugin
 reads its name, size, auto-layout redlines (padding / gap / corner radius), text,
 and the **component instances it's built from** into a structured spec.
 
