@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.32](https://github.com/yschimke/design-parity/compare/v0.1.31...v0.1.32) (2026-08-03)
+
+
+### Bug Fixes
+
+* **candidate:** resolve raw preview ids from bundles ([#256](https://github.com/yschimke/design-parity/issues/256)) ([20ef70b](https://github.com/yschimke/design-parity/commit/20ef70b65b2ebc70b7119ac555e06718b49003fb))
+* **figma-plugin:** promote Compose pill paths ([#257](https://github.com/yschimke/design-parity/issues/257)) ([1a1e902](https://github.com/yschimke/design-parity/commit/1a1e902061061a0fb4c3583c53a294be61d5fca7))
+
 ## [0.1.31](https://github.com/yschimke/design-parity/compare/v0.1.30...v0.1.31) (2026-08-02)
 
 
