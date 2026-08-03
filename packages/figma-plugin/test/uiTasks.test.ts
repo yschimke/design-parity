@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
@@ -63,5 +64,23 @@ describe("task-oriented plugin dialog", () => {
       );
       expect(png.byteLength, `${task} preview looks empty`).toBeGreaterThan(20_000);
     }
+
+    const manifest = JSON.parse(readFileSync(
+      fileURLToPath(new URL("../docs/ui-preview.manifest.json", import.meta.url)),
+      "utf8",
+    )) as { schema: string; inputs: Record<string, string> };
+    expect(manifest.schema).toBe("design-parity-ui-preview/v1");
+    const sources: Record<string, URL> = {
+      "figma/ui.html": new URL("../figma/ui.html", import.meta.url),
+      "figma/ui.ts": new URL("../figma/ui.ts", import.meta.url),
+      "figma/code.ts": new URL("../figma/code.ts", import.meta.url),
+      "docs/ui-preview.mjs": new URL("../docs/ui-preview.mjs", import.meta.url),
+      "docs/sample-catalog.json": new URL("../docs/sample-catalog.json", import.meta.url),
+    };
+    const current = Object.fromEntries(Object.entries(sources).map(([name, url]) => [
+      name,
+      createHash("sha256").update(readFileSync(url)).digest("hex"),
+    ]));
+    expect(manifest.inputs, "dialog preview screenshots are stale — run npm run preview:ui").toEqual(current);
   });
 });

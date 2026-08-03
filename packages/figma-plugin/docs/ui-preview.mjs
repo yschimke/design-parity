@@ -19,6 +19,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { globSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,6 +29,13 @@ import puppeteer from "puppeteer-core";
 const docs = new URL(".", import.meta.url);
 const html = readFileSync(new URL("../figma/dist/plugin/ui.html", import.meta.url), "utf8");
 const SAMPLE = JSON.parse(readFileSync(new URL("./sample-catalog.json", import.meta.url), "utf8"));
+const EVIDENCE_INPUTS = {
+  "figma/ui.html": new URL("../figma/ui.html", import.meta.url),
+  "figma/ui.ts": new URL("../figma/ui.ts", import.meta.url),
+  "figma/code.ts": new URL("../figma/code.ts", import.meta.url),
+  "docs/ui-preview.mjs": new URL("./ui-preview.mjs", import.meta.url),
+  "docs/sample-catalog.json": new URL("./sample-catalog.json", import.meta.url),
+};
 // setContent/goto both need a real document for the inlined <script> + our stub;
 // a temp file gives a stable file:// URL that evaluateOnNewDocument applies to.
 const tmp = join(tmpdir(), "design-parity-ui-preview.html");
@@ -122,7 +130,16 @@ try {
   await page.waitForSelector("#propose-out:not([hidden])");
   await page.screenshot({ path: fileURLToPath(new URL("./ui-task-handoff.png", docs)), fullPage: true });
 
-  console.log("wrote docs/ui-task-{add,library,customize,handoff}.png");
+  const inputs = Object.fromEntries(Object.entries(EVIDENCE_INPUTS).map(([name, url]) => [
+    name,
+    createHash("sha256").update(readFileSync(url)).digest("hex"),
+  ]));
+  writeFileSync(
+    new URL("./ui-preview.manifest.json", docs),
+    `${JSON.stringify({ schema: "design-parity-ui-preview/v1", inputs }, null, 2)}\n`,
+  );
+
+  console.log("wrote docs/ui-task-{add,library,customize,handoff}.png and docs/ui-preview.manifest.json");
 } finally {
   await browser.close();
 }
