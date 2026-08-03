@@ -214,14 +214,34 @@ export async function diff(
   const visualFindings: Finding[] = [];
   for (const v of visuals) {
     visualScores[v.key] = round(v.score);
-    if (v.dimensionMismatch) {
-      // The pair was diffed over its overlap after a sub-tolerance size delta;
-      // note it so the reviewer knows the score is an aligned comparison (#47).
+    if (v.dimensionMismatch && v.dimensions) {
+      // The pair was diffed over its overlap; say so, and say by how much the
+      // frames differ (#47). `visualDimTolerancePx` no longer decides *whether*
+      // to compare — it only separates density rounding (info: a pixel or two
+      // between render tools) from a real size difference (warn: the candidate
+      // is genuinely a different shape than its design). Reporting the larger
+      // drift *more* loudly is the point: it used to report it less.
+      const { reference: r, candidate: c } = v.dimensions;
+      const dw = r.width - c.width;
+      const dh = r.height - c.height;
+      const rounding =
+        Math.abs(dw) <= config.visualDimTolerancePx &&
+        Math.abs(dh) <= config.visualDimTolerancePx;
+      const border = v.borderPixels ?? 0;
+      const uncovered = v.totalPixels === 0 ? 0 : border / v.totalPixels;
       visualFindings.push({
         kind: "visual",
-        severity: "info",
-        message: `${v.key}: reference and candidate differ slightly in size; compared over their overlap`,
-        detail: { key: v.key },
+        severity: rounding ? "info" : "warn",
+        message: rounding
+          ? `${v.key}: reference and candidate differ slightly in size (${r.width}×${r.height} vs ${c.width}×${c.height}); compared over their overlap`
+          : `${v.key}: reference ${r.width}×${r.height} vs candidate ${c.width}×${c.height}; compared over their ${Math.min(r.width, c.width)}×${Math.min(r.height, c.height)} overlap, ${(uncovered * 100).toFixed(1)}% of the frame uncovered`,
+        detail: {
+          key: v.key,
+          dw,
+          dh,
+          borderPixels: border,
+          contentPixels: v.diffPixels - border,
+        },
       });
     }
     if (v.score > config.visualWarnRatio) {
