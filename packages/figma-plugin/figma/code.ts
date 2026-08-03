@@ -379,7 +379,10 @@ async function readFrame(node: SceneNode): Promise<FrameRead> {
   return read;
 }
 
-figma.showUI(__html__, { width: 420, height: 360, themeColors: true });
+// Task navigation and progressive disclosures are most useful when the current
+// task has enough vertical room to remain legible without a scroll after every
+// control. This still fits comfortably beside the canvas on laptop displays.
+figma.showUI(__html__, { width: 440, height: 640, themeColors: true });
 
 figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
   if (msg.type === "cancel") {

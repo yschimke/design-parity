@@ -1,14 +1,17 @@
 /**
  * UI-iframe entry — the only realm with `fetch` / DOM.
  *
- * Two flows, one per tab:
- *  - **Catalog import**: fetch a published `catalog.json` (+ optional DTCG
+ * Four task views over three deterministic flows:
+ *  - **Add components / Manage library**: fetch a published `catalog.json`
+ *    (+ optional DTCG
  *    tokens), run the pure {@link buildImportPlan} planner, fetch every image's
  *    bytes, and post the plan + bytes to the main thread (which owns the scene).
- *  - **Override editor**: fetch a system's previews from `compose-preview serve`
+ *  - **Customize live**: fetch a system's previews from `compose-preview serve`
  *    (`/api/previews`, v2), render each knob + display-axis as a control, and on
  *    place turn the edited state into a {@link renderSourceForPreview} render
  *    request, fetch its live PNG, and post it for {@link placeLiveRender}.
+ *  - **Handoff to code**: turn a main-thread structural frame read into
+ *    reviewable spec / issue artifacts; it never writes application code.
  *
  * All decisions live in the pure core (`plan.ts`, `previews.ts`, `editor.ts`,
  * `render.ts`); this file is fetch + DOM reflection + postMessage.
@@ -926,21 +929,47 @@ function dedupeImages(images: PlannedImage[]): PlannedImage[] {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 const views: Record<string, HTMLElement> = {
-  catalog: document.getElementById("view-catalog") as HTMLElement,
+  add: document.getElementById("view-add") as HTMLElement,
+  library: document.getElementById("view-library") as HTMLElement,
   editor: document.getElementById("view-editor") as HTMLElement,
   propose: document.getElementById("view-propose") as HTMLElement,
 };
-for (const tab of Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"))) {
-  tab.addEventListener("click", () => {
-    const target = tab.dataset.view!;
-    for (const other of Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"))) {
-      other.setAttribute("aria-selected", String(other === tab));
-    }
-    for (const [name, el] of Object.entries(views)) el.hidden = name !== target;
-  });
+const catalogSource = document.getElementById("catalog-source") as HTMLElement;
+const taskTabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
+
+function activateTask(tab: HTMLButtonElement): void {
+  const target = tab.dataset.view!;
+  for (const other of taskTabs) {
+    const selected = other === tab;
+    other.setAttribute("aria-selected", String(selected));
+    other.tabIndex = selected ? 0 : -1;
+  }
+  for (const [name, el] of Object.entries(views)) el.hidden = name !== target;
+  catalogSource.hidden = target !== "add" && target !== "library";
 }
 
-// ── Override editor ─────────────────────────────────────────────────────────────
+for (const [index, tab] of taskTabs.entries()) {
+  tab.addEventListener("click", () => activateTask(tab));
+  tab.addEventListener("keydown", (event) => {
+    const columns = 2;
+    const rows = Math.ceil(taskTabs.length / columns);
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const nextIndex = event.key === "ArrowRight" ? row * columns + (column + 1) % columns
+      : event.key === "ArrowLeft" ? row * columns + (column + columns - 1) % columns
+      : event.key === "ArrowDown" ? ((row + 1) % rows) * columns + column
+      : event.key === "ArrowUp" ? ((row + rows - 1) % rows) * columns + column
+      : undefined;
+    if (nextIndex === undefined) return;
+    event.preventDefault();
+    const next = taskTabs[nextIndex] ?? taskTabs[index]!;
+    activateTask(next);
+    next.focus();
+  });
+}
+activateTask(taskTabs.find((tab) => tab.getAttribute("aria-selected") === "true") ?? taskTabs[0]!);
+
+// ── Customize live ───────────────────────────────────────────────────────────
 
 const editorForm = document.getElementById("editor-form") as HTMLFormElement;
 const serverInput = document.getElementById("server") as HTMLInputElement;
@@ -1052,7 +1081,7 @@ editorForm.addEventListener("submit", async (event) => {
   editorSay(`${response.previews.length} component${response.previews.length === 1 ? "" : "s"} — pick one, edit its knobs, and place.`);
 });
 
-// The catalog → live bridge: hand the picked component to the Override editor,
+// The catalog → live bridge: hand the picked component to Customize live,
 // prefilling the server + system (from the catalog's livePreview deep link when
 // present) so browsing flows straight into live customization at any size.
 customiseLiveButton.addEventListener("click", () => {
@@ -1295,7 +1324,7 @@ placeSlotsButton.addEventListener("click", async () => {
   }
 });
 
-// ── Propose spec ────────────────────────────────────────────────────────────
+// ── Handoff to code ─────────────────────────────────────────────────────────
 
 const readSelectionButton = document.getElementById("read-selection") as HTMLButtonElement;
 const proposeStatus = document.getElementById("propose-status") as HTMLParagraphElement;

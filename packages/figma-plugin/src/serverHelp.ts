@@ -43,7 +43,7 @@ function startSteps(system: string): string[] {
     `Start a host: compose-preview serve --catalogs ${system || "<system>"}`,
     "It listens on http://localhost:8723 by default — enter that as the Preview server.",
     "For a localhost host, add http://localhost:* to the plugin manifest's networkAccess.devAllowedDomains (dev builds only).",
-    "No server needed to browse: the Catalog import tab inserts published renders offline — a server is only for live customization + arbitrary-size rendering.",
+    "No server needed to browse: Add components inserts published renders offline — a server is only for Customize live and arbitrary-size rendering.",
   ];
 }
 

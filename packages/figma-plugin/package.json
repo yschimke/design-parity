@@ -17,6 +17,7 @@
     "build": "tsc --build",
     "build:plugin": "node esbuild.mjs",
     "preview": "node docs/canvas-preview.mjs",
+    "preview:ui": "node docs/ui-preview.mjs",
     "test": "vitest run --root ../.. packages/figma-plugin/test"
   },
   "dependencies": {
