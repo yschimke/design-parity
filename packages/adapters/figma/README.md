@@ -20,7 +20,13 @@ local/desktop-session oriented and wrong for a hosted bot).
    structure-only tokens when variables aren't entitled.
 4. **Render the reference image(s)** — `GET /v1/images`, downloaded and written
    under `outDir`.
-5. **Normalize** to a `DesignReference` with `linkMethod: "code-connect"`.
+5. **Normalize** to a `DesignReference` with `linkMethod: "code-connect"`,
+   including `layout` — the node tree's `absoluteBoundingBox`es flattened to a
+   `SemanticTree` (root-relative dp, frame on the root) so the structural layout
+   diff can compare element placement. Text nodes are labelled by their visible
+   `characters`, which is what matches a candidate's semantics label; other
+   nodes fall back to their Figma layer name and so generally go unmatched until
+   layer naming is reconciled. Absent when the node carries no bounding box.
 
 ## Auth
 
