@@ -130,8 +130,8 @@ Both work after a build; the dev entry is the one to keep loaded while iterating
 
 ## Testing before Figma
 
-A Figma plugin can't run under Node, so the scene the plugin builds is verified
-**headlessly** before it's ever loaded in Figma. The main-thread logic lives in
+A complete Figma document cannot run under Node, so the scene the plugin builds
+is verified **headlessly** before it's ever loaded in Figma. The main-thread logic lives in
 [`src/scene.ts`](src/scene.ts) as `applyImport(figma, plan, images)`, which takes
 the scene API as an **injected** `FigmaApi` (a structural subset of Figma's
 `PluginAPI`). [`test/scene.test.ts`](test/scene.test.ts) drives it against a fake
@@ -140,6 +140,13 @@ image, variable, and font load, then asserts the exact tree — frame hierarchy,
 image fills, greenline/redline rects and their strokes, the variable collection's
 modes + values, and the emitted `design-map.json`. This catches wrong API calls,
 ordering, and null handling (e.g. an unsaved file's `fileKey`) up front.
+
+The post-SVG Figma-runtime transforms are covered at the same boundary in
+[`test/nativeSvgRuntime.test.ts`](test/nativeSvgRuntime.test.ts). Its focused
+Plugin API double proves that a padded list becomes an exact-size vertical Auto
+Layout frame, overlapping artwork remains absolute, and a Compose pill vector
+is replaced in-place by an appearance-preserving native rectangle. The pure
+geometry, font, token, slot, and mapped-upgrade planners have separate tests.
 
 What's left for a manual Figma smoke test is only genuinely runtime-specific:
 real font metrics, image decoding, and Figma's auto-parenting. To run it, feed
