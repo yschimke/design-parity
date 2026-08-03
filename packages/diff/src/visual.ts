@@ -95,9 +95,17 @@ function decodeDataUri(uri: string): Buffer {
 }
 
 /**
- * Rasterisation scale for a vector reference. A 2× render mirrors the Figma
- * adapter's previous `scale=2` PNG export, so switching a reference to SVG
- * leaves the pixel diff's dimensions (and its tolerances) unchanged.
+ * Rasterisation scale for a vector reference when the candidate's width isn't
+ * known (candidate is itself vector, or it failed to decode). A 2× render
+ * mirrors the Figma adapter's original `scale=2` PNG export.
+ *
+ * The *normal* path does not use this — see {@link rasterizeSvg}. A vector
+ * reference is resolution-free, so rasterising it at a fixed multiple of its own
+ * user units only lines up with the candidate by luck: a Figma frame authored in
+ * dp rasterises to 2× a 2.625×-density Compose render (822px vs 1078px), and a
+ * frame seeded from an already-device-pixel export rasterises to exactly twice
+ * it. Either way the delta clears `visualDimTolerancePx` and the pair scores a
+ * flat 100% mismatch — a number that says nothing about the design.
  */
 const SVG_RASTER_SCALE = 2;
 
@@ -110,19 +118,32 @@ function isPng(buf: Buffer): boolean {
  * Rasterise an SVG reference so the pixel diff (which is inherently raster) can
  * compare it. resvg is deterministic — same markup in, same pixels out — and
  * self-contained (no headless browser). The report itself still shows the SVG
- * as crisp vector; this bitmap exists only for pixelmatch. Rendered at
- * {@link SVG_RASTER_SCALE} to match the old PNG export's density.
+ * as crisp vector; this bitmap exists only for pixelmatch.
+ *
+ * Rendered to `targetWidth` — the candidate raster's width — so the two sides
+ * meet at the same density whatever units the design was authored in. That is
+ * what makes a vector reference comparable at all: the diff wants pixel drift
+ * (colour, spacing, glyphs), not a report that the design tool and the renderer
+ * disagree about how big a dp is. Falls back to {@link SVG_RASTER_SCALE} when
+ * there is no candidate width to match.
  */
-function rasterizeSvg(buf: Buffer): Raster {
+function rasterizeSvg(buf: Buffer, targetWidth?: number): Raster {
   const resvg = new Resvg(buf.toString("utf8"), {
-    fitTo: { mode: "zoom", value: SVG_RASTER_SCALE },
+    fitTo:
+      targetWidth && targetWidth > 0
+        ? { mode: "width", value: targetWidth }
+        : { mode: "zoom", value: SVG_RASTER_SCALE },
     font: { loadSystemFonts: true },
   });
   const img = resvg.render();
   return { width: img.width, height: img.height, data: Buffer.from(img.pixels) };
 }
 
-async function readRaster(repoRoot: string, uri: string): Promise<Raster> {
+async function readRaster(
+  repoRoot: string,
+  uri: string,
+  targetWidth?: number,
+): Promise<Raster> {
   // A source may hand us the image inline as a `data:` URI (e.g. a `.zip` bundle,
   // which has no standalone repo file); decode it rather than reading from disk.
   const buf = uri.startsWith("data:")
@@ -131,7 +152,7 @@ async function readRaster(repoRoot: string, uri: string): Promise<Raster> {
   // A committed reference may be vector SVG (crisp in the report); rasterise it
   // so pixelmatch has a bitmap. PNGs (every candidate render) decode directly.
   if (!isPng(buf)) {
-    return rasterizeSvg(buf);
+    return rasterizeSvg(buf, targetWidth);
   }
   const png = PNG.sync.read(buf);
   return { width: png.width, height: png.height, data: png.data };
@@ -144,8 +165,10 @@ export async function diffImagePair(
   candidate: Image,
   config: DiffConfig,
 ): Promise<VisualResult> {
-  const ref = await readRaster(repoRoot, reference.uri);
+  // Candidate first: a vector reference is rasterised to the candidate's width
+  // (see `rasterizeSvg`), so the candidate's own size has to be known already.
   const cand = await readRaster(repoRoot, candidate.uri);
+  const ref = await readRaster(repoRoot, reference.uri, cand.width);
   const key = imageKey(reference);
 
   const dw = Math.abs(ref.width - cand.width);
