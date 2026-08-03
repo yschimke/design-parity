@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.33](https://github.com/yschimke/design-parity/compare/v0.1.32...v0.1.33) (2026-08-03)
+
+
+### Features
+
+* **figma-plugin:** organize dialog around designer tasks ([#264](https://github.com/yschimke/design-parity/issues/264)) ([e69d095](https://github.com/yschimke/design-parity/commit/e69d095758019157a007474c978bf7b8d50bc167))
+
+
+### Bug Fixes
+
+* **diff:** rasterise a vector reference at the candidate's density ([#263](https://github.com/yschimke/design-parity/issues/263)) ([0591189](https://github.com/yschimke/design-parity/commit/059118997368c1f035f05c76c6334fd0451a2a77))
+* **figma-plugin:** preserve semantic native import bindings ([#260](https://github.com/yschimke/design-parity/issues/260)) ([73f5f88](https://github.com/yschimke/design-parity/commit/73f5f882348a2f212357e3a1b3b9e7b71035dc29))
+
 ## [0.1.32](https://github.com/yschimke/design-parity/compare/v0.1.31...v0.1.32) (2026-08-03)
 
 
