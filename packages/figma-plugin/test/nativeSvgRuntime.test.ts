@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  bindImportedTextStyles,
+  bindImportedVariables,
+  preflightSvgFonts,
   promoteNativeContainers,
   promoteNativeRoundedRects,
 } from "../figma/nativeSvg.js";
@@ -38,11 +41,60 @@ interface RuntimeNode {
   paddingRight?: number;
   paddingBottom?: number;
   paddingLeft?: number;
+  fontName?: FontName;
+  fontSize?: number;
+  characters?: string;
+  textStyleId?: string;
+  boundVariables: Record<string, RuntimeVariable>;
+  explicitModes: Record<string, string>;
   appendChild(child: RuntimeNode): void;
   insertChild(index: number, child: RuntimeNode): void;
   resize(width: number, height: number): void;
   remove(): void;
   findAll(predicate: (node: RuntimeNode) => boolean): RuntimeNode[];
+  setBoundVariable(field: string, variable: RuntimeVariable): void;
+  setExplicitVariableModeForCollection(collection: RuntimeCollection, modeId: string): void;
+  setTextStyleIdAsync(id: string): Promise<void>;
+}
+
+interface RuntimeCollection {
+  id: string;
+  name: string;
+  modes: Array<{ modeId: string; name: string }>;
+  defaultModeId: string;
+  pluginData: Record<string, string>;
+  renameMode(modeId: string, name: string): void;
+  addMode(name: string): string;
+  setPluginData(key: string, value: string): void;
+}
+
+interface RuntimeVariable {
+  id: string;
+  name: string;
+  resolvedType: VariableResolvedDataType;
+  variableCollectionId: string;
+  scopes: VariableScope[];
+  values: Record<string, VariableValue>;
+  codeSyntax: Record<string, string>;
+  setValueForMode(modeId: string, value: VariableValue): void;
+  setVariableCodeSyntax(platform: string, syntax: string): void;
+}
+
+interface RuntimeTextStyle {
+  id: string;
+  name: string;
+  fontName: FontName;
+  fontSize: number;
+  lineHeight: LineHeight;
+  letterSpacing: LetterSpacing;
+  description: string;
+}
+
+interface RuntimeState {
+  collections: RuntimeCollection[];
+  variables: RuntimeVariable[];
+  textStyles: RuntimeTextStyle[];
+  loadedFonts: FontName[];
 }
 
 let nextId = 0;
@@ -69,6 +121,8 @@ function node(type: NodeType, values: Partial<RuntimeNode> = {}): RuntimeNode {
     removed: false,
     children: [],
     layoutMode: "NONE",
+    boundVariables: {},
+    explicitModes: {},
     appendChild(child: RuntimeNode): void {
       detach(child);
       child.parent = result;
@@ -96,6 +150,15 @@ function node(type: NodeType, values: Partial<RuntimeNode> = {}): RuntimeNode {
       result.children.forEach(visit);
       return found;
     },
+    setBoundVariable(field: string, variable: RuntimeVariable): void {
+      result.boundVariables[field] = variable;
+    },
+    setExplicitVariableModeForCollection(collection: RuntimeCollection, modeId: string): void {
+      result.explicitModes[collection.id] = modeId;
+    },
+    async setTextStyleIdAsync(id: string): Promise<void> {
+      result.textStyleId = id;
+    },
     ...values,
   } satisfies RuntimeNode;
   return result;
@@ -107,11 +170,75 @@ function detach(child: RuntimeNode): void {
   child.parent = undefined;
 }
 
-function installRuntime(): void {
+function installRuntime(fonts: FontName[] = []): RuntimeState {
+  const state: RuntimeState = { collections: [], variables: [], textStyles: [], loadedFonts: [] };
   globalThis.figma = {
     createFrame: () => node("FRAME"),
     createRectangle: () => node("RECTANGLE"),
+    listAvailableFontsAsync: async () => fonts.map((fontName) => ({ fontName })),
+    loadFontAsync: async (font: FontName) => { state.loadedFonts.push(font); },
+    getLocalTextStylesAsync: async () => state.textStyles,
+    createTextStyle: () => {
+      const style: RuntimeTextStyle = {
+        id: `style-${state.textStyles.length}`,
+        name: "",
+        fontName: { family: "Inter", style: "Regular" },
+        fontSize: 12,
+        lineHeight: { unit: "AUTO" },
+        letterSpacing: { unit: "PIXELS", value: 0 },
+        description: "",
+      };
+      state.textStyles.push(style);
+      return style;
+    },
+    variables: {
+      getLocalVariableCollectionsAsync: async () => state.collections,
+      getLocalVariablesAsync: async () => state.variables,
+      createVariableCollection: (name: string) => {
+        const collection: RuntimeCollection = {
+          id: `collection-${state.collections.length}`,
+          name,
+          modes: [{ modeId: "mode-0", name: "Mode 1" }],
+          defaultModeId: "mode-0",
+          pluginData: {},
+          renameMode(modeId: string, modeName: string): void {
+            const mode = collection.modes.find((candidate) => candidate.modeId === modeId);
+            if (mode) mode.name = modeName;
+          },
+          addMode(modeName: string): string {
+            const modeId = `mode-${collection.modes.length}`;
+            collection.modes.push({ modeId, name: modeName });
+            return modeId;
+          },
+          setPluginData(key: string, value: string): void {
+            collection.pluginData[key] = value;
+          },
+        };
+        state.collections.push(collection);
+        return collection;
+      },
+      createVariable: (name: string, collection: RuntimeCollection, resolvedType: VariableResolvedDataType) => {
+        const variable: RuntimeVariable = {
+          id: `variable-${state.variables.length}`,
+          name,
+          resolvedType,
+          variableCollectionId: collection.id,
+          scopes: [],
+          values: {},
+          codeSyntax: {},
+          setValueForMode(modeId: string, value: VariableValue): void { variable.values[modeId] = value; },
+          setVariableCodeSyntax(platform: string, syntax: string): void { variable.codeSyntax[platform] = syntax; },
+        };
+        state.variables.push(variable);
+        return variable;
+      },
+      setBoundVariableForPaint: (paint: SolidPaint, _field: string, variable: RuntimeVariable) => ({
+        ...paint,
+        boundVariables: { color: { type: "VARIABLE_ALIAS", id: variable.id } },
+      }),
+    },
   } as unknown as PluginAPI;
+  return state;
 }
 
 function append(parent: RuntimeNode, ...children: RuntimeNode[]): RuntimeNode {
@@ -239,5 +366,117 @@ describe("Figma-runtime native SVG promotion", () => {
       effects: vector.effects,
     });
     expect(vector.removed).toBe(true);
+  });
+
+  it("creates named theme variables and binds paints, radii, padding, and gaps", async () => {
+    const state = installRuntime();
+    const root = node("FRAME", {
+      name: "Button",
+      layoutMode: "HORIZONTAL",
+      itemSpacing: 8,
+      paddingTop: 8,
+      paddingRight: 8,
+      paddingBottom: 8,
+      paddingLeft: 8,
+      cornerRadius: 16,
+    });
+    const surface = node("RECTANGLE", {
+      name: "Surface",
+      cornerRadius: 16,
+      fills: [{ type: "SOLID", color: { r: 0.4039, g: 0.3137, b: 0.6431 } }],
+    });
+    append(root, surface);
+
+    const bound = await bindImportedVariables(
+      root as unknown as SceneNode,
+      '<g id="Surface" data-token="primary"></g>',
+      {
+        name: "Material 3",
+        modes: { light: "Light", dark: "Dark" },
+        defaultModeId: "light",
+        variables: [
+          { name: "color/primary", resolvedType: "COLOR", valuesByMode: { light: "#6750A4", dark: "#D0BCFF" } },
+          { name: "radius/medium", resolvedType: "FLOAT", valuesByMode: { light: 16, dark: 16 } },
+          { name: "spacing/small", resolvedType: "FLOAT", valuesByMode: { light: 8, dark: 8 } },
+        ],
+      },
+    );
+
+    expect(bound).toBe(8);
+    expect(state.collections).toHaveLength(1);
+    expect(state.collections[0]).toMatchObject({
+      name: "Material 3",
+      modes: [{ name: "Light" }, { name: "Dark" }],
+      pluginData: { designParity: "tokens" },
+    });
+    expect(state.variables.map((variable) => ({
+      name: variable.name,
+      scopes: variable.scopes,
+      android: variable.codeSyntax.ANDROID,
+    }))).toEqual([
+      { name: "color/primary", scopes: ["ALL_FILLS", "STROKE_COLOR"], android: "MaterialTheme.colorScheme.primary" },
+      { name: "radius/medium", scopes: ["CORNER_RADIUS"], android: "MaterialTheme.shapes.medium" },
+      { name: "spacing/small", scopes: ["GAP"], android: undefined },
+    ]);
+    expect((surface.fills[0] as SolidPaint).boundVariables?.color).toMatchObject({
+      type: "VARIABLE_ALIAS",
+      id: state.variables[0]!.id,
+    });
+    expect(surface.boundVariables.cornerRadius).toBe(state.variables[1]);
+    expect(root.boundVariables).toMatchObject({
+      cornerRadius: state.variables[1],
+      itemSpacing: state.variables[2],
+      paddingTop: state.variables[2],
+      paddingRight: state.variables[2],
+      paddingBottom: state.variables[2],
+      paddingLeft: state.variables[2],
+    });
+  });
+
+  it("loads the requested face, creates a named text style, and binds exact text", async () => {
+    const state = installRuntime([
+      { family: "Roboto", style: "Regular" },
+      { family: "Roboto", style: "Medium" },
+    ]);
+    const root = node("FRAME");
+    const label = node("TEXT", {
+      name: "Label",
+      characters: "Continue",
+      fontName: { family: "Roboto", style: "Medium" },
+      fontSize: 14,
+    });
+    append(root, label);
+
+    const preflight = await preflightSvgFonts(
+      '<text font-family="Roboto" font-weight="500">Continue</text><text font-family="Missing Sans">Missing</text>',
+    );
+    const bound = await bindImportedTextStyles(root as unknown as SceneNode, [{
+      name: "typography/labelLarge",
+      fontFamily: "Roboto",
+      fontSize: 14,
+      fontWeight: 500,
+      lineHeight: 20,
+      letterSpacing: 0.1,
+      androidCodeSyntax: "MaterialTheme.typography.labelLarge",
+    }]);
+
+    expect(preflight).toEqual({
+      loaded: [{ family: "Roboto", style: "Medium" }],
+      missing: ["Missing Sans"],
+    });
+    expect(bound).toBe(1);
+    expect(state.loadedFonts).toEqual([
+      { family: "Roboto", style: "Medium" },
+      { family: "Roboto", style: "Medium" },
+    ]);
+    expect(state.textStyles[0]).toMatchObject({
+      name: "typography/labelLarge",
+      fontName: { family: "Roboto", style: "Medium" },
+      fontSize: 14,
+      lineHeight: { unit: "PIXELS", value: 20 },
+      letterSpacing: { unit: "PIXELS", value: 0.1 },
+      description: "Code: MaterialTheme.typography.labelLarge",
+    });
+    expect(label.textStyleId).toBe(state.textStyles[0]!.id);
   });
 });
