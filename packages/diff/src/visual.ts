@@ -43,11 +43,27 @@ export interface VisualResult {
    */
   diffPng?: Buffer;
   /**
-   * True when reference and candidate had different dimensions but within
-   * {@link DiffConfig.visualDimTolerancePx}, so they were diffed over their
-   * top-left overlap rather than scored a total mismatch (#47).
+   * True when reference and candidate had different dimensions. They are still
+   * diffed over their shared top-left overlap; the score counts the uncovered
+   * border as differing (#47).
    */
   dimensionMismatch?: boolean;
+  /**
+   * The raster dimensions actually compared, present only when they differ.
+   * Lets a consumer name the drift ("reference 1078×2399 vs candidate
+   * 1078×2447") instead of just reporting a ratio.
+   */
+  dimensions?: {
+    reference: { width: number; height: number };
+    candidate: { width: number; height: number };
+  };
+  /**
+   * Pixels of the union box that only one side covers — the part of the score
+   * attributable to the *size* difference rather than to content drift. A
+   * reviewer reads `borderPixels === diffPixels` as "the overlap matches
+   * exactly; the images are only different sizes".
+   */
+  borderPixels?: number;
 }
 
 /** Human-readable key (raw size) — also the {@link Verdict.visualScores} key. */
@@ -104,8 +120,9 @@ function decodeDataUri(uri: string): Buffer {
  * user units only lines up with the candidate by luck: a Figma frame authored in
  * dp rasterises to 2× a 2.625×-density Compose render (822px vs 1078px), and a
  * frame seeded from an already-device-pixel export rasterises to exactly twice
- * it. Either way the delta clears `visualDimTolerancePx` and the pair scores a
- * flat 100% mismatch — a number that says nothing about the design.
+ * it. Either way the two sides land at wildly different sizes and the score
+ * degenerates into "the images are different shapes" — a number that says
+ * nothing about the design.
  */
 const SVG_RASTER_SCALE = 2;
 
@@ -171,28 +188,29 @@ export async function diffImagePair(
   const ref = await readRaster(repoRoot, reference.uri, cand.width);
   const key = imageKey(reference);
 
-  const dw = Math.abs(ref.width - cand.width);
-  const dh = Math.abs(ref.height - cand.height);
-  const sameSize = dw === 0 && dh === 0;
-  // A sub-tolerance dimension delta (e.g. density rounding between two render
-  // tools) is diffed over the shared top-left overlap rather than written off as
-  // a total mismatch, so the real content drift isn't masked (#47).
-  const aligned =
-    !sameSize &&
-    dw <= config.visualDimTolerancePx &&
-    dh <= config.visualDimTolerancePx;
+  const sameSize = ref.width === cand.width && ref.height === cand.height;
 
   // Score against the union box so the non-overlapping border (counted as
   // differing below) can't push the ratio past 1; for equal sizes this is just
   // the shared area.
   const totalPixels = Math.max(ref.width, cand.width) * Math.max(ref.height, cand.height);
+  // The shared top-left region — the only part where comparing pixels means
+  // anything. It is diffed *whatever* the size delta. Writing a large delta off
+  // as a flat 100% threw away the answer along with the question: a candidate
+  // that matches its design for 2399 rows and then runs 48px taller is ~2%
+  // drift plus a border, and reporting it as "100% of pixels differ" hides both
+  // the fact that the content matches and the fact that the height is what
+  // moved. Only a genuinely empty overlap (a zero-width or zero-height side)
+  // has nothing left to compare.
+  const ow = Math.min(ref.width, cand.width);
+  const oh = Math.min(ref.height, cand.height);
+  const borderPixels = totalPixels - ow * oh;
+
   let diffPixels: number;
   let diff: Raster | null = null;
   let diffPng: Buffer | undefined;
 
-  if (sameSize || aligned) {
-    const ow = Math.min(ref.width, cand.width);
-    const oh = Math.min(ref.height, cand.height);
+  if (ow > 0 && oh > 0) {
     const out = new PNG({ width: ow, height: oh });
     const overlapDiff = pixelmatch(
       cropTopLeft(ref, ow, oh),
@@ -205,10 +223,9 @@ export async function diffImagePair(
     diff = { width: ow, height: oh, data: out.data };
     diffPng = PNG.sync.write(out);
     // Differing overlap pixels + the border only one image covers.
-    diffPixels = overlapDiff + (totalPixels - ow * oh);
+    diffPixels = overlapDiff + borderPixels;
   } else {
-    // Dimension drift beyond tolerance is a genuine total mismatch; there's no
-    // meaningful aligned region to render.
+    // No overlap at all (a zero-dimension side) — nothing to render or measure.
     diffPixels = totalPixels;
   }
 
@@ -217,7 +234,14 @@ export async function diffImagePair(
 
   const result: VisualResult = { key, score, diffPixels, totalPixels, triptych };
   if (diffPng) result.diffPng = diffPng;
-  if (aligned) result.dimensionMismatch = true;
+  if (!sameSize) {
+    result.dimensionMismatch = true;
+    result.dimensions = {
+      reference: { width: ref.width, height: ref.height },
+      candidate: { width: cand.width, height: cand.height },
+    };
+    result.borderPixels = borderPixels;
+  }
   return result;
 }
 

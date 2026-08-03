@@ -59,29 +59,63 @@ describe("diffImagePair dimension tolerance (#47)", () => {
     expect(r.score).toBeGreaterThan(0.9);
   });
 
-  it("treats a beyond-tolerance size delta as a genuine total mismatch", async () => {
+  it("diffs a beyond-tolerance size delta over the overlap instead of a blind 100%", async () => {
     const ref = img(solidPng(200, 100), 200, 100);
-    const cand = img(solidPng(260, 100), 260, 100); // 60px > 8px tolerance
+    const cand = img(solidPng(260, 100), 260, 100); // 60px, far past the 8px tolerance
 
     const r = await diffImagePair("/nonexistent", ref, cand, defaultDiffConfig);
 
-    expect(r.dimensionMismatch).toBeUndefined();
-    expect(r.score).toBe(1);
-    expect(r.diffPixels).toBe(r.totalPixels);
+    expect(r.dimensionMismatch).toBe(true);
+    // The overlap is identical; only the 60px border the candidate alone covers
+    // differs. Pre-fix this was a flat 1.0 with no heatmap.
+    expect(r.totalPixels).toBe(260 * 100);
+    expect(r.borderPixels).toBe(60 * 100);
+    expect(r.diffPixels).toBe(60 * 100);
+    expect(r.score).toBeCloseTo((60 * 100) / (260 * 100), 6);
+    expect(r.score).not.toBe(1);
+    expect(r.diffPng).toBeDefined();
   });
 
-  it("respects a custom visualDimTolerancePx override", async () => {
+  it("measures the DeviceBody vertical drift instead of saturating (the 8px cliff)", async () => {
+    // The real meshcore-mobile shape: the candidate matches its design across
+    // the full width and the first 2399 rows, then runs 48px taller. The whole
+    // point of the pipeline is to report that as ~2% drift concentrated in the
+    // height — the old cliff called it 100% and said nothing.
+    const ref = img(solidPng(1078, 2399), 1078, 2399);
+    const cand = img(solidPng(1078, 2447), 1078, 2447);
+
+    const r = await diffImagePair("/nonexistent", ref, cand, defaultDiffConfig);
+
+    expect(r.dimensionMismatch).toBe(true);
+    expect(r.dimensions).toEqual({
+      reference: { width: 1078, height: 2399 },
+      candidate: { width: 1078, height: 2447 },
+    });
+    // Every differing pixel is border: the content itself matches exactly.
+    expect(r.borderPixels).toBe(1078 * 48);
+    expect(r.diffPixels).toBe(r.borderPixels);
+    expect(r.score).toBeLessThan(0.02);
+  });
+
+  // The remaining total-mismatch path (an empty overlap) isn't exercised here:
+  // a zero-width/zero-height raster can't be built with pngjs, and no real
+  // decoder produces one. The guard in `diffImagePair` stays as a defensive
+  // floor so a degenerate rasterisation can't divide by an empty region.
+
+  it("uses visualDimTolerancePx to grade the report, not to gate the diff", async () => {
     const ref = img(solidPng(200, 100), 200, 100);
     const cand = img(solidPng(210, 100), 210, 100); // 10px
 
     const tight = await diffImagePair("/x", ref, cand, defaultDiffConfig);
-    expect(tight.dimensionMismatch).toBeUndefined(); // 10 > default 8
-
     const loose = await diffImagePair("/x", ref, cand, {
       ...defaultDiffConfig,
       visualDimTolerancePx: 16,
     });
-    expect(loose.dimensionMismatch).toBe(true); // 10 <= 16
+
+    // Same measurement either way — the threshold no longer changes the score.
+    expect(tight.dimensionMismatch).toBe(true);
+    expect(loose.dimensionMismatch).toBe(true);
+    expect(tight.score).toBe(loose.score);
   });
 
   it("surfaces an info finding through diff() when sizes are tolerated", async () => {
@@ -105,5 +139,30 @@ describe("diffImagePair dimension tolerance (#47)", () => {
       (f) => f.kind === "visual" && f.severity === "info",
     );
     expect(info?.message).toContain("differ slightly in size");
+  });
+
+  it("warns with both frame sizes when the delta is a real size difference", async () => {
+    const reference: DesignReference = {
+      componentId: "ui/Tile.kt#LightOn",
+      source: "bundle",
+      linkMethod: "manifest",
+      ref: "tile",
+      referenceImages: [img(solidPng(200, 100), 200, 100)],
+    };
+    const candidate: CandidateRender = {
+      componentId: "ui/Tile.kt#LightOn",
+      images: [img(solidPng(260, 100), 260, 100)],
+      semantics: { theme: "light", root: { role: "image" } },
+    };
+
+    const { verdict } = await diff(reference, candidate);
+    const dim = verdict.findings.find(
+      (f) => f.kind === "visual" && String(f.message).includes("overlap"),
+    );
+    expect(dim?.severity).toBe("warn");
+    expect(dim?.message).toContain("200×100");
+    expect(dim?.message).toContain("260×100");
+    // The overlap matched, so none of the difference is content drift.
+    expect(dim?.detail).toMatchObject({ dw: -60, dh: 0, contentPixels: 0 });
   });
 });

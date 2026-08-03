@@ -29,12 +29,17 @@ export interface DiffConfig {
    */
   visualWarnRatio: number;
   /**
-   * Max per-axis dimension delta (px) between reference and candidate that is
-   * still diffed as an aligned overlap rather than scored a 100% mismatch. Two
-   * render tools rounding density differently (e.g. Robolectric 2.625 vs a
+   * Max per-axis dimension delta (px) between reference and candidate that
+   * counts as *density rounding* rather than a real size difference. Two render
+   * tools rounding density differently (e.g. Robolectric 2.625 vs a
    * `deviceScaleFactor=2` capture) can differ by a pixel or two without any real
-   * visual drift; tolerating that keeps the heatmap informative (#47). A delta
-   * beyond this on either axis is a genuine total mismatch.
+   * visual drift, and that shouldn't read as a defect (#47).
+   *
+   * This affects only how the size difference is *reported* — info below the
+   * threshold, `warn` (with both frame sizes) above it. Mismatched pairs are
+   * always diffed over their shared top-left overlap regardless: a delta past
+   * the threshold used to be written off as a flat 100%, which discarded a
+   * usable measurement precisely when the drift was largest.
    */
   visualDimTolerancePx: number;
   /**
