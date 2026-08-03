@@ -451,12 +451,17 @@ export async function bindImportedVariables(
     if (!variable) continue;
     const node = nodes.find((item) => item.name === annotation.layer && !used.has(item.id));
     if (!node) continue;
-    used.add(node.id);
     const allowed = new Map<string, Variable>();
     for (const [key, candidates] of colorCandidates) if (candidates.includes(variable)) allowed.set(key, variable);
-    for (const child of walk(node)) count += bindPaints(child, allowed);
+    for (const child of walk(node)) {
+      used.add(child.id);
+      count += bindPaints(child, allowed);
+    }
   }
-  for (const node of nodes) count += bindPaints(node, uniqueColors);
+  // A semantic annotation is authoritative. Do not immediately bind that same
+  // layer again through the literal-colour fallback: aside from inflating the
+  // result count, a future palette with aliases could replace the named role.
+  for (const node of nodes) if (!used.has(node.id)) count += bindPaints(node, uniqueColors);
 
   for (const node of nodes) {
     if (!("setBoundVariable" in node)) continue;
