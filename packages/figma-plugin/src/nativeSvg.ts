@@ -86,6 +86,90 @@ function compact(value: number): string {
   return Number(value.toFixed(3)).toString();
 }
 
+export interface SvgRoundedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
+}
+
+/** Recognise the canonical four-arc path emitted by the Compose wireframe exporter. */
+function pillPathBox(value: string): SvgRoundedRect | undefined {
+  const tokens = value.match(/[A-Za-z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) ?? [];
+  let at = 0;
+  const command = (expected: string): boolean => tokens[at++]?.toUpperCase() === expected;
+  const number = (): number | undefined => {
+    const token = tokens[at++];
+    if (token === undefined || !NUMBER.test(token)) return undefined;
+    const result = Number(token);
+    return Number.isFinite(result) ? result : undefined;
+  };
+  const arc = (): [number, number, number, number] | undefined => {
+    if (!command("A")) return undefined;
+    const rx = number(); const ry = number();
+    const rotation = number(); const large = number(); const sweep = number();
+    const x = number(); const y = number();
+    if ([rx, ry, rotation, large, sweep, x, y].some((part) => part === undefined)) return undefined;
+    if (!almost(rotation!, 0, 0.001) || !almost(large!, 0, 0.001) || !almost(sweep!, 1, 0.001)) return undefined;
+    return [rx!, ry!, x!, y!];
+  };
+
+  if (!command("M")) return undefined;
+  const innerLeft = number(); const top = number();
+  if (!command("H")) return undefined;
+  const innerRight = number();
+  const topRight = arc();
+  if (!command("V")) return undefined;
+  const centre1 = number();
+  const bottomRight = arc();
+  if (!command("H")) return undefined;
+  const innerLeft2 = number();
+  const bottomLeft = arc();
+  if (!command("V")) return undefined;
+  const centre2 = number();
+  const topLeft = arc();
+  if (!command("Z") || at !== tokens.length) return undefined;
+  if ([innerLeft, top, innerRight, centre1, innerLeft2, centre2].some((part) => part === undefined) ||
+      !topRight || !bottomRight || !bottomLeft || !topLeft) return undefined;
+
+  const [rx, ry, right, centre] = topRight;
+  const [, , bottomInnerRight, bottom] = bottomRight;
+  const [, , left, bottomCentre] = bottomLeft;
+  const [, , topInnerLeft, topAgain] = topLeft;
+  const height = bottom - top!;
+  const width = right - left;
+  const expectedRadius = height / 2;
+  const valuesMatch = [ry, ...bottomRight.slice(0, 2), ...bottomLeft.slice(0, 2), ...topLeft.slice(0, 2)]
+    .every((part) => almost(part, rx, 0.001));
+  if (width <= 0 || height <= 0 || !valuesMatch || !almost(rx, expectedRadius, 0.001) ||
+      !almost(innerLeft!, left + rx, 0.001) || !almost(innerLeft2!, innerLeft!, 0.001) ||
+      !almost(innerRight!, right - rx, 0.001) || !almost(bottomInnerRight, innerRight!, 0.001) ||
+      !almost(centre1!, centre, 0.001) || !almost(centre2!, centre, 0.001) ||
+      !almost(bottomCentre, centre, 0.001) || !almost(centre, top! + rx, 0.001) ||
+      !almost(topInnerLeft, innerLeft!, 0.001) || !almost(topAgain, top!, 0.001)) return undefined;
+  return { x: left, y: top!, width, height, radius: rx };
+}
+
+/** Rounded rectangles that Figma should materialize with its Rectangle API. */
+export function svgRoundedRects(svg: string): SvgRoundedRect[] {
+  const out: SvgRoundedRect[] = [];
+  const normalized = normalizeSvgRects(svg);
+  for (const tag of normalized.match(/<rect\b[^>]*>/gi) ?? []) {
+    const parsed = attrs(tag);
+    const x = scalar(parsed.get("x")?.value) ?? 0;
+    const y = scalar(parsed.get("y")?.value) ?? 0;
+    const width = scalar(parsed.get("width")?.value);
+    const height = scalar(parsed.get("height")?.value);
+    const rx = scalar(parsed.get("rx")?.value);
+    const ry = scalar(parsed.get("ry")?.value ?? parsed.get("rx")?.value);
+    if (width === undefined || height === undefined || rx === undefined || ry === undefined ||
+        width <= 0 || height <= 0 || !almost(rx, ry, 0.001)) continue;
+    out.push({ x, y, width, height, radius: rx });
+  }
+  return out;
+}
+
 /**
  * Clamp a rounded SVG rect's radius to the native rectangle range Figma uses.
  *
@@ -97,7 +181,18 @@ function compact(value: number): string {
  * without changing the design.
  */
 export function normalizeSvgRects(svg: string): string {
-  return svg.replace(/<rect\b[^>]*>/gi, (tag) => {
+  const roundedPaths = svg.replace(/<path\b[^>]*>/gi, (tag) => {
+    const parsed = attrs(tag);
+    const d = parsed.get("d")?.value;
+    const pill = d ? pillPathBox(d) : undefined;
+    if (!pill) return tag;
+    const geometry = `x="${compact(pill.x)}" y="${compact(pill.y)}" width="${compact(pill.width)}" height="${compact(pill.height)}" rx="${compact(pill.radius)}"`;
+    return tag
+      .replace(/^<path\b/i, "<rect")
+      .replace(/\s+d\s*=\s*(["']).*?\1/is, ` ${geometry}`);
+  });
+
+  return roundedPaths.replace(/<rect\b[^>]*>/gi, (tag) => {
     const parsed = attrs(tag);
     const width = scalar(parsed.get("width")?.value);
     const height = scalar(parsed.get("height")?.value);

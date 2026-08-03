@@ -9,6 +9,7 @@ import {
   chooseAvailableFont,
   inferAutoLayout,
   svgFontRequests,
+  svgRoundedRects,
   svgTokenAnnotations,
 } from "../src/nativeSvg.js";
 
@@ -120,6 +121,53 @@ export function promoteNativeContainers(root: SceneNode): number {
       frame.paddingLeft = layout.paddingLeft;
     }
     promoted += 1;
+  }
+  return promoted;
+}
+
+/** Replace SVG-imported pill vectors with editable Figma Rectangle nodes. */
+export function promoteNativeRoundedRects(root: SceneNode, svg: string): number {
+  if (!("findAll" in root)) return 0;
+  const specs = svgRoundedRects(svg);
+  const vectors = root.findAll((node) => node.type === "VECTOR") as VectorNode[];
+  const used = new Set<VectorNode>();
+  let promoted = 0;
+  for (const spec of specs) {
+    const vector = vectors.find((candidate) => !used.has(candidate) &&
+      Math.abs(candidate.width - spec.width) <= 1 &&
+      Math.abs(candidate.height - spec.height) <= 1);
+    if (!vector) continue;
+    const parent = vector.parent;
+    if (!parent || !("insertChild" in parent)) continue;
+    used.add(vector);
+    const index = parent.children.indexOf(vector);
+    const rectangle = figma.createRectangle();
+    try {
+      rectangle.name = /^Vector(?: \d+)?$/.test(vector.name) ? "Pill" : vector.name;
+      rectangle.resize(vector.width, vector.height);
+      rectangle.x = vector.x;
+      rectangle.y = vector.y;
+      rectangle.rotation = vector.rotation;
+      rectangle.cornerRadius = spec.radius * (vector.height / spec.height);
+      parent.insertChild(index, rectangle);
+      // Figma can mark individual properties on imported/locked SVG vectors as
+      // non-transferable. Copy each optional appearance property independently
+      // so one unsupported value cannot cancel the native-shape conversion.
+      try { rectangle.fills = vector.fills; } catch { /* keep the default fill */ }
+      try { rectangle.strokes = vector.strokes; } catch { /* keep no stroke */ }
+      try { rectangle.effects = vector.effects; } catch { /* keep no effects */ }
+      try { rectangle.opacity = vector.opacity; } catch { /* keep full opacity */ }
+      try { rectangle.blendMode = vector.blendMode; } catch { /* keep normal blend */ }
+      try { rectangle.visible = vector.visible; } catch { /* keep visible */ }
+      vector.remove();
+      promoted += 1;
+    } catch (error) {
+      // An imported vector may expose a read-only mixed property in a future
+      // Plugin API. Never leave a detached rectangle behind or fail the whole
+      // component import because an optional native-shape enhancement failed.
+      rectangle.remove();
+      console.warn("Could not promote an imported pill to a rectangle", error);
+    }
   }
   return promoted;
 }

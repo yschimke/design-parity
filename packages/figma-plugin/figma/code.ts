@@ -42,6 +42,7 @@ import {
   exposeTextProperties,
   preflightSvgFonts,
   promoteNativeContainers,
+  promoteNativeRoundedRects,
 } from "./nativeSvg.js";
 
 /** The message the UI posts once it has resolved the plan and all image bytes. */
@@ -240,7 +241,15 @@ async function applyCatalogMetadata(
   node: ComponentNode | ComponentSetNode,
   metadata: CatalogNodeMetadata | undefined,
 ): Promise<void> {
-  node.setRelaunchData({ open: "Open this component in Design Parity" });
+  // Figma only permits relaunch data once the plugin has a Community plugin
+  // id. Local development manifests intentionally have no id, so keep this
+  // enhancement best-effort instead of failing an otherwise valid import.
+  try {
+    node.setRelaunchData({ open: "Open this component in Design Parity" });
+  } catch {
+    // The component, bindings, documentation, and Dev Resources remain useful
+    // in local/unpublished builds; published builds still get the relaunch UI.
+  }
   if (!metadata) return;
   if (metadata.descriptionMarkdown) node.descriptionMarkdown = metadata.descriptionMarkdown;
   if (metadata.documentationUrl) {
@@ -257,6 +266,7 @@ async function applyCatalogMetadata(
 interface BuiltComponentSet {
   node: ComponentSetNode;
   editable: number;
+  nativeShapes: number;
   tokenBindings: number;
   styleBindings: number;
   properties: number;
@@ -275,6 +285,7 @@ async function buildEditableComponentSet(
   if (cells.length === 0) throw new Error("No renders to place for this component.");
   const variants: ComponentNode[] = [];
   let editable = 0;
+  let nativeShapes = 0;
   let tokenBindings = 0;
   let styleBindings = 0;
   const missingFonts = new Set<string>();
@@ -287,6 +298,7 @@ async function buildEditableComponentSet(
         name: cell.name,
         componentId,
       }) as unknown as SceneNode;
+      nativeShapes += promoteNativeRoundedRects(imported, cell.svg);
       promoteNativeContainers(imported);
       if (imported.type !== "COMPONENT") imported = figma.createComponentFromNode(imported);
       variant = imported as ComponentNode;
@@ -310,7 +322,7 @@ async function buildEditableComponentSet(
   node.setSharedPluginData(STAMP, "nativeImportVersion", "2");
   const properties = exposeCommonTextProperties(node);
   await applyCatalogMetadata(node, metadata);
-  return { node, editable, tokenBindings, styleBindings, properties, missingFonts };
+  return { node, editable, nativeShapes, tokenBindings, styleBindings, properties, missingFonts };
 }
 
 async function instanceCount(node: SceneNode): Promise<number> {
@@ -493,12 +505,24 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
     return;
   }
   if (msg.type === "requestRegistry") {
-    const stored = await figma.clientStorage.getAsync(REGISTRY_KEY);
-    figma.ui.postMessage({ type: "registry", stored: stored ?? undefined });
+    try {
+      const stored = await figma.clientStorage.getAsync(REGISTRY_KEY);
+      figma.ui.postMessage({ type: "registry", stored: stored ?? undefined });
+    } catch {
+      // Unpublished development manifests have no plugin ID, so Figma denies
+      // clientStorage. The built-in registry remains fully usable for smoke
+      // tests and local development.
+      figma.ui.postMessage({ type: "registry", stored: undefined });
+    }
     return;
   }
   if (msg.type === "saveRegistry") {
-    await figma.clientStorage.setAsync(REGISTRY_KEY, msg.stored);
+    try {
+      await figma.clientStorage.setAsync(REGISTRY_KEY, msg.stored);
+    } catch {
+      // See requestRegistry: persistence becomes available once the plugin has
+      // a Figma-assigned ID, while the in-memory registry still works without it.
+    }
     return;
   }
   if (msg.type === "proposeReadSelection") {
@@ -553,6 +577,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
         name: msg.name,
         componentId: msg.componentId,
       });
+      const nativeShapes = promoteNativeRoundedRects(node as unknown as SceneNode, msg.svg);
       const promoted = promoteNativeContainers(node as unknown as SceneNode);
       // A picked catalog item is reusable by intent. Preserve the imported
       // layers while giving it Figma's native main-component representation.
@@ -579,6 +604,7 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       figma.ui.postMessage({ type: "inserted", name: node.name });
       const details = [
         promoted > 0 ? `${promoted} native container${promoted === 1 ? "" : "s"}` : "",
+        nativeShapes > 0 ? `${nativeShapes} native rounded rect${nativeShapes === 1 ? "" : "s"}` : "",
         bound > 0 ? `${bound} token binding${bound === 1 ? "" : "s"}` : "",
         styled > 0 ? `${styled} text style${styled === 1 ? "" : "s"}` : "",
         properties > 0 ? `${properties} text propert${properties === 1 ? "y" : "ies"}` : "",
@@ -603,11 +629,12 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
         msg.textStyles,
         msg.metadata,
       );
-      const { node, editable, tokenBindings, styleBindings, properties, missingFonts } = built;
+      const { node, editable, nativeShapes, tokenBindings, styleBindings, properties, missingFonts } = built;
       figma.viewport.scrollAndZoomIntoView([node]);
       figma.ui.postMessage({ type: "inserted", name: node.name });
       const details = [
         editable > 0 ? `${editable} editable` : "",
+        nativeShapes > 0 ? `${nativeShapes} native rounded rects` : "",
         tokenBindings > 0 ? `${tokenBindings} token bindings` : "",
         styleBindings > 0 ? `${styleBindings} text styles` : "",
         properties > 0 ? `${properties} text properties` : "",
@@ -641,6 +668,8 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       const node = placeLiveSvg(figma as unknown as FigmaApi, msg.source, msg.svg, {
         name: msg.name,
       });
+      promoteNativeRoundedRects(node as unknown as SceneNode, msg.svg);
+      promoteNativeContainers(node as unknown as SceneNode);
       figma.ui.postMessage({ type: "livePlaced", name: node.name });
       figma.notify(`Placed “${node.name}” (SVG).`);
     } catch (err) {
