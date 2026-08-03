@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.34](https://github.com/yschimke/design-parity/compare/v0.1.33...v0.1.34) (2026-08-03)
+
+
+### Features
+
+* **diff:** report layout and size drift instead of silently skipping it ([#267](https://github.com/yschimke/design-parity/issues/267)) ([b641407](https://github.com/yschimke/design-parity/commit/b6414071079df278b1e2936e3007b681894715b7))
+
+
+### Bug Fixes
+
+* **diff:** measure size-mismatched pairs instead of saturating at 100% ([#265](https://github.com/yschimke/design-parity/issues/265)) ([143d910](https://github.com/yschimke/design-parity/commit/143d910ff7c10504121c4a7a1d50ed119585809c))
+
 ## [0.1.33](https://github.com/yschimke/design-parity/compare/v0.1.32...v0.1.33) (2026-08-03)
 
 
