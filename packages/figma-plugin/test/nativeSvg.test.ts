@@ -4,6 +4,7 @@ import {
   chooseAvailableFont,
   inferAutoLayout,
   normalizeSvgRects,
+  svgRoundedRects,
   svgFontRequests,
   svgTokenAnnotations,
 } from "../src/nativeSvg.js";
@@ -17,6 +18,21 @@ describe("normalizeSvgRects", () => {
   it("clamps an over-large numeric radius the same way a browser paints it", () => {
     expect(normalizeSvgRects("<svg><rect width='72' height='32' rx='36'/></svg>"))
       .toContain("rx='16'");
+  });
+
+  it("turns the Compose exporter's canonical four-arc pill path into a native rect", () => {
+    const path = '<path d="M94.5,53 H205.5 A52.5,52.5 0 0 1 258,105.5 V105.5 A52.5,52.5 0 0 1 205.5,158 H94.5 A52.5,52.5 0 0 1 42,105.5 V105.5 A52.5,52.5 0 0 1 94.5,53 Z" fill="#6750A4"/>';
+    expect(normalizeSvgRects(path)).toBe(
+      '<rect x="42" y="53" width="216" height="105" rx="52.5" fill="#6750A4"/>',
+    );
+    expect(svgRoundedRects(path)).toEqual([
+      { x: 42, y: 53, width: 216, height: 105, radius: 52.5 },
+    ]);
+  });
+
+  it("leaves non-pill path geometry alone", () => {
+    const path = '<path d="M0 0 L40 0 L20 20 Z" fill="red"/>';
+    expect(normalizeSvgRects(path)).toBe(path);
   });
 
   it("does not flatten a genuinely elliptical corner or dynamic dimensions", () => {
