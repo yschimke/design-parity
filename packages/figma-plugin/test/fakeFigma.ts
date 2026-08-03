@@ -21,6 +21,8 @@ export interface FakeNode extends FigmaNode {
   height?: number;
   /** The SVG a node parsed from `createNodeFromSvg`, recorded for assertions. */
   fromSvg?: string;
+  /** Shared plugin data exposed for stable scene-contract snapshots. */
+  pluginData: Record<string, Record<string, string>>;
 }
 
 export interface FakeVariable {
@@ -71,6 +73,7 @@ export function createFakeFigma(opts: { fileKey?: string } = {}): FakeFigma {
       id: `${idc++}:0`,
       name: "",
       children: [],
+      pluginData,
       appendChild(child: FigmaNode): void {
         const c = child as FakeNode;
         // Reparent: drop from a previous parent so the tree stays a tree.

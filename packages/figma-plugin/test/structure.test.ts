@@ -16,6 +16,7 @@ import {
   SLOT_ROLE,
 } from "../src/structure.js";
 import { createFakeFigma, type FakeNode } from "./fakeFigma.js";
+import { sceneContract } from "./figmaRuntimeHarness.js";
 
 const slots: PreviewSlots = {
   previewId: "Card/Slots",
@@ -56,6 +57,66 @@ describe("placeSlots", () => {
     expect(headline.node.y).toBe(12);
     expect((headline.node as FakeNode).width).toBe(140);
     expect((headline.node as FakeNode).height).toBe(20);
+    expect(sceneContract(container as FakeNode)).toMatchInlineSnapshot(`
+      {
+        "children": [
+          {
+            "children": [],
+            "name": "slot:leadingIcon",
+            "pluginData": {
+              "designParity": {
+                "role": "slot",
+                "slotName": "leadingIcon",
+              },
+            },
+            "position": {
+              "x": 8,
+              "y": 8,
+            },
+            "size": {
+              "height": 40,
+              "width": 40,
+            },
+            "type": "frame",
+          },
+          {
+            "children": [],
+            "name": "slot:headline",
+            "pluginData": {
+              "designParity": {
+                "role": "slot",
+                "slotName": "headline",
+              },
+            },
+            "position": {
+              "x": 60,
+              "y": 12,
+            },
+            "size": {
+              "height": 20,
+              "width": 140,
+            },
+            "type": "frame",
+          },
+        ],
+        "name": "",
+        "pluginData": {
+          "designParity": {
+            "role": "slot-container",
+            "slotContainer": "Card/Slots",
+          },
+        },
+        "position": {
+          "x": 0,
+          "y": 0,
+        },
+        "size": {
+          "height": 0,
+          "width": 0,
+        },
+        "type": "frame",
+      }
+    `);
   });
 
   it("returns an empty list for a slotless container, still stamping it", () => {

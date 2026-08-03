@@ -142,14 +142,26 @@ modes + values, and the emitted `design-map.json`. This catches wrong API calls,
 ordering, and null handling (e.g. an unsaved file's `fileKey`) up front.
 
 The post-SVG Figma-runtime transforms are covered at the same boundary in
-[`test/nativeSvgRuntime.test.ts`](test/nativeSvgRuntime.test.ts). Its focused
-Plugin API double proves that a padded list becomes an exact-size vertical Auto
-Layout frame, overlapping artwork remains absolute, and a Compose pill vector
-is replaced in-place by an appearance-preserving native rectangle. It also
-checks native theme-variable bindings and exact font-face/Text Style bindings;
-the mapped-upgrade runtime likewise verifies safe skips, instance protection,
-placement/order preservation, failure cleanup, and refreshed node IDs. Pure
-geometry, token projection, slot, and upgrade planning have separate tests.
+[`test/nativeSvgRuntime.test.ts`](test/nativeSvgRuntime.test.ts). The reusable
+[`test/figmaRuntimeHarness.ts`](test/figmaRuntimeHarness.ts) models the observable
+node-tree, Auto Layout, variable, text-style, font, plugin-data, and placement
+semantics used by the runtime. It is shared with the mapped-upgrade tests and
+provides stable scene-contract projections that deliberately omit transient
+Figma node IDs. Inline contracts cover four critical outcomes: a Compose pill
+becomes an appearance-preserving native rectangle; a padded list becomes an
+exact-size vertical Auto Layout frame; named, exactly sized slot nodes are
+materialized under their container; and a mapped legacy root is replaced at the
+same position, rotation, and sibling index. The focused assertions additionally
+cover native theme-variable bindings, exact font-face/Text Style bindings, safe
+upgrade skips, instance protection, failure cleanup, and refreshed node IDs.
+
+This harness is intentionally not a full Figma emulator. Routine acceptance is
+headless and deterministic; the real Desktop host is only needed to spot-check
+behavior owned by Figma itself: whether its current SVG parser produces the
+expected source layer, whether a locally installed font is available, and
+whether a newly introduced Plugin API feature behaves differently from its
+published contract. Those narrow compatibility checks must not duplicate every
+pill, list, slot, and upgrade scenario already enforced in CI.
 
 Dialog changes carry visual evidence too. After bundling, run
 `npm run preview:ui --workspace @design-parity/figma-plugin` (set

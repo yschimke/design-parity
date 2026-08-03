@@ -5,60 +5,13 @@ import {
   type MappedUpgradeApi,
   type RuntimeUpgradeJob,
 } from "../figma/mappedUpgrade.js";
-
-interface UpgradeNode {
-  id: string;
-  type: string;
-  name: string;
-  x: number;
-  y: number;
-  rotation: number;
-  children: UpgradeNode[];
-  parent: UpgradeNode | null;
-  removed: boolean;
-  pluginData: Record<string, Record<string, string>>;
-  insertChild(index: number, child: UpgradeNode): void;
-  remove(): void;
-  getSharedPluginData(namespace: string, key: string): string;
-  getInstancesAsync(): Promise<UpgradeNode[]>;
-}
-
-let nextId = 0;
-
-function upgradeNode(type: string, values: Partial<UpgradeNode> = {}): UpgradeNode {
-  const result: UpgradeNode = {
-    id: `${nextId++}:0`,
-    type,
-    name: type,
-    x: 0,
-    y: 0,
-    rotation: 0,
-    children: [],
-    parent: null,
-    removed: false,
-    pluginData: {},
-    insertChild(index: number, child: UpgradeNode): void {
-      if (child.parent) child.parent.children = child.parent.children.filter((candidate) => candidate !== child);
-      child.parent = result;
-      result.children.splice(index, 0, child);
-    },
-    remove(): void {
-      if (result.parent) result.parent.children = result.parent.children.filter((candidate) => candidate !== result);
-      result.parent = null;
-      result.removed = true;
-    },
-    getSharedPluginData(namespace: string, key: string): string {
-      return result.pluginData[namespace]?.[key] ?? "";
-    },
-    async getInstancesAsync(): Promise<UpgradeNode[]> { return []; },
-    ...values,
-  };
-  return result;
-}
-
-function append(parent: UpgradeNode, ...children: UpgradeNode[]): void {
-  children.forEach((child) => parent.insertChild(parent.children.length, child));
-}
+import {
+  appendRuntimeNodes as append,
+  resetRuntimeIds,
+  type RuntimeNode,
+  runtimeNode as upgradeNode,
+  sceneContract,
+} from "./figmaRuntimeHarness.js";
 
 function job(componentId: string, nodeId: string): RuntimeUpgradeJob {
   return {
@@ -74,7 +27,7 @@ function job(componentId: string, nodeId: string): RuntimeUpgradeJob {
   };
 }
 
-function api(nodes: UpgradeNode[], scroll = vi.fn()): MappedUpgradeApi {
+function api(nodes: RuntimeNode[], scroll = vi.fn()): MappedUpgradeApi {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return {
     getNodeByIdAsync: async (id: string) => (byId.get(id) ?? null) as unknown as BaseNode | null,
@@ -84,7 +37,7 @@ function api(nodes: UpgradeNode[], scroll = vi.fn()): MappedUpgradeApi {
 
 describe("applyMappedUpgradeJobs", () => {
   it("replaces a mapped legacy root in place and reports its new correspondence", async () => {
-    nextId = 0;
+    resetRuntimeIds();
     const parent = upgradeNode("PAGE");
     const before = upgradeNode("FRAME", { name: "Before" });
     const legacy = upgradeNode("FRAME", { name: "Primary button", x: 240, y: 96, rotation: 7 });
@@ -108,6 +61,62 @@ describe("applyMappedUpgradeJobs", () => {
     );
     expect(parent.children).toEqual([before, replacement, after]);
     expect(replacement).toMatchObject({ name: "new", x: 240, y: 96, rotation: 7 });
+    expect(sceneContract(parent)).toMatchInlineSnapshot(`
+      {
+        "children": [
+          {
+            "children": [],
+            "name": "Before",
+            "position": {
+              "x": 0,
+              "y": 0,
+            },
+            "size": {
+              "height": 0,
+              "width": 0,
+            },
+            "type": "FRAME",
+          },
+          {
+            "children": [],
+            "name": "new",
+            "position": {
+              "x": 240,
+              "y": 96,
+            },
+            "rotation": 7,
+            "size": {
+              "height": 0,
+              "width": 0,
+            },
+            "type": "COMPONENT_SET",
+          },
+          {
+            "children": [],
+            "name": "After",
+            "position": {
+              "x": 0,
+              "y": 0,
+            },
+            "size": {
+              "height": 0,
+              "width": 0,
+            },
+            "type": "FRAME",
+          },
+        ],
+        "name": "PAGE",
+        "position": {
+          "x": 0,
+          "y": 0,
+        },
+        "size": {
+          "height": 0,
+          "width": 0,
+        },
+        "type": "PAGE",
+      }
+    `);
     expect(legacy.removed).toBe(true);
     expect(result).toMatchObject({
       replacements: { [legacy.id]: replacement.id },
@@ -119,7 +128,7 @@ describe("applyMappedUpgradeJobs", () => {
   });
 
   it("skips missing, unsafe, already-native, conflicting, and live-instance roots", async () => {
-    nextId = 0;
+    resetRuntimeIds();
     const text = upgradeNode("TEXT");
     const conflicting = upgradeNode("FRAME", {
       pluginData: { designParity: { componentId: "Card/Filled" } },
@@ -164,7 +173,7 @@ describe("applyMappedUpgradeJobs", () => {
   });
 
   it("removes a partially built replacement when insertion fails", async () => {
-    nextId = 0;
+    resetRuntimeIds();
     const parent = upgradeNode("PAGE", {
       insertChild(): void { throw new Error("document became read-only"); },
     });

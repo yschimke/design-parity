@@ -7,247 +7,18 @@ import {
   promoteNativeContainers,
   promoteNativeRoundedRects,
 } from "../figma/nativeSvg.js";
+import {
+  appendRuntimeNodes as append,
+  installFigmaRuntime as installRuntime,
+  resetRuntimeIds,
+  runtimeNode as node,
+  sceneContract,
+} from "./figmaRuntimeHarness.js";
 
-type NodeType = "FRAME" | "GROUP" | "RECTANGLE" | "TEXT" | "VECTOR";
-
-interface RuntimeNode {
-  id: string;
-  type: NodeType;
-  name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotation: number;
-  opacity: number;
-  blendMode: string;
-  effects: unknown[];
-  fills: unknown[];
-  strokes: unknown[];
-  strokeWeight: number;
-  cornerRadius: number;
-  visible: boolean;
-  removed: boolean;
-  parent?: RuntimeNode;
-  children: RuntimeNode[];
-  clipsContent?: boolean;
-  layoutMode: "NONE" | "HORIZONTAL" | "VERTICAL";
-  primaryAxisSizingMode?: "FIXED";
-  counterAxisSizingMode?: "FIXED";
-  primaryAxisAlignItems?: "MIN";
-  counterAxisAlignItems?: "MIN" | "CENTER" | "MAX";
-  itemSpacing?: number;
-  paddingTop?: number;
-  paddingRight?: number;
-  paddingBottom?: number;
-  paddingLeft?: number;
-  fontName?: FontName;
-  fontSize?: number;
-  characters?: string;
-  textStyleId?: string;
-  boundVariables: Record<string, RuntimeVariable>;
-  explicitModes: Record<string, string>;
-  appendChild(child: RuntimeNode): void;
-  insertChild(index: number, child: RuntimeNode): void;
-  resize(width: number, height: number): void;
-  remove(): void;
-  findAll(predicate: (node: RuntimeNode) => boolean): RuntimeNode[];
-  setBoundVariable(field: string, variable: RuntimeVariable): void;
-  setExplicitVariableModeForCollection(collection: RuntimeCollection, modeId: string): void;
-  setTextStyleIdAsync(id: string): Promise<void>;
-}
-
-interface RuntimeCollection {
-  id: string;
-  name: string;
-  modes: Array<{ modeId: string; name: string }>;
-  defaultModeId: string;
-  pluginData: Record<string, string>;
-  renameMode(modeId: string, name: string): void;
-  addMode(name: string): string;
-  setPluginData(key: string, value: string): void;
-}
-
-interface RuntimeVariable {
-  id: string;
-  name: string;
-  resolvedType: VariableResolvedDataType;
-  variableCollectionId: string;
-  scopes: VariableScope[];
-  values: Record<string, VariableValue>;
-  codeSyntax: Record<string, string>;
-  setValueForMode(modeId: string, value: VariableValue): void;
-  setVariableCodeSyntax(platform: string, syntax: string): void;
-}
-
-interface RuntimeTextStyle {
-  id: string;
-  name: string;
-  fontName: FontName;
-  fontSize: number;
-  lineHeight: LineHeight;
-  letterSpacing: LetterSpacing;
-  description: string;
-}
-
-interface RuntimeState {
-  collections: RuntimeCollection[];
-  variables: RuntimeVariable[];
-  textStyles: RuntimeTextStyle[];
-  loadedFonts: FontName[];
-}
-
-let nextId = 0;
 const previousFigma = globalThis.figma;
 
-function node(type: NodeType, values: Partial<RuntimeNode> = {}): RuntimeNode {
-  const result = {
-    id: `${nextId++}:0`,
-    type,
-    name: type === "VECTOR" ? "Vector" : type,
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-    rotation: 0,
-    opacity: 1,
-    blendMode: "PASS_THROUGH",
-    effects: [],
-    fills: [],
-    strokes: [],
-    strokeWeight: 1,
-    cornerRadius: 0,
-    visible: true,
-    removed: false,
-    children: [],
-    layoutMode: "NONE",
-    boundVariables: {},
-    explicitModes: {},
-    appendChild(child: RuntimeNode): void {
-      detach(child);
-      child.parent = result;
-      result.children.push(child);
-    },
-    insertChild(index: number, child: RuntimeNode): void {
-      detach(child);
-      child.parent = result;
-      result.children.splice(index, 0, child);
-    },
-    resize(width: number, height: number): void {
-      result.width = width;
-      result.height = height;
-    },
-    remove(): void {
-      detach(result);
-      result.removed = true;
-    },
-    findAll(predicate: (candidate: RuntimeNode) => boolean): RuntimeNode[] {
-      const found: RuntimeNode[] = [];
-      const visit = (candidate: RuntimeNode): void => {
-        if (predicate(candidate)) found.push(candidate);
-        candidate.children.forEach(visit);
-      };
-      result.children.forEach(visit);
-      return found;
-    },
-    setBoundVariable(field: string, variable: RuntimeVariable): void {
-      result.boundVariables[field] = variable;
-    },
-    setExplicitVariableModeForCollection(collection: RuntimeCollection, modeId: string): void {
-      result.explicitModes[collection.id] = modeId;
-    },
-    async setTextStyleIdAsync(id: string): Promise<void> {
-      result.textStyleId = id;
-    },
-    ...values,
-  } satisfies RuntimeNode;
-  return result;
-}
-
-function detach(child: RuntimeNode): void {
-  if (!child.parent) return;
-  child.parent.children = child.parent.children.filter((candidate) => candidate !== child);
-  child.parent = undefined;
-}
-
-function installRuntime(fonts: FontName[] = []): RuntimeState {
-  const state: RuntimeState = { collections: [], variables: [], textStyles: [], loadedFonts: [] };
-  globalThis.figma = {
-    createFrame: () => node("FRAME"),
-    createRectangle: () => node("RECTANGLE"),
-    listAvailableFontsAsync: async () => fonts.map((fontName) => ({ fontName })),
-    loadFontAsync: async (font: FontName) => { state.loadedFonts.push(font); },
-    getLocalTextStylesAsync: async () => state.textStyles,
-    createTextStyle: () => {
-      const style: RuntimeTextStyle = {
-        id: `style-${state.textStyles.length}`,
-        name: "",
-        fontName: { family: "Inter", style: "Regular" },
-        fontSize: 12,
-        lineHeight: { unit: "AUTO" },
-        letterSpacing: { unit: "PIXELS", value: 0 },
-        description: "",
-      };
-      state.textStyles.push(style);
-      return style;
-    },
-    variables: {
-      getLocalVariableCollectionsAsync: async () => state.collections,
-      getLocalVariablesAsync: async () => state.variables,
-      createVariableCollection: (name: string) => {
-        const collection: RuntimeCollection = {
-          id: `collection-${state.collections.length}`,
-          name,
-          modes: [{ modeId: "mode-0", name: "Mode 1" }],
-          defaultModeId: "mode-0",
-          pluginData: {},
-          renameMode(modeId: string, modeName: string): void {
-            const mode = collection.modes.find((candidate) => candidate.modeId === modeId);
-            if (mode) mode.name = modeName;
-          },
-          addMode(modeName: string): string {
-            const modeId = `mode-${collection.modes.length}`;
-            collection.modes.push({ modeId, name: modeName });
-            return modeId;
-          },
-          setPluginData(key: string, value: string): void {
-            collection.pluginData[key] = value;
-          },
-        };
-        state.collections.push(collection);
-        return collection;
-      },
-      createVariable: (name: string, collection: RuntimeCollection, resolvedType: VariableResolvedDataType) => {
-        const variable: RuntimeVariable = {
-          id: `variable-${state.variables.length}`,
-          name,
-          resolvedType,
-          variableCollectionId: collection.id,
-          scopes: [],
-          values: {},
-          codeSyntax: {},
-          setValueForMode(modeId: string, value: VariableValue): void { variable.values[modeId] = value; },
-          setVariableCodeSyntax(platform: string, syntax: string): void { variable.codeSyntax[platform] = syntax; },
-        };
-        state.variables.push(variable);
-        return variable;
-      },
-      setBoundVariableForPaint: (paint: SolidPaint, _field: string, variable: RuntimeVariable) => ({
-        ...paint,
-        boundVariables: { color: { type: "VARIABLE_ALIAS", id: variable.id } },
-      }),
-    },
-  } as unknown as PluginAPI;
-  return state;
-}
-
-function append(parent: RuntimeNode, ...children: RuntimeNode[]): RuntimeNode {
-  children.forEach((child) => parent.appendChild(child));
-  return parent;
-}
-
 afterEach(() => {
-  nextId = 0;
+  resetRuntimeIds();
   globalThis.figma = previousFigma;
 });
 
@@ -310,6 +81,101 @@ describe("Figma-runtime native SVG promotion", () => {
       opacity: 0.4,
       blendMode: "MULTIPLY",
     });
+    expect(sceneContract(frame)).toMatchInlineSnapshot(`
+      {
+        "autoLayout": {
+          "align": [
+            "MIN",
+            "CENTER",
+          ],
+          "gap": 8,
+          "mode": "VERTICAL",
+          "padding": [
+            12,
+            16,
+            12,
+            16,
+          ],
+          "sizing": [
+            "FIXED",
+            "FIXED",
+          ],
+        },
+        "children": [
+          {
+            "children": [],
+            "name": "One",
+            "position": {
+              "x": 16,
+              "y": 12,
+            },
+            "size": {
+              "height": 36,
+              "width": 168,
+            },
+            "type": "TEXT",
+          },
+          {
+            "children": [],
+            "name": "Two",
+            "position": {
+              "x": 16,
+              "y": 56,
+            },
+            "size": {
+              "height": 36,
+              "width": 168,
+            },
+            "type": "TEXT",
+          },
+          {
+            "children": [],
+            "name": "Three",
+            "position": {
+              "x": 16,
+              "y": 100,
+            },
+            "size": {
+              "height": 36,
+              "width": 168,
+            },
+            "type": "TEXT",
+          },
+        ],
+        "cornerRadius": 16,
+        "effects": [
+          {
+            "type": "LAYER_BLUR",
+          },
+          {
+            "type": "DROP_SHADOW",
+          },
+        ],
+        "fills": [
+          {
+            "color": "surface",
+            "type": "SOLID",
+          },
+        ],
+        "name": "List",
+        "opacity": 0.4,
+        "position": {
+          "x": 40,
+          "y": 80,
+        },
+        "size": {
+          "height": 148,
+          "width": 200,
+        },
+        "strokes": [
+          {
+            "color": "outline",
+            "type": "SOLID",
+          },
+        ],
+        "type": "FRAME",
+      }
+    `);
     expect(group.removed).toBe(true);
     expect(background.removed).toBe(true);
   });
@@ -365,6 +231,41 @@ describe("Figma-runtime native SVG promotion", () => {
       strokes: vector.strokes,
       effects: vector.effects,
     });
+    expect(sceneContract(rectangle)).toMatchInlineSnapshot(`
+      {
+        "children": [],
+        "cornerRadius": 52.5,
+        "effects": [
+          {
+            "type": "DROP_SHADOW",
+          },
+        ],
+        "fills": [
+          {
+            "color": "#6750A4",
+            "type": "SOLID",
+          },
+        ],
+        "name": "Pill",
+        "opacity": 0.7,
+        "position": {
+          "x": 10,
+          "y": 20,
+        },
+        "rotation": 4,
+        "size": {
+          "height": 105,
+          "width": 216,
+        },
+        "strokes": [
+          {
+            "color": "#000000",
+            "type": "SOLID",
+          },
+        ],
+        "type": "RECTANGLE",
+      }
+    `);
     expect(vector.removed).toBe(true);
   });
 
