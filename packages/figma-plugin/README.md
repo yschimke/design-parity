@@ -147,8 +147,9 @@ Plugin API double proves that a padded list becomes an exact-size vertical Auto
 Layout frame, overlapping artwork remains absolute, and a Compose pill vector
 is replaced in-place by an appearance-preserving native rectangle. It also
 checks native theme-variable bindings and exact font-face/Text Style bindings;
-the pure geometry, token projection, slot, and mapped-upgrade planners have
-separate tests.
+the mapped-upgrade runtime likewise verifies safe skips, instance protection,
+placement/order preservation, failure cleanup, and refreshed node IDs. Pure
+geometry, token projection, slot, and upgrade planning have separate tests.
 
 What's left for a manual Figma smoke test is only genuinely runtime-specific:
 real font metrics, image decoding, and Figma's auto-parenting. To run it, feed

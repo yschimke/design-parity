@@ -44,6 +44,11 @@ import {
   promoteNativeContainers,
   promoteNativeRoundedRects,
 } from "./nativeSvg.js";
+import {
+  applyMappedUpgradeJobs,
+  type CatalogNodeMetadata,
+  type RuntimeUpgradeJob,
+} from "./mappedUpgrade.js";
 
 /** The message the UI posts once it has resolved the plan and all image bytes. */
 interface ImportMessage {
@@ -113,12 +118,6 @@ interface InsertComponentSetMessage {
   metadata?: CatalogNodeMetadata;
 }
 
-interface CatalogNodeMetadata {
-  descriptionMarkdown?: string;
-  documentationUrl?: string;
-  previewUrl?: string;
-}
-
 interface PlanMappedUpgradeMessage {
   type: "planMappedUpgrade";
   manifest: CatalogManifest;
@@ -128,12 +127,7 @@ interface PlanMappedUpgradeMessage {
 
 interface ApplyMappedUpgradeMessage {
   type: "applyMappedUpgrade";
-  jobs: Array<{
-    componentId: string;
-    nodeId: string;
-    cells: InsertSetCell[];
-    metadata?: CatalogNodeMetadata;
-  }>;
+  jobs: RuntimeUpgradeJob[];
   collection?: FigmaVariableCollection;
   textStyles?: FigmaTextStyleSpec[];
 }
@@ -325,17 +319,6 @@ async function buildEditableComponentSet(
   return { node, editable, nativeShapes, tokenBindings, styleBindings, properties, missingFonts };
 }
 
-async function instanceCount(node: SceneNode): Promise<number> {
-  if (node.type === "COMPONENT") return (await node.getInstancesAsync()).length;
-  if (node.type !== "COMPONENT_SET") return node.type === "INSTANCE" ? 1 : 0;
-  const counts = await Promise.all(
-    node.children
-      .filter((child): child is ComponentNode => child.type === "COMPONENT")
-      .map((child) => child.getInstancesAsync().then((instances) => instances.length)),
-  );
-  return counts.reduce((sum, count) => sum + count, 0);
-}
-
 /**
  * Read a selected node into a {@link FrameRead}: name, size, auto-layout spacing,
  * text, and the **component instances it's built from** (the building blocks,
@@ -426,80 +409,24 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       figma.ui.postMessage({ type: "upgradeError", message: "The upgrade plan expired; choose the mapping file again." });
       return;
     }
-    const replacements: Record<string, string> = {};
-    const upgraded: string[] = [];
-    const skipped: Array<{ code: string; reason: string }> = [];
-    const placed: SceneNode[] = [];
-    for (const job of msg.jobs) {
-      let built: BuiltComponentSet | undefined;
-      try {
-        const target = await figma.getNodeByIdAsync(job.nodeId);
-        if (!target || !("x" in target) || !("remove" in target)) {
-          skipped.push({ code: job.componentId, reason: "mapped node no longer exists" });
-          continue;
-        }
-        const scene = target as SceneNode;
-        if (!["FRAME", "GROUP", "COMPONENT", "COMPONENT_SET"].includes(scene.type)) {
-          skipped.push({ code: job.componentId, reason: `mapped ${scene.type.toLowerCase()} is not an upgradeable import root` });
-          continue;
-        }
-        const stamped = scene.getSharedPluginData(STAMP, "componentId");
-        if (stamped && stamped !== job.componentId) {
-          skipped.push({ code: job.componentId, reason: `node belongs to ${stamped}, not this mapping` });
-          continue;
-        }
-        if (scene.getSharedPluginData(STAMP, "nativeImportVersion") === "2") {
-          skipped.push({ code: job.componentId, reason: "already uses the current native import" });
-          continue;
-        }
-        const instances = await instanceCount(scene);
-        if (instances > 0) {
-          skipped.push({ code: job.componentId, reason: `${instances} live instance${instances === 1 ? "" : "s"}; skipped to preserve overrides` });
-          continue;
-        }
-        const parent = scene.parent;
-        if (!parent || !("insertChild" in parent) || !("children" in parent)) {
-          skipped.push({ code: job.componentId, reason: "mapped node has no writable canvas parent" });
-          continue;
-        }
-        const index = parent.children.indexOf(scene);
-        const placement = {
-          x: scene.x,
-          y: scene.y,
-          rotation: "rotation" in scene ? scene.rotation : 0,
-          name: scene.name,
-        };
-        built = await buildEditableComponentSet(
-          job.componentId,
-          placement.name,
-          job.cells,
-          msg.collection,
-          msg.textStyles,
-          job.metadata,
-        );
-        parent.insertChild(Math.max(0, index), built.node);
-        built.node.x = placement.x;
-        built.node.y = placement.y;
-        built.node.rotation = placement.rotation;
-        scene.remove();
-        replacements[job.nodeId] = built.node.id;
-        upgraded.push(job.componentId);
-        placed.push(built.node);
-      } catch (err) {
-        built?.node.remove();
-        skipped.push({
-          code: job.componentId,
-          reason: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+    const { replacements, upgraded, skipped } = await applyMappedUpgradeJobs(
+      figma,
+      msg.jobs,
+      async (componentId, name, cells, metadata) => buildEditableComponentSet(
+        componentId,
+        name,
+        cells,
+        msg.collection,
+        msg.textStyles,
+        metadata,
+      ),
+    );
     const updatedMap = rewriteMappedNodeIds(
       pendingUpgradeMap.map,
       pendingUpgradeMap.fileKey,
       replacements,
     );
     pendingUpgradeMap = undefined;
-    if (placed.length) figma.viewport.scrollAndZoomIntoView(placed);
     figma.ui.postMessage({ type: "upgradeDone", upgraded, skipped, updatedMap });
     figma.notify(`Upgraded ${upgraded.length} mapped component${upgraded.length === 1 ? "" : "s"}; skipped ${skipped.length}.`);
     return;
