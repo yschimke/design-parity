@@ -41,7 +41,12 @@ directly instead of shelling out to a second render.
 
 Zip layout consumed:
 
-- `bundle.json` — `{ schemaVersion, previewIds, coverPreviewId, classpath[] }`.
+- `bundle.json` — `{ schemaVersion, previewIds, rawPreviewIds, coverPreviewId,
+  classpath[] }`. Current compose-preview bundles use filename-safe
+  `previewIds` for ZIP entries and carry their canonical discovery ids in the
+  positionally aligned `rawPreviewIds` array. Design-parity uses the raw id for
+  correspondence and the safe id only to read bundle assets; older bundles
+  without `rawPreviewIds` continue to use `previewIds` directly.
 - `previews.json` — `{ schema, module, variant, previews: [{ id, functionName,
   className, sourceFile, params, captures[] }] }`. The preview `id`
   (`<fqClass>.<function>[_<variant>]`) maps to `componentId`; `params`
@@ -261,8 +266,9 @@ references use a **code handle** (`path#Member`, e.g.
    `previews.json` entry (low confidence), when no explicit link exists.
 
 The matched candidate is re-keyed to the **code handle** (`componentId`) so it
-pairs with its reference, while the raw preview id is preserved on
-`CandidateRender.previewId`. A preview id that maps to neither surfaces a
+pairs with its reference, while the canonical discovery id (from
+`rawPreviewIds` when available) is preserved on `CandidateRender.previewId`.
+A preview id that maps to neither surfaces a
 **warning** in the run report rather than silently failing to pair.
 
 #### Multiple previews → one component (#111)

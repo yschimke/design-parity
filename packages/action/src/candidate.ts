@@ -24,6 +24,7 @@ import type {
 } from "@design-parity/core";
 import {
   bundleCandidateSource,
+  rawPreviewIdForEntry,
   firstAvailable,
   readPreviewBundle,
   type CandidateSource,
@@ -136,7 +137,7 @@ export async function buildCandidateProvider(
 
       const identities: PreviewIdentity[] = bundles.flatMap((b) =>
         b.previews.map((e) => ({
-          id: e.id,
+          id: rawPreviewIdForEntry(b, e),
           ...(e.sourceFile !== undefined ? { sourceFile: e.sourceFile } : {}),
           ...(e.functionName !== undefined
             ? { functionName: e.functionName }

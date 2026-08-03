@@ -72,7 +72,8 @@ function png(w, h, [r, g, b]) {
 }
 
 // --- fixture content -------------------------------------------------------
-const ID = "ui.Button.PrimaryButton"; // <fqClass>.<function>
+const ID = "ui.Button.PrimaryButton"; // filename-safe bundle id
+const RAW_ID = "ui.Button.Primary Button"; // canonical discovery/design-map id
 
 const lightPng = png(160, 48, [0x64, 0x5a, 0xff]);
 const darkPng = png(160, 48, [0x7a, 0x72, 0xf0]);
@@ -148,6 +149,7 @@ const previews = {
 const manifest = {
   schemaVersion: 4,
   previewIds: [ID],
+  rawPreviewIds: [RAW_ID],
   coverPreviewId: ID,
   classpath: ["classes/app.jar"],
 };
@@ -176,6 +178,7 @@ const dataUri = (bytes) =>
   `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`;
 const expected = {
   componentId: ID,
+  functionName: "PrimaryButton",
   images: [
     { state: "default", theme: "light", size: "compact", uri: dataUri(lightPng), width: 160, height: 48 },
     { state: "default", theme: "dark", size: "compact", uri: dataUri(darkPng), width: 160, height: 48 },
