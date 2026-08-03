@@ -16,6 +16,7 @@ import type {
   FigmaStyleMeta,
   VariablesResponse,
 } from "./figma-api.js";
+import { layoutFromNode } from "./layout.js";
 
 function hex(c: FigmaColor): string {
   const ch = (n: number) =>
@@ -262,5 +263,7 @@ export function normalizeReference(input: NormalizeInput): DesignReference {
   };
   if (tokens) ref.tokens = tokens;
   if (themeTokens) ref.themeTokens = themeTokens;
+  const layout = layoutFromNode(input.node);
+  if (layout) ref.layout = layout;
   return ref;
 }
