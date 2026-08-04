@@ -41,6 +41,19 @@ export {
 export { buildRedlines } from "./redlines.js";
 
 export {
+  ANNOTATION_SCHEMA,
+  buildAnnotationManifest,
+  componentAnnotations,
+  isEmptyAnnotationManifest,
+} from "./annotations.js";
+export type {
+  AnnotationBounds,
+  AnnotationKind,
+  AnnotationManifest,
+  DesignAnnotation,
+} from "./annotations.js";
+
+export {
   imagePath,
   livePreviewUrl,
   slug,

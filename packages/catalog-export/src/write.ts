@@ -23,6 +23,10 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { tokensToDtcg } from "@design-parity/core";
 import type { Image } from "@design-parity/core";
 
+import {
+  buildAnnotationManifest,
+  isEmptyAnnotationManifest,
+} from "./annotations.js";
 import { toFigmaVariables } from "./figma.js";
 import { imagePath, toCatalogManifest, wireframePath, type ManifestOptions } from "./manifest.js";
 import type { Catalog } from "./types.js";
@@ -47,6 +51,8 @@ export interface WriteResult {
   imageCount: number;
   /** Number of wireframe SVG files written. */
   wireframeCount?: number;
+  /** Absolute path to the annotation manifest, when the catalog produced one. */
+  annotationsPath?: string;
 }
 
 const DATA_URI = /^data:([^;,]*)?(;base64)?,(.*)$/s;
@@ -131,6 +137,17 @@ export async function writeCatalog(
       await writeFile(dest, component.wireframeSvg, "utf8");
       result.wireframeCount = (result.wireframeCount ?? 0) + 1;
     }
+  }
+
+  // The annotation layer a preview server draws over its compare panels. Written
+  // only when something would actually draw: an empty manifest is worse than none,
+  // since a consumer would offer toggles that reveal nothing.
+  const annotations = buildAnnotationManifest(catalog.components);
+  if (!isEmptyAnnotationManifest(annotations)) {
+    const annotationsPath = join(out, "annotations", "index.json");
+    await mkdir(dirname(annotationsPath), { recursive: true });
+    await writeJson(annotationsPath, annotations, indent);
+    result.annotationsPath = annotationsPath;
   }
 
   return result;
