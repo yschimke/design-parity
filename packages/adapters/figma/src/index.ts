@@ -18,6 +18,13 @@ export type {
   RenderedImage,
 } from "./rest-client.js";
 
+// The layout capture, public so a *publisher* can turn fetched Figma node JSON
+// into the same SemanticTree the adapter builds — that tree is what feeds
+// reference-side redline/typography annotations, and re-deriving geometry in the
+// publisher would mean the two sides were measured by different code.
+export { layoutFromNode } from "./layout.js";
+export type { FigmaNodeDoc } from "./figma-api.js";
+
 export {
   parseFigmaRef,
   formatFigmaRef,
