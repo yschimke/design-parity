@@ -28,6 +28,8 @@ export interface FigmaNodeDoc {
   type: string;
   absoluteBoundingBox?: { x: number; y: number; width: number; height: number };
   cornerRadius?: number;
+  /** Auto-layout child spacing — the `gap` a redline reads. */
+  itemSpacing?: number;
   paddingLeft?: number;
   paddingRight?: number;
   paddingTop?: number;
