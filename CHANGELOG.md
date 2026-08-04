@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.38](https://github.com/yschimke/design-parity/compare/v0.1.37...v0.1.38) (2026-08-04)
+
+
+### Bug Fixes
+
+* **catalog-export:** key preview annotations on the sticker id, and name the type unit ([#277](https://github.com/yschimke/design-parity/issues/277)) ([363467d](https://github.com/yschimke/design-parity/commit/363467d14435ec9312333927f2c75336a3427a8a))
+
 ## [0.1.37](https://github.com/yschimke/design-parity/compare/v0.1.36...v0.1.37) (2026-08-04)
 
 
