@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.35](https://github.com/yschimke/design-parity/compare/v0.1.34...v0.1.35) (2026-08-04)
+
+
+### Features
+
+* **catalog-export:** emit the annotation manifest for compare-page redlines ([#270](https://github.com/yschimke/design-parity/issues/270)) ([701eaea](https://github.com/yschimke/design-parity/commit/701eaeac839eb33ea69d4c5d7690fd38ba14850b))
+
 ## [0.1.34](https://github.com/yschimke/design-parity/compare/v0.1.33...v0.1.34) (2026-08-03)
 
 
