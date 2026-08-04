@@ -54,6 +54,7 @@ export type {
   AnnotationKind,
   AnnotationManifest,
   DesignAnnotation,
+  TypeUnit,
 } from "./annotations.js";
 
 export {
@@ -73,6 +74,7 @@ export type {
   VariantKind,
 } from "./manifest.js";
 
+export { stickerId } from "./manifest.js";
 export { toFigmaVariables } from "./figma.js";
 export type {
   FigmaVariable,

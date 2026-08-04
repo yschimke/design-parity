@@ -153,24 +153,28 @@ describe("manifest", () => {
     { bounds: { x: 0, y: 0, width: 10, height: 10 }, padding: { top: 8, bottom: 8, start: 8, end: 8 } },
   ];
 
-  it("keys every ideal variant's preview id to the component's layers", () => {
+  it("keys every ideal variant's sticker id to the component's layers", () => {
     const manifest = buildAnnotationManifest([
       component({
         redlines,
         variants: {
           ideal: [
-            { path: "l.png", previewId: "button__light" },
-            { path: "d.png", previewId: "button__dark" },
+            { path: "l.png", state: "default", theme: "light" },
+            { path: "d.png", state: "default", theme: "dark" },
           ],
         },
       }),
     ]);
     expect(manifest.schema).toBe(ANNOTATION_SCHEMA);
-    expect(Object.keys(manifest.previews).sort()).toEqual(["button__dark", "button__light"]);
-    expect(manifest.previews.button__light[0].label).toBe("pad 8dp");
+    expect(Object.keys(manifest.previews).sort()).toEqual([
+      "button-filled__ideal__default__dark",
+      "button-filled__ideal__default__light",
+    ]);
+    expect(manifest.previews["button-filled__ideal__default__light"][0].label).toBe("pad 8dp");
   });
 
-  it("skips images with no preview id, which the server cannot route to", () => {
+  it("skips an image with no previewId and nothing derivable to route on", () => {
+    // No `state`, so no sticker id can be derived either — genuinely unaddressable.
     const manifest = buildAnnotationManifest([
       component({ redlines, variants: { ideal: [{ path: "a.png" }] } }),
     ]);
@@ -215,7 +219,8 @@ describe("reference annotations", () => {
   it("walks the captured geometry into both layers", () => {
     const annotations = referenceAnnotations(reference);
     expect(annotations.some((a) => a.kind === "layout")).toBe(true);
-    expect(annotations.find((a) => a.kind === "typography")?.label).toBe("labelLarge 14sp/20");
+    // px, not sp: this tree came from a design tool (see TypeUnit).
+    expect(annotations.find((a) => a.kind === "typography")?.label).toBe("labelLarge 14px/20");
   });
 
   it("is empty for a source that captured no geometry", () => {
@@ -245,8 +250,86 @@ describe("reference annotations", () => {
   it("builds both columns the same way, so agreeing specs read identically", () => {
     // The point of the two-column view: same extraction on both sides means a
     // difference in the label is a real difference in the spec.
+    // Same unit on both sides, so this compares the extraction rather than the
+    // unit labelling — the geometry and structure must still match exactly.
     const fromReference = referenceAnnotations(reference).find((a) => a.kind === "typography");
-    const fromCandidate = treeAnnotations(reference.layout).find((a) => a.kind === "typography");
+    const fromCandidate = treeAnnotations(reference.layout, "px").find((a) => a.kind === "typography");
     expect(fromReference).toEqual(fromCandidate);
+  });
+});
+
+/**
+ * Both cases below were found by inspecting a *published* manifest, not by
+ * reasoning about the code — the meshcore-mobile catalog produced 19 annotated
+ * references and zero annotated previews, with type sizes like "52.5sp".
+ */
+describe("published-catalog regressions", () => {
+  const redlines = [
+    {
+      bounds: { x: 0, y: 0, width: 10, height: 10 },
+      padding: { top: 8, bottom: 8, start: 8, end: 8 },
+    },
+  ];
+
+  it("keys on the derived sticker id when the catalog recorded no previewId", () => {
+    // 62 of 70 components had redlines and none had a previewId, so requiring it
+    // dropped every one and the Actual column rendered bare.
+    const manifest = buildAnnotationManifest([
+      component({
+        componentId: "Device/Populated",
+        redlines,
+        variants: { ideal: [{ path: "x.png", state: "default", size: "compact" }] },
+      }),
+    ]);
+    expect(Object.keys(manifest.previews)).toEqual(["device-populated__ideal__default__compact"]);
+  });
+
+  it("emits previewId as an alias, never as the only key", () => {
+    // previewId is the fully-qualified Compose id, which the compare page does not route on —
+    // keying solely on it produced a manifest the server silently ignored.
+    const manifest = buildAnnotationManifest([
+      component({
+        componentId: "Device/Populated",
+        redlines,
+        variants: {
+          ideal: [{ path: "x.png", state: "default", previewId: "a.b.CKt.SomePreview_light" }],
+        },
+      }),
+    ]);
+    expect(Object.keys(manifest.previews).sort()).toEqual([
+      "a.b.CKt.SomePreview_light",
+      "device-populated__ideal__default",
+    ]);
+  });
+
+  it("quotes a design tool's type sizes in px, not sp", () => {
+    // A 3x Figma board reports fontSize 52.5; calling that "52.5sp" claims a spec
+    // three times the design's and would read as a huge false discrepancy.
+    const reference = {
+      layout: {
+        root: {
+          bounds: { x: 0, y: 0, width: 100, height: 40 },
+          tokens: { typography: { text: { fontSize: 52.5, lineHeight: 63.5 } } },
+        },
+      },
+    } as never;
+    const [annotation] = referenceAnnotations(reference);
+    expect(annotation.label).toBe("text 52.5px/63.5");
+    expect(annotation.detail?.unit).toBe("px");
+  });
+
+  it("keeps sp for the candidate side, whose semantics resolve real sp", () => {
+    const [annotation] = componentAnnotations(
+      component({
+        semantics: {
+          root: {
+            bounds: { x: 0, y: 0, width: 8, height: 8 },
+            tokens: { typography: { bodyLarge: { fontSize: 16, lineHeight: 24 } } },
+          },
+        },
+      }),
+    );
+    expect(annotation.label).toBe("bodyLarge 16sp/24");
+    expect(annotation.detail?.unit).toBe("sp");
   });
 });
