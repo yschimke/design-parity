@@ -15,8 +15,14 @@
  *
  * Pure functions over core types — no I/O, trivially testable.
  */
-import type { SemanticNode, SemanticTree, TypographyToken } from "@design-parity/core";
+import type {
+  DesignReference,
+  SemanticNode,
+  SemanticTree,
+  TypographyToken,
+} from "@design-parity/core";
 
+import { buildRedlines } from "./redlines.js";
 import type { CatalogComponent, Redline } from "./types.js";
 
 /** Schema id the preview server validates before reading a manifest. */
@@ -174,6 +180,58 @@ export function componentAnnotations(component: CatalogComponent): DesignAnnotat
 }
 
 /**
+ * Both layers for any bounded tree — the shape the two sides of a comparison share.
+ *
+ * A catalog component arrives with its redlines already walked, so
+ * {@link componentAnnotations} reuses them; a design reference carries only the
+ * raw tree, so this walks it first. Same extraction either way, which is the
+ * point: the reference and actual columns have to be built the same way or
+ * comparing them means comparing two different measurements.
+ */
+export function treeAnnotations(tree: SemanticTree | undefined): DesignAnnotation[] {
+  const layout = buildRedlines(tree)
+    .map(layoutAnnotation)
+    .filter((a): a is DesignAnnotation => a !== undefined);
+  return [...layout, ...typographyAnnotations(tree)];
+}
+
+/**
+ * Both layers for a design reference, from the geometry its adapter captured.
+ *
+ * Empty for a source that captures no geometry — `layout` is optional on
+ * {@link DesignReference}, and a reference that is only a raster has nothing to
+ * annotate. That is a property of the source, not a failure.
+ */
+export function referenceAnnotations(reference: DesignReference): DesignAnnotation[] {
+  return treeAnnotations(reference.layout);
+}
+
+/**
+ * Add reference-side layers to a manifest, keyed by the id the *publisher* uses.
+ *
+ * The key has to be the serve/catalog reference id, which is minted by whoever
+ * writes `references/index.json` — not something this package can derive from a
+ * {@link DesignReference}. So callers pass the mapping they already hold rather
+ * than having a guess baked in here; a wrong key is invisible at build time and
+ * silently draws nothing.
+ *
+ * References that produced no annotations are skipped, keeping the manifest to
+ * entries that will actually draw.
+ */
+export function withReferenceAnnotations(
+  manifest: AnnotationManifest,
+  references: Readonly<Record<string, DesignReference>>,
+): AnnotationManifest {
+  const out: Record<string, DesignAnnotation[]> = { ...manifest.references };
+  for (const [referenceId, reference] of Object.entries(references)) {
+    const annotations = referenceAnnotations(reference);
+    if (annotations.length === 0) continue;
+    out[referenceId] = annotations;
+  }
+  return { ...manifest, references: out };
+}
+
+/**
  * Build the manifest for a catalog's components.
  *
  * Keyed by `previewId`, which is what the preview server routes on — a component
@@ -184,7 +242,8 @@ export function componentAnnotations(component: CatalogComponent): DesignAnnotat
  *
  * The `references` map is left empty here: reference-side annotations describe a
  * *design tool's* geometry, which this code-led catalog is not the source of.
- * They are filled in by the adapter that owns the reference.
+ * Fill it with {@link withReferenceAnnotations}, which needs the publisher's
+ * reference ids.
  */
 export function buildAnnotationManifest(
   components: readonly CatalogComponent[],

@@ -5,6 +5,9 @@ import {
   buildAnnotationManifest,
   componentAnnotations,
   isEmptyAnnotationManifest,
+  referenceAnnotations,
+  treeAnnotations,
+  withReferenceAnnotations,
 } from "../src/annotations.js";
 import type { CatalogComponent } from "../src/types.js";
 
@@ -182,5 +185,68 @@ describe("manifest", () => {
 
   it("leaves references empty — the catalog is not the source of design geometry", () => {
     expect(buildAnnotationManifest([component({ redlines })]).references).toEqual({});
+  });
+});
+
+describe("reference annotations", () => {
+  const reference = {
+    componentId: "Button/Filled",
+    source: { kind: "figma" },
+    referenceImages: [],
+    linkMethod: "manual",
+    layout: {
+      root: {
+        role: "button",
+        label: "Button",
+        bounds: { x: 0, y: 0, width: 200, height: 48 },
+        tokens: { spacing: { padding: 16, gap: 8 }, radius: { cornerRadius: 20 } },
+        children: [
+          {
+            role: "text",
+            label: "Label",
+            bounds: { x: 46, y: 26, width: 128, height: 20 },
+            tokens: { typography: { labelLarge: { fontSize: 14, lineHeight: 20 } } },
+          },
+        ],
+      },
+    },
+  } as never;
+
+  it("walks the captured geometry into both layers", () => {
+    const annotations = referenceAnnotations(reference);
+    expect(annotations.some((a) => a.kind === "layout")).toBe(true);
+    expect(annotations.find((a) => a.kind === "typography")?.label).toBe("labelLarge 14sp/20");
+  });
+
+  it("is empty for a source that captured no geometry", () => {
+    // A raster-only reference has nothing to annotate — a property of the source,
+    // not a failure.
+    expect(referenceAnnotations({ ...(reference as object), layout: undefined } as never)).toEqual(
+      [],
+    );
+  });
+
+  it("keys layers by the publisher's reference id, not the componentId", () => {
+    const manifest = withReferenceAnnotations(buildAnnotationManifest([]), {
+      "design-button-filled-light": reference,
+    });
+    expect(Object.keys(manifest.references)).toEqual(["design-button-filled-light"]);
+    expect(manifest.previews).toEqual({});
+  });
+
+  it("skips references that produced no annotations", () => {
+    const manifest = withReferenceAnnotations(buildAnnotationManifest([]), {
+      bare: { ...(reference as object), layout: undefined } as never,
+    });
+    expect(manifest.references).toEqual({});
+    expect(isEmptyAnnotationManifest(manifest)).toBe(true);
+  });
+
+  it("builds both columns the same way, so agreeing specs read identically", () => {
+    // The point of the two-column view: same extraction on both sides means a
+    // difference in the label is a real difference in the spec.
+    const fromReference = referenceAnnotations(reference).find((a) => a.kind === "typography");
+    const fromCandidate = treeAnnotations(reference.layout).find((a) => a.kind === "typography");
+    expect(fromReference).toEqual(fromCandidate);
   });
 });

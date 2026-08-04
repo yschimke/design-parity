@@ -45,6 +45,9 @@ export {
   buildAnnotationManifest,
   componentAnnotations,
   isEmptyAnnotationManifest,
+  referenceAnnotations,
+  treeAnnotations,
+  withReferenceAnnotations,
 } from "./annotations.js";
 export type {
   AnnotationBounds,
