@@ -22,6 +22,7 @@ import type {
   TypographyToken,
 } from "@design-parity/core";
 
+import { stickerId } from "./manifest.js";
 import { buildRedlines } from "./redlines.js";
 import type { CatalogComponent, Redline } from "./types.js";
 
@@ -124,15 +125,30 @@ function layoutAnnotation(redline: Redline): DesignAnnotation | undefined {
   };
 }
 
+/**
+ * The unit a type size is quoted in.
+ *
+ * A candidate's semantics resolve real `sp` — the value in the code. A design
+ * tool reports the frame's own pixels, which are only `sp` if the frame happens
+ * to be authored 1:1 with the code's density; on a 2x/3x board they are not, and
+ * quoting them as `sp` states a spec several times larger than the design's.
+ * Naming the unit keeps the number checkable instead of quietly wrong.
+ */
+export type TypeUnit = "sp" | "px";
+
 /** `"bodyLarge 16sp/24"` — token name, size, and line height when it is known. */
-function typographyLabel(name: string, token: TypographyToken): string | undefined {
+function typographyLabel(
+  name: string,
+  token: TypographyToken,
+  unit: TypeUnit,
+): string | undefined {
   if (token.fontSize === undefined) return undefined;
   const size = Number.isInteger(token.fontSize) ? token.fontSize : Number(token.fontSize.toFixed(1));
   const lineHeight =
     token.lineHeight === undefined
       ? ""
       : `/${Number.isInteger(token.lineHeight) ? token.lineHeight : Number(token.lineHeight.toFixed(1))}`;
-  return `${name} ${size}sp${lineHeight}`;
+  return `${name} ${size}${unit}${lineHeight}`;
 }
 
 /**
@@ -142,16 +158,19 @@ function typographyLabel(name: string, token: TypographyToken): string | undefin
  * annotation so the layer stays a flat list of drawable boxes. Nodes without
  * bounds are skipped — there is nowhere to anchor them.
  */
-function typographyAnnotations(tree: SemanticTree | undefined): DesignAnnotation[] {
+function typographyAnnotations(
+  tree: SemanticTree | undefined,
+  unit: TypeUnit = "sp",
+): DesignAnnotation[] {
   if (!tree) return [];
   const out: DesignAnnotation[] = [];
   const visit = (node: SemanticNode): void => {
     const styles = node.tokens?.typography;
     if (styles && node.bounds) {
       for (const [name, token] of Object.entries(styles)) {
-        const label = typographyLabel(name, token);
+        const label = typographyLabel(name, token, unit);
         if (!label) continue;
-        const detail: Record<string, string> = { token: name };
+        const detail: Record<string, string> = { token: name, unit };
         if (token.fontSize !== undefined) detail.fontSize = String(token.fontSize);
         if (token.lineHeight !== undefined) detail.lineHeight = String(token.lineHeight);
         if (token.fontWeight !== undefined) detail.fontWeight = String(token.fontWeight);
@@ -188,11 +207,14 @@ export function componentAnnotations(component: CatalogComponent): DesignAnnotat
  * point: the reference and actual columns have to be built the same way or
  * comparing them means comparing two different measurements.
  */
-export function treeAnnotations(tree: SemanticTree | undefined): DesignAnnotation[] {
+export function treeAnnotations(
+  tree: SemanticTree | undefined,
+  unit: TypeUnit = "sp",
+): DesignAnnotation[] {
   const layout = buildRedlines(tree)
     .map(layoutAnnotation)
     .filter((a): a is DesignAnnotation => a !== undefined);
-  return [...layout, ...typographyAnnotations(tree)];
+  return [...layout, ...typographyAnnotations(tree, unit)];
 }
 
 /**
@@ -202,8 +224,11 @@ export function treeAnnotations(tree: SemanticTree | undefined): DesignAnnotatio
  * {@link DesignReference}, and a reference that is only a raster has nothing to
  * annotate. That is a property of the source, not a failure.
  */
-export function referenceAnnotations(reference: DesignReference): DesignAnnotation[] {
-  return treeAnnotations(reference.layout);
+export function referenceAnnotations(
+  reference: DesignReference,
+  unit: TypeUnit = "px",
+): DesignAnnotation[] {
+  return treeAnnotations(reference.layout, unit);
 }
 
 /**
@@ -253,10 +278,18 @@ export function buildAnnotationManifest(
     const annotations = componentAnnotations(component);
     if (annotations.length === 0) continue;
     for (const image of component.variants.ideal) {
-      if (!image.previewId) continue;
+      // Key on the **sticker id** — what a preview server actually routes on, and what appears in
+      // a compare URL (`…/compare/device-populated__ideal__default__compact`).
+      //
+      // `previewId` is deliberately NOT the primary key. It holds the fully-qualified Compose id
+      // (`ee.schimke.…PreviewsKt.SomePreview_Foundation___MeshCore_light`), which the compare page
+      // never looks up; keying on it produced a manifest the server silently ignored. It is still
+      // emitted as an alias so a consumer holding that id resolves too.
+      const sticker = stickerId(component.componentId, "ideal", image);
       // Every ideal variant of a component shares its geometry, so the same layer
-      // is correct for each preview id it renders under (light/dark, locales).
-      previews[image.previewId] = annotations;
+      // is correct for each id it renders under (light/dark, locales).
+      if (sticker) previews[sticker] = annotations;
+      if (image.previewId) previews[image.previewId] = annotations;
     }
   }
   return { schema: ANNOTATION_SCHEMA, previews, references: {} };

@@ -178,6 +178,30 @@ export function slug(value: string): string {
  * distinct states/themes/sizes/props never collide:
  * `images/<component>/<variant>__<state>[__<theme>][__<size>][__<k-v>…].png`.
  */
+/**
+ * The **sticker id** a preview server routes on — `<component>__<variant>__<state>[…]`.
+ *
+ * This is the id in a compare URL (`…/compare/device-populated__ideal__default__compact`) and the
+ * one design references are keyed by, derived from exactly the same parts as {@link imagePath} so
+ * the two can never drift. Used as the annotation key when an image carries no explicit
+ * `previewId`: a catalog that never recorded one is still addressable, because this is how the
+ * server names it either way.
+ */
+export function stickerId(
+  componentId: string,
+  variant: VariantKind,
+  image: Image,
+): string | undefined {
+  // `state` is what makes the id addressable; without it there is no stable name to derive and
+  // guessing one would key annotations to something the server never looks up.
+  if (!image.state) return undefined;
+  const file = imagePath(componentId, variant, image)
+    .replace(/^images\//, "")
+    .replace(/\.png$/, "");
+  const [dir, stem] = file.split("/");
+  return `${dir}__${stem}`;
+}
+
 export function imagePath(
   componentId: string,
   variant: VariantKind,
