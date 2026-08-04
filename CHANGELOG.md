@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.37](https://github.com/yschimke/design-parity/compare/v0.1.36...v0.1.37) (2026-08-04)
+
+
+### Bug Fixes
+
+* **adapter-figma:** capture spec tokens, not just geometry, in layoutFromNode ([#275](https://github.com/yschimke/design-parity/issues/275)) ([9d36c35](https://github.com/yschimke/design-parity/commit/9d36c35483271ef6515669c1a7d9e43bb4d29665))
+
 ## [0.1.36](https://github.com/yschimke/design-parity/compare/v0.1.35...v0.1.36) (2026-08-04)
 
 
