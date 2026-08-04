@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.36](https://github.com/yschimke/design-parity/compare/v0.1.35...v0.1.36) (2026-08-04)
+
+
+### Features
+
+* **adapter-figma:** make layoutFromNode part of the public surface ([#273](https://github.com/yschimke/design-parity/issues/273)) ([9e55881](https://github.com/yschimke/design-parity/commit/9e5588125ca21ad418af03918e14afabc6396c96))
+* **catalog-export:** build reference-side annotations from captured geometry ([#272](https://github.com/yschimke/design-parity/issues/272)) ([8a796ca](https://github.com/yschimke/design-parity/commit/8a796cab6e143554de348266729c5efec98af201))
+
 ## [0.1.35](https://github.com/yschimke/design-parity/compare/v0.1.34...v0.1.35) (2026-08-04)
 
 
