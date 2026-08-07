@@ -14,6 +14,7 @@ repo-relative paths to the PNGs alongside them.
 | `bundle/offer-card.reference.json` + `bundle/offer-card/` (dir: `manifest.json` + `.light.png` / `.dark.png`) and `bundle/offer-card.zip` (same, zipped) | Bundle (manifest, image bundle) | Issue 32 (bundle adapter) |
 | `candidate/button-primary.candidate.json` + `.png`s | candidate render | Issue 5 (candidate), Issue 6 (diff) |
 | `design-map.json` | manifest | Issue 3/4/7 |
+| `page-backdrop/pages.json` + `now-playing.png` + `render-*.png` | Figma page import | `@design-parity/page-backdrop` — a whole imported screen (nine instances covering all four link methods) plus the three code renders that overlay it, so the viewer builds with no Figma credentials and no renderer |
 
 ## The diff story (Figma button vs candidate)
 
