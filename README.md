@@ -65,6 +65,10 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
 
 ## Guides
 
+The pick of the doc tree is below; [`docs/README.md`](./docs/README.md) indexes
+all of it, including the contracts, the code→design catalog docs, and the
+written-up research verdicts.
+
 - [Adopting design-parity on a Compose Multiplatform project](./docs/adopting-cmp.md)
   — the emulator-free Desktop/JVM render path, end to end (Claude Design or Stitch).
 - [Candidate sources](./docs/candidate-sources.md) — the four candidate-render
