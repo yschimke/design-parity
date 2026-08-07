@@ -57,6 +57,7 @@ rendering. See [docs/PRINCIPLES.md](./docs/PRINCIPLES.md).
 | [`@design-parity/report-html`](./packages/report-html) | ✅ #31 | Per-run self-contained HTML comparison page: reference \| candidate \| diff side by side with the verdict findings, inlined to one offline `.html` (data-URI PNGs + inline CSS/JS, no external assets). Deterministic; leaf consumer. |
 | [`design-parity`](./packages/cli) | ✅ #61 | Top-level CLI package (unscoped) — owns the `design-parity` bin so `npx design-parity run …` works with no checkout. A thin launcher over `@design-parity/action` that also re-exports its programmatic API. |
 | [`@design-parity/catalog-export`](./packages/catalog-export) | ✅ | Code → design-artifact direction: render a whole component system and export it as an importable sticker-sheet **catalog** — per-component `ideal`+`layout` variants, a DTCG token set + Figma variable projection, and an accessibility **greenline** layer. Code-led; published kits are seed only (see [`docs/design-artifacts/REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md)). |
+| [`@design-parity/page-backdrop`](./packages/page-backdrop) | ✅ | **Opt-in, off by default.** Whole-screen direction: import key Figma pages as backdrops, place every component instance on them, link each back to its code component (Code Connect → `design-map.json` → name → unlinked), and view the page with the code renders optionally laid **on top**. Not referenced by `@design-parity/action`; driven only by the `design-parity-pages` CLI. See [`docs/page-backdrops.md`](./docs/page-backdrops.md). |
 
 `fixtures/` holds one golden reference per source plus a candidate render, so
 every package can be built and tested against stubs with no live source or
@@ -77,6 +78,11 @@ renderer. See [`fixtures/README.md`](./fixtures/README.md).
   [`REFERENCE_KITS.md`](./docs/design-artifacts/REFERENCE_KITS.md). Importing a
   delivery branch into Figma (one file per system) is documented in
   [`FIGMA_IMPORT.md`](./docs/design-artifacts/FIGMA_IMPORT.md).
+- [Key design pages as backdrops](./docs/page-backdrops.md) — the whole-screen
+  direction: import key Figma pages as backgrounds, link every component
+  instance on them to the code that implements it, and lay the code renders on
+  top. Opt-in and off by default; owned by
+  [`@design-parity/page-backdrop`](./packages/page-backdrop).
 - [Principles](./docs/PRINCIPLES.md) — the six principles that shape the design.
 
 ## Use

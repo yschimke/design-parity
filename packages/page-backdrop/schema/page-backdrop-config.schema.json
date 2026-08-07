@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yschimke/design-parity/schema/page-backdrop-config.schema.json",
+  "title": "design-pages.json",
+  "description": "Opt-in configuration for @design-parity/page-backdrop. The feature is off unless this file exists AND sets \"enabled\": true.",
+  "type": "object",
+  "required": ["enabled", "fileKey", "pages"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "enabled": {
+      "type": "boolean",
+      "description": "Page backdrops run only when this is exactly true. Any other value — including omitting the field — leaves the feature off, so the configuration can be committed and reviewed before it is switched on. Required here so the choice is always stated explicitly rather than inherited from a default."
+    },
+    "source": {
+      "const": "figma",
+      "default": "figma",
+      "description": "Design source. Only Figma exposes a page-level read API today."
+    },
+    "fileKey": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Figma file key — the segment after /design/ in the file URL."
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The key pages to import, in priority order. Explicit by design: nothing is auto-discovered.",
+      "items": {
+        "type": "object",
+        "required": ["nodeId"],
+        "additionalProperties": false,
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Node id of the page frame, e.g. \"1:2\" (a figma.com URL spells it \"1-2\")."
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Slug for the page's manifest entry and PNG filename. Defaults to a slug of the frame's own name."
+          }
+        }
+      }
+    },
+    "scale": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 4,
+      "default": 2,
+      "description": "PNG export scale for the backdrop images."
+    },
+    "nested": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also record component instances nested inside another instance. Off by default: the outermost instance is the meaningful placement."
+    },
+    "outDir": {
+      "type": "string",
+      "default": "design/pages",
+      "description": "Where the manifest and backdrop PNGs are written, relative to this file."
+    },
+    "overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Viewer defaults for the layer that shows code renders on top of the design.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the overlay starts on when a page is opened. Off by default — the design is what you should see first."
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5
+        },
+        "blend": {
+          "enum": ["normal", "difference"],
+          "default": "normal",
+          "description": "\"difference\" makes matching pixels black, so drift lights up."
+        }
+      }
+    }
+  }
+}
