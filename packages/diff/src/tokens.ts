@@ -185,6 +185,7 @@ export function diffTokens(
   candidate: DesignTokens,
   config: DiffConfig,
   alias?: TokenAliasMap,
+  box?: { width: number; height: number },
 ): Finding[] {
   const findings: Finding[] = [];
   if (!specInput) return findings;
@@ -201,7 +202,15 @@ export function diffTokens(
     findings.push(groupUnverified("radius", Object.keys(spec.radius!).length));
   } else {
     for (const [name, want] of Object.entries(spec.radius ?? {})) {
-      numericFinding("radius", name, want, candidate.radius, config.radiusTolerance, findings);
+      numericFinding(
+        "radius",
+        name,
+        want,
+        candidate.radius,
+        config.radiusTolerance,
+        findings,
+        box,
+      );
     }
   }
   if (unverifiableGroup(spec.colors, candidate.colors)) {
@@ -286,6 +295,7 @@ function numericFinding(
   candidate: Record<string, number> | undefined,
   tolerance: number,
   findings: Finding[],
+  box?: { width: number; height: number },
 ): void {
   // Prefer an exact name match; otherwise fall back to a value match. The
   // candidate carries resolved spacing/radius values under generic keys, not the
@@ -297,6 +307,14 @@ function numericFinding(
     findings.push(missing(group, name, String(want)));
     return;
   }
+  // A radius at or past half the shorter side draws a stadium: the corner is
+  // clamped, and every larger number draws the same pixels. Design systems say
+  // "fully rounded" with a sentinel (Material's kit uses 100) while code says it
+  // with whatever number cleared the clamp, so comparing the two as lengths
+  // reports a Δ96 between two identical shapes. When BOTH sides are past the
+  // clamp they describe the same corner, whatever they call it.
+  if (group === "radius" && box && fullyRounded(got, box) && fullyRounded(want, box)) return;
+
   const delta = Math.abs(got - want);
   if (delta > tolerance) {
     findings.push({
@@ -306,6 +324,19 @@ function numericFinding(
       detail: { token: `${group}.${name}`, expected: want, actual: got, delta },
     });
   }
+}
+
+/**
+ * Whether `radius` is at or past the clamp for a box of this size — the point
+ * beyond which the corner cannot get any rounder.
+ *
+ * Deliberately symmetric and unit-agnostic: it does not need to know whether a
+ * spec's `100` means dp or per cent, because either reading is past the clamp on
+ * any box small enough for the question to arise.
+ */
+function fullyRounded(radius: number, box: { width: number; height: number }): boolean {
+  const shorter = Math.min(box.width, box.height);
+  return shorter > 0 && radius >= shorter / 2;
 }
 
 /** The candidate value closest to `want` within `tolerance`, or `undefined`. */

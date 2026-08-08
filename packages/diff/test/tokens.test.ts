@@ -86,6 +86,65 @@ describe("diffTokens", () => {
     expect(diffTokens(spec, spec, defaultDiffConfig)).toEqual([]);
   });
 
+  describe("fully-rounded corners", () => {
+    // Real measurements from three M3 catalog components that each reported a
+    // ~Δ96 radius divergence against a shape identical to the kit's. The kit
+    // writes "fully rounded" as 100; Compose writes whatever cleared the clamp.
+    const pill = (radius: number) => ({ radius: { corner: radius } });
+    const rounded: DesignTokens = { radius: { corner: 100 } };
+
+    it.each([
+      ["Badge/Dot", 3.05, { width: 3, height: 3 }],
+      ["Badge/Number", 3.81, { width: 7, height: 7 }],
+      ["Switch/On", 16, { width: 32, height: 20 }],
+    ])("%s: %d on its box is the kit's 100", (_name, radius, box) => {
+      expect(diffTokens(rounded, pill(radius), defaultDiffConfig, undefined, box)).toEqual([]);
+    });
+
+    it("still reports a radius short of the clamp", () => {
+      // 4 on a 30x17 menu item is nowhere near half the shorter side, so
+      // nothing normalises it away — the divergence is real.
+      const findings = diffTokens(
+        { radius: { corner: 16 } },
+        pill(4),
+        defaultDiffConfig,
+        undefined,
+        { width: 30, height: 17 },
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "error" });
+    });
+
+    it("does not normalise when only the candidate is past the clamp", () => {
+      // A pill drawn where the spec asked for a 4dp corner is a real defect,
+      // not two spellings of one shape.
+      const findings = diffTokens(
+        { radius: { corner: 4 } },
+        pill(16),
+        defaultDiffConfig,
+        undefined,
+        { width: 32, height: 20 },
+      );
+      expect(findings).toHaveLength(1);
+    });
+
+    it("reports normally when no box is known, rather than guessing", () => {
+      const findings = diffTokens(rounded, pill(16), defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+    });
+
+    it("leaves spacing alone — only a corner can be clamped", () => {
+      const findings = diffTokens(
+        { spacing: { padding: 100 } },
+        { spacing: { padding: 16 } },
+        defaultDiffConfig,
+        undefined,
+        { width: 32, height: 20 },
+      );
+      expect(findings).toHaveLength(1);
+    });
+  });
+
   it("flags numeric drift beyond tolerance as an error", () => {
     const findings = diffTokens(
       spec,
