@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.43](https://github.com/yschimke/design-parity/compare/v0.1.42...v0.1.43) (2026-08-08)
+
+
+### Features
+
+* **action:** split the reference import from the parity run ([#305](https://github.com/yschimke/design-parity/issues/305)) ([33951f7](https://github.com/yschimke/design-parity/commit/33951f7b1114e52d67457deb7b6e74595f4aa0af))
+* **candidate:** check the compose-preview CLI version instead of discarding it ([#300](https://github.com/yschimke/design-parity/issues/300)) ([4ce4a32](https://github.com/yschimke/design-parity/commit/4ce4a32ca0640ac96cae42d9021f4fe73f58bc7f))
+* **catalog-export:** carry referenceSet onto the published catalog ([#306](https://github.com/yschimke/design-parity/issues/306)) ([8213ece](https://github.com/yschimke/design-parity/commit/8213ece79ea3c296595fee531ccc49658a7ed4a9))
+* **catalog-export:** make the two annotated columns comparable ([#304](https://github.com/yschimke/design-parity/issues/304)) ([1ad51b0](https://github.com/yschimke/design-parity/commit/1ad51b054f2297c9ba7a7592c3d0190427da8c3e))
+* **core:** add refSet so a screen's variant links to its mapped component ([#299](https://github.com/yschimke/design-parity/issues/299)) ([32a10b8](https://github.com/yschimke/design-parity/commit/32a10b80b228272d6d866571b4530e1cb82c5e89))
+* **figma:** carry component properties on a reference, and pair on them ([#303](https://github.com/yschimke/design-parity/issues/303)) ([52e6c7a](https://github.com/yschimke/design-parity/commit/52e6c7a0ab55ad8fc76bc42aff0be0037580dba5))
+
 ## [0.1.42](https://github.com/yschimke/design-parity/compare/v0.1.41...v0.1.42) (2026-08-08)
 
 
