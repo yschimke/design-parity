@@ -25,6 +25,12 @@ export interface RunManifest {
   direction: ResolvedDirection;
   status: VerdictStatus;
   blocked: boolean;
+  /**
+   * Digest of the inputs this run was derived from, when the caller supplied
+   * one. A later run computing the same digest can stand on this board instead
+   * of rebuilding it — see `cache.ts`.
+   */
+  cacheKey?: string;
   entries: IndexEntry[];
 }
 

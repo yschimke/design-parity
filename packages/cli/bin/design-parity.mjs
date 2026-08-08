@@ -7,6 +7,7 @@
 //   shard   → print one shard's slice of the run (the render step reads this so
 //             both sides of a sharded run partition identically);
 //   merge   → reassemble a sharded run (`run --shard i/n`) into one artifact set;
+//   cache   → would this run reproduce the published board? (skip decision);
 //   anything else → a parity run.
 //
 // `run` and `merge` export `main` and we invoke it explicitly: importing the
@@ -17,6 +18,9 @@ if (process.argv[2] === "reverse") {
   await import("@design-parity/action/reverse");
 } else if (process.argv[2] === "merge") {
   const { main } = await import("@design-parity/action/merge");
+  process.exit(await main());
+} else if (process.argv[2] === "cache") {
+  const { main } = await import("@design-parity/action/cache");
   process.exit(await main());
 } else if (process.argv[2] === "shard") {
   const { main } = await import("@design-parity/action/shard");

@@ -12,7 +12,8 @@
     "./merge": "./dist/cli/merge.js",
     "./shard": "./dist/cli/shard-cli.js",
     "./reverse": "./dist/cli/reverse.js",
-    "./schema/verdict.schema.json": "./schema/verdict.schema.json"
+    "./schema/verdict.schema.json": "./schema/verdict.schema.json",
+    "./cache": "./dist/cli/cache-cli.js"
   },
   "files": [
     "dist",

@@ -112,6 +112,27 @@ on:
         required: false
         type: string
         default: "latest"
+      cache-paths:
+        description: >
+          Space-separated paths whose content decides whether a run would
+          reproduce the published board — the module, the version catalog, the
+          build files. When they and the reference file are unchanged and the
+          tool is the same version, the run is skipped and the previous verdict
+          re-applied. Empty (the default) disables the short-circuit: a caller
+          has to say what feeds its render, because a wrong list produces a
+          stale skip, which is worse than never skipping.
+        required: false
+        type: string
+        default: ""
+      force-refresh:
+        description: >
+          Ignore the cache and run regardless. The key cannot cover everything
+          that moves — a runner image, a font, a renderer's own transitive deps
+          — so a scheduled unconditional run is the companion to caching, not an
+          optional extra.
+        required: false
+        type: boolean
+        default: false
       design-parity-ref:
         description: >
           Test an UNRELEASED design-parity: a git ref of yschimke/design-parity
@@ -193,9 +214,132 @@ jobs:
   # so a CLI predating `merge` would fail with "unknown subcommand" having burned
   # the entire fan-out. `design-parity-version` defaults to `latest`, but a
   # consumer pinning an older version is exactly the case that hits this.
+  # ── Would this run reproduce the board that is already published? ──────────
+  # A parity run is a pure function of the code, the renderer, the references,
+  # the map joining them, the policy and the tool. When none moved, rebuilding
+  # the board costs a full render and a reference fetch to arrive back where the
+  # branch already is. Roughly 40s to find that out, against ~10 minutes to
+  # rediscover it the long way.
+  cache:
+    name: Check the inputs moved
+    if: ${{ inputs.cache-paths != '' && inputs.artifact-branch != '' }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      skip: ${{ steps.decide.outputs.skip }}
+      key: ${{ steps.decide.outputs.key }}
+      blocked: ${{ steps.decide.outputs.blocked }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Check out design-parity@${{ inputs.design-parity-ref }}
+        if: ${{ inputs.design-parity-ref != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yschimke/design-parity
+          ref: ${{ inputs.design-parity-ref }}
+          path: .design-parity-src
+
+      - name: Build design-parity from source
+        if: ${{ inputs.design-parity-ref != '' }}
+        working-directory: .design-parity-src
+        run: |
+          set -euo pipefail
+          npm ci --silent
+          npm run build --silent
+
+      - name: Fetch the previous board
+        id: previous
+        env:
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          set -euo pipefail
+          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 --branch "$BRANCH" "$repo" previous 2>/dev/null; then
+            rm -rf previous/.git
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide
+        id: decide
+        env:
+          FIGMA_TOKEN: ${{ secrets.figma-token }}
+          DP_VERSION: ${{ inputs.design-parity-version }}
+          DP_REF: ${{ inputs.design-parity-ref }}
+          CACHE_PATHS: ${{ inputs.cache-paths }}
+          FORCE: ${{ inputs.force-refresh }}
+        run: |
+          set -euo pipefail
+          parts=()
+
+          # The code side: a git tree hash per named path. Exact — it moves iff a
+          # tracked file under it moves — and free, unlike hashing the tree here.
+          for path in $CACHE_PATHS; do
+            if hash="$(git rev-parse "HEAD:${path}" 2>/dev/null)"; then
+              parts+=(--part "path:${path}=${hash}")
+            else
+              # A named path that does not exist is an ingredient we cannot
+              # resolve, so it goes in as empty rather than being dropped: two
+              # materially different trees must not hash the same.
+              parts+=(--part "path:${path}=")
+            fi
+          done
+
+          # The reference side: the file version, which changes on any edit to
+          # the kit. One request answers "can any reference have moved?" for the
+          # whole file — and a token that cannot answer it means no skip.
+          if [ -n "${FIGMA_TOKEN:-}" ] && [ -f design-map.json ]; then
+            for key in $(jq -r '[.components[].ref | select(startswith("figma:")) | split(":")[1] | split("/")[0]] | unique[]' design-map.json); do
+              version="$(curl -sS -H "X-Figma-Token: ${FIGMA_TOKEN}" \
+                "https://api.figma.com/v1/files/${key}?depth=1" | jq -r '.version // ""')"
+              parts+=(--part "figma:${key}=${version}")
+            done
+            parts+=(--part "design-map=$(sha256sum design-map.json | cut -d' ' -f1)")
+          else
+            parts+=(--part "design-map=")
+          fi
+          [ -f .design-parity.json ] && parts+=(--part "policy=$(sha256sum .design-parity.json | cut -d' ' -f1)")
+
+          # The tool and its surroundings. `runner` is a coarse proxy for image
+          # drift: it names the label, not the image, so `force-refresh` on a
+          # schedule remains the real defence.
+          parts+=(--part "tool=${DP_REF:-$DP_VERSION}")
+          parts+=(--part "renderer=${{ inputs.compose-preview-version }}")
+          parts+=(--part "runner=${{ inputs.runs-on }}")
+          parts+=(--part "module=${{ inputs.module }}")
+          parts+=(--part "shards=${{ inputs.shards }}")
+          parts+=(--part "map-command=${{ inputs.design-map-command }}")
+
+          if [ -n "${DP_REF:-}" ]; then
+            dp=(node "${GITHUB_WORKSPACE}/.design-parity-src/packages/cli/bin/design-parity.mjs")
+          else
+            dp=(npx -y "design-parity@${DP_VERSION}")
+          fi
+          prev=()
+          if [ "${{ steps.previous.outputs.found }}" = "true" ]; then prev=(--previous previous); fi
+          force=()
+          if [ "${FORCE}" = "true" ]; then force=(--force); fi
+
+          "${dp[@]}" cache "${parts[@]}" "${prev[@]}" "${force[@]}" | tee decision.txt
+          cat decision.txt >> "$GITHUB_OUTPUT"
+          reason="$(grep '^reason=' decision.txt | cut -d= -f2-)"
+          if grep -q '^skip=true' decision.txt; then
+            echo "::notice::Skipping the parity run — ${reason}. The published board already describes this commit."
+          else
+            echo "::notice::Running — ${reason}."
+          fi
+
   plan:
     name: Plan ${{ inputs.shards }} shard(s)
-    if: ${{ inputs.shards > 1 }}
+    needs: [cache]
+    if: ${{ !cancelled() && inputs.shards > 1 && needs.cache.outputs.skip != 'true' }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 10
     outputs:
@@ -239,9 +383,10 @@ jobs:
   # local — one job, one `--shard` value, both steps reading it.
   shard:
     name: Parity ${{ inputs.shards > 1 && format('shard {0}/{1}', matrix.shard, inputs.shards) || '(single job)' }}
-    needs: [plan]
-    # A skipped `plan` is the single-shard path, not a failure.
-    if: ${{ !cancelled() && needs.plan.result != 'failure' && needs.plan.result != 'cancelled' }}
+    needs: [plan, cache]
+    # A skipped `plan` is the single-shard path, not a failure. A `cache` that
+    # decided to skip is not either — the verdict is re-applied by `publish`.
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && needs.plan.result != 'cancelled' && needs.cache.outputs.skip != 'true' }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
@@ -512,8 +657,8 @@ jobs:
   # ── Merge + publish ─────────────────────────────────────────────────────────
   publish:
     name: Merge and publish
-    needs: [shard]
-    if: ${{ !cancelled() && needs.shard.result == 'success' }}
+    needs: [shard, cache]
+    if: ${{ !cancelled() && (needs.shard.result == 'success' || needs.cache.outputs.skip == 'true') }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 20
     permissions:
@@ -528,7 +673,7 @@ jobs:
       # `@design-parity/*` to the sibling workspaces rather than to whatever npm
       # would fetch, so a change in an adapter is actually the code that runs.
       - name: Check out design-parity@${{ inputs.design-parity-ref }}
-        if: ${{ inputs.design-parity-ref != '' }}
+        if: ${{ inputs.design-parity-ref != '' && needs.cache.outputs.skip != 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
@@ -536,7 +681,7 @@ jobs:
           path: .design-parity-src
 
       - name: Build design-parity from source
-        if: ${{ inputs.design-parity-ref != '' }}
+        if: ${{ inputs.design-parity-ref != '' && needs.cache.outputs.skip != 'true' }}
         working-directory: .design-parity-src
         run: |
           set -euo pipefail
@@ -545,7 +690,24 @@ jobs:
           node packages/cli/bin/design-parity.mjs merge >/dev/null 2>&1 || true
           echo "::notice::Running design-parity from ${{ inputs.design-parity-ref }} rather than the published CLI."
 
+      # Nothing was rendered and nothing compared, so there is nothing to
+      # publish: the branch already holds the board this commit would produce.
+      # The verdict still applies — a blocking finding does not lapse because
+      # the inputs held still.
+      - name: Re-apply the cached verdict
+        if: ${{ needs.cache.outputs.skip == 'true' }}
+        env:
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.cache.outputs.blocked }}" = "true" ]; then
+            echo "::error title=Design parity blocked::Inputs unchanged since the last run, which was blocking. See the published report on ${BRANCH}."
+            exit 1
+          fi
+          echo "::notice::Inputs unchanged since the last run, which passed. Nothing to re-render."
+
       - name: Download the shard runs
+        if: ${{ needs.cache.outputs.skip != 'true' }}
         id: download
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -559,7 +721,7 @@ jobs:
       # partial refresh converges instead of thrashing (#289).
       - name: Fetch the previous board
         id: previous
-        if: ${{ inputs.artifact-branch != '' }}
+        if: ${{ inputs.artifact-branch != '' && needs.cache.outputs.skip != 'true' }}
         env:
           BRANCH: ${{ inputs.artifact-branch }}
         run: |
@@ -581,6 +743,7 @@ jobs:
       # a good one would be worse than doing nothing.
       - name: Anything to publish?
         id: check
+        if: ${{ needs.cache.outputs.skip != 'true' }}
         run: |
           set -euo pipefail
           if [ -z "$(find shards -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)" ]; then
@@ -603,6 +766,7 @@ jobs:
           DP_REF: ${{ inputs.design-parity-ref }}
           BRANCH: ${{ inputs.artifact-branch }}
           PREVIOUS_FOUND: ${{ steps.previous.outputs.found }}
+          CACHE_KEY: ${{ needs.cache.outputs.key }}
         run: |
           set -euo pipefail
           mapfile -t dirs < <(find shards -name shard.json | sort -V)
@@ -632,7 +796,8 @@ jobs:
             "${prev[@]}" \
             --repo-slug "${GITHUB_REPOSITORY}" \
             --branch "${BRANCH}" \
-            --source-commit "${GITHUB_SHA}"; then
+            --source-commit "${GITHUB_SHA}" \
+            ${CACHE_KEY:+--cache-key "$CACHE_KEY"}; then
             echo "blocked=false" >> "$GITHUB_OUTPUT"
           else
             echo "blocked=true" >> "$GITHUB_OUTPUT"
