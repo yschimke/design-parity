@@ -44,6 +44,14 @@ export interface FigmaAdapterOptions {
   fetch?: FetchLike;
   /** API base override (tests). */
   baseUrl?: string;
+  /**
+   * Attempts per REST request before a 429/5xx is raised. Defaults to the
+   * client's own default; 1 disables retrying, which is what a test asserting
+   * the error mapping wants.
+   */
+  attempts?: number;
+  /** Injectable delay for the retry backoff (tests). */
+  sleep?: (ms: number) => Promise<void>;
   /** Directory rendered references are written to. Defaults under the repo root. */
   outDir?: string;
   /** Image render scale (Figma `scale`, PNG only). Defaults to 2. */
@@ -164,6 +172,8 @@ export class FigmaAdapter implements ReferenceAdapter {
     if (token) clientOpts.token = token;
     if (this.#opts.fetch) clientOpts.fetch = this.#opts.fetch;
     if (this.#opts.baseUrl) clientOpts.baseUrl = this.#opts.baseUrl;
+    if (this.#opts.attempts !== undefined) clientOpts.attempts = this.#opts.attempts;
+    if (this.#opts.sleep) clientOpts.sleep = this.#opts.sleep;
     return new FigmaRestClient(clientOpts);
   }
 }

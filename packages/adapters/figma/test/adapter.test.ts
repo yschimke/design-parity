@@ -254,7 +254,10 @@ describe("FigmaAdapter.resolve (errors)", () => {
   it("maps 429 to FigmaRateLimitError with retry-after", async () => {
     const f: FetchLike = async () =>
       new Response("slow down", { status: 429, headers: { "retry-after": "30" } });
-    const adapter = createFigmaAdapter({ fetch: f, baseUrl: BASE });
+    // `attempts: 1` because this asserts the error MAPPING. With retrying left
+    // on, a permanently-429 fetch would exercise the backoff schedule instead —
+    // which rest-client.test.ts covers, with an injected clock.
+    const adapter = createFigmaAdapter({ fetch: f, baseUrl: BASE, attempts: 1 });
     await expect(
       adapter.resolve("c#C", "figma:KEY/1:1", await ctx()),
     ).rejects.toBeInstanceOf(FigmaRateLimitError);

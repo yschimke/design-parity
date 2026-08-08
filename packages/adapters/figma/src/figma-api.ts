@@ -49,6 +49,20 @@ export interface FigmaStyleMeta {
   styleType: "FILL" | "TEXT" | "EFFECT" | "GRID";
 }
 
+/**
+ * `GET /v1/files/:key` — the file's own metadata. `version` is the edit
+ * counter: it changes whenever anyone touches the file, so it answers "can any
+ * cached reference from this file have moved?" in one request.
+ */
+export interface FileMetaResponse {
+  name: string;
+  /** ISO-8601, when the file was last edited. */
+  lastModified: string;
+  /** Opaque, monotonic per file. Compare for equality, don't order. */
+  version: string;
+  thumbnailUrl?: string;
+}
+
 export interface FileNodesResponse {
   nodes: Record<
     string,

@@ -487,6 +487,30 @@ jobs:
           pattern: design-parity-*
           path: shards
 
+      # The board this run builds on. Publishing REPLACES the branch, so without
+      # this a component the run could not refresh — rate limited, a source
+      # briefly unreachable — loses not just its verdict but its last good
+      # report. `merge --previous` rolls those rows forward and dates them, so a
+      # partial refresh converges instead of thrashing (#289).
+      - name: Fetch the previous board
+        id: previous
+        if: ${{ inputs.artifact-branch != '' }}
+        env:
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          set -euo pipefail
+          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 --branch "$BRANCH" "$repo" previous 2>/dev/null; then
+            rm -rf previous/.git
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Carrying forward from $(ls previous | wc -l) published path(s)."
+          else
+            # First run on a repo, or the branch was pruned. Not an error: there
+            # is simply nothing to carry, and the merge writes the first board.
+            echo "::notice::No existing ${BRANCH} to carry forward from."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Nothing to do when every shard skipped (no FIGMA_TOKEN, or an empty
       # design map). A skip is not a failure, and publishing an empty branch over
       # a good one would be worse than doing nothing.
@@ -512,18 +536,29 @@ jobs:
         env:
           DP_VERSION: ${{ inputs.design-parity-version }}
           BRANCH: ${{ inputs.artifact-branch }}
+          PREVIOUS_FOUND: ${{ steps.previous.outputs.found }}
         run: |
           set -euo pipefail
           mapfile -t dirs < <(find shards -name shard.json | sort -V)
           if [ "${#dirs[@]}" -eq 0 ]; then
-            # A single-shard run wrote its artifacts directly — no shard.json,
-            # nothing to reassemble.
+            # A run old enough not to write shard.json. Publish what it made,
+            # but do NOT fold the previous board in here: without `merge` there
+            # is nothing to regenerate index.html, README.md and run.json from,
+            # so carried reports would sit on the branch unlisted — a board that
+            # silently under-reports what it holds is worse than one that is
+            # honestly only this run.
             cp -a "$(find shards -mindepth 1 -maxdepth 1 -type d | head -1)" out
+            if [ "${PREVIOUS_FOUND}" = "true" ]; then
+              echo "::warning::This run did not write shard.json, so the previous board could not be carried forward. Upgrade design-parity-version to get partial refresh."
+            fi
             echo "blocked=unknown" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          prev=()
+          if [ "${PREVIOUS_FOUND}" = "true" ]; then prev=(--previous previous); fi
           if npx -y "design-parity@${DP_VERSION}" merge "${dirs[@]}" \
             --out out \
+            "${prev[@]}" \
             --repo-slug "${GITHUB_REPOSITORY}" \
             --branch "${BRANCH}" \
             --source-commit "${GITHUB_SHA}"; then

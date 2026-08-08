@@ -45,6 +45,14 @@ export interface IndexEntry {
    * self-contained. Omitted when there's no candidate (e.g. a skipped component).
    */
   thumbnail?: string;
+  /**
+   * Set when this row was NOT produced by the current run: the source commit of
+   * the run that was, carried forward because this one could not refresh it
+   * (design-parity#289). A board of carried rows is still a complete board —
+   * what changes is how old each row is, which is why it is shown per row
+   * rather than summarised.
+   */
+  carriedFrom?: string;
 }
 
 export interface IndexInput {
@@ -171,7 +179,11 @@ export function renderReadme(input: IndexInput): string {
   for (const e of input.entries) {
     const cells = [mdCell(shortCode(e.code))];
     if (hasSource) cells.push(e.source ? mdCell(e.source) : "—");
-    cells.push(`${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]}`);
+    cells.push(
+      e.carriedFrom
+        ? `${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]} <sub>from \`${short(e.carriedFrom)}\`</sub>`
+        : `${STATUS_EMOJI[e.status]} ${STATUS_TEXT[e.status]}`,
+    );
     cells.push(
       e.reportPath ? `[report](${previewHref(e.reportPath, input)})` : "—",
     );
@@ -224,7 +236,10 @@ function rowMarkup(
   hasHistory: boolean,
   hasSource: boolean,
 ): string {
-  const status = `<span class="status status-${e.status}">${STATUS_TEXT[e.status]}</span>`;
+  const carried = e.carriedFrom
+    ? ` <span class="muted" title="carried forward from ${escapeHtml(e.carriedFrom)} — this run could not refresh it">from ${escapeHtml(short(e.carriedFrom))}</span>`
+    : "";
+  const status = `<span class="status status-${e.status}">${STATUS_TEXT[e.status]}</span>${carried}`;
   const report = e.reportPath
     ? `<a href="${escapeHtml(previewHref(e.reportPath, input))}">report</a>`
     : `<span class="muted">—</span>`;
