@@ -19,6 +19,7 @@ import {
   rawPreviewIdForEntry,
   mergeCandidateRenders,
   catalogTokensFromBundle,
+  themeTokenSetsFromBundle,
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
@@ -344,6 +345,10 @@ describe("catalogTokensFromBundle", () => {
   const te = new TextEncoder();
   const sidecar = (previewId: string, tokens: unknown[]): Uint8Array =>
     te.encode(JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, tokens }));
+  const themeSidecar = (previewId: string, theme: string, tokens: unknown[]): Uint8Array =>
+    te.encode(
+      JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, theme, tokens }),
+    );
 
   it("aggregates @ColorCatalog and @TypographyCatalog sidecars into system tokens", () => {
     const bundle: PreviewBundle = {
@@ -388,6 +393,34 @@ describe("catalogTokensFromBundle", () => {
     });
   });
 
+  it("leaves a declared theme's palette out of the SYSTEM token set", () => {
+    // A theme sheet's sidecar is tagged with its theme; the system set is the
+    // untagged sheets only. Before that split every theme was merged in here, and
+    // since M3 role labels repeat across themes the surviving value was decided by
+    // zip iteration order — a system's published `primary` was whichever theme
+    // happened to be read last.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/colorcatalog__Palette.catalog.json": sidecar("colorcatalog__Palette", [
+          { label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } },
+        ]),
+        "previews/wearthemecatalog__Coral.catalog.json": themeSidecar(
+          "wearthemecatalog__Coral",
+          "Coral",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFFF6F61" } }],
+        ),
+        "previews/wearthemecatalog__Teal.catalog.json": themeSidecar(
+          "wearthemecatalog__Teal",
+          "Teal",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF00BFA5" } }],
+        ),
+      },
+    };
+    expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ primary: "#aecbfaff" });
+  });
+
   it("returns undefined for a bundle with no catalog sidecars", () => {
     const bundle: PreviewBundle = {
       manifest: {},
@@ -411,3 +444,373 @@ describe("catalogTokensFromBundle", () => {
     expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ BrandCoral: "#ff6f61ff" });
   });
 });
+
+describe("themeTokenSetsFromBundle", () => {
+  const te = new TextEncoder();
+  const themeSidecar = (previewId: string, theme: string, tokens: unknown[]): Uint8Array =>
+    te.encode(
+      JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, theme, tokens }),
+    );
+
+  it("returns one token set per declared theme, colours and typeface alike", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        // Untagged: the system's own sheet, which is NOT a theme.
+        "previews/colorcatalog__Palette.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            previewId: "colorcatalog__Palette",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+        "previews/wearthemecatalog__KotlinConf.catalog.json": themeSidecar(
+          "wearthemecatalog__KotlinConf",
+          "KotlinConf",
+          [
+            { label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } },
+            {
+              label: "titleMedium",
+              kind: "TEXT_STYLE",
+              textStyle: { fontFamily: "JetBrains Mono", fontSizeSp: 16, fontWeight: 500 },
+            },
+          ],
+        ),
+        "previews/wearthemecatalog__Coral.catalog.json": themeSidecar(
+          "wearthemecatalog__Coral",
+          "Coral",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFFF6F61" } }],
+        ),
+      },
+    };
+
+    const themes = themeTokenSetsFromBundle(bundle);
+    // Ordered by preview id, so a regenerated bundle produces a stable list.
+    expect(themes.map((t) => t.theme)).toEqual(["Coral", "KotlinConf"]);
+    expect(themes[0]?.tokens.colors).toEqual({ primary: "#ff6f61ff" });
+    // The typeface travels too — a theme is free to swap the type scale, and that
+    // is half of what distinguishes one theme sheet from another.
+    expect(themes[1]?.tokens.typography?.titleMedium).toEqual({
+      fontFamily: "JetBrains Mono",
+      fontSize: 16,
+      fontWeight: 500,
+    });
+    // The previewId is the join key back to previews.json, where the entry's
+    // wrapperClassName gives the provider FQN a preview server addresses.
+    expect(themes[1]?.previewId).toBe("wearthemecatalog__KotlinConf");
+  });
+
+  it("treats a blank theme label as a theme, not as system tokens", () => {
+    // The tag's PRESENCE is the discriminator. A provider that declared no display
+    // name writes `theme: ""`; reading that as a system sheet would be the worst of
+    // both worlds — its repeated M3 roles overwriting the system's own tokens while
+    // the theme vanished from the list.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/colorcatalog__Palette.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            previewId: "colorcatalog__Palette",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+        "previews/themecatalog__Unnamed.catalog.json": themeSidecar(
+          "themecatalog__Unnamed",
+          "",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+        ),
+      },
+    };
+    expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ primary: "#aecbfaff" });
+    const themes = themeTokenSetsFromBundle(bundle);
+    expect(themes).toHaveLength(1);
+    expect(themes[0]?.theme).toBe("");
+    expect(themes[0]?.tokens.colors).toEqual({ primary: "#7f52ffff" });
+  });
+
+  it("falls back to the sidecar's own path for a missing preview id", () => {
+    // The join key is what makes the tokens publishable — without it a consumer
+    // cannot reach `previews.json` for the provider FQN. The file name carries it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Brand.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Brand",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+          }),
+        ),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle)[0]?.previewId).toBe("themecatalog__Brand");
+  });
+
+  it("drops a text style whose metrics all failed to reflect", () => {
+    // `textStyle: {}` resolves to an empty token. Keeping it would serialise
+    // downstream as a DTCG `$value: {}` AND make a theme that resolved nothing
+    // usable look like it did.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Hollow.catalog.json": themeSidecar(
+          "themecatalog__Hollow",
+          "Hollow",
+          [{ label: "titleMedium", kind: "TEXT_STYLE", textStyle: {} }],
+        ),
+        "previews/themecatalog__Real.catalog.json": themeSidecar(
+          "themecatalog__Real",
+          "Real",
+          [
+            { label: "titleMedium", kind: "TEXT_STYLE", textStyle: {} },
+            { label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } },
+          ],
+        ),
+      },
+    };
+    const themes = themeTokenSetsFromBundle(bundle);
+    // The all-empty sheet is gone; the real one kept its colour and grew no
+    // hollow typography group.
+    expect(themes.map((t) => t.theme)).toEqual(["Real"]);
+    expect(themes[0]?.tokens.typography).toBeUndefined();
+    expect(themes[0]?.tokens.colors).toEqual({ primary: "#7f52ffff" });
+  });
+
+  it("skips a structurally malformed sidecar instead of aborting the bundle", () => {
+    // Parseable JSON is not the same as a sidecar. Each of these got past
+    // `JSON.parse` and would then throw when read — taking every other theme in
+    // the bundle down with it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/notobject.catalog.json": te.encode("null"),
+        "previews/anarray.catalog.json": te.encode("[]"),
+        "previews/tokensnotarray.catalog.json": te.encode(
+          JSON.stringify({ theme: "Brand", tokens: {} }),
+        ),
+        "previews/themecatalog__Good.catalog.json": themeSidecar(
+          "themecatalog__Good",
+          "Good",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+        ),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle).map((t) => t.theme)).toEqual(["Good"]);
+    expect(() => catalogTokensFromBundle(bundle)).not.toThrow();
+  });
+
+  it("resolves each theme's provider FQN from the bundle's preview list", () => {
+    // The FQN is the theme's identity — what a preview server addresses it by and
+    // what `CatalogTheme.id` wants — so the join happens here rather than being
+    // left to every consumer (which could not do it: it lives on the preview
+    // entry's params, not on the sidecar).
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [
+        {
+          id: "wearthemecatalog__Google Sans Flex",
+          params: { wrapperClassName: "com.example.WearGoogleSansFlexThemeCatalog" },
+        },
+        { id: "wearthemecatalog__Coral", params: { wrapperClassName: "com.example.WearCoral" } },
+        { id: "unrelated", params: {} },
+      ],
+      entries: {
+        // The file name is the renderer's SANITIZED id (spaces folded), while the
+        // payload carries none — so this only joins if the fallback matches the
+        // way the renderer spells it.
+        "previews/wearthemecatalog__Google_Sans_Flex.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Google Sans Flex",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+        "previews/wearthemecatalog__Coral.catalog.json": themeSidecar(
+          "wearthemecatalog__Coral",
+          "Coral",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFFF6F61" } }],
+        ),
+      },
+    };
+    const byTheme = Object.fromEntries(
+      themeTokenSetsFromBundle(bundle).map((t) => [t.theme, t.providerFqn]),
+    );
+    expect(byTheme).toEqual({
+      Coral: "com.example.WearCoral",
+      "Google Sans Flex": "com.example.WearGoogleSansFlexThemeCatalog",
+    });
+  });
+
+  it("joins whichever spelling of the id each side happens to use", () => {
+    // A preview has up to three spellings: the filename-safe id in `previews.json`,
+    // the canonical one in the manifest's `rawPreviewIds`, and the file name of the
+    // sidecar (safe again). Sanitizing one side only finds the pair in one
+    // direction — here the payload keeps the RAW id while the entry carries the
+    // safe one, which is the direction that used to miss.
+    const bundle: PreviewBundle = {
+      manifest: {
+        previewIds: ["wearthemecatalog__Google_Sans_Flex"],
+        rawPreviewIds: ["wearthemecatalog__Google Sans Flex"],
+      },
+      previews: [
+        {
+          id: "wearthemecatalog__Google_Sans_Flex",
+          params: { wrapperClassName: "com.example.WearGoogleSansFlexThemeCatalog" },
+        },
+      ],
+      entries: {
+        "previews/wearthemecatalog__Google_Sans_Flex.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            previewId: "wearthemecatalog__Google Sans Flex",
+            theme: "Google Sans Flex",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle)[0]?.providerFqn).toBe(
+      "com.example.WearGoogleSansFlexThemeCatalog",
+    );
+  });
+
+  it("leaves the FQN absent when the preview list doesn't carry the specimen", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Brand.catalog.json": themeSidecar(
+          "themecatalog__Brand",
+          "Brand",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+        ),
+      },
+    };
+    const theme = themeTokenSetsFromBundle(bundle)[0];
+    expect(theme?.providerFqn).toBeUndefined();
+    expect(theme?.previewId).toBe("themecatalog__Brand");
+  });
+
+  it("survives a preview id that isn't a string", () => {
+    // The payload is JSON: `previewId` can be anything. Calling `.trim()` on a
+    // number took the whole bundle's themes down with it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Numeric.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Numeric",
+            previewId: 123,
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+          }),
+        ),
+        "previews/themecatalog__Good.catalog.json": themeSidecar(
+          "themecatalog__Good",
+          "Good",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+        ),
+      },
+    };
+    const themes = themeTokenSetsFromBundle(bundle);
+    expect(themes.map((t) => t.theme).sort()).toEqual(["Good", "Numeric"]);
+    // …and the bad id falls back to the one its own file name carries.
+    expect(themes.find((t) => t.theme === "Numeric")?.previewId).toBe(
+      "themecatalog__Numeric",
+    );
+  });
+
+  it("skips mistyped nested fields instead of aborting the bundle", () => {
+    // The interface describes a WELL-FORMED sidecar; the value came from
+    // `JSON.parse`, so any field can be anything. A number where a hex string
+    // belongs used to throw inside `argbToCssHex` and take every theme with it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Mistyped.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Mistyped",
+            tokens: [
+              { label: "primary", kind: "COLOR", color: { hex: 123 } },
+              { label: 42, kind: "COLOR", color: { hex: "#FF7F52FF" } },
+              {
+                label: "titleMedium",
+                kind: "TEXT_STYLE",
+                textStyle: { fontFamily: "Inter", fontSizeSp: "16sp", fontWeight: 500 },
+              },
+            ],
+          }),
+        ),
+        "previews/themecatalog__Good.catalog.json": themeSidecar(
+          "themecatalog__Good",
+          "Good",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+        ),
+      },
+    };
+    const themes = themeTokenSetsFromBundle(bundle);
+    expect(themes.map((t) => t.theme).sort()).toEqual(["Good", "Mistyped"]);
+    const mistyped = themes.find((t) => t.theme === "Mistyped");
+    // The unusable colour and the non-string label are dropped; the good half of
+    // the text style survives, minus the size that came through as a string.
+    expect(mistyped?.tokens.colors).toBeUndefined();
+    expect(mistyped?.tokens.typography?.titleMedium).toEqual({
+      fontFamily: "Inter",
+      fontWeight: 500,
+    });
+  });
+
+  it("orders themes by code unit, not by the runtime's locale", () => {
+    // This list feeds generated artifacts. `localeCompare` would order non-ASCII
+    // ids by whatever ICU locale the consumer's CI runs under — `ä` before `z` in
+    // English, after it in Swedish — so the same bundle could produce two orders.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/zulu.catalog.json": themeSidecar("zulu", "Zulu", [
+          { label: "primary", kind: "COLOR", color: { hex: "#FF000001" } },
+        ]),
+        "previews/ätherisch.catalog.json": themeSidecar("ätherisch", "Ätherisch", [
+          { label: "primary", kind: "COLOR", color: { hex: "#FF000002" } },
+        ]),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle).map((t) => t.previewId)).toEqual([
+      "zulu",
+      "ätherisch",
+    ]);
+  });
+
+  it("is empty for a system that declares no themes", () => {
+    expect(
+      themeTokenSetsFromBundle({ manifest: {}, previews: [], entries: {} }),
+    ).toEqual([]);
+  });
+
+  it("drops a theme sheet that resolved no usable token", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Empty.catalog.json": themeSidecar(
+          "themecatalog__Empty",
+          "Empty",
+          [{ kind: "COLOR", color: { hex: "#FF000000" } }],
+        ),
+        "previews/bad.catalog.json": te.encode("{ not json"),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle)).toEqual([]);
+  });
+});
+

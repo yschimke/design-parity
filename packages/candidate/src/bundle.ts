@@ -500,6 +500,15 @@ interface CatalogTokenEntry {
 interface CatalogTokenSidecar {
   schema?: string;
   previewId?: string;
+  /**
+   * Present only on a **theme** sheet: the display name of the `@ThemeCatalog` /
+   * `@WearThemeCatalog` provider whose live `MaterialTheme` these tokens were
+   * resolved from (compose-ai-tools#2179). Absent on a `@ColorCatalog` /
+   * `@TypographyCatalog` sheet, whose tokens are the system's own — which is
+   * exactly the distinction {@link catalogTokensFromBundle} and
+   * {@link themeTokenSetsFromBundle} split on.
+   */
+  theme?: string;
   tokens?: CatalogTokenEntry[];
 }
 
@@ -507,13 +516,33 @@ function toTypographyToken(
   ts: NonNullable<CatalogTokenEntry["textStyle"]>,
 ): TypographyToken {
   const out: TypographyToken = {};
-  if (ts.fontFamily) out.fontFamily = normalizeFontFamily(ts.fontFamily);
-  if (ts.fontSizeSp !== undefined) out.fontSize = ts.fontSizeSp;
-  if (ts.fontWeight !== undefined) out.fontWeight = ts.fontWeight;
-  if (ts.fontStyle) out.fontStyle = ts.fontStyle;
-  if (ts.letterSpacingSp !== undefined) out.letterSpacing = ts.letterSpacingSp;
-  if (ts.lineHeightSp !== undefined) out.lineHeight = ts.lineHeightSp;
+  // Every field is type-checked rather than trusted. The interface describes what
+  // a *well-formed* sidecar holds, but the value came from `JSON.parse`, so any
+  // field can be anything — and this file's contract is that one damaged or
+  // newer-schema sheet is skipped, not that it takes the bundle's tokens with it.
+  // A mistyped field is dropped; the rest of the style still lands.
+  if (str(ts.fontFamily)) out.fontFamily = normalizeFontFamily(str(ts.fontFamily)!);
+  const size = num(ts.fontSizeSp);
+  if (size !== undefined) out.fontSize = size;
+  const weight = num(ts.fontWeight);
+  if (weight !== undefined) out.fontWeight = weight;
+  const style = str(ts.fontStyle);
+  if (style) out.fontStyle = style;
+  const tracking = num(ts.letterSpacingSp);
+  if (tracking !== undefined) out.letterSpacing = tracking;
+  const lineHeight = num(ts.lineHeightSp);
+  if (lineHeight !== undefined) out.lineHeight = lineHeight;
   return out;
+}
+
+/** [value] when it really is a string, else undefined — see [toTypographyToken]. */
+function str(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** [value] when it really is a finite number, else undefined. */
+function num(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -534,30 +563,223 @@ function toTypographyToken(
 export function catalogTokensFromBundle(
   bundle: PreviewBundle,
 ): DesignTokens | undefined {
-  const colors: Record<string, string> = {};
-  const typography: Record<string, TypographyToken> = {};
+  return tokensFrom(readCatalogSidecars(bundle).filter((s) => !isThemeSidecar(s)));
+}
 
+/**
+ * One declared theme's resolved token set, read out of a bundle.
+ *
+ * A `@ThemeCatalog` / `@WearThemeCatalog` sheet's sidecar carries the live
+ * `MaterialTheme.colorScheme` / `.typography` its provider resolved to, tagged
+ * with the theme's display name (compose-ai-tools#2179). That is a *different*
+ * axis from the system token set: one system, several themes.
+ */
+export interface BundleThemeTokens {
+  /**
+   * The theme's display name, as the provider declared it (`"Brand Dark"`).
+   * Empty when it declared none — the sheet is still a theme (the tag's presence
+   * is what says so), and its identity is {@link previewId}, so a consumer that
+   * needs a label falls back to its own rather than losing the tokens.
+   */
+  theme: string;
+  /**
+   * The specimen preview whose render resolved these. Never empty: it falls back
+   * to the id in the sidecar's own path, and a sheet with neither is dropped
+   * rather than published with a key nothing can join on.
+   */
+  previewId: string;
+  /**
+   * The theme's **provider FQN** (`com.example.BrandDarkThemeCatalog`), resolved
+   * by joining {@link previewId} against the bundle's `previews.json`. This is
+   * the theme's stable identity — what a preview server addresses it by
+   * (`?theme=theme:<providerFqn>`) and what `CatalogTheme.id` wants — so the join
+   * is done here rather than left to every consumer. Absent when the bundle's
+   * preview list doesn't carry the specimen (an older producer, or a sidecar
+   * whose id matches no entry); a consumer then falls back to {@link previewId}.
+   */
+  providerFqn?: string;
+  /** The theme's own colours and type scale. */
+  tokens: DesignTokens;
+}
+
+/**
+ * Every **declared theme's** token set in [bundle], one entry per theme sheet.
+ *
+ * These used to be invisible. `catalogTokensFromBundle` read every
+ * `previews/<id>.catalog.json` and merged them into a single system token set,
+ * theme sheets included — so a system declaring five themes had five palettes
+ * flattened onto one another, and because M3 role labels repeat across themes
+ * (`primary`, `onSurface`, …) the surviving value was decided by zip iteration
+ * order. Splitting on the sidecar's `theme` tag fixes both halves: the system set
+ * is the system's own tokens again, and each theme's palette and typeface become
+ * addressable data — which is what lets a consumer show what a theme *is*
+ * (a picker chip painted in it, a per-theme Figma variable mode, a contrast audit
+ * across every theme a system ships) without re-rendering.
+ *
+ * Each entry carries the theme's **provider FQN** where the bundle's preview list
+ * supplies one, so a consumer gets the theme's stable identity without a second
+ * lookup it has no typed way to perform.
+ *
+ * Ordered by preview id so a regenerated bundle produces a stable list. Themes
+ * that resolved no usable token are dropped. Pure; best-effort per sidecar — a
+ * malformed, mistyped or newer-schema sheet is skipped, never fatal.
+ */
+export function themeTokenSetsFromBundle(
+  bundle: PreviewBundle,
+): BundleThemeTokens[] {
+  const out: BundleThemeTokens[] = [];
+  for (const sidecar of readCatalogSidecars(bundle)) {
+    if (!isThemeSidecar(sidecar)) continue;
+    // The payload's own id is authoritative (it is the id `previews.json` uses);
+    // the path's is the fallback, since the file name is derived from a sanitized
+    // form of it. Type-checked rather than trusted: the payload is JSON, so a
+    // `previewId` that isn't a string would take the whole read down on `.trim()`
+    // — the same best-effort rule the guards above keep. Without either id there
+    // is nothing to join on, so the sheet is dropped.
+    const declaredId = sidecar.payload.previewId;
+    const previewId =
+      (typeof declaredId === "string" ? declaredId.trim() : "") ||
+      sidecar.pathId.trim();
+    if (!previewId) continue;
+    const tokens = tokensFrom([sidecar]);
+    if (!tokens) continue;
+    const entry: BundleThemeTokens = {
+      theme: typeof sidecar.payload.theme === "string" ? sidecar.payload.theme : "",
+      previewId,
+      tokens,
+    };
+    const providerFqn = providerFqnFor(bundle, previewId);
+    if (providerFqn) entry.providerFqn = providerFqn;
+    out.push(entry);
+  }
+  // Code-unit order, not `localeCompare`: this list feeds generated artifacts, and
+  // a locale-sensitive comparison would order non-ASCII ids by whatever ICU locale
+  // the consumer's CI happens to run under — the same bundle, two orderings.
+  return out.sort((a, b) =>
+    a.previewId < b.previewId ? -1 : a.previewId > b.previewId ? 1 : 0,
+  );
+}
+
+/** A parsed sidecar plus the preview id its own path names. */
+interface ReadSidecar {
+  payload: CatalogTokenSidecar;
+  /** `<id>` from `previews/<id>.catalog.json` — always present, unlike the payload's. */
+  pathId: string;
+}
+
+const SIDECAR_PREFIX = "previews/";
+const SIDECAR_SUFFIX = ".catalog.json";
+
+/**
+ * The `wrapperClassName` (provider FQN) of [previewId]'s entry in the bundle's
+ * `previews.json`.
+ *
+ * Matching is deliberately symmetric, because a preview has up to three spellings
+ * and the two sides of this join need not use the same one. `previews.json`'s
+ * `id` is the **filename-safe** bundle id; the manifest's `rawPreviewIds` carries
+ * the **canonical** id discovery emitted (see {@link rawPreviewIdForEntry}); and a
+ * sidecar may name either, or neither — in which case the id comes from its file
+ * name, which is the safe form again. Sanitizing only one side finds the pair in
+ * one direction and silently misses it in the other, and a miss costs the theme
+ * its FQN, i.e. the only id a preview server can address it by. So both sides are
+ * compared raw and sanitized.
+ */
+function providerFqnFor(
+  bundle: PreviewBundle,
+  previewId: string,
+): string | undefined {
+  const wanted = sidecarId(previewId);
+  const entry = bundle.previews.find((p) => {
+    const raw = rawPreviewIdForEntry(bundle, p);
+    return (
+      p.id === previewId ||
+      raw === previewId ||
+      sidecarId(p.id) === wanted ||
+      sidecarId(raw) === wanted
+    );
+  });
+  const fqn = entry?.params?.wrapperClassName;
+  return typeof fqn === "string" && fqn.length > 0 ? fqn : undefined;
+}
+
+/**
+ * A preview id as the renderer spells it in a sidecar file name. Mirrors
+ * compose-ai-tools' `CatalogTokenSidecar.sanitize`, which folds exactly the
+ * characters a file name can't carry — deliberately narrow, so an id with a `$`
+ * or a `(` in it still matches rather than being over-folded into a miss.
+ */
+function sidecarId(id: string): string {
+  return id.replace(/[/\\:*?"<>|\s]/g, "_");
+}
+
+/** Every parseable `previews/<id>.catalog.json` payload in [bundle], with its path id. */
+function readCatalogSidecars(bundle: PreviewBundle): ReadSidecar[] {
+  const out: ReadSidecar[] = [];
   for (const [path, bytes] of Object.entries(bundle.entries)) {
-    if (!path.startsWith("previews/") || !path.endsWith(".catalog.json")) {
+    if (!path.startsWith(SIDECAR_PREFIX) || !path.endsWith(SIDECAR_SUFFIX)) {
       continue;
     }
-    let payload: CatalogTokenSidecar;
+    let parsed: unknown;
     try {
-      payload = JSON.parse(td.decode(bytes)) as CatalogTokenSidecar;
+      parsed = JSON.parse(td.decode(bytes));
     } catch {
       continue; // best-effort: a malformed sidecar doesn't sink the read
     }
-    for (const token of payload.tokens ?? []) {
-      if (!token.label) continue;
+    // …and neither does a *structurally* malformed one. Parseable JSON is not the
+    // same as a sidecar: `null`, an array, or a newer schema whose `tokens` is an
+    // object would all get past `JSON.parse` and then throw when read, taking the
+    // whole bundle's tokens down with one bad file.
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    out.push({
+      payload: parsed as CatalogTokenSidecar,
+      pathId: path.slice(SIDECAR_PREFIX.length, -SIDECAR_SUFFIX.length),
+    });
+  }
+  return out;
+}
+
+/**
+ * Whether a sidecar came from a THEME sheet. The discriminator is the tag's
+ * **presence**, not its truthiness: a provider that declared no display name
+ * writes `theme: ""`, and treating that as a system sheet would be the worst of
+ * both worlds — its repeated M3 roles would overwrite the system's own tokens
+ * while the theme itself vanished from the list.
+ */
+function isThemeSidecar(sidecar: ReadSidecar): boolean {
+  return sidecar.payload.theme !== undefined;
+}
+
+/** Fold [sidecars] into one {@link DesignTokens}, or undefined when they carry none. */
+function tokensFrom(
+  sidecars: readonly ReadSidecar[],
+): DesignTokens | undefined {
+  const colors: Record<string, string> = {};
+  const typography: Record<string, TypographyToken> = {};
+  for (const sidecar of sidecars) {
+    const tokens = sidecar.payload.tokens;
+    if (!Array.isArray(tokens)) continue;
+    for (const token of tokens) {
+      const label = str(token?.label);
+      if (!label) continue;
       if (token.kind === "COLOR") {
-        const css = argbToCssHex(token.color?.hex);
-        if (css) colors[token.label] = css;
-      } else if (token.kind === "TEXT_STYLE" && token.textStyle) {
-        typography[token.label] = toTypographyToken(token.textStyle);
+        // `argbToCssHex` takes a string; a sidecar can carry anything here, and a
+        // number would throw on `.startsWith` and abort the whole bundle.
+        const css = argbToCssHex(str(token.color?.hex));
+        if (css) colors[label] = css;
+      } else if (
+        token.kind === "TEXT_STYLE" &&
+        token.textStyle &&
+        typeof token.textStyle === "object"
+      ) {
+        const style = toTypographyToken(token.textStyle);
+        // A `TEXT_STYLE` whose metrics all failed to reflect resolves to `{}`.
+        // Keeping it would be worse than dropping it twice over: the token
+        // serialises downstream as a DTCG `$value: {}`, and its mere presence
+        // makes a theme that resolved nothing usable look like it did.
+        if (Object.keys(style).length > 0) typography[label] = style;
       }
     }
   }
-
   const out: DesignTokens = {};
   if (Object.keys(colors).length > 0) out.colors = colors;
   if (Object.keys(typography).length > 0) out.typography = typography;
