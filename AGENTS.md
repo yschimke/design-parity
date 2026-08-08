@@ -98,14 +98,47 @@ is generated automatically.
 **One-time setup per package** (and once for every *new* package added later):
 
 1. **Bootstrap the first version manually.** OIDC can't publish a package that
-   doesn't exist yet (npm's trusted-publisher settings page only appears once
-   the package is on the registry). From a clean checkout: `npm login` (browser
-   auth — no token to store), `npm run build`, then
-   `npm publish --workspaces --access public` to create all packages at the
-   current version. This first cut has no provenance — that's fine.
-2. **Configure the trusted publisher** for each package on npmjs.com →
-   *Settings → Trusted Publisher*: GitHub Actions, repo `yschimke/design-parity`,
-   workflow file `release.yml`. After this, every release is token-free.
+   doesn't exist yet. From a clean checkout: `npm login` (browser auth — no
+   token to store), then:
+
+   ```sh
+   npm run set-version <current published version>   # e.g. 0.1.40
+   npm run build
+   npm publish --workspace @design-parity/<name> --access public
+   ```
+
+   **`--workspace <name>`, not `--workspaces`.** The plural form is only right
+   for the very first release, when nothing is on the registry; adding one
+   package to an existing scope with it errors on every package already
+   published at that version. Run `set-version` first or the new package ships
+   with internal ranges pointing at a version that may not exist. Don't commit
+   the fan-out — workspace versions on `main` are a derived-at-publish detail.
+   This first cut has no provenance; that's expected.
+
+2. **Configure the trusted publisher** on npmjs.com → the package →
+   *Settings → Trusted Publisher*. Four fields, all load-bearing:
+
+   | Field | Value |
+   | --- | --- |
+   | Publisher | GitHub Actions |
+   | Repository | `yschimke/design-parity` |
+   | Workflow filename | `release.yml` — the OIDC binding matches on this exact name |
+   | Environment | **blank** — the `publish` job declares no `environment:`, so its token carries no such claim and setting one rejects every publish |
+   | Allowed actions | **`publish`** only. The release runs a plain `npm publish`; `stage publish` grants a staged-then-promoted flow this pipeline never uses |
+
+   After this, every release is token-free and provenance is automatic.
+
+**Skipping step 2 reddens the release.** The publish loop in
+[`release.yml`](./.github/workflows/release.yml) is per-workspace precisely so
+one unpublishable package doesn't abort the rest — but it still sets `fail=1`
+and exits non-zero. Release `0.1.40` failed exactly this way when
+`@design-parity/page-backdrop` was added: the other 14 packages published
+cleanly and the job went red anyway. Once the trusted publisher was configured,
+`0.1.41` published it automatically with provenance and the job went green.
+
+If a new package isn't ready to ship, marking it `"private": true` keeps
+releases green — the loop filters private workspaces — at the cost of it staying
+unpublished.
 
 **Cutting a release** (steady state) — driven by **release-please**, no manual
 tagging:
