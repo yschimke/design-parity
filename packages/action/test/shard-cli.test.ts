@@ -69,6 +69,33 @@ describe("shard CLI args", () => {
   it("defaults the field to the component handle", () => {
     expect(parseArgs(["shard", "--shard", "1/2"]).field).toBe("code");
   });
+
+  it("parses the preview universe path", () => {
+    expect(
+      parseArgs(["shard", "--shard", "1/2", "--preview-universe", "p/previews.json"])
+        .previewUniverse,
+    ).toMatch(/p\/previews\.json$/);
+  });
+
+  // Ignoring an unknown flag does not ignore its VALUE: the path would land in
+  // `components` and the run would compare a component named after a file.
+  it("rejects an unknown option instead of swallowing its value as a component", () => {
+    expect(() => parseArgs(["shard", "--shard", "1/2", "--nope", "some/path.json"])).toThrow(
+      /unknown option: --nope/,
+    );
+  });
+
+  it("exits 2 on an unknown option rather than running a corrupted slice", async () => {
+    const { code, err } = await runShard(["shard", "--shard", "1/2", "--nope", "x.json"]);
+    expect(code).toBe(2);
+    expect(err).toContain("unknown option: --nope");
+  });
+
+  it("advertises --preview-universe in its usage, which is how a caller probes for it", async () => {
+    const { code, lines } = await runShard(["shard"]);
+    expect(code).toBe(2);
+    expect(lines.join("\n")).toContain("--preview-universe");
+  });
 });
 
 describe("shard", () => {

@@ -307,11 +307,25 @@ jobs:
             path="${MODULE#:}"
             manifest="${path//://}/build/compose-previews/previews.json"
           fi
-          if [ -f "$manifest" ]; then
+          # Does this CLI know the flag? Its usage line lists it; a CLI predating
+          # it does not. Worth checking rather than just passing it: an older
+          # `shard` rejects unknown options, and one older still would swallow
+          # the PATH as a component handle and scope the render off nonsense.
+          if npx -y "design-parity@${DP_VERSION}" shard 2>&1 \
+            | grep -q -- '--preview-universe'; then
+            universe=true
+          else
+            universe=false
+            echo "::warning title=CLI too old to scope the render::design-parity@${DP_VERSION} has no '--preview-universe', so the render cannot be limited to this shard's slice — every shard will draw the whole module. Raise design-parity-version."
+          fi
+
+          if [ "$universe" = true ] && [ -f "$manifest" ]; then
             dp --shard "${SHARD}/${SHARDS}" --field previewId --complement \
               --preview-universe "$manifest" > slice-excluded.txt
           else
-            echo "::warning title=Render not scoped::No preview manifest at '${manifest}' — every shard will render the whole module. Set preview-manifest, or have design-map-command write the discovery manifest there."
+            if [ "$universe" = true ]; then
+              echo "::warning title=Render not scoped::No preview manifest at '${manifest}' — every shard will render the whole module. Set preview-manifest, or have design-map-command write the discovery manifest there."
+            fi
             dp --shard "${SHARD}/${SHARDS}" --field previewId --complement \
               > slice-excluded.txt
           fi

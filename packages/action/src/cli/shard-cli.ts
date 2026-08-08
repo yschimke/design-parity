@@ -93,7 +93,16 @@ export function parseArgs(args: string[]): Args {
         out.previewUniverse = resolvePath(next() ?? ".");
         break;
       default:
-        if (a && !a.startsWith("--")) out.components.push(a);
+        // An unknown `--flag` is rejected rather than ignored, because ignoring
+        // it does not skip its VALUE: `--preview-universe path/previews.json` on
+        // a CLI predating that flag would fall through here and push the PATH
+        // into `components`, so the run would compare a component named after a
+        // file and scope the render off a list of one nonexistent handle. A CLI
+        // too old for the caller's workflow has to fail loudly.
+        if (a?.startsWith("--")) {
+          throw new Error(`unknown option: ${a}`);
+        }
+        if (a) out.components.push(a);
     }
   }
   return out;
@@ -147,7 +156,13 @@ export function parsePreviewUniverse(raw: string): string[] {
 }
 
 export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
-  const args = parseArgs(rawArgs);
+  let args: Args;
+  try {
+    args = parseArgs(rawArgs);
+  } catch (e) {
+    stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+    return 2;
+  }
   if (!args.shard) {
     stdout.write(
       "design-parity shard --shard <index>/<total> [--repo .] " +
