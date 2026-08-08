@@ -11,6 +11,33 @@ npx design-parity run \
   --out .design-parity/out
 ```
 
+## `shard` + `merge` — one run across N jobs
+
+A catalog big enough that one job can't compare it inside a timeout doesn't have
+to be narrowed down to a hand-picked subset. Split the *same exhaustive*
+component list across parallel jobs and union the results:
+
+```sh
+# In job i of N: what this shard renders, and what it must not render.
+npx design-parity shard --shard 2/6 --repo . --field previewId
+npx design-parity shard --shard 2/6 --repo . --field previewId --complement
+
+# Compare this shard's slice. Note: given the FULL component list — `--shard`
+# partitions what it is handed, so passing a pre-sliced list slices it twice.
+npx design-parity run --repo . --components "$ALL" --shard 2/6 \
+  --candidate-bundles build/design-parity/candidates.bundle.png \
+  --out build/design-parity/out
+
+# Then, once: reassemble the shards into the artifact set one serial run
+# would have written. Exits 1 on a blocking verdict — after writing the files.
+npx design-parity merge shards/* --out .design-parity/out
+```
+
+Most consumers don't wire this by hand: the
+[reusable workflow](https://github.com/yschimke/design-parity/blob/main/.github/workflows/design-parity-reusable.yml)
+is the whole pipeline behind a `shards:` number. See
+[`docs/PARALLEL_PARITY.md`](https://github.com/yschimke/design-parity/blob/main/docs/PARALLEL_PARITY.md).
+
 ## `reverse` — design → code
 
 Ask the committed `design-map.json` which code implements a design node — the

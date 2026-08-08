@@ -123,3 +123,20 @@ const report = await orchestrate({
 });
 console.log(renderReport(report));
 ```
+
+## Sharding
+
+`src/shard.ts` splits one run across N jobs and puts the pieces back: a
+sort-then-round-robin partition every shard derives independently
+(`partitionComponents`), a `shard.json` per shard, and `verifyShardReports` +
+`mergeShards` to union them into what a serial run would have produced. It is
+what lets an *exhaustive* comparison fit inside a job timeout instead of being
+narrowed to a hand-picked subset.
+
+The CLIs over it are `design-parity shard` (`cli/shard-cli.ts`, read by the
+render step), `design-parity run --shard i/N` (`cli/run.ts`), and
+`design-parity merge` (`cli/merge.ts`). Both sides of a shard read the *same*
+partition implementation — see
+[`docs/PARALLEL_PARITY.md`](https://github.com/yschimke/design-parity/blob/main/docs/PARALLEL_PARITY.md)
+for the invariant and the two orderings (verify-before-merge,
+publish-before-verdict) that it turns on.

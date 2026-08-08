@@ -73,6 +73,12 @@ written-up research verdicts.
   — the emulator-free Desktop/JVM render path, end to end (Claude Design or Stitch).
 - [Candidate sources](./docs/candidate-sources.md) — the four candidate-render
   backends (static bundle, CLI, local-compose-web, daemon) and how they wire in.
+- [Running an exhaustive parity check in parallel](./docs/PARALLEL_PARITY.md) —
+  a large catalog checked in full rather than sampled: the
+  [reusable workflow](./.github/workflows/design-parity-reusable.yml) splits one
+  run across N jobs and `design-parity merge` unions them. How to pick a shard
+  count, and why excluding previews to fit the timeout is the lever to reach for
+  second.
 - [Compose-for-Web / wasm renderer — feasibility verdict](./docs/cmp-web-wasm-feasibility.md)
   — why the web/wasm candidate backend is a deliberate stub (issue #30 stretch).
 - [Design-artifact catalogs](./docs/design-artifacts/PLAN.md) — the code →
@@ -107,7 +113,25 @@ You get the markdown verdict on stdout plus a self-contained `report.html` per
 component under `--out`. See the
 [CMP adoption guide](./docs/adopting-cmp.md) for the full pipeline, and
 [`packages/cli`](./packages/cli) for the package. For CI, consume the GitHub
-Action (`@design-parity/action`).
+Action (`@design-parity/action`), or — for a catalog large enough that one job
+can't check it all inside a timeout — call the
+[reusable workflow](./.github/workflows/design-parity-reusable.yml), which runs
+the same check split across N parallel jobs:
+
+```yaml
+jobs:
+  parity:
+    uses: yschimke/design-parity/.github/workflows/design-parity-reusable.yml@main
+    permissions:
+      contents: write
+    with:
+      module: ':catalog'
+      shards: 6
+    secrets:
+      figma-token: ${{ secrets.FIGMA_TOKEN }}
+```
+
+See [`docs/PARALLEL_PARITY.md`](./docs/PARALLEL_PARITY.md).
 
 ## Develop
 

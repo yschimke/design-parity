@@ -9,6 +9,8 @@
   "exports": {
     ".": "./dist/index.js",
     "./run": "./dist/cli/run.js",
+    "./merge": "./dist/cli/merge.js",
+    "./shard": "./dist/cli/shard-cli.js",
     "./reverse": "./dist/cli/reverse.js",
     "./schema/verdict.schema.json": "./schema/verdict.schema.json"
   },

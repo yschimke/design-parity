@@ -1,0 +1,482 @@
+name: design-parity (reusable)
+
+# The sharded parity run, as a reusable workflow a consumer repo calls.
+#
+# WHY THIS EXISTS. A parity run costs roughly `fixed + per_component × components`.
+# The fixed part is the candidate render's Gradle configure + compile (~4 min,
+# paid whether one preview is drawn or a thousand); the marginal part is one
+# render + reference fetch + diff per component. Past a few hundred components
+# the marginal part dominates and a single job walks into its own timeout.
+#
+# The workaround that has been reached for is to shrink the INPUT — compare only
+# the mapped components and exclude every other preview from the render, tuned by
+# hand in the consumer's own workflow (yschimke/m3-catalog#11). That buys time by
+# giving up coverage, and it has to be re-tuned by hand every time the catalog
+# grows. This workflow buys the same time without giving up coverage: N jobs each
+# render and compare a disjoint slice of the SAME exhaustive component list, and
+# `design-parity merge` unions the slices into the artifact set one serial run
+# would have produced. The consumer passes a number; nothing is hand-scoped.
+#
+# WHAT DIVIDES AND WHAT DOESN'T. Only the marginal cost divides — every shard
+# pays the fixed cost in full — so 4–8 is the useful range and a large fleet is
+# buying Gradle configure time, not throughput. See docs/PARALLEL_PARITY.md for
+# the arithmetic and how to pick a number.
+#
+# THE ONE INVARIANT. Each shard's render and its comparison must select the same
+# components, or the shard renders previews it never diffs and diffs components
+# it never rendered — which surfaces only as "no candidate render available"
+# warnings on a green run. Both sides therefore read the partition from the same
+# place: `design-parity shard --shard i/N`. Neither re-derives it.
+#
+# Usage (the whole consumer-side workflow):
+#
+#   jobs:
+#     parity:
+#       uses: yschimke/design-parity/.github/workflows/design-parity-reusable.yml@main
+#       permissions:
+#         contents: write
+#       with:
+#         module: ':catalog'
+#         shards: 6
+#         design-map-command: ./gradlew :catalog:composePreviewDiscover && node scripts/generate-design-map.mjs
+#       secrets:
+#         figma-token: ${{ secrets.FIGMA_TOKEN }}
+
+on:
+  workflow_call:
+    inputs:
+      module:
+        description: "Gradle module holding the @Preview functions, e.g. ':catalog'."
+        required: true
+        type: string
+      shards:
+        description: >
+          Split the run across this many parallel jobs. 1 (the default) is a
+          single job doing exactly what a serial run does — no artifacts, no
+          merge — so a small catalog pays nothing for this workflow's existence.
+
+          Above 1, each shard renders and compares its own slice and the merge
+          reassembles them. Only the marginal cost divides (see the header), so
+          4–8 is the useful range. More shards than components is allowed: the
+          tail shards no-op rather than failing.
+        required: false
+        type: number
+        default: 1
+      design-map-command:
+        description: >
+          Shell run before the partition, to regenerate `design-map.json` from
+          the repo (e.g. a discovery pass that projects the map out of
+          `@CatalogComponent(reference = …)` annotations). Empty means the
+          committed map is used as-is. Runs in every shard: it is cheap next to
+          the render, and the partition must be derived from the same map the
+          comparison will use.
+        required: false
+        type: string
+        default: ""
+      components:
+        description: >
+          Comma-separated component handles to compare. Empty (the default) means
+          EVERY component in `design-map.json` — the exhaustive run this workflow
+          exists to make affordable. Set it only to deliberately narrow the run.
+        required: false
+        type: string
+        default: ""
+      design-parity-version:
+        description: "npm version of the `design-parity` CLI to run (must be >= the release carrying `merge`)."
+        required: false
+        type: string
+        default: "latest"
+      compose-preview-version:
+        description: "Version passed to the compose-ai-tools install action. `catalog` resolves the pin from the version catalog."
+        required: false
+        type: string
+        default: "catalog"
+      catalog-key:
+        description: "Version-catalog key the compose-preview pin lives under, when `compose-preview-version: catalog`."
+        required: false
+        type: string
+        default: "composePreviewPlugin"
+      artifact-branch:
+        description: "Long-lived branch the merged artifacts are published to. Empty disables publishing (the run still comments its verdict via the exit code)."
+        required: false
+        type: string
+        default: "design-parity/main"
+      render-timeout:
+        description: "Seconds `bundle pack` may spend rendering, per shard. This is the INNER timeout; keep `timeout-minutes` above it."
+        required: false
+        type: number
+        default: 2400
+      desktop-render:
+        description: "Install Mesa/Xvfb and render under xvfb-run — required by the desktop (Skiko) render daemon."
+        required: false
+        type: boolean
+        default: true
+      java-version:
+        description: "Temurin JDK version for the render."
+        required: false
+        type: string
+        default: "21"
+      node-version:
+        description: "Node version for the parity run."
+        required: false
+        type: string
+        default: "24"
+      runs-on:
+        description: "Runner label for every job."
+        required: false
+        type: string
+        default: ubuntu-latest
+      timeout-minutes:
+        description: "Per-shard job timeout. A shard does the fixed setup plus its slice, so this is sized for one slice, not the whole run."
+        required: false
+        type: number
+        default: 60
+    secrets:
+      figma-token:
+        description: "Read-only Figma PAT with `file_content:read`. Absent ⇒ the parity step is skipped with a warning rather than failing."
+        required: false
+
+permissions: {}
+
+jobs:
+  # ── Plan ────────────────────────────────────────────────────────────────────
+  # Turns the shard count into a matrix (Actions has no range expression) and
+  # probes the CLI *before* anything expensive starts. The probe is not
+  # ceremony: the merge runs LAST, after every shard has spent its full budget,
+  # so a CLI predating `merge` would fail with "unknown subcommand" having burned
+  # the entire fan-out. `design-parity-version` defaults to `latest`, but a
+  # consumer pinning an older version is exactly the case that hits this.
+  plan:
+    name: Plan ${{ inputs.shards }} shard(s)
+    if: ${{ inputs.shards > 1 }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Build the shard matrix
+        id: matrix
+        env:
+          SHARDS: ${{ inputs.shards }}
+        run: |
+          set -euo pipefail
+          echo "matrix=[$(seq -s, 1 "$SHARDS")]" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Check the CLI can merge shard runs
+        env:
+          DP_VERSION: ${{ inputs.design-parity-version }}
+        run: |
+          set -euo pipefail
+          # `merge` with no args prints usage and exits 2; an older CLI falls
+          # through to `run`, whose usage names `--components` instead.
+          usage="$(npx -y "design-parity@${DP_VERSION}" merge 2>&1 || true)"
+          if printf '%s' "$usage" | grep -q 'design-parity merge'; then
+            echo "✓ design-parity@${DP_VERSION} supports 'merge'."
+            exit 0
+          fi
+          echo "::error title=CLI too old for shards::design-parity@${DP_VERSION} has no 'merge' subcommand, which a sharded run needs to reassemble the shards. Raise design-parity-version, or set shards: 1."
+          exit 1
+
+  # ── Shard: render + compare one slice ───────────────────────────────────────
+  # Render and comparison live in ONE job rather than two fan-outs joined by an
+  # artifact: the bundle a shard renders is consumed only by that shard's own
+  # comparison, so shipping it between jobs would mean uploading and downloading
+  # hundreds of MB to hand a job data it already had. It also keeps the invariant
+  # local — one job, one `--shard` value, both steps reading it.
+  shard:
+    name: Parity ${{ inputs.shards > 1 && format('shard {0}/{1}', matrix.shard, inputs.shards) || '(single job)' }}
+    needs: [plan]
+    # A skipped `plan` is the single-shard path, not a failure.
+    if: ${{ !cancelled() && needs.plan.result != 'failure' && needs.plan.result != 'cancelled' }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    strategy:
+      # A dead shard takes the run with it: the merge needs every slice, so
+      # letting the siblings burn another 20 minutes to produce an unpublishable
+      # half-run helps nobody.
+      fail-fast: true
+      matrix:
+        # The `|| '[1]'` is inert insurance: with `shards` at its default `plan`
+        # is skipped and its output is empty, and `strategy` is expanded early
+        # enough that a bare `fromJSON('')` can fail the workflow rather than
+        # produce the single-shard case.
+        shard: ${{ fromJSON(needs.plan.outputs.matrix || '[1]') }}
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install compose-preview CLI
+        uses: yschimke/compose-ai-tools/.github/actions/install@main
+        with:
+          version: ${{ inputs.compose-preview-version }}
+          catalog-key: ${{ inputs.catalog-key }}
+          github-token: ${{ github.token }}
+
+      # Read through env, never interpolated into the script body: an input
+      # spliced into `run:` is the classic template-injection shape, and a
+      # reusable workflow's inputs come from whatever repo calls it.
+      - name: Regenerate the design map
+        if: ${{ inputs.design-map-command != '' }}
+        env:
+          DESIGN_MAP_COMMAND: ${{ inputs.design-map-command }}
+        run: bash -eo pipefail -c "$DESIGN_MAP_COMMAND"
+
+      # What this job renders, and what the whole run compares.
+      #
+      # Note the asymmetry, which is load-bearing: the RENDER is given this
+      # shard's slice, but the comparison is given the FULL component list and
+      # partitions it itself from `--shard i/N`. Handing `run --shard` a
+      # pre-sliced list would make it partition the slice again and compare a
+      # fraction of a fraction. One partition, derived twice from the same
+      # implementation — never sliced twice.
+      - name: Plan this shard
+        id: slice
+        env:
+          DP_VERSION: ${{ inputs.design-parity-version }}
+          SHARD: ${{ inputs.shards > 1 && matrix.shard || 1 }}
+          SHARDS: ${{ inputs.shards }}
+          COMPONENTS: ${{ inputs.components }}
+        run: |
+          set -euo pipefail
+          scope=()
+          if [ -n "$COMPONENTS" ]; then scope=(--components "$COMPONENTS"); fi
+          dp() { npx -y "design-parity@${DP_VERSION}" shard --repo . "${scope[@]}" "$@"; }
+          # `--shard 1/1` is the identity partition: every component, in the one
+          # canonical order. This is the exhaustive list — nothing hand-scoped.
+          dp --shard 1/1 > all-components.txt
+          dp --shard "${SHARD}/${SHARDS}" > slice-components.txt
+          dp --shard "${SHARD}/${SHARDS}" --field previewId > slice-previews.txt
+          # The complement is what this shard must NOT render. A positive `--id`
+          # selection alone has been observed not to scope the render (it is the
+          # exclusion list that does), which is the flag m3-catalog#11 had to add
+          # by hand — derived here instead, from the same partition.
+          dp --shard "${SHARD}/${SHARDS}" --field previewId --complement \
+            > slice-excluded.txt
+          {
+            echo "components<<EOF"
+            paste -sd, - < all-components.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "count=$(wc -l < slice-components.txt)" >> "$GITHUB_OUTPUT"
+          echo "Shard ${SHARD}/${SHARDS}: $(wc -l < slice-components.txt) of" \
+            "$(wc -l < all-components.txt) component(s);" \
+            "$(wc -l < slice-previews.txt) preview(s) to render," \
+            "$(wc -l < slice-excluded.txt) excluded."
+
+      # The desktop (Skiko/CPU) render daemon links libGL; install Mesa's
+      # software GL and a font stack.
+      - name: Install desktop (Skiko) render deps
+        if: ${{ inputs.desktop-render && steps.slice.outputs.count != '0' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            xvfb libgl1 libglx-mesa0 libgl1-mesa-dri libfreetype6 libfontconfig1 fontconfig
+
+      - name: Render this shard's candidates
+        if: ${{ steps.slice.outputs.count != '0' }}
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          MODULE: ${{ inputs.module }}
+          RENDER_TIMEOUT: ${{ inputs.render-timeout }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/design-parity
+          args=()
+          while IFS= read -r id; do args+=(--id "$id"); done < slice-previews.txt
+          # An empty exclusion list means this shard owns everything — passing
+          # `--exclude-preview-id ""` would be read as excluding nothing named,
+          # so skip the flag rather than pass an empty value.
+          if [ -s slice-excluded.txt ]; then
+            args+=(--exclude-preview-id "$(paste -sd, - < slice-excluded.txt)")
+          fi
+          run() {
+            if [ "${{ inputs.desktop-render }}" = "true" ]; then
+              xvfb-run -a -s "-screen 0 2000x1400x24" "$@"
+            else
+              "$@"
+            fi
+          }
+          # --with-semantics injects each preview's a11y tree, resolved
+          # foreground/background colours and per-node design tokens, so the
+          # token / contrast / a11y checks can evaluate instead of reporting them
+          # as missing from the candidate.
+          run compose-preview bundle pack --module "$MODULE" "${args[@]}" \
+            --with-semantics -o build/design-parity/candidates.bundle.png \
+            --timeout "$RENDER_TIMEOUT"
+          # Assert the artifact rather than trusting the exit status: a failed
+          # Gradle model query has been observed printing an error and still
+          # exiting 0, which would sail past `set -e` and leave the parity run
+          # reporting "no candidate render available" on a green job.
+          test -s build/design-parity/candidates.bundle.png
+
+      - name: Run design-parity
+        id: parity
+        if: ${{ steps.slice.outputs.count != '0' }}
+        env:
+          FIGMA_TOKEN: ${{ secrets.figma-token }}
+          DP_VERSION: ${{ inputs.design-parity-version }}
+          COMPONENTS: ${{ steps.slice.outputs.components }}
+          SHARD: ${{ inputs.shards > 1 && matrix.shard || 1 }}
+          SHARDS: ${{ inputs.shards }}
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FIGMA_TOKEN:-}" ]; then
+            echo "::warning::FIGMA_TOKEN is not set — skipping the parity run."
+            exit 0
+          fi
+          # `--shard` makes the run write the `shard.json` the merge reads, and
+          # makes a blocking verdict exit 0 here: the verdict belongs to the RUN
+          # and is applied once, by the merge, after the artifacts are published.
+          # Exiting non-zero per shard would take the fan-out down (fail-fast)
+          # and strand the very reports that diagnose the failure.
+          npx -y "design-parity@${DP_VERSION}" run \
+            --repo . \
+            --components "$COMPONENTS" \
+            --shard "${SHARD}/${SHARDS}" \
+            --candidate-bundles build/design-parity/candidates.bundle.png \
+            --out build/design-parity/out \
+            --repo-slug "${GITHUB_REPOSITORY}" \
+            --branch "${BRANCH}" \
+            --source-commit "${GITHUB_SHA}"
+          echo "ran=true" >> "$GITHUB_OUTPUT"
+
+      # Even an empty slice uploads: the merge treats a shard that never reported
+      # as a hard error rather than an absence, which is what catches a lost
+      # upload instead of publishing a quietly incomplete index.
+      - name: Upload shard ${{ matrix.shard }}
+        if: ${{ inputs.shards > 1 && steps.parity.outputs.ran == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: design-parity-shard-${{ matrix.shard }}
+          path: build/design-parity/out
+          if-no-files-found: error
+          retention-days: 1
+
+      # Single-shard runs skip the merge entirely, so they publish from here —
+      # the same artifact set, assembled by the run itself.
+      - name: Upload the run
+        if: ${{ inputs.shards < 2 && steps.parity.outputs.ran == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: design-parity-run
+          path: build/design-parity/out
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Merge + publish ─────────────────────────────────────────────────────────
+  publish:
+    name: Merge and publish
+    needs: [shard]
+    if: ${{ !cancelled() && needs.shard.result == 'success' }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Download the shard runs
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: design-parity-*
+          path: shards
+
+      # Nothing to do when every shard skipped (no FIGMA_TOKEN, or an empty
+      # design map). A skip is not a failure, and publishing an empty branch over
+      # a good one would be worse than doing nothing.
+      - name: Anything to publish?
+        id: check
+        run: |
+          set -euo pipefail
+          if [ -z "$(find shards -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)" ]; then
+            echo "::notice::No shard produced artifacts — nothing to merge or publish."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The verdict is applied AFTER publishing, so a blocking run still ships
+      # the reports that explain it. `merge` writes its artifacts before it
+      # fails, which is what makes `continue-on-error` here safe rather than a
+      # swallowed failure — the exit code is re-applied at the end of the job.
+      - name: Merge the shards
+        id: merge
+        if: ${{ steps.check.outputs.found == 'true' }}
+        continue-on-error: true
+        env:
+          DP_VERSION: ${{ inputs.design-parity-version }}
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          set -euo pipefail
+          mapfile -t dirs < <(find shards -name shard.json | sort -V)
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            # A single-shard run wrote its artifacts directly — no shard.json,
+            # nothing to reassemble.
+            cp -a "$(find shards -mindepth 1 -maxdepth 1 -type d | head -1)" out
+            echo "blocked=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if npx -y "design-parity@${DP_VERSION}" merge "${dirs[@]}" \
+            --out out \
+            --repo-slug "${GITHUB_REPOSITORY}" \
+            --branch "${BRANCH}" \
+            --source-commit "${GITHUB_SHA}"; then
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to ${{ inputs.artifact-branch }}
+        if: ${{ steps.check.outputs.found == 'true' && inputs.artifact-branch != '' && hashFiles('out/**') != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          set -euo pipefail
+          art="$(mktemp -d)"
+          cp -a out/. "$art/"
+          printf '%s\n' "$GITHUB_SHA" > "$art/SOURCE_COMMIT"
+          cd "$art"
+          git init -q
+          git checkout -q -b "$BRANCH"
+          git add -A
+          git \
+            -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "design-parity artifacts for ${GITHUB_SHA}"
+          git push -f \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$BRANCH"
+
+      # The run's verdict, applied last — after the reports that explain it are
+      # on the branch. This is the step that fails a blocking run.
+      - name: Apply the parity verdict
+        if: ${{ steps.merge.outputs.blocked == 'true' }}
+        env:
+          BRANCH: ${{ inputs.artifact-branch }}
+        run: |
+          echo "::error title=Design parity blocked::The parity direction blocks on a failing verdict. See the published report on ${BRANCH}."
+          exit 1
