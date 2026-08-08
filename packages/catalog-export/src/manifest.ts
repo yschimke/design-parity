@@ -79,6 +79,26 @@ export interface CatalogManifestComponent {
   wireframe?: string;
 }
 
+/**
+ * One alternate theme's entry in the manifest: what it is called, and where its
+ * token file lives in the bundle. The tokens themselves are a sibling DTCG file
+ * rather than inline, so a consumer that only needs the *list* of themes (a
+ * picker, an index page) doesn't pay for every theme's full palette, and each
+ * file is importable on its own exactly like the system one.
+ */
+export interface CatalogManifestTheme {
+  /** Stable id — the provider FQN; see `CatalogTheme.id`. */
+  id: string;
+  /** Human label, when the system declares one. */
+  name?: string;
+  /** Declaring group, when the system declares one. */
+  group?: string;
+  /** Whether this is a dark theme; see `CatalogTheme.dark`. */
+  dark?: boolean;
+  /** Bundle-relative path to this theme's DTCG token file. */
+  tokensFile: string;
+}
+
 /** The parsed/serializable `catalog.json`. */
 export interface CatalogManifest {
   schema: "design-parity-catalog/v1";
@@ -108,6 +128,13 @@ export interface CatalogManifest {
    * consumer's defaults.
    */
   display?: CatalogDisplay;
+  /**
+   * The system's alternate named themes and where each one's tokens live —
+   * absent when the system declares none. `tokensFile` above stays the SYSTEM
+   * token set (the theme the stickers were rendered under); these are additive,
+   * so a consumer that predates them reads the same catalog it always did.
+   */
+  themes?: CatalogManifestTheme[];
   components: CatalogManifestComponent[];
 }
 
@@ -140,6 +167,19 @@ export interface ManifestOptions {
 }
 
 const DEFAULT_TOKENS_FILE = "tokens.dtcg.json";
+
+/** Directory the per-theme DTCG files are written under, bundle-relative. */
+const THEMES_DIR = "themes";
+
+/**
+ * Bundle-relative path for one theme's token file: `themes/<slug>.dtcg.json`,
+ * slugged from the theme id (a provider FQN) the same way component ids are, so
+ * the name is filesystem-safe, stable across regenerations, and can never escape
+ * the directory.
+ */
+export function themeTokensPath(id: string): string {
+  return `${THEMES_DIR}/${slug(id)}.dtcg.json`;
+}
 
 /**
  * The live-preview deep link for a manifest image. Targets the server's **viewer**
@@ -308,6 +348,19 @@ export function toCatalogManifest(
   if (catalog.meta.display) manifest.display = catalog.meta.display;
   if (catalog.themeTokens) {
     manifest.tokensFile = opts.tokensFile ?? DEFAULT_TOKENS_FILE;
+  }
+  const themes = catalog.themes ?? [];
+  if (themes.length > 0) {
+    manifest.themes = themes.map((theme) => {
+      const entry: CatalogManifestTheme = {
+        id: theme.id,
+        tokensFile: themeTokensPath(theme.id),
+      };
+      if (theme.name !== undefined) entry.name = theme.name;
+      if (theme.group !== undefined) entry.group = theme.group;
+      if (theme.dark !== undefined) entry.dark = theme.dark;
+      return entry;
+    });
   }
   return manifest;
 }

@@ -6,6 +6,7 @@ import {
   imagePath,
   livePreviewUrl,
   slug,
+  themeTokensPath,
   toCatalogManifest,
 } from "../src/manifest.js";
 import type { Catalog } from "../src/types.js";
@@ -191,6 +192,50 @@ describe("toCatalogManifest", () => {
     expect(img.livePreview).toBe(
       "https://preview.coo.ee/p/button-filled__ideal__default__light?session=compose-m3",
     );
+  });
+});
+
+describe("toCatalogManifest themes", () => {
+  const base: Catalog = {
+    meta: { system: "wear-m3", title: "Wear M3" },
+    components: [],
+  };
+
+  it("declares each theme's id, labels and token file", () => {
+    const manifest = toCatalogManifest({
+      ...base,
+      themes: [
+        {
+          id: "com.example.BrandDarkThemeCatalog",
+          name: "Brand Dark",
+          group: "Brand",
+          dark: true,
+          tokens: { colors: { primary: "#4dd0e1" } },
+        },
+      ],
+    });
+    expect(manifest.themes).toEqual([
+      {
+        id: "com.example.BrandDarkThemeCatalog",
+        name: "Brand Dark",
+        group: "Brand",
+        dark: true,
+        tokensFile: "themes/com.example.branddarkthemecatalog.dtcg.json",
+      },
+    ]);
+  });
+
+  it("omits the array entirely when the system declares no themes", () => {
+    expect(toCatalogManifest(base).themes).toBeUndefined();
+    expect(toCatalogManifest({ ...base, themes: [] }).themes).toBeUndefined();
+  });
+
+  it("slugs a theme id into a filesystem-safe path", () => {
+    // Ids are provider FQNs, but nothing stops a producer from an id with
+    // separators in it — every one becomes a dash, so the result is a single
+    // file name under themes/ that can never escape the directory.
+    expect(themeTokensPath("a/../b Theme")).toBe("themes/a-..-b-theme.dtcg.json");
+    expect(themeTokensPath("a/../b Theme")).not.toContain("/../");
   });
 });
 

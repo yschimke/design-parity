@@ -6,6 +6,7 @@
  * ```
  * catalog.json            # the CatalogManifest index
  * tokens.dtcg.json        # the system token set, W3C DTCG (when present)
+ * themes/<theme>.dtcg.json # one per alternate named theme (when declared)
  * figma-variables.json    # the Figma variable-collection projection (when present)
  * images/<component>/<variant>__<state>[__theme][__size].png
  * ```
@@ -45,6 +46,11 @@ export interface WriteResult {
   manifestPath: string;
   /** Absolute path to the DTCG token file, when tokens were exported. */
   tokensPath?: string;
+  /**
+   * Absolute path to each alternate theme's DTCG token file, in manifest order.
+   * Absent when the system declares no alternate themes.
+   */
+  themeTokensPaths?: string[];
   /** Absolute path to the Figma variables file, when written. */
   figmaPath?: string;
   /** Number of image files written. */
@@ -111,6 +117,23 @@ export async function writeCatalog(
       );
       result.figmaPath = figmaPath;
     }
+  }
+
+  // One DTCG file per alternate theme, at the paths the manifest just named. The
+  // system token set above keeps `figma-variables.json` to itself: that projection
+  // is a single variable collection, and fanning it per theme is a variable-modes
+  // question for the importer to answer, not one to guess at here.
+  if (manifest.themes?.length) {
+    const themesById = new Map((catalog.themes ?? []).map((t) => [t.id, t]));
+    const paths: string[] = [];
+    for (const entry of manifest.themes) {
+      const theme = themesById.get(entry.id);
+      if (!theme) continue;
+      const path = join(out, entry.tokensFile);
+      await writeJson(path, tokensToDtcg(theme.tokens), indent);
+      paths.push(path);
+    }
+    if (paths.length > 0) result.themeTokensPaths = paths;
   }
 
   // Image bytes, keyed by the same paths the manifest computed.

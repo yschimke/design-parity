@@ -82,4 +82,35 @@ describe("buildCatalog", () => {
   it("leaves themeTokens unset when nothing supplies them", () => {
     expect(buildCatalog(meta, [{ componentId: "A", ideal }]).themeTokens).toBeUndefined();
   });
+
+  it("carries the alternate named themes it is given, in declaration order", () => {
+    const themes = [
+      { id: "app.BrandDark", name: "Brand Dark", dark: true, tokens: { colors: { primary: "#111" } } },
+      { id: "app.HighContrast", tokens: { typography: { titleMedium: { fontFamily: "Rubik" } } } },
+    ];
+    const catalog = buildCatalog(meta, [{ componentId: "A", ideal }], undefined, themes);
+    expect(catalog.themes?.map((t) => t.id)).toEqual(["app.BrandDark", "app.HighContrast"]);
+    // A theme carrying only a typeface is a real theme: swapping the type scale
+    // is exactly what several published theme catalogs do.
+    expect(catalog.themes?.[1]?.tokens.typography?.titleMedium?.fontFamily).toBe("Rubik");
+  });
+
+  it("never publishes a theme a consumer would find nothing behind", () => {
+    const catalog = buildCatalog(meta, [{ componentId: "A", ideal }], undefined, [
+      { id: "", tokens: { colors: { primary: "#111" } } },
+      { id: "app.Empty", tokens: {} },
+      { id: "app.AlsoEmpty", tokens: { colors: {} } },
+      { id: "app.Real", tokens: { colors: { primary: "#222" } } },
+      // A duplicate id keeps the FIRST entry: publishing one theme twice would
+      // give a picker two identical chips resolving to the same token file.
+      { id: "app.Real", tokens: { colors: { primary: "#333" } } },
+    ]);
+    expect(catalog.themes?.map((t) => t.id)).toEqual(["app.Real"]);
+    expect(catalog.themes?.[0]?.tokens.colors?.primary).toBe("#222");
+  });
+
+  it("leaves themes unset when none are declared", () => {
+    expect(buildCatalog(meta, [{ componentId: "A", ideal }], undefined, []).themes).toBeUndefined();
+    expect(buildCatalog(meta, [{ componentId: "A", ideal }]).themes).toBeUndefined();
+  });
 });

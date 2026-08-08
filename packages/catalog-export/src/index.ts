@@ -18,6 +18,7 @@ export type {
   CatalogDisplay,
   CatalogMeta,
   CatalogScreen,
+  CatalogTheme,
   ComponentReference,
   ComponentVariants,
   CatalogImage,
@@ -61,6 +62,7 @@ export {
   imagePath,
   livePreviewUrl,
   slug,
+  themeTokensPath,
   toCatalogManifest,
   wireframePath,
 } from "./manifest.js";
@@ -69,6 +71,7 @@ export type {
   CatalogManifest,
   CatalogManifestComponent,
   CatalogManifestImage,
+  CatalogManifestTheme,
   ManifestOptions,
   PreviewServerOptions,
   VariantKind,
