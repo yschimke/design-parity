@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.44](https://github.com/yschimke/design-parity/compare/v0.1.43...v0.1.44) (2026-08-08)
+
+
+### Bug Fixes
+
+* **release:** let a manual dispatch publish an already-cut release ([#310](https://github.com/yschimke/design-parity/issues/310)) ([a910fa2](https://github.com/yschimke/design-parity/commit/a910fa27fba5ec9ce251d1cf5c30a3f3ad1dc9c9))
+
 ## [0.1.43](https://github.com/yschimke/design-parity/compare/v0.1.42...v0.1.43) (2026-08-08)
 
 
