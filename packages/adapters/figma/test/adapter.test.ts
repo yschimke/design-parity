@@ -289,3 +289,96 @@ describe("FigmaAdapter.resolve (errors)", () => {
     ).rejects.toBeInstanceOf(FigmaNodeNotFoundError);
   });
 });
+
+describe("prefetch (batched reads)", () => {
+  /** Records every API path, and serves any node id out of one nodes response. */
+  function countingFetch(): { fetch: FetchLike; paths: string[] } {
+    const paths: string[] = [];
+    const fetch: FetchLike = async (url) => {
+      paths.push(url);
+      if (url.includes("/variables/local")) return jsonRes(variables);
+      if (url.includes("/nodes?")) {
+        const ids = decodeURIComponent(new URL(url).searchParams.get("ids") ?? "");
+        const nodes: Record<string, unknown> = {};
+        for (const id of ids.split(",")) nodes[id] = { document: { ...node, id }, styles };
+        return jsonRes({ nodes });
+      }
+      if (url.includes("/v1/images/")) {
+        const id = decodeURIComponent(new URL(url).searchParams.get("ids") ?? "");
+        return jsonRes({ err: null, images: { [id]: "https://img.test/light.svg" } });
+      }
+      if (url === "https://img.test/light.svg") return new Response(svg160x48("#645AFF"));
+      return new Response("not found", { status: 404 });
+    };
+    return { fetch, paths };
+  }
+
+  const refs = ["1:42", "1:43", "1:44"].map((id) => `figma:${FILE}/${id}`);
+
+  it("reads every warmed node in ONE nodes request", async () => {
+    const { fetch, paths } = countingFetch();
+    const adapter = createFigmaAdapter({ fetch, baseUrl: BASE });
+    const c = await ctx();
+
+    await adapter.prefetch!(refs, c);
+
+    const nodeCalls = paths.filter((p) => p.includes("/nodes?"));
+    expect(nodeCalls).toHaveLength(1);
+    expect(decodeURIComponent(nodeCalls[0]!)).toContain("1:42,1:43,1:44");
+  });
+
+  it("resolves from the warm cache without going back for structure", async () => {
+    const { fetch, paths } = countingFetch();
+    const adapter = createFigmaAdapter({ fetch, baseUrl: BASE });
+    const c = await ctx();
+
+    await adapter.prefetch!(refs, c);
+    const before = paths.filter((p) => p.includes("/nodes?")).length;
+    for (const ref of refs) await adapter.resolve("c#C", ref, c);
+    const after = paths.filter((p) => p.includes("/nodes?")).length;
+
+    // Three components resolved, no further structure reads: 1 request, not 4.
+    expect(before).toBe(1);
+    expect(after).toBe(1);
+  });
+
+  it("fetches a file's variables once, not once per component", async () => {
+    const { fetch, paths } = countingFetch();
+    const adapter = createFigmaAdapter({ fetch, baseUrl: BASE });
+    const c = await ctx();
+
+    await adapter.prefetch!(refs, c);
+    for (const ref of refs) await adapter.resolve("c#C", ref, c);
+
+    expect(paths.filter((p) => p.includes("/variables/local"))).toHaveLength(1);
+  });
+
+  it("falls back to a single read when the warm missed the node", async () => {
+    const { fetch, paths } = countingFetch();
+    const adapter = createFigmaAdapter({ fetch, baseUrl: BASE });
+    const c = await ctx();
+
+    // Never warmed: resolve still works, it just pays for its own request.
+    await adapter.resolve("c#C", `figma:${FILE}/9:99`, c);
+    expect(paths.filter((p) => p.includes("/nodes?"))).toHaveLength(1);
+  });
+
+  it("survives a failing warm, leaving resolve to fetch alone", async () => {
+    const paths: string[] = [];
+    let first = true;
+    const fetch: FetchLike = async (url) => {
+      paths.push(url);
+      if (url.includes("/nodes?") && first) {
+        first = false;
+        return new Response("boom", { status: 500 });
+      }
+      return countingFetch().fetch(url);
+    };
+    const adapter = createFigmaAdapter({ fetch, baseUrl: BASE, attempts: 1 });
+    const c = await ctx();
+
+    await expect(adapter.prefetch!(refs, c)).resolves.toBeUndefined();
+    const ref = await adapter.resolve("c#C", refs[0]!, c);
+    expect(ref.componentId).toBe("c#C");
+  });
+});

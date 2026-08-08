@@ -16,6 +16,7 @@ import type {
   DesignSource,
   DesignTokens,
   Finding,
+  ReferenceAdapter,
   ResolvedDirection,
   TokenAliasMap,
   Verdict,
@@ -264,6 +265,31 @@ export async function orchestrate(
   // The output slug chosen for each result, reused when building the index so a
   // row's report link matches the dir the report was written to.
   const slugByResult = new Map<ComponentResult, string>();
+
+  // Give each adapter the whole list before resolving any of it. Correspondences
+  // are resolved one after another, so an adapter has no other moment at which
+  // it can see more than one ref — and for a source with a rate limiter, asking
+  // once for fifty nodes rather than fifty times for one is the difference
+  // between a complete run and a truncated one. Best-effort: a warm that fails
+  // leaves `resolve` to fetch alone.
+  const refsByAdapter = new Map<ReferenceAdapter, string[]>();
+  for (const corr of options.correspondences) {
+    const adapter = options.registry[corr.source];
+    if (!adapter?.prefetch) continue;
+    const refs = refsByAdapter.get(adapter) ?? [];
+    refs.push(...(corr.refs ? corr.refs.map((v) => v.ref) : [corr.ref]));
+    refsByAdapter.set(adapter, refs);
+  }
+  for (const [adapter, refs] of refsByAdapter) {
+    try {
+      await adapter.prefetch?.(refs, ctx);
+    } catch (err) {
+      warnings.push(
+        `${adapter.source}: prefetch failed (${err instanceof Error ? err.message : String(err)}) — ` +
+          `references will be fetched one at a time`,
+      );
+    }
+  }
 
   for (const corr of options.correspondences) {
     const result: ComponentResult = {
