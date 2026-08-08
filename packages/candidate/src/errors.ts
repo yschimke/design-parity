@@ -28,6 +28,35 @@ export class MissingComposePreviewError extends CandidateError {
   }
 }
 
+/**
+ * The `compose-preview` CLI is present but older than this wrapper's contract.
+ *
+ * Worth its own class because the failure it replaces was so misleading: an
+ * out-of-date CLI used to surface as a JSON parse error from `show --json`, or
+ * as an exit code this wrapper mapped to the wrong meaning — both of which read
+ * as a bug in design-parity rather than an environment that needs updating.
+ */
+export class UnsupportedComposePreviewVersionError extends CandidateError {
+  override name = "UnsupportedComposePreviewVersionError";
+  /** The version reported by `compose-preview --version`. */
+  readonly found: string;
+  /** The minimum this wrapper supports. */
+  readonly minimum: string;
+  constructor(found: string, minimum: string, cliPath: string) {
+    super(
+      `compose-preview ${found} is too old — this needs >= ${minimum}.\n` +
+        `The candidate side consumes 'compose-preview show --json' and its exit\n` +
+        `codes; both are owned by that CLI and have changed across versions, so an\n` +
+        `older binary fails later as an unreadable payload rather than here.\n` +
+        `To fix, update it (bootstrap installer):\n` +
+        `  https://github.com/yschimke/compose-ai-tools\n` +
+        `Then verify with: ${cliPath} --version`,
+    );
+    this.found = found;
+    this.minimum = minimum;
+  }
+}
+
 /** The CLI ran but found no previews to render (CLI exit code 3). */
 export class NoPreviewsError extends CandidateError {
   override name = "NoPreviewsError";
