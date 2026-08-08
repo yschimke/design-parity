@@ -37,6 +37,8 @@ export interface ComponentSource {
   reference?: ComponentReference;
   /** Family handle for {@link reference}; see {@link CatalogComponent.referenceSet}. */
   referenceSet?: string;
+  /** Stated reason there is no {@link reference}; see {@link CatalogComponent.noReference}. */
+  noReference?: string;
   /** Ideal capture image(s) — one per state/theme/size. */
   ideal: CatalogImage[];
   /** Layout/wireframe image(s) from `compose/semantics-wireframe`. */
@@ -69,6 +71,7 @@ export function buildComponent(source: ComponentSource): CatalogComponent {
   if (source.caption !== undefined) component.caption = source.caption;
   if (source.reference !== undefined) component.reference = source.reference;
   if (source.referenceSet !== undefined) component.referenceSet = source.referenceSet;
+  if (source.noReference !== undefined) component.noReference = source.noReference;
   if (source.tokens !== undefined) component.tokens = source.tokens;
   if (source.semantics !== undefined) component.semantics = source.semantics;
   const wireframeSvg = buildWireframeSvg(source.semantics);

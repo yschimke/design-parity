@@ -76,6 +76,44 @@ describe("catalogFromCandidates", () => {
     expect(filled.greenlines.some((g) => g.detail?.["role"] === "button")).toBe(true);
   });
 
+  it("carries both kit handles and a stated absence from spec to catalog", () => {
+    // The join copies field by field, so each of these reaches the published catalog only by
+    // being named in `catalogFromCandidates` — the same silent-omission shape the ingest test
+    // guards. `reference` and `noReference` are mutually exclusive in practice, but the join has
+    // no business enforcing that: it reports what the spec declared.
+    const annotated: CatalogSpec = {
+      ...spec,
+      groups: [
+        {
+          name: "Buttons",
+          components: [
+            {
+              componentId: "Button/Filled",
+              preview: "FilledButton",
+              reference: { source: "figma", ref: "figma:AbCdEf/51964:64241" },
+              referenceSet: "figma:AbCdEf/51964:63037",
+            },
+            {
+              componentId: "Button/Text",
+              preview: "TextButtonSticker",
+              noReference: "Kit never published a text button.",
+            },
+          ],
+        },
+      ],
+    };
+    const { catalog } = catalogFromCandidates(
+      [candidate("com.example.CKt", "FilledButton"), candidate("com.example.CKt", "TextButtonSticker")],
+      annotated,
+    );
+
+    const [filled, text] = catalog.components;
+    expect(filled!.referenceSet).toBe("figma:AbCdEf/51964:63037");
+    expect(filled!.noReference).toBeUndefined();
+    expect(text!.reference).toBeUndefined();
+    expect(text!.noReference).toBe("Kit never published a text button.");
+  });
+
   it("lifts the system token set from a candidate's themeTokens", () => {
     const { catalog } = catalogFromCandidates(
       [candidate("com.example.CKt", "FilledButton"), candidate("com.example.CKt", "TextButtonSticker")],

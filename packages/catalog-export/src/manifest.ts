@@ -66,6 +66,8 @@ export interface CatalogManifestComponent {
   reference?: ComponentReference;
   /** Family handle for {@link reference}; see {@link CatalogComponent.referenceSet}. */
   referenceSet?: string;
+  /** Stated reason there is no {@link reference}; see {@link CatalogComponent.noReference}. */
+  noReference?: string;
   images: CatalogManifestImage[];
   tokens?: DesignTokens;
   greenlines: Greenline[];
@@ -320,6 +322,7 @@ function manifestComponent(
   if (component.caption !== undefined) out.caption = component.caption;
   if (component.reference !== undefined) out.reference = component.reference;
   if (component.referenceSet !== undefined) out.referenceSet = component.referenceSet;
+  if (component.noReference !== undefined) out.noReference = component.noReference;
   if (component.tokens !== undefined) out.tokens = component.tokens;
   if (component.wireframeSvg !== undefined) out.wireframe = wireframePath(component.componentId);
   return out;

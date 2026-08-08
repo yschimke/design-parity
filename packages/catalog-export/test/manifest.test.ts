@@ -60,6 +60,7 @@ describe("toCatalogManifest", () => {
         caption: "Primary action",
         reference: { source: "figma", url: "https://figma.com/..." },
         referenceSet: "figma:AbCdEf/58114:20565",
+        noReference: "Kit publishes only the tonal variant; close enough to mislead.",
         variants: {
           ideal: [
             {
@@ -117,6 +118,9 @@ describe("toCatalogManifest", () => {
     // The family handle has to survive onto the serialized manifest too, or the published
     // catalog.json drops it even though buildComponent kept it.
     expect(c.referenceSet).toBe("figma:AbCdEf/58114:20565");
+    // Same for the stated-absence reason: it is the only signal separating "audited, kit has
+    // nothing" from "nobody has looked", and it is worthless if it stops short of catalog.json.
+    expect(c.noReference).toBe("Kit publishes only the tonal variant; close enough to mislead.");
     expect(c.tokens).toEqual({ radius: { container: 20 } });
     expect(c.greenlines).toHaveLength(1);
   });

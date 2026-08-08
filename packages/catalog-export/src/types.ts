@@ -199,6 +199,16 @@ export interface CatalogComponent {
    * the family, since a screen rarely uses the exact variant a catalog pictured.
    */
   referenceSet?: string;
+  /**
+   * Why this component has **no** {@link reference} — set only when the absence is a finding
+   * rather than a gap: the kit retired the pattern, never published it, or publishes something
+   * close enough to mislead.
+   *
+   * Distinct from an absent {@link reference}, which means only "nobody has looked yet". A
+   * consumer cannot tell the two apart without this, so a deliberately unreferenced component
+   * reads identically to an unaudited one and keeps being re-investigated.
+   */
+  noReference?: string;
   variants: ComponentVariants;
   /** Per-component resolved tokens (the padding / radius / type actually used). */
   tokens?: DesignTokens;
