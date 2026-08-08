@@ -112,6 +112,18 @@ on:
         required: false
         type: string
         default: "latest"
+      design-parity-ref:
+        description: >
+          Test an UNRELEASED design-parity: a git ref of yschimke/design-parity
+          to build and run instead of the published `design-parity-version`.
+          The whole monorepo is checked out and built, so the run exercises the
+          `@design-parity/*` workspaces at that ref — a fix in an adapter is
+          reachable, which it is not from a tarball of the launcher alone.
+          Empty (the default) runs the published CLI. Pair it with a `uses:` ref
+          on this workflow to test a change to the pipeline itself.
+        required: false
+        type: string
+        default: ""
       compose-preview-version:
         description: "Version passed to the compose-ai-tools install action. `catalog` resolves the pin from the version catalog."
         required: false
@@ -201,7 +213,10 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
 
+      # Skipped for a ref: the gate exists to catch a published version too old
+      # to reassemble shards, and a ref IS the code under test.
       - name: Check the CLI can merge shard runs
+        if: ${{ inputs.design-parity-ref == '' }}
         env:
           DP_VERSION: ${{ inputs.design-parity-version }}
         run: |
@@ -267,6 +282,28 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
+
+      # Build the CLI under test. Workspace resolution is the point: running
+      # `packages/cli/bin/design-parity.mjs` from a checkout binds
+      # `@design-parity/*` to the sibling workspaces rather than to whatever npm
+      # would fetch, so a change in an adapter is actually the code that runs.
+      - name: Check out design-parity@${{ inputs.design-parity-ref }}
+        if: ${{ inputs.design-parity-ref != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yschimke/design-parity
+          ref: ${{ inputs.design-parity-ref }}
+          path: .design-parity-src
+
+      - name: Build design-parity from source
+        if: ${{ inputs.design-parity-ref != '' }}
+        working-directory: .design-parity-src
+        run: |
+          set -euo pipefail
+          npm ci --silent
+          npm run build --silent
+          node packages/cli/bin/design-parity.mjs merge >/dev/null 2>&1 || true
+          echo "::notice::Running design-parity from ${{ inputs.design-parity-ref }} rather than the published CLI."
 
       - name: Install compose-preview CLI
         uses: yschimke/compose-ai-tools/.github/actions/install@main
@@ -417,6 +454,7 @@ jobs:
         env:
           FIGMA_TOKEN: ${{ secrets.figma-token }}
           DP_VERSION: ${{ inputs.design-parity-version }}
+          DP_REF: ${{ inputs.design-parity-ref }}
           COMPONENTS: ${{ steps.slice.outputs.components }}
           SHARD: ${{ inputs.shards > 1 && matrix.shard || 1 }}
           SHARDS: ${{ inputs.shards }}
@@ -432,7 +470,12 @@ jobs:
           # and is applied once, by the merge, after the artifacts are published.
           # Exiting non-zero per shard would take the fan-out down (fail-fast)
           # and strand the very reports that diagnose the failure.
-          npx -y "design-parity@${DP_VERSION}" run \
+          if [ -n "${DP_REF:-}" ]; then
+            dp=(node "${GITHUB_WORKSPACE}/.design-parity-src/packages/cli/bin/design-parity.mjs")
+          else
+            dp=(npx -y "design-parity@${DP_VERSION}")
+          fi
+          "${dp[@]}" run \
             --repo . \
             --components "$COMPONENTS" \
             --shard "${SHARD}/${SHARDS}" \
@@ -479,6 +522,28 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
+
+      # Build the CLI under test. Workspace resolution is the point: running
+      # `packages/cli/bin/design-parity.mjs` from a checkout binds
+      # `@design-parity/*` to the sibling workspaces rather than to whatever npm
+      # would fetch, so a change in an adapter is actually the code that runs.
+      - name: Check out design-parity@${{ inputs.design-parity-ref }}
+        if: ${{ inputs.design-parity-ref != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yschimke/design-parity
+          ref: ${{ inputs.design-parity-ref }}
+          path: .design-parity-src
+
+      - name: Build design-parity from source
+        if: ${{ inputs.design-parity-ref != '' }}
+        working-directory: .design-parity-src
+        run: |
+          set -euo pipefail
+          npm ci --silent
+          npm run build --silent
+          node packages/cli/bin/design-parity.mjs merge >/dev/null 2>&1 || true
+          echo "::notice::Running design-parity from ${{ inputs.design-parity-ref }} rather than the published CLI."
 
       - name: Download the shard runs
         id: download
@@ -535,6 +600,7 @@ jobs:
         continue-on-error: true
         env:
           DP_VERSION: ${{ inputs.design-parity-version }}
+          DP_REF: ${{ inputs.design-parity-ref }}
           BRANCH: ${{ inputs.artifact-branch }}
           PREVIOUS_FOUND: ${{ steps.previous.outputs.found }}
         run: |
@@ -556,7 +622,12 @@ jobs:
           fi
           prev=()
           if [ "${PREVIOUS_FOUND}" = "true" ]; then prev=(--previous previous); fi
-          if npx -y "design-parity@${DP_VERSION}" merge "${dirs[@]}" \
+          if [ -n "${DP_REF:-}" ]; then
+            dp=(node "${GITHUB_WORKSPACE}/.design-parity-src/packages/cli/bin/design-parity.mjs")
+          else
+            dp=(npx -y "design-parity@${DP_VERSION}")
+          fi
+          if "${dp[@]}" merge "${dirs[@]}" \
             --out out \
             "${prev[@]}" \
             --repo-slug "${GITHUB_REPOSITORY}" \
