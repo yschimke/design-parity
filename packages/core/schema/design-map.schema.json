@@ -4,23 +4,37 @@
   "title": "design-map",
   "description": "In-repo manifest linking code components to design references for sources without a machine link (Stitch, Claude Design) or as an override for Figma.",
   "type": "object",
-  "required": ["components"],
+  "required": [
+    "components"
+  ],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
     "components": {
       "type": "array",
-      "items": { "$ref": "#/definitions/component" }
+      "items": {
+        "$ref": "#/definitions/component"
+      }
     },
     "tokens": {
       "type": "object",
       "description": "Design-name to code-name token aliases, keyed by code token name. Lets token-compliance match tokens whose design and code vocabularies differ (e.g. code 'onSurface' <-> design 'color/on-surface').",
       "additionalProperties": false,
       "properties": {
-        "colors": { "$ref": "#/definitions/aliasGroup" },
-        "typography": { "$ref": "#/definitions/aliasGroup" },
-        "spacing": { "$ref": "#/definitions/aliasGroup" },
-        "radius": { "$ref": "#/definitions/aliasGroup" }
+        "colors": {
+          "$ref": "#/definitions/aliasGroup"
+        },
+        "typography": {
+          "$ref": "#/definitions/aliasGroup"
+        },
+        "spacing": {
+          "$ref": "#/definitions/aliasGroup"
+        },
+        "radius": {
+          "$ref": "#/definitions/aliasGroup"
+        }
       }
     }
   },
@@ -28,35 +42,76 @@
     "aliasGroup": {
       "type": "object",
       "description": "Code token name -> design token name.",
-      "additionalProperties": { "type": "string", "minLength": 1 }
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "refVariant": {
       "type": "object",
       "description": "A reference handle tagged with the variant slot (state/theme/size) it fills.",
-      "required": ["ref"],
+      "required": [
+        "ref"
+      ],
       "additionalProperties": false,
       "properties": {
-        "ref": { "type": "string", "minLength": 1 },
-        "state": { "type": "string", "minLength": 1 },
-        "theme": { "type": "string", "enum": ["light", "dark"] },
-        "size": { "type": "string", "minLength": 1 }
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "light",
+            "dark"
+          ]
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "previewIdVariant": {
       "type": "object",
       "description": "A candidate preview id tagged with the variant slot (state/theme/size) it fills. The candidate-side mirror of refVariant: lets one code component bind several previews when each theme/state/size is authored as its own @Preview. See design-parity issue #111.",
-      "required": ["previewId"],
+      "required": [
+        "previewId"
+      ],
       "additionalProperties": false,
       "properties": {
-        "previewId": { "type": "string", "minLength": 1 },
-        "state": { "type": "string", "minLength": 1 },
-        "theme": { "type": "string", "enum": ["light", "dark"] },
-        "size": { "type": "string", "minLength": 1 }
+        "previewId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme": {
+          "type": "string",
+          "enum": [
+            "light",
+            "dark"
+          ]
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "component": {
       "type": "object",
-      "required": ["code", "source", "ref"],
+      "required": [
+        "code",
+        "source",
+        "ref"
+      ],
       "additionalProperties": false,
       "properties": {
         "code": {
@@ -66,27 +121,46 @@
         },
         "source": {
           "type": "string",
-          "enum": ["figma", "stitch", "claude-design", "bundle"]
+          "enum": [
+            "figma",
+            "stitch",
+            "claude-design",
+            "bundle"
+          ]
         },
         "ref": {
           "description": "Source-specific reference handle(s). A string binds a single node. A list of variant-tagged handles binds several nodes (a screen's states/themes/sizes in separate frames). Figma: 'figma:<fileKey>/<nodeId>'. Stitch: 'stitch:<designId>'. Claude Design: repo-relative path to a committed HTML export, a '.json' DTCG token artifact, or a 'live:<path>' prototype the adapter live-renders per viewport instead of rasterizing a static export (issue #85). Bundle: repo-relative path to a committed directory or '.zip' of reference PNGs plus a manifest.json.",
           "oneOf": [
-            { "type": "string", "minLength": 1 },
+            {
+              "type": "string",
+              "minLength": 1
+            },
             {
               "type": "array",
               "minItems": 1,
-              "items": { "$ref": "#/definitions/refVariant" }
+              "items": {
+                "$ref": "#/definitions/refVariant"
+              }
             }
           ]
+        },
+        "refSet": {
+          "type": "string",
+          "description": "Optional handle for the component FAMILY that `ref` is one variant of — a Figma component set, or whatever the source calls the node owning a component's variants. Sources without the concept omit it. Kept separate from `ref` because the two serve different consumers: parity diffs against `ref`, so that must be one concrete renderable variant, while whole-screen matching (page backdrops) sees an instance reporting its own variant plus its set, and a screen rarely uses the exact variant a catalog pictured. Figma: 'figma:<fileKey>/<nodeId>' naming a COMPONENT_SET."
         },
         "previewId": {
           "description": "Optional compose-ai-tools preview id this code handle renders as. A string binds a single candidate preview (e.g. 'ee.app.FooKt.Bar'); a list of variant-tagged handles binds several themes/states/sizes authored as separate @Previews, each re-tagged onto its variant slot and merged into one candidate (issue #111). Links a preview-bundle/daemon candidate (keyed by preview id) to this reference (keyed by code handle). See design-parity issues #44 and #111.",
           "oneOf": [
-            { "type": "string", "minLength": 1 },
+            {
+              "type": "string",
+              "minLength": 1
+            },
             {
               "type": "array",
               "minItems": 1,
-              "items": { "$ref": "#/definitions/previewIdVariant" }
+              "items": {
+                "$ref": "#/definitions/previewIdVariant"
+              }
             }
           ]
         },

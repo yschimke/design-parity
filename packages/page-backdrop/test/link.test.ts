@@ -59,6 +59,71 @@ describe("linkInstance precedence", () => {
     expect(linkInstance(bare, FILE, { codeConnect }).placement.code).toBe("ui/Inst.kt#FromInstance");
   });
 
+  it("links an instance whose variant differs from the mapped one, via refSet", () => {
+    // The real m3-catalog failure: the Upcoming screen's list items are
+    // instances of 51964:65404, a sibling of the variant the catalog pictured.
+    // Matching on the mapped variant alone left all five unlinked even though
+    // the component is mapped; the component set covers every variant at once.
+    const listItem = hit({
+      nodeId: "2:7",
+      name: "List item",
+      componentId: "51964:65404",
+      componentSetId: "51964:63037",
+    });
+    const designMap: DesignMap = {
+      components: [
+        {
+          code: "ui/Lists.kt#ListItemSticker",
+          source: "figma",
+          ref: `figma:${FILE}/51964:64241`, // a different variant — what parity diffs against
+          refSet: `figma:${FILE}/51964:63037`, // the family the screen's variant belongs to
+        },
+      ],
+    };
+
+    const { placement } = linkInstance(listItem, FILE, { designMap });
+    expect(placement.code).toBe("ui/Lists.kt#ListItemSticker");
+    expect(placement.link).toBe("manifest");
+    // Matched on the set, and says so — a reader can see which ref carried it.
+    expect(placement.matchedRef).toBe(`figma:${FILE}/51964:63037`);
+
+    // Without refSet the same instance is unlinked, which is the bug.
+    const withoutSet: DesignMap = {
+      components: [
+        { code: "ui/Lists.kt#ListItemSticker", source: "figma", ref: `figma:${FILE}/51964:64241` },
+      ],
+    };
+    expect(linkInstance(listItem, FILE, { designMap: withoutSet }).placement.link).toBe("unlinked");
+  });
+
+  it("still prefers the exact variant when the design map names it", () => {
+    // refSet widens matching; it must not coarsen it. An instance whose own
+    // component is mapped should resolve to that component's code, not to
+    // whatever else shares the family.
+    const designMap: DesignMap = {
+      components: [
+        {
+          code: "ui/Bars.kt#Medium",
+          source: "figma",
+          ref: `figma:${FILE}/10:5`,
+          refSet: `figma:${FILE}/10:1`,
+        },
+        {
+          code: "ui/Bars.kt#Small",
+          source: "figma",
+          ref: `figma:${FILE}/10:9`,
+          refSet: `figma:${FILE}/10:1`,
+        },
+      ],
+    };
+    // The linker tries the set first, so a shared family is ambiguous and warns
+    // rather than silently picking — the honest outcome when two components
+    // claim the same set.
+    const { placement, warnings } = linkInstance(hit(), FILE, { designMap });
+    expect(placement.code).toBe("ui/Bars.kt#Medium");
+    expect(warnings.join("\n")).toMatch(/bound to 2 code handles/);
+  });
+
   it("falls back to a name match, flagged as convention", () => {
     const { placement } = linkInstance(hit({ name: "OfferCard" }), FILE, {
       codeHandles: ["ui/Card.kt#OfferCard", "ui/Button.kt#PrimaryButton"],

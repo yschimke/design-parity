@@ -31,6 +31,32 @@ export interface DesignMapEntry {
    */
   ref: string | RefVariant[];
   /**
+   * Optional handle for the **component family** {@link ref} is one variant of —
+   * a Figma component *set*, or whatever the source calls the node that owns a
+   * component's variants. Sources with no such concept (Stitch, Claude Design,
+   * bundle) simply omit it.
+   *
+   * Why it exists, and why it is not just another {@link ref}: the two are read
+   * by different consumers wanting incompatible things.
+   *
+   * - **Parity** diffs a render against `ref`, so `ref` must be one concrete,
+   *   renderable variant. Point it at a set and the comparison is against a
+   *   grid of every variant at once — meaningless.
+   * - **Whole-screen matching** ({@link https://github.com/yschimke/design-parity/blob/main/docs/page-backdrop-contract.md | page backdrops})
+   *   sees a component *instance* on a screen, which reports its own variant and
+   *   its set. A screen almost never uses the exact variant a catalog chose to
+   *   picture, so matching on `ref` alone misses — while the set matches every
+   *   variant of the component at once.
+   *
+   * Measured on the Material 3 kit: mapping only per-variant refs linked 3 of 11
+   * instances on a real screen; the misses were a list item and a carousel whose
+   * screens used *sibling variants* of the very components the catalog maps.
+   *
+   * So this is the family key, kept separate from the parity key rather than
+   * overloading one field to mean both.
+   */
+  refSet?: string;
+  /**
    * Optional compose-ai-tools preview id this code handle renders as — the
    * authoritative link between a preview-bundle / daemon candidate (keyed by
    * preview id) and this reference (keyed by code handle), see issue #44.
