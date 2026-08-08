@@ -500,6 +500,15 @@ interface CatalogTokenEntry {
 interface CatalogTokenSidecar {
   schema?: string;
   previewId?: string;
+  /**
+   * Present only on a **theme** sheet: the display name of the `@ThemeCatalog` /
+   * `@WearThemeCatalog` provider whose live `MaterialTheme` these tokens were
+   * resolved from (compose-ai-tools#2179). Absent on a `@ColorCatalog` /
+   * `@TypographyCatalog` sheet, whose tokens are the system's own — which is
+   * exactly the distinction {@link catalogTokensFromBundle} and
+   * {@link themeTokenSetsFromBundle} split on.
+   */
+  theme?: string;
   tokens?: CatalogTokenEntry[];
 }
 
@@ -534,20 +543,85 @@ function toTypographyToken(
 export function catalogTokensFromBundle(
   bundle: PreviewBundle,
 ): DesignTokens | undefined {
-  const colors: Record<string, string> = {};
-  const typography: Record<string, TypographyToken> = {};
+  return tokensFrom(readCatalogSidecars(bundle).filter((s) => !s.theme));
+}
 
+/**
+ * One declared theme's resolved token set, read out of a bundle.
+ *
+ * A `@ThemeCatalog` / `@WearThemeCatalog` sheet's sidecar carries the live
+ * `MaterialTheme.colorScheme` / `.typography` its provider resolved to, tagged
+ * with the theme's display name (compose-ai-tools#2179). That is a *different*
+ * axis from the system token set: one system, several themes.
+ */
+export interface BundleThemeTokens {
+  /** The theme's display name, as the provider declared it (`"Brand Dark"`). */
+  theme: string;
+  /**
+   * The specimen preview whose render resolved these — the join key back to
+   * `previews.json`, where the entry's `wrapperClassName` gives the provider FQN
+   * a preview server addresses the theme by (`?theme=theme:<providerFqn>`).
+   */
+  previewId: string;
+  /** The theme's own colours and type scale. */
+  tokens: DesignTokens;
+}
+
+/**
+ * Every **declared theme's** token set in [bundle], one entry per theme sheet.
+ *
+ * These used to be invisible. `catalogTokensFromBundle` read every
+ * `previews/<id>.catalog.json` and merged them into a single system token set,
+ * theme sheets included — so a system declaring five themes had five palettes
+ * flattened onto one another, and because M3 role labels repeat across themes
+ * (`primary`, `onSurface`, …) the surviving value was decided by zip iteration
+ * order. Splitting on the sidecar's `theme` tag fixes both halves: the system set
+ * is the system's own tokens again, and each theme's palette and typeface become
+ * addressable data — which is what lets a consumer show what a theme *is*
+ * (a picker chip painted in it, a per-theme Figma variable mode, a contrast audit
+ * across every theme a system ships) without re-rendering.
+ *
+ * Ordered by preview id so a regenerated bundle produces a stable list. Themes
+ * that resolved no usable token are dropped. Pure; best-effort per sidecar.
+ */
+export function themeTokenSetsFromBundle(
+  bundle: PreviewBundle,
+): BundleThemeTokens[] {
+  const out: BundleThemeTokens[] = [];
+  for (const sidecar of readCatalogSidecars(bundle)) {
+    const theme = sidecar.theme;
+    if (!theme) continue;
+    const tokens = tokensFrom([sidecar]);
+    if (!tokens) continue;
+    out.push({ theme, previewId: sidecar.previewId ?? "", tokens });
+  }
+  return out.sort((a, b) => a.previewId.localeCompare(b.previewId));
+}
+
+/** Every parseable `previews/<id>.catalog.json` payload in [bundle]. */
+function readCatalogSidecars(bundle: PreviewBundle): CatalogTokenSidecar[] {
+  const out: CatalogTokenSidecar[] = [];
   for (const [path, bytes] of Object.entries(bundle.entries)) {
     if (!path.startsWith("previews/") || !path.endsWith(".catalog.json")) {
       continue;
     }
-    let payload: CatalogTokenSidecar;
     try {
-      payload = JSON.parse(td.decode(bytes)) as CatalogTokenSidecar;
+      out.push(JSON.parse(td.decode(bytes)) as CatalogTokenSidecar);
     } catch {
       continue; // best-effort: a malformed sidecar doesn't sink the read
     }
-    for (const token of payload.tokens ?? []) {
+  }
+  return out;
+}
+
+/** Fold [sidecars] into one {@link DesignTokens}, or undefined when they carry none. */
+function tokensFrom(
+  sidecars: readonly CatalogTokenSidecar[],
+): DesignTokens | undefined {
+  const colors: Record<string, string> = {};
+  const typography: Record<string, TypographyToken> = {};
+  for (const sidecar of sidecars) {
+    for (const token of sidecar.tokens ?? []) {
       if (!token.label) continue;
       if (token.kind === "COLOR") {
         const css = argbToCssHex(token.color?.hex);
@@ -557,7 +631,6 @@ export function catalogTokensFromBundle(
       }
     }
   }
-
   const out: DesignTokens = {};
   if (Object.keys(colors).length > 0) out.colors = colors;
   if (Object.keys(typography).length > 0) out.typography = typography;

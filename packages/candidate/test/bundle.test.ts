@@ -19,6 +19,7 @@ import {
   rawPreviewIdForEntry,
   mergeCandidateRenders,
   catalogTokensFromBundle,
+  themeTokenSetsFromBundle,
   bundleCandidateSource,
   cliRenderSource,
   localComposeWebSource,
@@ -344,6 +345,10 @@ describe("catalogTokensFromBundle", () => {
   const te = new TextEncoder();
   const sidecar = (previewId: string, tokens: unknown[]): Uint8Array =>
     te.encode(JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, tokens }));
+  const themeSidecar = (previewId: string, theme: string, tokens: unknown[]): Uint8Array =>
+    te.encode(
+      JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, theme, tokens }),
+    );
 
   it("aggregates @ColorCatalog and @TypographyCatalog sidecars into system tokens", () => {
     const bundle: PreviewBundle = {
@@ -388,6 +393,34 @@ describe("catalogTokensFromBundle", () => {
     });
   });
 
+  it("leaves a declared theme's palette out of the SYSTEM token set", () => {
+    // A theme sheet's sidecar is tagged with its theme; the system set is the
+    // untagged sheets only. Before that split every theme was merged in here, and
+    // since M3 role labels repeat across themes the surviving value was decided by
+    // zip iteration order — a system's published `primary` was whichever theme
+    // happened to be read last.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/colorcatalog__Palette.catalog.json": sidecar("colorcatalog__Palette", [
+          { label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } },
+        ]),
+        "previews/wearthemecatalog__Coral.catalog.json": themeSidecar(
+          "wearthemecatalog__Coral",
+          "Coral",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFFF6F61" } }],
+        ),
+        "previews/wearthemecatalog__Teal.catalog.json": themeSidecar(
+          "wearthemecatalog__Teal",
+          "Teal",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF00BFA5" } }],
+        ),
+      },
+    };
+    expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ primary: "#aecbfaff" });
+  });
+
   it("returns undefined for a bundle with no catalog sidecars", () => {
     const bundle: PreviewBundle = {
       manifest: {},
@@ -411,3 +444,83 @@ describe("catalogTokensFromBundle", () => {
     expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ BrandCoral: "#ff6f61ff" });
   });
 });
+
+describe("themeTokenSetsFromBundle", () => {
+  const te = new TextEncoder();
+  const themeSidecar = (previewId: string, theme: string, tokens: unknown[]): Uint8Array =>
+    te.encode(
+      JSON.stringify({ schema: "compose-preview-catalog-tokens/v1", previewId, theme, tokens }),
+    );
+
+  it("returns one token set per declared theme, colours and typeface alike", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        // Untagged: the system's own sheet, which is NOT a theme.
+        "previews/colorcatalog__Palette.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            previewId: "colorcatalog__Palette",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+        "previews/wearthemecatalog__KotlinConf.catalog.json": themeSidecar(
+          "wearthemecatalog__KotlinConf",
+          "KotlinConf",
+          [
+            { label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } },
+            {
+              label: "titleMedium",
+              kind: "TEXT_STYLE",
+              textStyle: { fontFamily: "JetBrains Mono", fontSizeSp: 16, fontWeight: 500 },
+            },
+          ],
+        ),
+        "previews/wearthemecatalog__Coral.catalog.json": themeSidecar(
+          "wearthemecatalog__Coral",
+          "Coral",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFFF6F61" } }],
+        ),
+      },
+    };
+
+    const themes = themeTokenSetsFromBundle(bundle);
+    // Ordered by preview id, so a regenerated bundle produces a stable list.
+    expect(themes.map((t) => t.theme)).toEqual(["Coral", "KotlinConf"]);
+    expect(themes[0]?.tokens.colors).toEqual({ primary: "#ff6f61ff" });
+    // The typeface travels too — a theme is free to swap the type scale, and that
+    // is half of what distinguishes one theme sheet from another.
+    expect(themes[1]?.tokens.typography?.titleMedium).toEqual({
+      fontFamily: "JetBrains Mono",
+      fontSize: 16,
+      fontWeight: 500,
+    });
+    // The previewId is the join key back to previews.json, where the entry's
+    // wrapperClassName gives the provider FQN a preview server addresses.
+    expect(themes[1]?.previewId).toBe("wearthemecatalog__KotlinConf");
+  });
+
+  it("is empty for a system that declares no themes", () => {
+    expect(
+      themeTokenSetsFromBundle({ manifest: {}, previews: [], entries: {} }),
+    ).toEqual([]);
+  });
+
+  it("drops a theme sheet that resolved no usable token", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Empty.catalog.json": themeSidecar(
+          "themecatalog__Empty",
+          "Empty",
+          [{ kind: "COLOR", color: { hex: "#FF000000" } }],
+        ),
+        "previews/bad.catalog.json": te.encode("{ not json"),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle)).toEqual([]);
+  });
+});
+

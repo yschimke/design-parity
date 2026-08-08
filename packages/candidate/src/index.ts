@@ -95,8 +95,10 @@ export {
   mergeCandidateRenders,
   loadPreviewBundle,
   catalogTokensFromBundle,
+  themeTokenSetsFromBundle,
 } from "./bundle.js";
 export type {
+  BundleThemeTokens,
   PreviewBundle,
   BundleManifest,
   PreviewsFile,
