@@ -22,6 +22,7 @@ import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { directionPolicy } from "@design-parity/policy";
 import { renderIndex } from "@design-parity/report-html";
 
 import { mergeShards, verifyShardReports, type ShardReport } from "../shard.js";
@@ -199,7 +200,14 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   // The verdict covers the union. A blocking finding does not stop being one
   // because this run could not re-measure it, and a run that went green by
   // losing sight of the failure is the exact outcome this is guarding against.
-  const blocked = merged.blocked || carried.some((e) => e.status === "fail");
+  //
+  // Gated on the direction, exactly as a freshly measured failure is: under
+  // `code-led` a failing verdict is information, not a gate, and a carried row
+  // must not block what the same row would not have blocked when it was fresh.
+  const blocked =
+    merged.blocked ||
+    (directionPolicy(merged.direction).blocksPr &&
+      carried.some((e) => e.status === "fail"));
 
   const { readme, html } = renderIndex({
     entries,

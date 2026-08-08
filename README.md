@@ -79,6 +79,10 @@ written-up research verdicts.
   run across N jobs and `design-parity merge` unions them. How to pick a shard
   count, and why excluding previews to fit the timeout is the lever to reach for
   second.
+- [The reference cache](./docs/REFERENCE_CACHE.md) — importing the design side on
+  its own schedule into a committed cache, so a parity run makes **zero** Figma
+  calls. Why re-fetching every reference on every commit silently reported on a
+  quarter of a catalog, and how the split converges under a rate limit.
 - [Compose-for-Web / wasm renderer — feasibility verdict](./docs/cmp-web-wasm-feasibility.md)
   — why the web/wasm candidate backend is a deliberate stub (issue #30 stretch).
 - [Design-artifact catalogs](./docs/design-artifacts/PLAN.md) — the code →

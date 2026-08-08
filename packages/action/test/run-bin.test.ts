@@ -46,4 +46,18 @@ describe("design-parity bin launcher", () => {
     const { stdout } = await runBin(["run"]);
     expect(stdout).toContain("--shard <index>/<total>");
   });
+
+  // Same trap again, and the same consequence: an `import` that only imported
+  // its module would exit 0 having refreshed nothing, and the parity run would
+  // then read a cache that never moved — a stale board that looks current.
+  it("dispatches `import` to its own main", async () => {
+    const { code, stdout } = await runBin(["import"]);
+    expect(code).toBe(2);
+    expect(stdout).toContain("design-parity import --cache");
+  });
+
+  it("advertises the reference cache on the run usage line", async () => {
+    const { stdout } = await runBin(["run"]);
+    expect(stdout).toContain("--reference-cache <dir>");
+  });
 });

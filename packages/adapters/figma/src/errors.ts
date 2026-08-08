@@ -5,6 +5,7 @@ export type FigmaErrorCode =
   | "rate-limit"
   | "node-not-found"
   | "bad-ref"
+  | "cache-miss"
   | "api";
 
 /** Base class so callers can `catch (e) { if (e instanceof FigmaError) ... }`. */
@@ -56,6 +57,30 @@ export class FigmaBadRefError extends FigmaError {
       `figma: cannot parse ref '${ref}' — expected 'figma:<fileKey>/<nodeId>' or a figma.com URL`,
       options,
     );
+  }
+}
+
+/**
+ * The node is absent from the committed reference cache, and the run was told
+ * to read only from it.
+ *
+ * Distinct from {@link FigmaNodeNotFoundError} because the remedy is different
+ * and mechanical: the node exists, the *import* has not reached it yet. The
+ * message says so, since this surfaces per component on an otherwise green run.
+ */
+export class FigmaCacheMissError extends FigmaError {
+  readonly fileKey: string;
+  readonly nodeId: string;
+  constructor(fileKey: string, nodeId: string, detail?: string, options?: ErrorOptions) {
+    super(
+      "cache-miss",
+      `figma: '${fileKey}/${nodeId}' is not in the reference cache` +
+        (detail ? ` (${detail})` : "") +
+        " — run `design-parity import` to fetch it",
+      options,
+    );
+    this.fileKey = fileKey;
+    this.nodeId = nodeId;
   }
 }
 

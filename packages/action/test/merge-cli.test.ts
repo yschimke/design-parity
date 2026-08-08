@@ -300,6 +300,30 @@ describe("merge --previous (partial refresh)", () => {
     expect(code).toBe(1);
   });
 
+  // A carried row must not block what the same row would not have blocked when
+  // it was fresh: under `code-led` a failing verdict is information, not a gate.
+  it("does not block on a carried failure when the direction does not block", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"], {
+      direction: "code-led",
+    });
+    const previous = await writePreviousDir(root, [
+      { code: "b/B.kt#B", status: "fail" },
+    ]);
+    const out = join(root, "out");
+
+    const { code } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(0);
+  });
+
   it("is a no-op when the previous dir has no usable manifest", async () => {
     const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
     const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);

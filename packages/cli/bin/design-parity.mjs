@@ -8,6 +8,9 @@
 //             both sides of a sharded run partition identically);
 //   merge   → reassemble a sharded run (`run --shard i/n`) into one artifact set;
 //   cache   → would this run reproduce the published board? (skip decision);
+//   import  → refresh the committed reference cache the run reads (the design
+//             side moves on its own schedule, so it is imported, not re-fetched
+//             on every commit);
 //   anything else → a parity run.
 //
 // `run` and `merge` export `main` and we invoke it explicitly: importing the
@@ -21,6 +24,9 @@ if (process.argv[2] === "reverse") {
   process.exit(await main());
 } else if (process.argv[2] === "cache") {
   const { main } = await import("@design-parity/action/cache");
+  process.exit(await main());
+} else if (process.argv[2] === "import") {
+  const { main } = await import("@design-parity/action/import");
   process.exit(await main());
 } else if (process.argv[2] === "shard") {
   const { main } = await import("@design-parity/action/shard");

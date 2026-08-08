@@ -49,6 +49,14 @@ export {
 } from "./shard.js";
 export type { MergedShards, ShardReport, ShardSelector } from "./shard.js";
 
+export {
+  figmaRefsOf,
+  importReferences,
+  importTargets,
+  refreshOrder,
+} from "./import.js";
+export type { ImportOptions, ImportResult, ImportTarget } from "./import.js";
+
 export { selectMode } from "./mode.js";
 export type { ActionMode, ModeInputs } from "./mode.js";
 

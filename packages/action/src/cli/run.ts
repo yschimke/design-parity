@@ -29,7 +29,7 @@ import { join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { resolve as resolveCorrespondences } from "@design-parity/resolver";
-import { FigmaCanvasWriter } from "@design-parity/adapter-figma";
+import { FigmaCanvasWriter, ReferenceCache } from "@design-parity/adapter-figma";
 
 import { buildCandidateProvider } from "../candidate.js";
 import { resolveRunConfig } from "../config.js";
@@ -59,10 +59,18 @@ interface Args {
   sourceCommit?: string;
   bundleImage?: string;
   shard?: ShardSelector;
+  referenceCache?: string;
+  referenceCacheOnly: boolean;
 }
 
 export function parseArgs(args: string[]): Args {
-  const out: Args = { repoRoot: cwd(), components: [], bundlePaths: [], pushBack: false };
+  const out: Args = {
+    repoRoot: cwd(),
+    components: [],
+    bundlePaths: [],
+    pushBack: false,
+    referenceCacheOnly: false,
+  };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     const next = () => args[(i += 1)];
@@ -105,6 +113,19 @@ export function parseArgs(args: string[]): Args {
         break;
       case "--bundle-image":
         out.bundleImage = next();
+        break;
+      // The committed reference cache `design-parity import` maintains. A hit
+      // costs no Figma call, so a code change compares against a reference that
+      // is pinned rather than re-fetched — reproducible, and immune to the rate
+      // limiter that was silently truncating runs (#289).
+      case "--reference-cache":
+        out.referenceCache = next();
+        break;
+      // …and the guarantee rather than the tendency: a miss becomes a
+      // per-component error instead of an API call. This is the mode a CI run
+      // wants, because "zero Figma calls" is only true if nothing can fall back.
+      case "--reference-cache-only":
+        out.referenceCacheOnly = true;
         break;
       // One slice of the run (`--shard 2/6`). Throws on a malformed or
       // out-of-range selector: a typo that silently compared everything (or
@@ -169,6 +190,7 @@ export async function main(): Promise<number> {
       "design-parity run --components <code#Member,...> [--repo .] " +
         "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir] " +
         "[--repo-slug owner/repo --branch <branch> --source-commit <sha> --bundle-image <file>] " +
+        "[--reference-cache <dir> [--reference-cache-only]] " +
         "[--shard <index>/<total>] [--push-back [--canvas-endpoint <url>]]\n",
     );
     return 2;
@@ -220,11 +242,38 @@ export async function main(): Promise<number> {
   const { provider, warnings: candidateWarnings } =
     await buildCandidateProvider(candidateOpts);
 
+  // A cache that cannot be opened is reported, not tolerated in silence: under
+  // `--reference-cache-only` the run would otherwise report every component as
+  // a miss and look like a broken kit rather than a missing directory.
+  const referenceCache = args.referenceCache
+    ? await ReferenceCache.open(resolvePath(args.repoRoot, args.referenceCache))
+    : undefined;
+  const cacheWarnings: string[] = [];
+  if (args.referenceCache && !referenceCache) {
+    cacheWarnings.push(
+      `no usable reference cache at '${args.referenceCache}' — ` +
+        (args.referenceCacheOnly
+          ? "every figma reference will be reported as a cache miss; run `design-parity import`"
+          : "references will be fetched from the API"),
+    );
+  } else if (referenceCache) {
+    stdout.write(
+      `Reference cache: ${referenceCache.entries.length} node(s) from ` +
+        `${Object.keys(referenceCache.doc.files).length} file(s)` +
+        `${args.referenceCacheOnly ? ", no API calls" : ""}\n`,
+    );
+  }
+
   const index = indexOptions(args);
   const report = await orchestrate({
     repoRoot: args.repoRoot,
     env,
-    registry: createAdapterRegistry(),
+    registry: createAdapterRegistry({
+      figma: {
+        ...(referenceCache ? { cache: referenceCache } : {}),
+        ...(args.referenceCacheOnly ? { cacheOnly: true } : {}),
+      },
+    }),
     correspondences: resolved.correspondences,
     candidate: provider ?? (() => undefined),
     direction,
@@ -236,6 +285,7 @@ export async function main(): Promise<number> {
 
   report.warnings.unshift(
     ...warnings,
+    ...cacheWarnings,
     ...resolved.warnings,
     ...candidateWarnings,
     ...spec.warnings,

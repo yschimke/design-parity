@@ -25,7 +25,15 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-workflow="$root/.github/workflows/design-parity-reusable.yml"
+# Every workflow that probes a CLI capability. The import workflow probes for
+# `import` itself, and the parity workflow for `--reference-cache`; both fail
+# open the same way, and both would fail open SILENTLY — an import that becomes
+# a nonsense parity run, or a run that quietly goes back to fetching every
+# reference live, which is the coupling issue #289 exists to remove.
+workflows=(
+  "$root/.github/workflows/design-parity-reusable.yml"
+  "$root/.github/workflows/design-parity-import-reusable.yml"
+)
 fail=0
 
 note() { printf '  %s\n' "$1"; }
@@ -38,13 +46,16 @@ ok() { printf '✓ %s\n' "$1"; }
 # fail, so grep's status is the pipeline's. Anything else on the left — npx, a
 # function, a subshell — carries its own exit status into the pipeline.
 danger='^[[:space:]]*if[[:space:]]+(?!printf|echo)[^|]*\|[[:space:]]*grep'
-if hits="$(grep -nP "$danger" "$workflow" 2>/dev/null)" && [ -n "$hits" ]; then
-  bad "probe pipes a fallible command straight into grep inside an \`if\` — under pipefail that command's exit status wins, not grep's:"
-  printf '%s\n' "$hits" | while IFS= read -r line; do note "$line"; done
-  note "capture first: usage=\"\$(cmd 2>&1 || true)\"; if printf '%s' \"\$usage\" | grep -q …"
-else
-  ok "no probe pipes a fallible command directly into grep inside an \`if\`"
-fi
+for workflow in "${workflows[@]}"; do
+  name="$(basename "$workflow")"
+  if hits="$(grep -nP "$danger" "$workflow" 2>/dev/null)" && [ -n "$hits" ]; then
+    bad "${name}: probe pipes a fallible command straight into grep inside an \`if\` — under pipefail that command's exit status wins, not grep's:"
+    printf '%s\n' "$hits" | while IFS= read -r line; do note "$line"; done
+    note "capture first: usage=\"\$(cmd 2>&1 || true)\"; if printf '%s' \"\$usage\" | grep -q …"
+  else
+    ok "${name}: no probe pipes a fallible command directly into grep inside an \`if\`"
+  fi
+done
 
 # ── 2. The replacement shape must actually work ─────────────────────────────
 # A stub standing in for `design-parity shard` with no selector: prints usage
@@ -78,14 +89,20 @@ fi
 # ── 3. Each probe's captured command guards its own exit status ─────────────
 # Every `usage="$(… )"` feeding a probe must carry `|| true`, or `set -e` kills
 # the step on the usage path's exit 2 before the grep is ever reached.
-while IFS= read -r line; do
-  case "$line" in
-    *'|| true)"'*) ;;
-    *) bad "captured probe command does not guard its exit status with \`|| true\`: ${line# }" ;;
-  esac
-done < <(grep -E '^\s*usage="\$\(' "$workflow" || true)
-grep -qE '^\s*usage="\$\(' "$workflow" &&
-  ok "every captured probe command guards its exit status"
+for workflow in "${workflows[@]}"; do
+  name="$(basename "$workflow")"
+  while IFS= read -r line; do
+    case "$line" in
+      *'|| true)"'*) ;;
+      *) bad "${name}: captured probe command does not guard its exit status with \`|| true\`: ${line# }" ;;
+    esac
+  done < <(grep -E '^\s*usage="\$\(' "$workflow" || true)
+  if grep -qE '^\s*usage="\$\(' "$workflow"; then
+    ok "${name}: every captured probe command guards its exit status"
+  else
+    bad "${name}: has no capability probe at all — did one get dropped?"
+  fi
+done
 
 if [ "$fail" -eq 0 ]; then
   printf '\nAll workflow probe checks passed.\n'

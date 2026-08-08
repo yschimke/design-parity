@@ -3,7 +3,7 @@
  * `ref` or Code Connect), fetch structure + variables + a rendered image over
  * REST, and normalize to a {@link DesignReference}. All network is injectable.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type {
@@ -18,7 +18,12 @@ import {
   loadCodeConnect,
   resolveFromCodeConnect,
 } from "./code-connect.js";
-import { FigmaBadRefError, FigmaNodeNotFoundError } from "./errors.js";
+import {
+  FigmaBadRefError,
+  FigmaCacheMissError,
+  FigmaNodeNotFoundError,
+} from "./errors.js";
+import type { ReferenceCache } from "./reference-cache.js";
 import { formatFigmaRef, isFigmaRef, parseFigmaRef, type FigmaRef } from "./figma-ref.js";
 import type { FigmaNodeDoc, FigmaStyleMeta, VariablesResponse } from "./figma-api.js";
 
@@ -79,6 +84,28 @@ export interface FigmaAdapterOptions {
   /** Code Connect JSON to consult when `ref` is not a figma handle. */
   codeConnectPath?: string;
   /**
+   * A committed reference cache (see `reference-cache.ts`) to read structure,
+   * variables and reference images from instead of calling Figma.
+   *
+   * A hit costs no request at all; a miss falls through to the API, so adding a
+   * cache can only reduce the calls a run makes. Pair with
+   * {@link FigmaAdapterOptions.cacheOnly} for the guarantee rather than the
+   * tendency.
+   */
+  cache?: ReferenceCache;
+  /**
+   * Make the cache the ONLY reference source: a miss raises
+   * {@link FigmaCacheMissError} rather than reaching for the network.
+   *
+   * This is what a parity run on a code change wants. Zero Figma calls means no
+   * rate limit and no network flake, and the diff is reproducible because the
+   * reference is pinned to what the last import saw rather than to whatever the
+   * file happens to say at the moment the job runs. A miss is a per-component
+   * error the run already fails soft on — one honest gap on a board, not a
+   * silently dropped row.
+   */
+  cacheOnly?: boolean;
+  /**
    * Produce the render targets for a resolved ref — e.g. one node per theme.
    * Defaults to a single image of the ref's node with no theme/size tag.
    */
@@ -120,10 +147,26 @@ export class FigmaAdapter implements ReferenceAdapter {
    * rather than failing the run.
    */
   async prefetch(refs: readonly string[], ctx: AdapterContext): Promise<void> {
+    // Nothing to warm when the run reads the committed cache and nothing else:
+    // every hit is already local, and every miss is going to be reported as a
+    // miss rather than fetched.
+    if (this.#opts.cacheOnly) return;
+
     const byFile = new Map<string, Set<string>>();
     for (const ref of refs) {
-      const parsed = parseFigmaRef(ref);
-      if (!parsed) continue;
+      // A ref Code Connect resolves is not parseable here and is not an error:
+      // `parseFigmaRef` THROWS on one, which would abandon the warm for every
+      // other ref in the list and put the run back to one request per
+      // component — the exact cost this method exists to remove.
+      let parsed: FigmaRef;
+      try {
+        parsed = parseFigmaRef(ref);
+      } catch {
+        continue;
+      }
+      // A cached node needs no request; asking for it anyway would spend the
+      // very quota the cache exists to protect.
+      if (this.#opts.cache?.entry(parsed.fileKey, parsed.nodeId)) continue;
       const ids = byFile.get(parsed.fileKey) ?? new Set<string>();
       ids.add(parsed.nodeId);
       byFile.set(parsed.fileKey, ids);
@@ -154,15 +197,32 @@ export class FigmaAdapter implements ReferenceAdapter {
     ctx: AdapterContext,
   ): Promise<DesignReference> {
     const figmaRef = await this.#resolveRef(componentId, ref, ctx);
-    const client = this.#client(ctx);
+    const committed = this.#opts.cache;
+    const cacheOnly = this.#opts.cacheOnly === true;
+
+    // Built on first use, not up front: a `cacheOnly` run has no Figma token to
+    // give it, and demanding one to read files off disk would be a network
+    // dependency in all but name.
+    let restClient: FigmaRestClient | undefined;
+    const client = (): FigmaRestClient => (restClient ??= this.#client(ctx));
 
     // Structure (tokens) comes from the primary node; fail clearly if absent.
-    // `prefetch` has usually put it here already; a miss is not an error, only
-    // a request this run had hoped to avoid.
+    // Three places it can come from, cheapest first: this run's in-memory warm,
+    // the committed cache, then the API.
     const cacheKey = `${figmaRef.fileKey}/${figmaRef.nodeId}`;
     let entry = this.#nodes.get(cacheKey);
     if (!entry) {
-      const nodes = await client.getFileNodes(figmaRef.fileKey, [figmaRef.nodeId]);
+      const cached = await committed?.node(figmaRef.fileKey, figmaRef.nodeId);
+      if (cached?.document) {
+        entry = cached;
+        this.#nodes.set(cacheKey, cached);
+      }
+    }
+    if (!entry && cacheOnly) {
+      throw new FigmaCacheMissError(figmaRef.fileKey, figmaRef.nodeId, "no structure");
+    }
+    if (!entry) {
+      const nodes = await client().getFileNodes(figmaRef.fileKey, [figmaRef.nodeId]);
       const fetched = nodes.nodes[figmaRef.nodeId];
       if (fetched?.document) {
         entry = fetched;
@@ -180,7 +240,14 @@ export class FigmaAdapter implements ReferenceAdapter {
     // rather than the value, so concurrent callers share one request.
     let variablesPromise = this.#variables.get(figmaRef.fileKey);
     if (!variablesPromise) {
-      variablesPromise = client.getLocalVariables(figmaRef.fileKey);
+      variablesPromise = committed?.file(figmaRef.fileKey)?.variables
+        ? committed.variables(figmaRef.fileKey)
+        : cacheOnly
+          ? // A file imported without variables (not Enterprise, or the import
+            // could not read them) degrades to structure-only tokens — the same
+            // shape `getLocalVariables` returns for a 403.
+            Promise.resolve({})
+          : client().getLocalVariables(figmaRef.fileKey);
       this.#variables.set(figmaRef.fileKey, variablesPromise);
     }
     const variables = await variablesPromise;
@@ -195,17 +262,35 @@ export class FigmaAdapter implements ReferenceAdapter {
     const format = this.#opts.imageFormat ?? "svg";
     const referenceImages: Image[] = [];
     for (const target of targets) {
-      const rendered = await client.renderImage(figmaRef.fileKey, target.nodeId, {
-        scale: this.#opts.imageScale,
-        format,
-      });
+      // A committed render is used where it lies: the bytes are already on
+      // disk, and copying them into `outDir` would double a catalog's images
+      // to save nothing. The cache's own format wins over `imageFormat` —
+      // what was imported is what there is.
+      const cachedImage = committed?.entry(figmaRef.fileKey, target.nodeId);
+      let bytes: Uint8Array;
+      let file: string;
+      let imageFormat: "png" | "svg";
+      if (committed && cachedImage?.image) {
+        file = committed.path(cachedImage.image);
+        bytes = await readFile(file);
+        imageFormat = cachedImage.imageFormat ?? format;
+      } else if (cacheOnly) {
+        throw new FigmaCacheMissError(figmaRef.fileKey, target.nodeId, "no rendered image");
+      } else {
+        const rendered = await client().renderImage(figmaRef.fileKey, target.nodeId, {
+          scale: this.#opts.imageScale,
+          format,
+        });
+        bytes = rendered.bytes;
+        imageFormat = format;
+        file = join(
+          outDir,
+          `${slug(componentId)}--${target.theme ?? target.state ?? "default"}--${target.size ?? "default"}.${format}`,
+        );
+        await writeFile(file, bytes);
+      }
       const { width, height } =
-        format === "svg" ? svgSize(rendered.bytes) : pngSize(rendered.bytes);
-      const file = join(
-        outDir,
-        `${slug(componentId)}--${target.theme ?? target.state ?? "default"}--${target.size ?? "default"}.${format}`,
-      );
-      await writeFile(file, rendered.bytes);
+        imageFormat === "svg" ? svgSize(bytes) : pngSize(bytes);
 
       const image: Image = { state: target.state ?? "default", uri: file, width, height };
       if (target.theme) image.theme = target.theme;

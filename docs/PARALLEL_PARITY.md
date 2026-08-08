@@ -157,6 +157,13 @@ Three CLI surfaces carry this, all in the published `design-parity` package:
 | `design-parity run --shard i/N` | Compares this shard's slice and writes `shard.json` next to the reports. Partitions the **full** list it is given; a blocking verdict exits 0 here (see below). |
 | `design-parity merge <shard-dir>... --out <dir>` | Verifies the shards cover the run exactly once, copies every component's report subdir, regenerates the landing page from the unioned rows, and applies the run's verdict as its exit code. |
 
+> **Shard the render, not the reference fetch.** Sharding divides the render and
+> the diff, but N shards fetching references live multiply the *reference* cost
+> by N against a limiter that is per token — the header's warning that "it is
+> the one that does not multiply the reference API's rate limit by N" is the
+> reason. Set `reference-cache-branch` and every shard reads the same committed
+> commit instead, at zero API cost. See [the reference cache](./REFERENCE_CACHE.md).
+
 **The invariant: the render side and the comparison side must select the same
 components.** If they disagree, a shard renders previews it never diffs and diffs
 components it never rendered — which surfaces only as "no candidate render

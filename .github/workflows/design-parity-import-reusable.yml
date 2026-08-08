@@ -1,0 +1,317 @@
+name: design-parity import (reusable)
+
+# Refresh the committed reference cache the parity run reads.
+#
+# WHY THIS IS A SEPARATE WORKFLOW. The two sides of a parity check move at
+# completely different speeds: code changes many times a day, a published design
+# kit changes rarely. Re-fetching every reference on every commit paid the full
+# reference cost for a side that had not moved — and paid it against a per-token
+# rate limiter, which is how a 77-component catalog came to report on 18
+# components, with a different 18 each run (issue #289).
+#
+# So the reference side is IMPORTED here, on its own schedule, into a committed
+# cache; the parity run reads that cache and makes zero Figma calls. A rate limit
+# then costs freshness, not data: what this run could not fetch keeps what it had
+# and refreshes first next time.
+#
+# THE IMPORT IS ALLOWED TO BE PARTIAL. It exits 0 having done what it could. That
+# is the design, not a tolerated failure — the alternative (fail the job, publish
+# nothing) is exactly the all-or-nothing behaviour that lost the previous results.
+#
+# Usage — a schedule plus a button, in the consumer repo:
+#
+#   on:
+#     schedule: [{ cron: '0 6 * * *' }]
+#     workflow_dispatch:
+#   jobs:
+#     import:
+#       uses: yschimke/design-parity/.github/workflows/design-parity-import-reusable.yml@main
+#       permissions:
+#         contents: write
+#       secrets:
+#         figma-token: ${{ secrets.FIGMA_TOKEN }}
+#
+# Then point the parity workflow at the same branch:
+#   with:
+#     reference-cache-branch: design-parity/reference
+
+on:
+  workflow_call:
+    inputs:
+      cache-branch:
+        description: >
+          Long-lived branch the reference cache is committed to. History is
+          APPENDED, never replaced: each import is one commit, so the cache is
+          diffable over time and a bad import is revertible.
+        required: false
+        type: string
+        default: "design-parity/reference"
+      design-map-command:
+        description: >
+          Shell run before the import, to regenerate `design-map.json` (e.g. a
+          Gradle discovery pass that projects the map out of annotations).
+          Empty (the default) uses the committed map — which is the cheaper
+          answer, since the import only needs the refs, not the code.
+        required: false
+        type: string
+        default: ""
+      max:
+        description: >
+          Refresh at most this many nodes. 0 (the default) means as many as the
+          API allows. Combined with oldest-first ordering, a ceiling is how a
+          kit too large for one job is imported over several runs — each
+          starting where the last left off.
+        required: false
+        type: number
+        default: 0
+      force:
+        description: >
+          Re-read every node even where the file `version` says nothing moved.
+          The version check is what makes an unchanged kit cost ONE request, so
+          leave this off except when you suspect the cache itself is wrong.
+        required: false
+        type: boolean
+        default: false
+      prune:
+        description: >
+          Delete cached nodes the design map no longer references. Off by
+          default: pruning against a map that failed to regenerate would throw
+          away references the next import has to fetch again.
+        required: false
+        type: boolean
+        default: false
+      image-format:
+        description: "`svg` (default, resolution-free) or `png` for the imported reference render."
+        required: false
+        type: string
+        default: "svg"
+      image-scale:
+        description: "Render scale, PNG only. 0 uses the adapter's default."
+        required: false
+        type: number
+        default: 0
+      design-parity-version:
+        description: "npm version of the `design-parity` CLI to run (must be >= the release carrying `import`)."
+        required: false
+        type: string
+        default: "latest"
+      design-parity-ref:
+        description: >
+          Test an UNRELEASED design-parity: a git ref of yschimke/design-parity
+          to build and run instead of the published version.
+        required: false
+        type: string
+        default: ""
+      java-version:
+        description: "Temurin JDK set up only when `design-map-command` is set (a discovery pass usually needs Gradle)."
+        required: false
+        type: string
+        default: "21"
+      node-version:
+        required: false
+        type: string
+        default: "24"
+      runs-on:
+        required: false
+        type: string
+        default: ubuntu-latest
+      timeout-minutes:
+        description: "Job timeout. An import is network-bound and mostly waiting on a rate limiter, so this is generous by design."
+        required: false
+        type: number
+        default: 60
+    secrets:
+      figma-token:
+        description: "Read-only Figma PAT with `file_content:read`. Required — an import with no credentials has nothing to do."
+        required: true
+    outputs:
+      refreshed:
+        description: "Nodes re-read from Figma this run."
+        value: ${{ jobs.import.outputs.refreshed }}
+      complete:
+        description: "`true` when every mapped reference is cached at its file's current version."
+        value: ${{ jobs.import.outputs.complete }}
+
+permissions: {}
+
+jobs:
+  import:
+    name: Import design references
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: write
+    outputs:
+      refreshed: ${{ steps.import.outputs.refreshed }}
+      complete: ${{ steps.import.outputs.complete }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # Only when the map is regenerated: a committed map needs neither.
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        if: ${{ inputs.design-map-command != '' }}
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
+        if: ${{ inputs.design-map-command != '' }}
+        with:
+          cache-read-only: true
+
+      - name: Check out design-parity@${{ inputs.design-parity-ref }}
+        if: ${{ inputs.design-parity-ref != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yschimke/design-parity
+          ref: ${{ inputs.design-parity-ref }}
+          path: .design-parity-src
+
+      - name: Build design-parity from source
+        if: ${{ inputs.design-parity-ref != '' }}
+        working-directory: .design-parity-src
+        run: |
+          set -euo pipefail
+          npm ci --silent
+          npm run build --silent
+
+      # A published CLI predating `import` would fall through the launcher's
+      # dispatch to `run`, which reads `--cache` as an unknown flag and
+      # `reference-cache` as a COMPONENT HANDLE — an import that quietly becomes
+      # a nonsense parity run. Worth one probe up front. Skipped for a ref: the
+      # ref IS the code under test.
+      - name: Check the CLI can import references
+        if: ${{ inputs.design-parity-ref == '' }}
+        env:
+          DP_VERSION: ${{ inputs.design-parity-version }}
+        run: |
+          set -euo pipefail
+          # Capture first, THEN grep: the usage path exits 2, and under pipefail
+          # that status would win over grep's no matter what it matched.
+          usage="$(npx -y "design-parity@${DP_VERSION}" import 2>&1 || true)"
+          if printf '%s' "$usage" | grep -q -- 'design-parity import --cache'; then
+            echo "✓ design-parity@${DP_VERSION} supports 'import'."
+            exit 0
+          fi
+          echo "::error title=CLI too old to import references::design-parity@${DP_VERSION} has no 'import' subcommand. Raise design-parity-version."
+          exit 1
+
+      - name: Regenerate the design map
+        if: ${{ inputs.design-map-command != '' }}
+        env:
+          DESIGN_MAP_COMMAND: ${{ inputs.design-map-command }}
+        run: bash -eo pipefail -c "$DESIGN_MAP_COMMAND"
+
+      # Cloned OUTSIDE the checkout so the consumer repo never sees a nested
+      # work tree, and with its `.git` intact so this job can commit onto the
+      # branch rather than replace it.
+      - name: Check out the reference cache
+        id: cache
+        env:
+          BRANCH: ${{ inputs.cache-branch }}
+          CACHE_DIR: ${{ runner.temp }}/reference-cache
+        run: |
+          set -euo pipefail
+          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 --branch "$BRANCH" "$repo" "$CACHE_DIR" 2>/dev/null; then
+            echo "Existing cache: $(du -sh "$CACHE_DIR" | cut -f1)."
+          else
+            # First import, or the branch was pruned. An orphan branch is the
+            # right shape here: the cache shares no history with the code.
+            echo "::notice::No existing ${BRANCH} — starting a new reference cache."
+            mkdir -p "$CACHE_DIR"
+            git -C "$CACHE_DIR" init -q
+            git -C "$CACHE_DIR" checkout -q -b "$BRANCH"
+            git -C "$CACHE_DIR" remote add origin "$repo"
+          fi
+          echo "dir=${CACHE_DIR}" >> "$GITHUB_OUTPUT"
+
+      - name: Import
+        id: import
+        env:
+          FIGMA_TOKEN: ${{ secrets.figma-token }}
+          DP_VERSION: ${{ inputs.design-parity-version }}
+          DP_REF: ${{ inputs.design-parity-ref }}
+          CACHE_DIR: ${{ steps.cache.outputs.dir }}
+          MAX: ${{ inputs.max }}
+          IMAGE_FORMAT: ${{ inputs.image-format }}
+          IMAGE_SCALE: ${{ inputs.image-scale }}
+          FORCE: ${{ inputs.force }}
+          PRUNE: ${{ inputs.prune }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DP_REF:-}" ]; then
+            dp=(node "${GITHUB_WORKSPACE}/.design-parity-src/packages/cli/bin/design-parity.mjs")
+          else
+            dp=(npx -y "design-parity@${DP_VERSION}")
+          fi
+          # `if` blocks, not `[ … ] && opts+=(…)`: under `set -e` a false test at
+          # the end of a `&&` list is a failed command, and the step would exit
+          # 1 for the entirely normal case of an option being off.
+          opts=()
+          if [ "${MAX}" != "0" ]; then opts+=(--max "${MAX}"); fi
+          if [ "${IMAGE_SCALE}" != "0" ]; then opts+=(--scale "${IMAGE_SCALE}"); fi
+          if [ "${FORCE}" = "true" ]; then opts+=(--force); fi
+          if [ "${PRUNE}" = "true" ]; then opts+=(--prune); fi
+
+          log="${RUNNER_TEMP}/import.txt"
+          "${dp[@]}" import \
+            --repo . \
+            --cache "$CACHE_DIR" \
+            --format "${IMAGE_FORMAT}" \
+            "${opts[@]}" | tee "$log"
+
+          # The CLI prints `name=value` lines precisely so they can go straight
+          # into the step's outputs. Guarded: grep exits 1 on no match, and
+          # failing here would abandon a completed import before it is pushed —
+          # losing exactly the work this workflow exists to preserve.
+          grep -E '^(refreshed|carried|failed|unchanged|pruned|complete)=' "$log" \
+            >> "$GITHUB_OUTPUT" || echo "::warning::Import printed no summary lines."
+
+      # One commit per import that changed something, onto the branch — so the
+      # cache is diffable over time and a bad import is one revert away. An
+      # import that changed nothing (the file version held still) is not a
+      # commit: an empty one per schedule tick is noise, not history.
+      - name: Publish to ${{ inputs.cache-branch }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BRANCH: ${{ inputs.cache-branch }}
+          CACHE_DIR: ${{ steps.cache.outputs.dir }}
+        run: |
+          set -euo pipefail
+          cd "$CACHE_DIR"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::notice::Reference cache unchanged — nothing to commit."
+            exit 0
+          fi
+          summary="$(git diff --cached --shortstat)"
+          git \
+            -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "design-parity reference cache: ${{ steps.import.outputs.refreshed }} node(s) refreshed from ${GITHUB_SHA}"
+          git push \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${BRANCH}"
+          echo "::notice::Published ${BRANCH} — ${summary}."
+
+      - name: Report freshness
+        env:
+          COMPLETE: ${{ steps.import.outputs.complete }}
+          FAILED: ${{ steps.import.outputs.failed }}
+        run: |
+          set -euo pipefail
+          if [ "${COMPLETE}" = "true" ]; then
+            echo "::notice::The reference cache describes every mapped component at the kit's current version."
+          else
+            # Deliberately a notice, not a warning: a partial import is the
+            # designed behaviour under a rate limit, and crying wolf on every
+            # scheduled run would train everyone to ignore it.
+            echo "::notice::Partial import — ${FAILED:-0} node(s) still stale. They are next run's oldest, so they refresh first."
+          fi
