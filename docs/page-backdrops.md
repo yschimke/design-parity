@@ -25,6 +25,18 @@ design has no code component behind it. On a real screen those gaps are what a
 design review is looking for, and they are invisible in a per-component run
 because a component that doesn't exist has nothing to diff.
 
+## The manifest is the surface, the HTML is the fallback
+
+`pages.json` is a versioned wire contract — see
+[page-backdrop-contract.md](./page-backdrop-contract.md). The self-contained HTML
+viewer below is the *fallback*: offline, artifact-friendly, needs no server.
+
+A consumer with a renderer behind it can do better. Given a placement's
+`previewId` and `bounds`, a preview server can render the component **live at the
+placement's exact dimensions** rather than scaling a fixed-size screenshot to fit
+— a materially stronger comparison, and one the producer can't make because it
+has no renderer and must not grow one.
+
 ## Showing the code on top
 
 Toggle the overlay and each placement's own render is laid over the design in

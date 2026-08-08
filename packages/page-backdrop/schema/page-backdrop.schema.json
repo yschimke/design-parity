@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/page-backdrop.schema.json",
+  "title": "PageBackdropManifest",
+  "description": "The wire contract between the producer — design-parity's Figma page importer — and any consumer that draws the result: a preview server, an IDE panel, or the bundled offline HTML viewer. The producer emits a design page's geometry and its design→code mapping; how it is drawn is entirely the consumer's decision. Prose spec: docs/page-backdrop-contract.md.",
+  "x-codegen": {
+    "version-const": "PAGE_BACKDROP_VERSION",
+    "root": "PageBackdropManifest"
+  },
+  "type": "object",
+  "required": ["version", "source", "fileKey", "pages"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Equals PAGE_BACKDROP_VERSION. Bumped only for a BREAKING shape change; additive optional fields never bump it. A consumer should accept any version it understands rather than requiring equality, because the producer releases independently of every consumer.",
+      "minimum": 1
+    },
+    "source": {
+      "const": "figma",
+      "description": "The design source the pages came from. Only Figma exposes a page-level read API today."
+    },
+    "fileKey": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Design-tool file the pages were imported from."
+    },
+    "pages": {
+      "type": "array",
+      "description": "Imported pages, in the order the committed config listed them — the repo's own stated priority.",
+      "items": { "$ref": "#/definitions/BackdropPage" }
+    }
+  },
+  "definitions": {
+    "PageRect": {
+      "type": "object",
+      "description": "An axis-aligned rectangle in the page's frame-local design units (dp), origin at the frame's top-left. Deliberately NOT image pixels: the backdrop PNG is exported at some scale, and pinning geometry to the unscaled frame means a re-export at a different resolution does not invalidate the manifest. Consumers position by ratio (x / frame.width), so no density arithmetic is needed anywhere.",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "PlacementLink": {
+      "enum": ["code-connect", "manifest", "convention", "unlinked"],
+      "description": "How a placement was linked to code. 'code-connect' is Figma's machine link; 'manifest' is the repo's design-map.json; 'convention' is a best-effort name match; 'unlinked' means nothing matched — which is a finding, not an omission."
+    },
+    "Placement": {
+      "type": "object",
+      "description": "One component instance found on the page, and the code it maps to. An instance nothing matched is still a placement: 'this part of the screen has no code behind it' is exactly what a whole-screen view exists to surface.",
+      "required": ["nodeId", "name", "bounds", "depth", "ref", "link"],
+      "properties": {
+        "nodeId": {
+          "type": "string",
+          "description": "Node id of the instance on the page."
+        },
+        "name": {
+          "type": "string",
+          "description": "The instance's layer name, e.g. \"Button/Primary\"."
+        },
+        "componentId": {
+          "type": "string",
+          "description": "Node id of the instance's main component, when the source reports one. This — not nodeId — is what Code Connect links against."
+        },
+        "componentSetId": {
+          "type": "string",
+          "description": "Node id of the main component's set, when the component is one variant of a set. Code Connect commonly links the set rather than a single variant, so it is tried first."
+        },
+        "bounds": { "$ref": "#/definitions/PageRect" },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Nesting depth below the page frame; 0 for a top-level instance. Greater than 0 only when the import ran with nested: true."
+        },
+        "ref": {
+          "type": "string",
+          "description": "The instance's own design ref, \"figma:<fileKey>/<nodeId>\". Always present, linked or not, so a consumer can deep-link a hotspot back into the design tool even for a part of the screen no code implements."
+        },
+        "code": {
+          "type": "string",
+          "description": "Code handle, e.g. \"ui/Button.kt#PrimaryButton\". Absent when unlinked."
+        },
+        "previewId": {
+          "type": "string",
+          "description": "Fully-qualified preview id of the code component, when design-map.json names one. Present so a consumer can render the component itself — a preview server keys on previewId, and without this it would need the producer's own inputs to turn a code handle into something renderable."
+        },
+        "link": { "$ref": "#/definitions/PlacementLink" },
+        "confidence": {
+          "enum": ["high", "low"],
+          "description": "How much to trust `code`. Stated rather than implied by `link`, so a consumer need not hardcode which methods are weak. code-connect and manifest are high; convention is always low. Absent when unlinked."
+        },
+        "matchedRef": {
+          "type": "string",
+          "description": "The design ref the link actually matched on, so a reader can tell whether the component set, the main component, or the instance carried the link."
+        }
+      }
+    },
+    "BackdropImage": {
+      "type": "object",
+      "required": ["uri", "scale"],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "Path to the PNG, relative to the manifest file."
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Export scale the PNG was rendered at; 2 means the PNG is 2x `frame`."
+        }
+      }
+    },
+    "BackdropPage": {
+      "type": "object",
+      "required": ["id", "name", "nodeId", "frame", "image", "placements"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable slug, unique within the manifest; also the backdrop PNG's basename."
+        },
+        "name": {
+          "type": "string",
+          "description": "The frame's layer name in the design file."
+        },
+        "nodeId": {
+          "type": "string",
+          "description": "Node id of the page frame."
+        },
+        "frame": {
+          "type": "object",
+          "description": "The frame's size in design units — the coordinate space every placement's bounds live in.",
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "image": { "$ref": "#/definitions/BackdropImage" },
+        "placements": {
+          "type": "array",
+          "description": "Component instances on the page, ordered top-left first so a re-import diffs cleanly.",
+          "items": { "$ref": "#/definitions/Placement" }
+        }
+      }
+    }
+  }
+}

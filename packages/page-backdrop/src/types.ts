@@ -68,10 +68,37 @@ export interface Placement {
    * greater than `0` when the import ran with `nested: true`.
    */
   depth: number;
+  /**
+   * The instance's own design ref, `"figma:<fileKey>/<nodeId>"`. **Always
+   * present**, linked or not: a consumer needs to be able to deep-link a hotspot
+   * back into the design tool even for a part of the screen no code implements —
+   * which is precisely the case worth clicking through on.
+   */
+  ref: string;
   /** Code handle, e.g. `"ui/Button.kt#PrimaryButton"`. Absent when unlinked. */
   code?: string;
+  /**
+   * Fully-qualified preview id of the code component, when the repo's
+   * `design-map.json` names one.
+   *
+   * Present so a consumer can render the component itself without re-deriving
+   * the mapping. A preview server keys everything on `previewId`; without it
+   * here, the server would need the *producer's* inputs (`design-map.json`) to
+   * turn a code handle into something renderable — which would defeat the point
+   * of the manifest being self-contained.
+   */
+  previewId?: string;
   /** How {@link code} was resolved. */
   link: PlacementLink;
+  /**
+   * How much to trust {@link code}. Stated rather than implied by
+   * {@link link}, so a consumer styling low-confidence links doesn't have to
+   * hardcode which methods count as weak. Absent when unlinked.
+   *
+   * `code-connect` and `manifest` are `high` — a human or a machine link said
+   * so. `convention` is always `low`: it is a name that happened to match.
+   */
+  confidence?: "high" | "low";
   /**
    * Design ref the link matched on (`"figma:<fileKey>/<nodeId>"`), so a reader
    * can tell whether the set, the component, or the instance carried the link.
