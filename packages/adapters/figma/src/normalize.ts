@@ -6,6 +6,7 @@ import type {
   DesignReference,
   DesignTokens,
   Image,
+  ReferenceProperty,
   TypographyToken,
 } from "@design-parity/core";
 
@@ -235,6 +236,8 @@ export interface NormalizeInput {
   variables: VariablesResponse;
   /** File-level published-style metadata (style id → name/type) for the node. */
   styles?: Record<string, FigmaStyleMeta>;
+  /** The component properties the render used — what the reference depicts. */
+  properties?: ReferenceProperty[];
   referenceImages: Image[];
 }
 
@@ -251,6 +254,7 @@ export function normalizeReference(input: NormalizeInput): DesignReference {
   };
   if (tokens) ref.tokens = tokens;
   if (themeTokens) ref.themeTokens = themeTokens;
+  if (input.properties?.length) ref.properties = input.properties;
   // Same `styles` map the type ramp is read from, so a node's annotation names
   // the published style it wears rather than the anonymous `text`.
   const layout = layoutFromNode(input.node, { styles: input.styles });

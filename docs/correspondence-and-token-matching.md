@@ -149,6 +149,59 @@ Unmatched reference variants surface as findings rather than being dropped.
 This is the layer that makes multi-node Figma refs (§2.4) cheap: every extra
 node just fills another variant slot.
 
+### 3.1 Pairing on component properties, not just on the variant key (issue #296)
+
+The variant key names `state|theme|size`, and a component varies along axes it
+does not name. Worse, the *reference render itself* is not neutral: Figma's
+`GET /v1/images` renders a node at its component-property **defaults**, and
+those defaults appear nowhere in the variant's name. The M3 kit's `Button` set
+defaults `Show icon` to `true`, so a node named `Type=Round, Size=Small` renders
+with an icon — and label-only code diffed against it reports a missing icon as
+though the code were wrong.
+
+The same pair, before and after. Before, the reference's icon is invisible to
+the reader and the pair is diffed anyway — "100.0% of pixels differ" reads as a
+defect in the code:
+
+![Report findings before: the pair is diffed and reported as a visual failure](./images/component-properties/before-findings.png)
+
+After, the report says what the reference depicts and why the pair was left
+alone:
+
+![Report header after: a "Reference depicts" chip row naming Show icon=true, Label=Button, Size=Small](./images/component-properties/after-header.png)
+
+![Report findings after: a Pairing section stating the property defaults and the two undiffed variants](./images/component-properties/after-findings.png)
+
+Three pieces close that:
+
+1. **The reference says what it depicts.** The Figma adapter reads
+   `componentPropertyDefinitions` — from the component **set**, since a variant
+   carries none of its own, and only for nodes asked for **directly**, since
+   Figma returns them for nothing reached by descending a page — and normalises
+   them onto `DesignReference.properties` (`ReferenceProperty[]`). One extra
+   batched read per file, not one per component. The report prints them under
+   the title; the diff states the non-variant ones as an `info` finding, since
+   those are the ones nothing else on the page mentions.
+2. **A contradiction is a pairing problem, not a divergence.** When a candidate
+   image declares a property (`Image.props`) the reference contradicts, the pair
+   is reported `kind: "pairing"` and left **undiffed** — `warn`, never `error`,
+   because the fix is a better reference and a blocking verdict would tell the
+   consumer to change correct code. Candidate silence is not a claim: a
+   candidate that says nothing about `Show icon` still diffs.
+3. **A better node is preferred over a mismatch.** `ReferenceAdapter.resolveSibling`
+   answers "the same component with one axis moved" (`Size=Small` →
+   `Size=Medium`) by looking it up in the set's variant names, which *are* axis
+   vectors. The orchestrator asks for it when the candidate claims a different
+   variant, and diffs against what comes back. It returns `undefined` for every
+   translation the source does not have — a confident reference to the wrong
+   node is worse than none, because the diff that follows looks authoritative.
+
+What stays out of design-parity: the consumer's own dialect — the map from *its*
+preview knobs to the source's axis names (`size`→`Size`, `xs`→`XSmall`), and
+which of its renders are single-axis rather than combinations. That is
+catalog-shaped, and shipping one consumer's vocabulary as a contract would make
+it wrong for every other consumer.
+
 ---
 
 ## 4. Token-table matching: colours & type styles ↔ code

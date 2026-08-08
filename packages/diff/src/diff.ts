@@ -28,6 +28,12 @@ import {
 import { resolveConfig, type DiffConfig } from "./config.js";
 import { diffDesignSystem } from "./design-system.js";
 import { diffLayout } from "./layout.js";
+import {
+  depictionFinding,
+  propertyConflicts,
+  unpairableFinding,
+  type PropertyConflict,
+} from "./pairing.js";
 import { diffSemantics } from "./semantic.js";
 import { renderSummary } from "./summary.js";
 import { collectTokens, diffTokens } from "./tokens.js";
@@ -92,6 +98,12 @@ interface PairingResult {
   pairs: Array<{ reference: Image; candidate: Image }>;
   /** Reference variants with no candidate to compare against. */
   unmatched: Image[];
+  /**
+   * Pairs the variant keys matched but the component properties refute — the
+   * reference depicts a different point in the component's property space than
+   * the candidate claims to be. Reported, never diffed (see `pairing.ts`).
+   */
+  unpairable: Array<{ reference: Image; conflicts: PropertyConflict[] }>;
 }
 
 /**
@@ -100,6 +112,11 @@ interface PairingResult {
  * fallback by `state/theme` when one side omits/uses an unknown size. Two
  * *different known* sizes never pair. Reference variants left over are reported
  * rather than silently dropped.
+ *
+ * A match on the variant key is necessary but not sufficient: the key names
+ * state/theme/size, and a component varies along axes it does not name. When
+ * the candidate declares a property the reference contradicts, the pair is
+ * separated out as unpairable instead of being diffed.
  */
 function pairImages(
   reference: DesignReference,
@@ -113,6 +130,7 @@ function pairImages(
   const used = new Set<Image>();
   const pairs: PairingResult["pairs"] = [];
   const unmatched: Image[] = [];
+  const unpairable: PairingResult["unpairable"] = [];
 
   for (const ref of reference.referenceImages) {
     let cand = exact.get(pairKey(ref));
@@ -127,12 +145,14 @@ function pairImages(
     }
     if (cand) {
       used.add(cand);
-      pairs.push({ reference: ref, candidate: cand });
+      const conflicts = propertyConflicts(reference.properties, ref, cand);
+      if (conflicts.length > 0) unpairable.push({ reference: ref, conflicts });
+      else pairs.push({ reference: ref, candidate: cand });
     } else {
       unmatched.push(ref);
     }
   }
-  return { pairs, unmatched };
+  return { pairs, unmatched, unpairable };
 }
 
 function statusFor(findings: Finding[]): VerdictStatus {
@@ -183,7 +203,7 @@ export async function diff(
 
   // 3. semantics (+ reference variants with no candidate counterpart).
   const semantic = diffSemantics(reference, candidate);
-  const { pairs, unmatched } = pairImages(reference, candidate);
+  const { pairs, unmatched, unpairable } = pairImages(reference, candidate);
   const candidateThemes = new Set(
     candidate.images.map((i) => i.theme).filter(Boolean),
   );
@@ -197,6 +217,15 @@ export async function diff(
       message: `reference variant '${imageKey(ref)}' has no candidate render to compare`,
       detail: { variant: imageKey(ref) },
     });
+  }
+
+  // 3b. pairing: state what the reference depicts beyond its name, and report
+  // the pairs whose properties refute each other rather than diffing them.
+  const pairing: Finding[] = [];
+  const depiction = depictionFinding(reference.properties);
+  if (depiction) pairing.push(depiction);
+  for (const { reference: ref, conflicts } of unpairable) {
+    pairing.push(unpairableFinding(imageKey(ref), conflicts));
   }
 
   // 4. structural layout: per-element position/size drift vs the reference's
@@ -254,7 +283,15 @@ export async function diff(
     }
   }
 
-  const findings = [...a11y, ...tokens, ...designSystem, ...semantic, ...layout, ...visualFindings];
+  const findings = [
+    ...a11y,
+    ...tokens,
+    ...designSystem,
+    ...pairing,
+    ...semantic,
+    ...layout,
+    ...visualFindings,
+  ];
   const verdict: Verdict = {
     componentId: candidate.componentId,
     status: statusFor(findings),

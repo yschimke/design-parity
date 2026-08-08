@@ -11,6 +11,7 @@ import type {
   DesignReference,
   Image,
   ReferenceAdapter,
+  SiblingTarget,
   Theme,
 } from "@design-parity/core";
 
@@ -25,12 +26,25 @@ import {
 } from "./errors.js";
 import type { ReferenceCache } from "./reference-cache.js";
 import { formatFigmaRef, isFigmaRef, parseFigmaRef, type FigmaRef } from "./figma-ref.js";
-import type { FigmaNodeDoc, FigmaStyleMeta, VariablesResponse } from "./figma-api.js";
+import type {
+  FigmaComponentMeta,
+  FigmaNodeDoc,
+  FigmaStyleMeta,
+  VariablesResponse,
+} from "./figma-api.js";
+import { referenceProperties } from "./properties.js";
+import {
+  canonicalAxis,
+  parseVariantName,
+  sameAxes,
+  type VariantAxes,
+} from "./variant-name.js";
 
-/** What a nodes response carries per id — the document, and the styles it uses. */
+/** What a nodes response carries per id — the document, the styles, the components. */
 interface CachedNode {
   document: FigmaNodeDoc;
   styles?: Record<string, FigmaStyleMeta>;
+  components?: Record<string, FigmaComponentMeta>;
 }
 
 /**
@@ -126,6 +140,12 @@ export class FigmaAdapter implements ReferenceAdapter {
   readonly #opts: FigmaAdapterOptions;
   /** `fileKey/nodeId` -> node entry, filled by {@link prefetch}. */
   readonly #nodes = new Map<string, CachedNode>();
+  /**
+   * `fileKey/setId` -> the component set's document, or `null` for one we asked
+   * for and did not get. Caching the miss matters as much as the hit: without
+   * it every node in a set whose fetch failed re-asks for the same set.
+   */
+  readonly #sets = new Map<string, FigmaNodeDoc | null>();
   /** `fileKey` -> variables. One response per file, not one per component. */
   readonly #variables = new Map<string, Promise<VariablesResponse>>();
 
@@ -188,7 +208,169 @@ export class FigmaAdapter implements ReferenceAdapter {
           // Leave the chunk unwarmed; `resolve` will ask for those ids itself.
         }
       }
+      await this.#warmSets(client, fileKey, ids);
     }
+  }
+
+  /**
+   * Second batched pass: the component **sets** the warmed nodes belong to.
+   *
+   * A variant node carries neither its set's `componentPropertyDefinitions` nor
+   * its siblings — both live on the set — and Figma returns definitions only for
+   * nodes asked for directly. So the set is a second read, and doing it here
+   * makes it a handful of requests for the whole run instead of one per
+   * component. Best-effort, like the node pass: a chunk that fails leaves those
+   * references without properties rather than failing the run.
+   */
+  async #warmSets(
+    client: FigmaRestClient,
+    fileKey: string,
+    nodeIds: readonly string[],
+  ): Promise<void> {
+    if (this.#opts.cacheOnly) return;
+    const setIds = new Set<string>();
+    for (const id of nodeIds) {
+      const setId = this.#setIdFor(fileKey, id);
+      if (setId && !this.#sets.has(`${fileKey}/${setId}`)) setIds.add(setId);
+    }
+    if (setIds.size === 0) return;
+
+    const ids = [...setIds];
+    for (let i = 0; i < ids.length; i += NODE_BATCH) {
+      const chunk = ids.slice(i, i + NODE_BATCH);
+      try {
+        const res = await client.getFileNodes(fileKey, chunk);
+        for (const id of chunk) {
+          this.#sets.set(`${fileKey}/${id}`, res.nodes[id]?.document ?? null);
+        }
+      } catch {
+        // Unwarmed, not absent — leave the key unset so a later read can retry.
+      }
+    }
+  }
+
+  /** The id of the component set `nodeId` is a variant of, per its file metadata. */
+  #setIdFor(fileKey: string, nodeId: string): string | undefined {
+    const entry = this.#nodes.get(`${fileKey}/${nodeId}`);
+    return entry?.components?.[nodeId]?.componentSetId;
+  }
+
+  /**
+   * The component set behind a node: this run's warm, then the committed cache,
+   * then the API — the same order, and the same reasons, as the node itself.
+   *
+   * The import stores sets as ordinary structure-only entries, so a `cacheOnly`
+   * run still knows what its references depict. Returns `undefined` when the
+   * node is not a variant, or when the set could not be read at all —
+   * properties are additive, so a miss degrades the reference rather than
+   * failing it.
+   */
+  async #componentSet(
+    client: () => FigmaRestClient,
+    fileKey: string,
+    nodeId: string,
+  ): Promise<FigmaNodeDoc | undefined> {
+    const setId = this.#setIdFor(fileKey, nodeId);
+    if (!setId) return undefined;
+    const key = `${fileKey}/${setId}`;
+    if (!this.#sets.has(key)) {
+      const committed = await this.#opts.cache?.node(fileKey, setId);
+      if (committed?.document) {
+        this.#sets.set(key, committed.document);
+      } else if (this.#opts.cacheOnly) {
+        // A cache built before sets were stored simply has no properties for
+        // this node. Silent is wrong, but so is spending a request the run
+        // promised not to make; the report shows the reference without them.
+        this.#sets.set(key, null);
+      } else {
+        try {
+          const res = await client().getFileNodes(fileKey, [setId]);
+          this.#sets.set(key, res.nodes[setId]?.document ?? null);
+        } catch {
+          this.#sets.set(key, null);
+        }
+      }
+    }
+    return this.#sets.get(key) ?? undefined;
+  }
+
+  /**
+   * Read a node: this run's warm, the committed cache, then the API.
+   * `undefined` when absent — or when only the API has it and this run is not
+   * allowed to ask.
+   */
+  async #node(
+    client: () => FigmaRestClient,
+    fileKey: string,
+    nodeId: string,
+  ): Promise<CachedNode | undefined> {
+    const key = `${fileKey}/${nodeId}`;
+    const warm = this.#nodes.get(key);
+    if (warm) return warm;
+    const committed = await this.#opts.cache?.node(fileKey, nodeId);
+    if (committed?.document) {
+      this.#nodes.set(key, committed);
+      return committed;
+    }
+    if (this.#opts.cacheOnly) return undefined;
+    const res = await client().getFileNodes(fileKey, [nodeId]);
+    const fetched = res.nodes[nodeId];
+    if (!fetched?.document) return undefined;
+    this.#nodes.set(key, fetched);
+    return fetched;
+  }
+
+  /**
+   * The same component with one variant axis moved — `Size=Small` →
+   * `Size=Medium` — as a `figma:<fileKey>/<nodeId>` handle.
+   *
+   * A component set's variant names are axis vectors and every child names
+   * every axis, so this is a lookup in the set's children rather than a guess.
+   * That makes it Figma's data model, not any consumer's taxonomy, which is why
+   * it belongs on the adapter: every consumer comparing more than a default
+   * state needs it.
+   *
+   * Returns `undefined` — deliberately, and for every failure alike: the ref is
+   * not a Figma handle, the node is not a variant, its set could not be read,
+   * the axis is not one this component has, or no sibling carries that value. A
+   * translation the source does not have must find *nothing*, because the
+   * alternative is a confident reference to the wrong node.
+   */
+  async resolveSibling(
+    ref: string,
+    target: SiblingTarget,
+    ctx: AdapterContext,
+  ): Promise<string | undefined> {
+    if (!isFigmaRef(ref)) return undefined;
+    const { fileKey, nodeId } = parseFigmaRef(ref);
+    // Lazily, like `resolve`: a cache-only run has no token to build one with,
+    // and demanding one to read files off disk would be a network dependency
+    // in all but name.
+    let restClient: FigmaRestClient | undefined;
+    const client = (): FigmaRestClient => (restClient ??= this.#client(ctx));
+
+    let entry: CachedNode | undefined;
+    try {
+      entry = await this.#node(client, fileKey, nodeId);
+    } catch {
+      return undefined;
+    }
+    if (!entry) return undefined;
+
+    const axes = parseVariantName(entry.document.name);
+    if (axes.size === 0) return undefined;
+    const axis = canonicalAxis(axes.keys(), target.axis);
+    if (axis === undefined) return undefined;
+
+    const set = await this.#componentSet(client, fileKey, nodeId);
+    if (!set) return undefined;
+
+    const wanted: VariantAxes = new Map(axes);
+    wanted.set(axis, target.value);
+    const sibling = (set.children ?? []).find((child) =>
+      sameAxes(wanted, parseVariantName(child.name)),
+    );
+    return sibling ? formatFigmaRef({ fileKey, nodeId: sibling.id }) : undefined;
   }
 
   async resolve(
@@ -233,6 +415,13 @@ export class FigmaAdapter implements ReferenceAdapter {
       throw new FigmaNodeNotFoundError(figmaRef.fileKey, figmaRef.nodeId);
     }
     const node = entry.document;
+
+    // What the render will actually depict. `/v1/images` renders at the
+    // component's property defaults, and those defaults are named nowhere in
+    // the variant — so without this the reference silently carries whatever the
+    // kit's author defaulted on, and the diff blames the candidate for it.
+    const set = await this.#componentSet(client, figmaRef.fileKey, figmaRef.nodeId);
+    const properties = referenceProperties(node, set);
 
     // One response per file rather than one per component: the variables of a
     // file do not vary by which node is being resolved, and 77 identical
@@ -304,6 +493,7 @@ export class FigmaAdapter implements ReferenceAdapter {
       node,
       variables,
       ...(entry.styles ? { styles: entry.styles } : {}),
+      ...(properties.length > 0 ? { properties } : {}),
       referenceImages,
     });
   }

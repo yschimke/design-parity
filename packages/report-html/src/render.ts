@@ -13,7 +13,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cwd } from "node:process";
 
-import type { Image, SemanticNode, SemanticTree, Verdict } from "@design-parity/core";
+import type {
+  Image,
+  ReferenceProperty,
+  SemanticNode,
+  SemanticTree,
+  Verdict,
+} from "@design-parity/core";
 
 import { groupFindings, tokenDelta } from "./findings.js";
 import { escapeHtml, isSvgSource, pngDataUri, svgDataUri } from "./html.js";
@@ -323,6 +329,27 @@ function variantMarkup(
           </section>`;
 }
 
+/**
+ * What the reference render depicts, as a chip row under the subtitle.
+ *
+ * The reference is the component at one point in its property space, and the
+ * source picks that point from its own defaults — a `Show icon` the variant
+ * name never mentions still shows an icon in the picture. A reviewer comparing
+ * two images has no way to know that from the images. Non-variant properties
+ * are highlighted because those are the silent ones; variant axes are already
+ * spelled out in the variant key above each comparison.
+ */
+function depictsMarkup(properties: readonly ReferenceProperty[] | undefined): string {
+  if (!properties || properties.length === 0) return "";
+  const chips = properties
+    .map((p) => {
+      const cls = p.type === "variant" ? "chip" : "chip chip-default";
+      return `<span class="${cls}">${escapeHtml(p.name)}=${escapeHtml(p.value)}</span>`;
+    })
+    .join("");
+  return `\n  <div class="depicts">Reference depicts ${chips}</div>`;
+}
+
 function findingsMarkup(verdict: Verdict): string {
   const sections = groupFindings(verdict.findings);
   if (sections.length === 0) {
@@ -384,6 +411,9 @@ a{color:inherit}
 header.page{padding:24px 28px;border-bottom:1px solid #26262f}
 header.page h1{margin:0 0 6px;font-size:18px}
 .subtitle{color:#9a9ab0;font-size:13px}
+.depicts{margin-top:8px;color:#9a9ab0;font-size:12px}
+.depicts .chip{margin:0 4px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.depicts .chip-default{background:#2b2418;color:#e8c66b}
 .status{display:inline-block;margin-left:10px;padding:2px 10px;border-radius:999px;font-weight:600;font-size:12px;vertical-align:middle}
 .status-pass{background:#16351f;color:#7ee29a}
 .status-warn{background:#3a3115;color:#e8c66b}
@@ -564,7 +594,7 @@ ${detailsHtml}`
 <body>
 <header class="page">
   <h1>${escapeHtml(verdict.componentId)}<span class="status status-${status}">${STATUS_LABEL[status]}</span></h1>
-  <div class="subtitle">${escapeHtml(reference.source)} reference vs candidate render</div>
+  <div class="subtitle">${escapeHtml(reference.source)} reference vs candidate render</div>${depictsMarkup(reference.properties)}
 </header>
 <main>
 ${variantsSection}

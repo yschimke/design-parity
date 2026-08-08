@@ -107,6 +107,78 @@ export interface OrchestrateOptions {
   };
 }
 
+/** Loose value comparison — sources spell booleans and enum values differently. */
+function equivalentValue(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * Prefer a reference the candidate could actually be a picture of.
+ *
+ * When the candidate declares a variant axis (`Size=Medium`) and the mapped
+ * reference is a different point on that axis, diffing them measures the wrong
+ * thing — the difference reported is the axis, not the code. But "the same
+ * component with one axis moved" is a mechanical lookup in the source's own
+ * data model, so ask for that node instead of reporting a mismatch nobody can
+ * act on. The diff still reports the pair unpairable if this finds nothing.
+ *
+ * Bounded by the number of variant axes: each pass fixes one, and a pass that
+ * fixes none ends it. Only reached when there *is* a contradiction, so the
+ * common path pays nothing.
+ *
+ * @returns the better reference, or `undefined` to keep the one already
+ *   resolved — including whenever the source cannot answer, which is the case
+ *   the diff's pairing check exists for.
+ */
+async function preferMatchingVariant(
+  adapter: ReferenceAdapter,
+  reference: DesignReference,
+  candidate: CandidateRender,
+  code: string,
+  ctx: AdapterContext,
+): Promise<DesignReference | undefined> {
+  if (!adapter.resolveSibling) return undefined;
+
+  // What the candidate says it is, first declaration per axis.
+  const claimed = new Map<string, string>();
+  for (const image of candidate.images) {
+    for (const [name, value] of Object.entries(image.props ?? {})) {
+      const key = name.trim().toLowerCase();
+      if (!claimed.has(key)) claimed.set(key, value);
+    }
+  }
+  if (claimed.size === 0) return undefined;
+
+  let current = reference;
+  for (let pass = 0; pass < claimed.size; pass++) {
+    const axes = (current.properties ?? []).filter((p) => p.type === "variant");
+    const conflict = axes.find((p) => {
+      const value = claimed.get(p.name.trim().toLowerCase());
+      return value !== undefined && !equivalentValue(p.value, value);
+    });
+    if (!conflict || !current.ref) break;
+
+    const value = claimed.get(conflict.name.trim().toLowerCase())!;
+    let sibling: string | undefined;
+    try {
+      sibling = await adapter.resolveSibling(
+        current.ref,
+        { axis: conflict.name, value },
+        ctx,
+      );
+    } catch {
+      break; // a source that cannot answer leaves the reference as it was
+    }
+    if (!sibling || sibling === current.ref) break;
+    try {
+      current = await adapter.resolve(code, sibling, ctx);
+    } catch {
+      break;
+    }
+  }
+  return current === reference ? undefined : current;
+}
+
 /** Wrap precomputed native findings as a {@link ChecksProvider} for the diff. */
 function nativeChecksProvider(findings: Finding[]): ChecksProvider {
   return { run: () => findings };
@@ -310,14 +382,7 @@ export async function orchestrate(
         continue;
       }
 
-      const reference = await resolveReference(adapter, corr, ctx);
-      // A component can declare its spec tokens via a committed DTCG file
-      // (design-map `tokensFile`, issue #89); merge them over whatever the
-      // adapter resolved so a token-less source still has a spec to diff.
-      const declared = options.referenceTokens?.get(
-        specTokenKey(corr.code, corr.source),
-      );
-      if (declared) reference.tokens = mergeReferenceTokens(reference.tokens, declared);
+      let reference = await resolveReference(adapter, corr, ctx);
       result.reference = reference;
 
       const candidate = await options.candidate(corr.code, ctx);
@@ -330,6 +395,28 @@ export async function orchestrate(
       }
       // Retain the render so push-back (#9) can write the shipped pixels back.
       result.candidate = candidate;
+
+      // With both sides in hand, re-target the reference when the candidate
+      // says it is a different variant than the one the map points at (#296).
+      const better = await preferMatchingVariant(
+        adapter,
+        reference,
+        candidate,
+        corr.code,
+        ctx,
+      );
+      if (better) {
+        reference = better;
+        result.reference = reference;
+      }
+
+      // A component can declare its spec tokens via a committed DTCG file
+      // (design-map `tokensFile`, issue #89); merge them over whatever the
+      // adapter resolved so a token-less source still has a spec to diff.
+      const declared = options.referenceTokens?.get(
+        specTokenKey(corr.code, corr.source),
+      );
+      if (declared) reference.tokens = mergeReferenceTokens(reference.tokens, declared);
 
       // Each component writes into its own subdir so triptychs (keyed only by
       // image variant) and the HTML page don't collide across components (#49),

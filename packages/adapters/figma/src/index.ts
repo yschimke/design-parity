@@ -8,6 +8,18 @@
 export { FigmaAdapter, createFigmaAdapter } from "./adapter.js";
 export type { FigmaAdapterOptions, RenderTarget } from "./adapter.js";
 
+// Component properties: what a rendered reference depicts, as opposed to what
+// its variant name says. Public so a publisher building a reference index
+// records the same values the adapter resolved, rather than re-deriving them.
+export { referenceProperties, propertyName } from "./properties.js";
+export {
+  parseVariantName,
+  formatVariantName,
+  canonicalAxis,
+  sameAxes,
+  type VariantAxes,
+} from "./variant-name.js";
+
 export { FigmaCanvasWriter, createFigmaCanvasWriter } from "./canvas-writer.js";
 export type { FigmaCanvasWriterOptions, CanvasFetch } from "./canvas-writer.js";
 
@@ -24,7 +36,12 @@ export type {
 // publisher would mean the two sides were measured by different code.
 export { layoutFromNode } from "./layout.js";
 export type { LayoutOptions, StyleMap } from "./layout.js";
-export type { FigmaNodeDoc, FigmaStyleMeta } from "./figma-api.js";
+export type {
+  FigmaNodeDoc,
+  FigmaStyleMeta,
+  FigmaComponentMeta,
+  FigmaComponentPropertyDefinition,
+} from "./figma-api.js";
 
 export {
   parseFigmaRef,
