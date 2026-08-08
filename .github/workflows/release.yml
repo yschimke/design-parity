@@ -38,7 +38,20 @@ jobs:
 
   publish:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # `release_created` is only true on the single run that cuts the release.
+    # When runners are backed up, a later push can execute first and create the
+    # release itself; by the time the release commit's own run gets a runner,
+    # release-please reports "Found release for path ., vX.Y.Z" and sets no
+    # output — so publish is gated off on *every* run and the version is
+    # stranded on the tag, never reaching npm. That happened to v0.1.43.
+    #
+    # A manual dispatch is the escape hatch (matching the sibling repo
+    # compose-ai-tools, whose release.yml takes a tag input for the same
+    # reason). The publish loop below already skips packages whose version is
+    # on npm, so re-publishing an in-sync release is a no-op.
+    if: >-
+      needs.release-please.outputs.release_created == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
