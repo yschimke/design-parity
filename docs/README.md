@@ -26,6 +26,7 @@ this repo.
 | Doc | What it covers |
 | --- | --- |
 | [correspondence-and-token-matching.md](./correspondence-and-token-matching.md) | How the bot decides *which* design a code preview is compared against, and how design colours and type styles line up with the code's. Documents what exists, names the gaps, proposes a phased plan. |
+| [page-backdrop-contract.md](./page-backdrop-contract.md) | The `PageBackdropManifest` wire format: what design-parity's Figma page importer emits, and why the consumer — not the producer — decides how it is drawn. Includes the cross-repo compatibility rules a contract with an independently released producer needs. |
 | [report-format.md](./report-format.md) | Versioning of the published `verdict.json`, and how its finding/verdict shapes line up with the compose-ai-tools reporting-branch contract so both projects converge on one history format. |
 
 ## Code → design (catalogs)

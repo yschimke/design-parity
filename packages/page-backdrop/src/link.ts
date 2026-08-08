@@ -69,6 +69,31 @@ function normalizeName(name: string): string {
   return name.replace(/[^\p{Letter}\p{Number}]+/gu, "").toLowerCase();
 }
 
+/**
+ * The preview id `design-map.json` records for a code handle, if any.
+ *
+ * Looked up by code rather than by ref on purpose: the handle that *linked* may
+ * have come from Code Connect, while the preview id is only ever stated in the
+ * manifest — so the two are joined through the code handle they share. A
+ * multi-variant `previewId` binding contributes its first entry, since a
+ * placement is one rectangle and can only show one render.
+ */
+function previewIdFor(code: string, designMap: DesignMap | undefined): string | undefined {
+  for (const entry of designMap?.components ?? []) {
+    if (entry.code !== code) continue;
+    const p = entry.previewId;
+    if (typeof p === "string" && p !== "") return p;
+    if (Array.isArray(p)) {
+      for (const variant of p) {
+        if (typeof variant?.previewId === "string" && variant.previewId !== "") {
+          return variant.previewId;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
 /** The result of linking one instance. */
 export interface LinkedPlacement {
   placement: Placement;
@@ -123,16 +148,28 @@ export function linkInstance(
     name: hit.name,
     bounds: hit.bounds,
     depth: hit.depth,
+    ref: formatFigmaRef({ fileKey, nodeId: hit.nodeId }),
     link: "unlinked",
   };
   if (hit.componentId) base.componentId = hit.componentId;
   if (hit.componentSetId) base.componentSetId = hit.componentSetId;
 
-  if (matched) {
-    return {
-      placement: { ...base, code: matched.code, link: matched.link, matchedRef: matched.matchedRef },
-      warnings,
+  /** Everything a linked placement carries beyond the bare instance. */
+  const linked = (code: string, link: PlacementLink, matchedRef?: string): Placement => {
+    const out: Placement = {
+      ...base,
+      code,
+      link,
+      confidence: link === "convention" ? "low" : "high",
     };
+    const previewId = previewIdFor(code, inputs.designMap);
+    if (previewId) out.previewId = previewId;
+    if (matchedRef) out.matchedRef = matchedRef;
+    return out;
+  };
+
+  if (matched) {
+    return { placement: linked(matched.code, matched.link, matched.matchedRef), warnings };
   }
 
   // Last resort: match the layer's component name against known code handles.
@@ -143,7 +180,7 @@ export function linkInstance(
     );
     const only = candidates[0];
     if (candidates.length === 1 && only) {
-      return { placement: { ...base, code: only, link: "convention" }, warnings };
+      return { placement: linked(only, "convention"), warnings };
     }
     if (candidates.length > 1) {
       warnings.push(

@@ -8,6 +8,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
+    "./schema/page-backdrop.schema.json": "./schema/page-backdrop.schema.json",
     "./schema/page-backdrop-config.schema.json": "./schema/page-backdrop-config.schema.json"
   },
   "files": [
@@ -25,6 +26,9 @@
     "@design-parity/core": "^0.1.38",
     "@design-parity/resolver": "^0.1.38",
     "@design-parity/adapter-figma": "^0.1.38"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1"
   },
   "repository": {
     "type": "git",
