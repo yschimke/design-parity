@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.40](https://github.com/yschimke/design-parity/compare/v0.1.39...v0.1.40) (2026-08-08)
+
+
+### Bug Fixes
+
+* **shard:** scope the render exclusion to the module's preview set ([#285](https://github.com/yschimke/design-parity/issues/285)) ([34f546b](https://github.com/yschimke/design-parity/commit/34f546bfedcf42ca0ad95ad3ad9fd2feaa2f4a80))
+
 ## [0.1.39](https://github.com/yschimke/design-parity/compare/v0.1.38...v0.1.39) (2026-08-08)
 
 
