@@ -169,6 +169,8 @@ export async function diff(
     candidateTokens,
     config,
     options.tokenAlias,
+    // The box the radii bound, so a corner can be read against what it rounds.
+    candidate.semantics.root.bounds,
   );
   const designSystem = diffDesignSystem(
     reference.themeTokens,
