@@ -236,6 +236,17 @@ describe("normalizeSemantics", () => {
     expect(normalizeSemantics({})).toBeUndefined();
   });
 
+  it("carries testTag as a name, without letting it stand in for the label", () => {
+    // A third of a published catalog's annotations had no title at all. The test
+    // tag names them — but folding it into `label` would make a node with no
+    // accessible name silently pass the missing-label check.
+    const tree = normalizeSemantics({
+      root: { testTag: "message-row", boundsInRoot: "0,0,10,10" },
+    });
+    expect(tree?.root.testTag).toBe("message-row");
+    expect(tree?.root.label).toBeUndefined();
+  });
+
   it("reads compose/semantics 'boundsInRoot' string geometry from the bundle", () => {
     // The compose-preview bundle emits geometry as "left,top,right,bottom" px
     // (not the object form). Without parsing it the bundle path had no bounds,

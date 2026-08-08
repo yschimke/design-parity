@@ -52,9 +52,15 @@ function nodeRedline(node: SemanticNode): Redline | undefined {
   const out: Redline = { bounds: node.bounds };
   if (node.role !== undefined) out.role = node.role;
   if (node.label !== undefined) out.label = node.label;
+  if (node.testTag !== undefined) out.testTag = node.testTag;
   if (padding) out.padding = padding;
   if (gap !== undefined) out.gap = gap;
   if (cornerRadius !== undefined) out.cornerRadius = cornerRadius;
+  // Only meaningful once there is spacing to qualify — a radius-only redline is
+  // always declared, and tagging it "derived" would misdescribe it.
+  if (node.spacingSource === "derived" && (padding || gap !== undefined)) {
+    out.spacingSource = "derived";
+  }
   return out;
 }
 

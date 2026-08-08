@@ -198,6 +198,20 @@ describe("compose/semantics → deeper SemanticTree (#55)", () => {
     expect(text?.tokens?.typography?.["text"]?.fontSize).toBe(16);
   });
 
+  it("carries testTag through as a name, separate from the accessible label", () => {
+    // `compose/semantics` has always emitted it; dropping it left a third of the
+    // published catalog's annotations as bare numbered boxes with no title.
+    const tree = semanticsToSemanticTree({
+      root: {
+        boundsInRoot: "0,0,360,640",
+        children: [{ testTag: "message-row", boundsInRoot: "0,0,360,48" }],
+      },
+    });
+    const row = tree?.root.children?.[0];
+    expect(row?.testTag).toBe("message-row");
+    expect(row?.label).toBeUndefined();
+  });
+
   it("maps the v6 typography + textColor objects into tokens (compose-ai-tools#1934, #1903)", () => {
     const tree = semanticsToSemanticTree(
       {

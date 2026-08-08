@@ -139,7 +139,7 @@ export interface ComponentReference {
   url?: string;
 }
 
-/** Per-edge content padding, in dp. */
+/** Per-edge content padding, in the source's own unit (dp for a render, px for a design board). */
 export interface RedlinePadding {
   start?: number;
   top?: number;
@@ -155,10 +155,18 @@ export interface RedlinePadding {
 export interface Redline {
   role?: string;
   label?: string;
+  /** Developer-authored test handle, a fallback name when there is no label/role. */
+  testTag?: string;
   bounds: Bounds;
   padding?: RedlinePadding;
   gap?: number;
   cornerRadius?: number;
+  /**
+   * `"derived"` when `padding` / `gap` were measured off child geometry rather
+   * than declared by the source (mirrors `SemanticNode.spacingSource`). Absent
+   * ⇒ declared. `cornerRadius` is always declared and is never covered by this.
+   */
+  spacingSource?: "declared" | "derived";
 }
 
 /** One component on the sticker sheet, in its primary modes. */

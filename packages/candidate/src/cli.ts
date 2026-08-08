@@ -227,6 +227,8 @@ export interface RawSemanticsNode {
   contentDescription?: string;
   /** Visible text — last-resort label source. */
   text?: string;
+  /** `Modifier.testTag` — a reader-facing name, never an accessible label. */
+  testTag?: string;
   bounds?: {
     x?: number;
     y?: number;
@@ -448,6 +450,9 @@ function normalizeNode(n: RawSemanticsNode): SemanticNode {
   if (n.role !== undefined) node.role = n.role;
   const label = n.label ?? n.contentDescription ?? n.text;
   if (label !== undefined) node.label = label;
+  // Kept out of `label` on purpose — see `SemanticNode.testTag`. Mirrors the
+  // daemon path so a bundle-sourced candidate names its slots the same way.
+  if (n.testTag !== undefined) node.testTag = n.testTag;
   // Object form first (a11y/hierarchy product), else the compose/semantics
   // `boundsInRoot`/`boundsInScreen` string the bundle emits.
   const bounds = normalizeBounds(n.bounds) ?? parseBoundsSpec(n.boundsInRoot ?? n.boundsInScreen);

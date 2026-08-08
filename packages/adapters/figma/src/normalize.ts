@@ -17,6 +17,7 @@ import type {
   VariablesResponse,
 } from "./figma-api.js";
 import { layoutFromNode } from "./layout.js";
+import { tokenPath } from "./token-name.js";
 
 function hex(c: FigmaColor): string {
   const ch = (n: number) =>
@@ -51,19 +52,6 @@ function varKey(name: string): string {
     .trim()
     .replace(/\s+/g, "-")
     .toLowerCase();
-}
-
-/**
- * Normalize a full token path, keeping its `/` segments (so the diff's Material
- * role lookup can read `radius/medium` → `medium`, `Body/Large` → `bodyLarge`):
- * trim + lowercase each segment, collapse inner whitespace to `-`.
- */
-function tokenPath(name: string): string {
-  return name
-    .split("/")
-    .map((s) => s.trim().replace(/\s+/g, "-").toLowerCase())
-    .filter(Boolean)
-    .join("/");
 }
 
 /** Map COLOR variables → `colors["<name>.<mode>"]` across every mode. */
@@ -263,7 +251,9 @@ export function normalizeReference(input: NormalizeInput): DesignReference {
   };
   if (tokens) ref.tokens = tokens;
   if (themeTokens) ref.themeTokens = themeTokens;
-  const layout = layoutFromNode(input.node);
+  // Same `styles` map the type ramp is read from, so a node's annotation names
+  // the published style it wears rather than the anonymous `text`.
+  const layout = layoutFromNode(input.node, { styles: input.styles });
   if (layout) ref.layout = layout;
   return ref;
 }

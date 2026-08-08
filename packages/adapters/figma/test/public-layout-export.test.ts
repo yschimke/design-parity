@@ -102,18 +102,134 @@ describe("captured spec tokens", () => {
     expect(text?.text).toMatchObject({ fontSize: 14, lineHeight: 20, fontWeight: 500 });
   });
 
-  it("omits tokens entirely for a node that specifies nothing", () => {
-    const bare = {
-      id: "1:2",
-      name: "Plain",
-      type: "FRAME",
-      absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
-      children: [
-        { id: "1:3", name: "Kid", type: "RECTANGLE", absoluteBoundingBox: { x: 0, y: 0, width: 4, height: 4 } },
-      ],
+  it("names the type after the published style the node actually wears", () => {
+    // A published style IS the file saying what it calls that type — reporting it
+    // is not the same as inventing `labelLarge` for a node that wears nothing.
+    const styled = {
+      ...node,
+      children: [{ ...node.children[0], styles: { text: "S:abc" } }],
     };
-    const tree = layoutFromNode(bare as never);
+    const text = layoutFromNode(styled as never, {
+      styles: { "S:abc": { key: "abc", name: "Body/Large", styleType: "TEXT" } },
+    })?.root.children?.[0].tokens?.typography;
+    expect(Object.keys(text ?? {})).toEqual(["body/large"]);
+  });
+
+  it("falls back to `text` when the style id resolves to nothing", () => {
+    const styled = {
+      ...node,
+      children: [{ ...node.children[0], styles: { text: "S:missing" } }],
+    };
+    const text = layoutFromNode(styled as never, { styles: {} })?.root.children?.[0].tokens
+      ?.typography;
+    expect(Object.keys(text ?? {})).toEqual(["text"]);
+  });
+
+  it("marks declared spacing as declared", () => {
+    expect(layoutFromNode(node as never)?.root.spacingSource).toBe("declared");
+  });
+
+  it("carries a stated density so a consumer can quote the board in dp", () => {
+    expect(layoutFromNode(node as never, { density: 3 })?.density).toBe(3);
+    expect(layoutFromNode(node as never)?.density).toBeUndefined();
+    // A nonsense factor is worse than none: it would silently divide every spec.
+    expect(layoutFromNode(node as never, { density: 0 })?.density).toBeUndefined();
+  });
+});
+
+/**
+ * Most annotated design frames are hand-placed, not auto-layout, so they declare
+ * no `padding*` / `itemSpacing` at all and the redline walk drops every one of
+ * them — the reference column of a compare page ends up with a type layer and no
+ * layout layer, which is the more common design-review question missing.
+ *
+ * Measuring the same vocabulary off child geometry fills it, at the cost of the
+ * numbers being observations rather than specs — so every one is flagged.
+ */
+describe("spacing derived from child geometry", () => {
+  const frame = (children: unknown[], extra: Record<string, unknown> = {}) => ({
+    id: "1:2",
+    name: "Card",
+    type: "FRAME",
+    absoluteBoundingBox: { x: 0, y: 0, width: 100, height: 100 },
+    children,
+    ...extra,
+  });
+  const kid = (id: string, x: number, y: number, width: number, height: number) => ({
+    id,
+    name: `Kid ${id}`,
+    type: "RECTANGLE",
+    absoluteBoundingBox: { x, y, width, height },
+  });
+
+  it("measures the inset from the parent box to the content box", () => {
+    const tree = layoutFromNode(frame([kid("1:3", 10, 20, 70, 60)]) as never);
+    expect(tree?.root.tokens?.spacing).toEqual({
+      paddingStart: 10,
+      paddingTop: 20,
+      paddingEnd: 20,
+      paddingBottom: 20,
+    });
+    expect(tree?.root.spacingSource).toBe("derived");
+  });
+
+  it("measures an evenly spaced run as a gap", () => {
+    const tree = layoutFromNode(
+      frame([kid("1:3", 10, 10, 80, 20), kid("1:4", 10, 42, 80, 20)]) as never,
+    );
+    expect(tree?.root.tokens?.spacing?.gap).toBe(12);
+  });
+
+  it("reports no gap when the run is uneven — a mean would state a rhythm that isn't there", () => {
+    const tree = layoutFromNode(
+      frame([
+        kid("1:3", 10, 10, 80, 10),
+        kid("1:4", 10, 28, 80, 10),
+        kid("1:5", 10, 70, 80, 10),
+      ]) as never,
+    );
+    expect(tree?.root.tokens?.spacing?.gap).toBeUndefined();
+  });
+
+  it("reports no gap for children that overlap on both axes", () => {
+    const tree = layoutFromNode(
+      frame([kid("1:3", 10, 10, 40, 40), kid("1:4", 20, 20, 40, 40)]) as never,
+    );
+    expect(tree?.root.tokens?.spacing?.gap).toBeUndefined();
+  });
+
+  it("reports no gap for a grid — there is no single stacking axis", () => {
+    const tree = layoutFromNode(
+      frame([kid("1:3", 10, 10, 30, 30), kid("1:4", 50, 50, 30, 30)]) as never,
+    );
+    expect(tree?.root.tokens?.spacing?.gap).toBeUndefined();
+  });
+
+  it("omits an all-zero inset — a child filling its parent is not a spec", () => {
+    const tree = layoutFromNode(frame([kid("1:3", 0, 0, 100, 100)]) as never);
     expect(tree?.root.tokens).toBeUndefined();
+    expect(tree?.root.spacingSource).toBeUndefined();
+  });
+
+  it("drops only the edge a child overflows, not the whole inset", () => {
+    const tree = layoutFromNode(frame([kid("1:3", 10, 10, 120, 60)]) as never);
+    expect(tree?.root.tokens?.spacing).toEqual({
+      paddingStart: 10,
+      paddingTop: 10,
+      paddingBottom: 30,
+    });
+  });
+
+  it("leaves a declared frame alone — a partial auto-layout spec is still the designer's", () => {
+    const tree = layoutFromNode(
+      frame([kid("1:3", 10, 20, 70, 60)], { paddingTop: 4 }) as never,
+    );
+    expect(tree?.root.tokens?.spacing).toEqual({ paddingTop: 4 });
+    expect(tree?.root.spacingSource).toBe("declared");
+  });
+
+  it("derives nothing for a leaf", () => {
+    const tree = layoutFromNode(frame([kid("1:3", 10, 10, 80, 80)]) as never);
     expect(tree?.root.children?.[0].tokens).toBeUndefined();
   });
 });

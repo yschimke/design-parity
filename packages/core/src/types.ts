@@ -93,9 +93,29 @@ export interface SemanticNode {
   role?: string;
   /** Accessible label / visible text. */
   label?: string;
+  /**
+   * The developer-authored test handle (`Modifier.testTag`), when the source
+   * carries one. Deliberately **not** folded into {@link label}: a11y checks read
+   * `label` as the accessible name, and a test tag is not one — a node named only
+   * by its tag is still missing its label, and merging the two would silently
+   * pass that check. It is a name a *reader* can use though, so an annotation
+   * viewer falls back to it before showing a bare numbered box.
+   */
+  testTag?: string;
   bounds?: Bounds;
   /** Tokens resolved at this node (theme-aware). */
   tokens?: DesignTokens;
+  /**
+   * Where this node's `tokens.spacing` came from. `"declared"` — the default and
+   * the historical meaning — is a spec read off the source: a Compose `padding` /
+   * `Arrangement.spacedBy` modifier, a Figma auto-layout frame. `"derived"` is
+   * *measured* from child geometry because the source declared nothing, so it
+   * describes what the artwork does rather than what its author specified.
+   *
+   * The distinction is the point: a derived number is honest about being an
+   * observation, and consumers mark it as such rather than quoting it as a spec.
+   */
+  spacingSource?: "declared" | "derived";
   children?: SemanticNode[];
 }
 
@@ -111,6 +131,22 @@ export interface SemanticTree {
    * review see the design system behind a screen, not just per-node values.
    */
   themeTokens?: DesignTokens;
+  /**
+   * Source pixels per density-independent pixel for the values in this tree's
+   * `tokens` — the scale factor that turns them into `dp`/`sp`.
+   *
+   * A candidate's semantics already resolve `dp`/`sp`, so it is absent there
+   * (equivalently 1). A design tool reports its board's own pixels: a 3× board
+   * draws 17sp type at 51px and a 16dp gutter at 48px, and quoting either
+   * number against the code side invents a threefold discrepancy. Carrying the
+   * factor is what lets a consumer state both columns in the same unit; absent,
+   * a consumer must quote the source unit rather than guess (issue #277).
+   *
+   * Note this scales `tokens` only. `bounds` are anchors in whatever pixel space
+   * the annotated image is in, and a publisher rescales them to the raster it
+   * draws over without touching the specs those boxes describe.
+   */
+  density?: number;
 }
 
 /**
