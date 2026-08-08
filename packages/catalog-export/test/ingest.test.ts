@@ -37,6 +37,23 @@ describe("buildComponent", () => {
   it("omits the layout variant when none is supplied", () => {
     expect(buildComponent({ componentId: "X", ideal }).variants.layout).toBeUndefined();
   });
+
+  it("carries both kit handles, and omits an absent referenceSet", () => {
+    // `reference` is the one node a parity run diffs against; `referenceSet` is the family a
+    // screen's sibling variant matches through. buildComponent copies field by field, so a new
+    // field reaches the published catalog only by being named here — an omission is silent.
+    const c = buildComponent({
+      componentId: "Lists/ListItem",
+      ideal,
+      reference: { source: "figma", ref: "figma:AbCdEf/51964:64241" },
+      referenceSet: "figma:AbCdEf/51964:63037",
+    });
+    expect(c.reference?.ref).toBe("figma:AbCdEf/51964:64241");
+    expect(c.referenceSet).toBe("figma:AbCdEf/51964:63037");
+
+    // Optional: a component naming only the variant is shaped exactly as before.
+    expect(buildComponent({ componentId: "X", ideal }).referenceSet).toBeUndefined();
+  });
 });
 
 describe("buildCatalog", () => {
