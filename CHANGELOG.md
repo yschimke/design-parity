@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.41](https://github.com/yschimke/design-parity/compare/v0.1.40...v0.1.41) (2026-08-08)
+
+
+### Features
+
+* **action:** carry the previous board forward on a partial refresh ([#291](https://github.com/yschimke/design-parity/issues/291)) ([0fdeb0b](https://github.com/yschimke/design-parity/commit/0fdeb0b1a746a375dca0d7328b8a5537dc7f6ca7))
+* **action:** skip a run that would reproduce the published board ([#293](https://github.com/yschimke/design-parity/issues/293)) ([4d1dd70](https://github.com/yschimke/design-parity/commit/4d1dd705adef7d127674d48599a2623136973282))
+* **ci:** run the pipeline from a design-parity ref, not just a release ([#292](https://github.com/yschimke/design-parity/issues/292)) ([310325b](https://github.com/yschimke/design-parity/commit/310325b1b7c5b4ad9c83502e662ecbff79457a80))
+
+
+### Bug Fixes
+
+* **adapter-figma:** retry rate-limited requests, and expose file version ([#290](https://github.com/yschimke/design-parity/issues/290)) ([223503d](https://github.com/yschimke/design-parity/commit/223503d049141fc31d5a8f417972f47c7c382df1))
+* **workflow:** capability probe reported every CLI as too old ([#287](https://github.com/yschimke/design-parity/issues/287)) ([777fe2a](https://github.com/yschimke/design-parity/commit/777fe2a2e756b99bf1c0de09e156efe5209b316d))
+
+
+### Performance Improvements
+
+* **adapter-figma:** read every reference in a handful of requests ([#294](https://github.com/yschimke/design-parity/issues/294)) ([1226939](https://github.com/yschimke/design-parity/commit/1226939e2070d6ded29d05116fc67a2d7df47438))
+
 ## [0.1.40](https://github.com/yschimke/design-parity/compare/v0.1.39...v0.1.40) (2026-08-08)
 
 
