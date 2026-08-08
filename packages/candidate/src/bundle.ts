@@ -516,13 +516,33 @@ function toTypographyToken(
   ts: NonNullable<CatalogTokenEntry["textStyle"]>,
 ): TypographyToken {
   const out: TypographyToken = {};
-  if (ts.fontFamily) out.fontFamily = normalizeFontFamily(ts.fontFamily);
-  if (ts.fontSizeSp !== undefined) out.fontSize = ts.fontSizeSp;
-  if (ts.fontWeight !== undefined) out.fontWeight = ts.fontWeight;
-  if (ts.fontStyle) out.fontStyle = ts.fontStyle;
-  if (ts.letterSpacingSp !== undefined) out.letterSpacing = ts.letterSpacingSp;
-  if (ts.lineHeightSp !== undefined) out.lineHeight = ts.lineHeightSp;
+  // Every field is type-checked rather than trusted. The interface describes what
+  // a *well-formed* sidecar holds, but the value came from `JSON.parse`, so any
+  // field can be anything — and this file's contract is that one damaged or
+  // newer-schema sheet is skipped, not that it takes the bundle's tokens with it.
+  // A mistyped field is dropped; the rest of the style still lands.
+  if (str(ts.fontFamily)) out.fontFamily = normalizeFontFamily(str(ts.fontFamily)!);
+  const size = num(ts.fontSizeSp);
+  if (size !== undefined) out.fontSize = size;
+  const weight = num(ts.fontWeight);
+  if (weight !== undefined) out.fontWeight = weight;
+  const style = str(ts.fontStyle);
+  if (style) out.fontStyle = style;
+  const tracking = num(ts.letterSpacingSp);
+  if (tracking !== undefined) out.letterSpacing = tracking;
+  const lineHeight = num(ts.lineHeightSp);
+  if (lineHeight !== undefined) out.lineHeight = lineHeight;
   return out;
+}
+
+/** [value] when it really is a string, else undefined — see [toTypographyToken]. */
+function str(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** [value] when it really is a finite number, else undefined. */
+function num(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -632,7 +652,12 @@ export function themeTokenSetsFromBundle(
     if (providerFqn) entry.providerFqn = providerFqn;
     out.push(entry);
   }
-  return out.sort((a, b) => a.previewId.localeCompare(b.previewId));
+  // Code-unit order, not `localeCompare`: this list feeds generated artifacts, and
+  // a locale-sensitive comparison would order non-ASCII ids by whatever ICU locale
+  // the consumer's CI happens to run under — the same bundle, two orderings.
+  return out.sort((a, b) =>
+    a.previewId < b.previewId ? -1 : a.previewId > b.previewId ? 1 : 0,
+  );
 }
 
 /** A parsed sidecar plus the preview id its own path names. */
@@ -719,17 +744,24 @@ function tokensFrom(
     const tokens = sidecar.payload.tokens;
     if (!Array.isArray(tokens)) continue;
     for (const token of tokens) {
-      if (!token?.label) continue;
+      const label = str(token?.label);
+      if (!label) continue;
       if (token.kind === "COLOR") {
-        const css = argbToCssHex(token.color?.hex);
-        if (css) colors[token.label] = css;
-      } else if (token.kind === "TEXT_STYLE" && token.textStyle) {
+        // `argbToCssHex` takes a string; a sidecar can carry anything here, and a
+        // number would throw on `.startsWith` and abort the whole bundle.
+        const css = argbToCssHex(str(token.color?.hex));
+        if (css) colors[label] = css;
+      } else if (
+        token.kind === "TEXT_STYLE" &&
+        token.textStyle &&
+        typeof token.textStyle === "object"
+      ) {
         const style = toTypographyToken(token.textStyle);
         // A `TEXT_STYLE` whose metrics all failed to reflect resolves to `{}`.
         // Keeping it would be worse than dropping it twice over: the token
         // serialises downstream as a DTCG `$value: {}`, and its mere presence
         // makes a theme that resolved nothing usable look like it did.
-        if (Object.keys(style).length > 0) typography[token.label] = style;
+        if (Object.keys(style).length > 0) typography[label] = style;
       }
     }
   }

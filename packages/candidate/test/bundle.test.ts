@@ -694,6 +694,70 @@ describe("themeTokenSetsFromBundle", () => {
     );
   });
 
+  it("skips mistyped nested fields instead of aborting the bundle", () => {
+    // The interface describes a WELL-FORMED sidecar; the value came from
+    // `JSON.parse`, so any field can be anything. A number where a hex string
+    // belongs used to throw inside `argbToCssHex` and take every theme with it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Mistyped.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Mistyped",
+            tokens: [
+              { label: "primary", kind: "COLOR", color: { hex: 123 } },
+              { label: 42, kind: "COLOR", color: { hex: "#FF7F52FF" } },
+              {
+                label: "titleMedium",
+                kind: "TEXT_STYLE",
+                textStyle: { fontFamily: "Inter", fontSizeSp: "16sp", fontWeight: 500 },
+              },
+            ],
+          }),
+        ),
+        "previews/themecatalog__Good.catalog.json": themeSidecar(
+          "themecatalog__Good",
+          "Good",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+        ),
+      },
+    };
+    const themes = themeTokenSetsFromBundle(bundle);
+    expect(themes.map((t) => t.theme).sort()).toEqual(["Good", "Mistyped"]);
+    const mistyped = themes.find((t) => t.theme === "Mistyped");
+    // The unusable colour and the non-string label are dropped; the good half of
+    // the text style survives, minus the size that came through as a string.
+    expect(mistyped?.tokens.colors).toBeUndefined();
+    expect(mistyped?.tokens.typography?.titleMedium).toEqual({
+      fontFamily: "Inter",
+      fontWeight: 500,
+    });
+  });
+
+  it("orders themes by code unit, not by the runtime's locale", () => {
+    // This list feeds generated artifacts. `localeCompare` would order non-ASCII
+    // ids by whatever ICU locale the consumer's CI runs under — `ä` before `z` in
+    // English, after it in Swedish — so the same bundle could produce two orders.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/zulu.catalog.json": themeSidecar("zulu", "Zulu", [
+          { label: "primary", kind: "COLOR", color: { hex: "#FF000001" } },
+        ]),
+        "previews/ätherisch.catalog.json": themeSidecar("ätherisch", "Ätherisch", [
+          { label: "primary", kind: "COLOR", color: { hex: "#FF000002" } },
+        ]),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle).map((t) => t.previewId)).toEqual([
+      "zulu",
+      "ätherisch",
+    ]);
+  });
+
   it("is empty for a system that declares no themes", () => {
     expect(
       themeTokenSetsFromBundle({ manifest: {}, previews: [], entries: {} }),
