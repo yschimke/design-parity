@@ -40,6 +40,7 @@ interface Args {
   sourceCommit?: string;
   bundleImage?: string;
   previousDir?: string;
+  cacheKey?: string;
 }
 
 export function parseArgs(args: string[]): Args {
@@ -68,6 +69,9 @@ export function parseArgs(args: string[]): Args {
         break;
       case "--previous":
         out.previousDir = next();
+        break;
+      case "--cache-key":
+        out.cacheKey = next();
         break;
       default:
         if (a && !a.startsWith("-")) out.shardDirs.push(a);
@@ -137,7 +141,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     stdout.write(
       "design-parity merge <shard-out-dir|shard.json>... --out <dir> " +
         "[--repo-slug owner/repo --branch <branch> --source-commit <sha> " +
-        "--bundle-image <file> --previous <dir>]\n",
+        "--bundle-image <file> --previous <dir> --cache-key <key>]\n",
     );
     return 2;
   }
@@ -212,6 +216,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     direction: merged.direction,
     status: merged.status,
     blocked,
+    ...(args.cacheKey ? { cacheKey: args.cacheKey } : {}),
     entries,
   });
 
