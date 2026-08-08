@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.45](https://github.com/yschimke/design-parity/compare/v0.1.44...v0.1.45) (2026-08-08)
+
+
+### Features
+
+* **candidate:** read each declared theme's tokens out of a bundle ([#313](https://github.com/yschimke/design-parity/issues/313)) ([2e853df](https://github.com/yschimke/design-parity/commit/2e853df00ce19e33c09a99a9b819a9074f14f72d))
+
 ## [0.1.44](https://github.com/yschimke/design-parity/compare/v0.1.43...v0.1.44) (2026-08-08)
 
 
