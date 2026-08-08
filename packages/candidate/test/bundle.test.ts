@@ -550,6 +550,61 @@ describe("themeTokenSetsFromBundle", () => {
     expect(themeTokenSetsFromBundle(bundle)[0]?.previewId).toBe("themecatalog__Brand");
   });
 
+  it("drops a text style whose metrics all failed to reflect", () => {
+    // `textStyle: {}` resolves to an empty token. Keeping it would serialise
+    // downstream as a DTCG `$value: {}` AND make a theme that resolved nothing
+    // usable look like it did.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Hollow.catalog.json": themeSidecar(
+          "themecatalog__Hollow",
+          "Hollow",
+          [{ label: "titleMedium", kind: "TEXT_STYLE", textStyle: {} }],
+        ),
+        "previews/themecatalog__Real.catalog.json": themeSidecar(
+          "themecatalog__Real",
+          "Real",
+          [
+            { label: "titleMedium", kind: "TEXT_STYLE", textStyle: {} },
+            { label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } },
+          ],
+        ),
+      },
+    };
+    const themes = themeTokenSetsFromBundle(bundle);
+    // The all-empty sheet is gone; the real one kept its colour and grew no
+    // hollow typography group.
+    expect(themes.map((t) => t.theme)).toEqual(["Real"]);
+    expect(themes[0]?.tokens.typography).toBeUndefined();
+    expect(themes[0]?.tokens.colors).toEqual({ primary: "#7f52ffff" });
+  });
+
+  it("skips a structurally malformed sidecar instead of aborting the bundle", () => {
+    // Parseable JSON is not the same as a sidecar. Each of these got past
+    // `JSON.parse` and would then throw when read — taking every other theme in
+    // the bundle down with it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/notobject.catalog.json": te.encode("null"),
+        "previews/anarray.catalog.json": te.encode("[]"),
+        "previews/tokensnotarray.catalog.json": te.encode(
+          JSON.stringify({ theme: "Brand", tokens: {} }),
+        ),
+        "previews/themecatalog__Good.catalog.json": themeSidecar(
+          "themecatalog__Good",
+          "Good",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+        ),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle).map((t) => t.theme)).toEqual(["Good"]);
+    expect(() => catalogTokensFromBundle(bundle)).not.toThrow();
+  });
+
   it("is empty for a system that declares no themes", () => {
     expect(
       themeTokenSetsFromBundle({ manifest: {}, previews: [], entries: {} }),

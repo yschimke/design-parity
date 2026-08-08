@@ -626,14 +626,21 @@ function readCatalogSidecars(bundle: PreviewBundle): ReadSidecar[] {
     if (!path.startsWith(SIDECAR_PREFIX) || !path.endsWith(SIDECAR_SUFFIX)) {
       continue;
     }
+    let parsed: unknown;
     try {
-      out.push({
-        payload: JSON.parse(td.decode(bytes)) as CatalogTokenSidecar,
-        pathId: path.slice(SIDECAR_PREFIX.length, -SIDECAR_SUFFIX.length),
-      });
+      parsed = JSON.parse(td.decode(bytes));
     } catch {
       continue; // best-effort: a malformed sidecar doesn't sink the read
     }
+    // …and neither does a *structurally* malformed one. Parseable JSON is not the
+    // same as a sidecar: `null`, an array, or a newer schema whose `tokens` is an
+    // object would all get past `JSON.parse` and then throw when read, taking the
+    // whole bundle's tokens down with one bad file.
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    out.push({
+      payload: parsed as CatalogTokenSidecar,
+      pathId: path.slice(SIDECAR_PREFIX.length, -SIDECAR_SUFFIX.length),
+    });
   }
   return out;
 }
@@ -656,13 +663,20 @@ function tokensFrom(
   const colors: Record<string, string> = {};
   const typography: Record<string, TypographyToken> = {};
   for (const sidecar of sidecars) {
-    for (const token of sidecar.payload.tokens ?? []) {
-      if (!token.label) continue;
+    const tokens = sidecar.payload.tokens;
+    if (!Array.isArray(tokens)) continue;
+    for (const token of tokens) {
+      if (!token?.label) continue;
       if (token.kind === "COLOR") {
         const css = argbToCssHex(token.color?.hex);
         if (css) colors[token.label] = css;
       } else if (token.kind === "TEXT_STYLE" && token.textStyle) {
-        typography[token.label] = toTypographyToken(token.textStyle);
+        const style = toTypographyToken(token.textStyle);
+        // A `TEXT_STYLE` whose metrics all failed to reflect resolves to `{}`.
+        // Keeping it would be worse than dropping it twice over: the token
+        // serialises downstream as a DTCG `$value: {}`, and its mere presence
+        // makes a theme that resolved nothing usable look like it did.
+        if (Object.keys(style).length > 0) typography[token.label] = style;
       }
     }
   }
