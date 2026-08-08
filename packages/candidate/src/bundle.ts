@@ -672,17 +672,32 @@ const SIDECAR_SUFFIX = ".catalog.json";
 
 /**
  * The `wrapperClassName` (provider FQN) of [previewId]'s entry in the bundle's
- * `previews.json`. Matched on the entry id, then on the id the sidecar file name
- * would have been derived from — the renderer sanitizes it for the path, so a
- * sidecar that carried no `previewId` of its own can still be joined.
+ * `previews.json`.
+ *
+ * Matching is deliberately symmetric, because a preview has up to three spellings
+ * and the two sides of this join need not use the same one. `previews.json`'s
+ * `id` is the **filename-safe** bundle id; the manifest's `rawPreviewIds` carries
+ * the **canonical** id discovery emitted (see {@link rawPreviewIdForEntry}); and a
+ * sidecar may name either, or neither — in which case the id comes from its file
+ * name, which is the safe form again. Sanitizing only one side finds the pair in
+ * one direction and silently misses it in the other, and a miss costs the theme
+ * its FQN, i.e. the only id a preview server can address it by. So both sides are
+ * compared raw and sanitized.
  */
 function providerFqnFor(
   bundle: PreviewBundle,
   previewId: string,
 ): string | undefined {
-  const exact = bundle.previews.find((p) => p.id === previewId);
-  const entry =
-    exact ?? bundle.previews.find((p) => sidecarId(p.id) === previewId);
+  const wanted = sidecarId(previewId);
+  const entry = bundle.previews.find((p) => {
+    const raw = rawPreviewIdForEntry(bundle, p);
+    return (
+      p.id === previewId ||
+      raw === previewId ||
+      sidecarId(p.id) === wanted ||
+      sidecarId(raw) === wanted
+    );
+  });
   const fqn = entry?.params?.wrapperClassName;
   return typeof fqn === "string" && fqn.length > 0 ? fqn : undefined;
 }

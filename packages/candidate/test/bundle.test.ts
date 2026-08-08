@@ -647,6 +647,39 @@ describe("themeTokenSetsFromBundle", () => {
     });
   });
 
+  it("joins whichever spelling of the id each side happens to use", () => {
+    // A preview has up to three spellings: the filename-safe id in `previews.json`,
+    // the canonical one in the manifest's `rawPreviewIds`, and the file name of the
+    // sidecar (safe again). Sanitizing one side only finds the pair in one
+    // direction — here the payload keeps the RAW id while the entry carries the
+    // safe one, which is the direction that used to miss.
+    const bundle: PreviewBundle = {
+      manifest: {
+        previewIds: ["wearthemecatalog__Google_Sans_Flex"],
+        rawPreviewIds: ["wearthemecatalog__Google Sans Flex"],
+      },
+      previews: [
+        {
+          id: "wearthemecatalog__Google_Sans_Flex",
+          params: { wrapperClassName: "com.example.WearGoogleSansFlexThemeCatalog" },
+        },
+      ],
+      entries: {
+        "previews/wearthemecatalog__Google_Sans_Flex.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            previewId: "wearthemecatalog__Google Sans Flex",
+            theme: "Google Sans Flex",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle)[0]?.providerFqn).toBe(
+      "com.example.WearGoogleSansFlexThemeCatalog",
+    );
+  });
+
   it("leaves the FQN absent when the preview list doesn't carry the specimen", () => {
     const bundle: PreviewBundle = {
       manifest: {},
