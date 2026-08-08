@@ -54,6 +54,22 @@ describe("buildComponent", () => {
     // Optional: a component naming only the variant is shaped exactly as before.
     expect(buildComponent({ componentId: "X", ideal }).referenceSet).toBeUndefined();
   });
+
+  it("distinguishes a stated absence of reference from an unaudited one", () => {
+    // The whole point of `noReference` is that these two components are NOT the same: one has
+    // been looked at and the kit has nothing, the other has never been looked at. Both carry no
+    // `reference`, so the reason is the only thing telling them apart downstream.
+    const stated = buildComponent({
+      componentId: "Layout/Scaffold",
+      ideal,
+      noReference: "The kit retired this pattern in the 2025 refresh.",
+    });
+    const unaudited = buildComponent({ componentId: "Layout/Scaffold", ideal });
+
+    expect(stated.reference).toBeUndefined();
+    expect(stated.noReference).toBe("The kit retired this pattern in the 2025 refresh.");
+    expect(unaudited.noReference).toBeUndefined();
+  });
 });
 
 describe("buildCatalog", () => {

@@ -68,6 +68,8 @@ export interface CatalogSpecComponent {
   reference?: ComponentReference;
   /** Family handle for {@link reference}; see {@link CatalogComponent.referenceSet}. */
   referenceSet?: string;
+  /** Stated reason there is no {@link reference}; see {@link CatalogComponent.noReference}. */
+  noReference?: string;
   /**
    * Extra state renders folded onto this component (see {@link CatalogSpecVariant}).
    * The default `preview` stays the grid hero; each variant's images are appended
@@ -280,6 +282,7 @@ export function catalogFromCandidates(
       if (component.caption !== undefined) source.caption = component.caption;
       if (component.reference !== undefined) source.reference = component.reference;
       if (component.referenceSet !== undefined) source.referenceSet = component.referenceSet;
+      if (component.noReference !== undefined) source.noReference = component.noReference;
       if (candidate.semantics) source.semantics = candidate.semantics;
       sources.push(source);
     }
