@@ -88,6 +88,51 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
   `packages/<name>/` files; `package-lock.json` updates from `npm install` are
   expected and regenerate cleanly.
 
+## Code Review Rules
+
+Read by Codex code review as well as by humans. Keep it to things a reviewer
+can actually check on a diff, and to failures this repo has really had — not
+generic advice.
+
+- **A field added to a published type must be named at every stage it passes
+  through.** `catalog-export` copies field by field, not by spread:
+  `catalogFromCandidates` (spec → `ComponentSource`), `buildComponent`
+  (source → `CatalogComponent`), and `toCatalogManifest` (component →
+  serialized `catalog.json`) each list the fields they carry. A field named in
+  three of them and missed in the fourth is dropped **in silence** — no type
+  error, no test failure, just an absent key in the published catalog. Flag any
+  new optional field that doesn't appear at every hop, with a test at each.
+- **Watch for drift in code vendored from here.** `compose-ai-tools`'
+  `scripts/design-artifacts/generate-design-catalog.mjs` carries an inline copy
+  of `packages/catalog-export/src/spec.ts`'s join, because the published package
+  predates exporting it. A change to the join here that isn't mirrored there
+  silently stops working for the main consumer — `referenceSet` shipped broken
+  that way. If a PR touches the join, say in the description whether the copy
+  needs the same edit.
+- **A release is not the same as a version bump downstream.** Consumers install
+  with `npm ci`, which is a frozen install: a caret range like `^0.1.38` does
+  **not** pick up a newer release. A PR adding behaviour behind a new option is
+  inert until the consumer's `package.json` *and* lockfile move. Don't approve
+  "this enables X downstream" without checking that.
+- **A test that passes against the unfixed code documents nothing.** For a bug
+  fix, the test must be shown to fail before the change — state the observed
+  failure (the actual expected/received, not "it fails"). If a fix can't be
+  reproduced by a test, say so plainly and ship the fix rather than a test that
+  is green either way.
+- **Guard the guard.** When a test depends on a fixture having some property
+  (non-zero height, more than one element, a differing baseline), assert that
+  property too. Otherwise a fixture that quietly stops exercising the case turns
+  into a passing test for the wrong reason.
+- **`buildCatalog` and the manifest are a published wire format.** Renaming or
+  re-typing an existing key is a breaking change for every consumer holding a
+  `catalog.json`, and needs to be called out as such — additive optional fields
+  are the cheap path and are almost always what's wanted.
+- Mechanical gates, all CI-enforced and all cheap to check on a diff:
+  conventional-commit PR title; `agent/...` branch name; no agent identity or
+  `Co-authored-by` trailer in **either** the commits or the PR description
+  (squash merge takes the description onto `main`); no package registered in a
+  root `tsconfig.json` `references` array (there isn't one).
+
 ## Releasing
 
 The whole scope publishes to npm at **one shared version** so cross-package
