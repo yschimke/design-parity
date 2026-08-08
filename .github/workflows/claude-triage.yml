@@ -32,18 +32,37 @@ jobs:
         with:
           # Full history so recent commits can be matched against issues.
           fetch-depth: 0
-      # Pre-create the follow-up label deterministically: the GitHub MCP
+      # Pre-create the triage labels deterministically: the GitHub MCP
       # server bundled with the pinned action (v0.17.1) ships no label
       # tools, and allowlisting label_write would also let a prompt-injected
-      # issue delete or rename any repository label.
-      - name: Ensure follow-up label exists
+      # issue delete or rename any repository label. Applying an unknown
+      # name to an issue *does* create it, but with no description and a
+      # default grey — so the scheme only stays legible if it's declared
+      # here. `--force` makes this idempotent and lets an edited colour or
+      # description land on the next run.
+      - name: Ensure triage labels exist
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh label create follow-up \
-            --repo "$GITHUB_REPOSITORY" \
-            --description "Deferred review feedback filed by weekly triage" \
-            --color BFD4F2 --force
+          set -euo pipefail
+          ensure() {
+            gh label create "$1" --repo "$GITHUB_REPOSITORY" \
+              --description "$2" --color "$3" --force
+          }
+          ensure follow-up "Deferred review feedback filed by weekly triage" BFD4F2
+          # Area — which surface the issue lands on. One per issue.
+          ensure area-action      "Action / CI surface: orchestration, verdict comment, publishing" 1D76DB
+          ensure area-figma       "Figma reference adapter: REST, references, tokens"              1D76DB
+          ensure area-figma-plugin "The in-Figma catalog plugin"                                   1D76DB
+          ensure area-report      "Report + compare page: triptych, annotations, redlines"         1D76DB
+          ensure area-adapters    "Non-Figma reference adapters: claude-design, stitch, bundle"    1D76DB
+          ensure area-hosting     "Hosted/paid surface (not the OSS path)"                         1D76DB
+          ensure area-adoption    "Docs, skills, quickstart — the front door"                      1D76DB
+          ensure area-process     "Repo process: triage, releases, workflows"                      1D76DB
+          # Priority — utility, not urgency. See the prompt below.
+          ensure priority-high   "Blocks or silently corrupts a verdict for a live consumer" B60205
+          ensure priority-medium "Real gap in a surface people use; no wrong answers today"  FBCA04
+          ensure priority-low    "Speculative, cosmetic, or blocked on an unstarted decision" 0E8A16
       - uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
         with:
           # Bills the Claude subscription's included usage.
@@ -55,24 +74,52 @@ jobs:
             Run the weekly issue triage for this repository. Work through ALL
             open issues (skip pull requests):
 
-            1. Label new or unlabeled issues: bug, enhancement, question, or
-               needs-info, plus priority-high only when clearly urgent.
-               If a needed label does not exist and cannot be created
-               with the available tools, note that in the summary instead.
+            1. Label every open issue on three axes. A workflow step
+               pre-creates all of these, so they exist; if applying one
+               fails, note that in the summary instead.
+               - Kind: bug, enhancement, question, or needs-info.
+               - Area, exactly one: area-action, area-figma,
+                 area-figma-plugin, area-report, area-adapters,
+                 area-hosting, area-adoption, area-process.
+               - Priority, exactly one, measured on **utility** — the value
+                 of the outcome against the work and risk to get there, not
+                 how loudly it was asked for:
+                 - priority-high: a live consumer is blocked, or gets a
+                   wrong answer it cannot see is wrong.
+                 - priority-medium: a real gap in a surface people use,
+                   but nothing is producing wrong answers today.
+                 - priority-low: speculative, cosmetic, or blocked on a
+                   decision nobody has started making.
+               Re-rate an existing priority only when something changed
+               (a dependency landed, a consumer hit it); say what, in the
+               summary. Epics and tracking issues take the priority of
+               their most valuable unstarted child.
             2. For each open issue, check whether it has already been
                resolved: search merged PRs and recent commits on main that
                reference or plausibly fix it. If confident it is fixed,
                comment with the evidence (PR/commit links) and close it as
                completed. If plausible but unconfirmed, comment asking the
                maintainer to confirm and apply needs-info; do not close.
-            3. Maintain a single open summary issue titled "Weekly triage"
+            3. Sweep the priority-low issues for ones that should not stay
+               open at all: the value has been served another way, the
+               premise no longer holds, or it duplicates an issue that is
+               actually moving. Comment the argument — what it asked for,
+               what changed, and what a reader should do instead — and
+               list it under "Proposed for closing" in the summary. Do NOT
+               close these yourself; closing on a judgement call, rather
+               than on evidence that it is fixed, stays with the
+               maintainer. Skip anything already proposed in a prior run
+               and not acted on.
+            4. Maintain a single open summary issue titled "Weekly triage"
                (create it if missing, otherwise update the existing one by
                editing its body): a table of open issues with labels, a
-               one-line status, and what is blocking each. End with a
-               "Ready for an agent" shortlist of issues that are specified
-               well enough to implement, each with a suggested kickoff:
-               apply the `claude` label, or comment `@claude <one-line task>`.
-            4. Review-feedback sweep: for each open PR, find unresolved
+               one-line status, and what is blocking each. Include a
+               "Proposed for closing" section from step 3 (empty is fine).
+               End with a "Ready for an agent" shortlist of issues that are
+               specified well enough to implement, each with a suggested
+               kickoff: apply the `claude` label, or comment
+               `@claude <one-line task>`.
+            5. Review-feedback sweep: for each open PR, find unresolved
                review threads and reviewer comments that never got a reply
                or a resulting change, and list them in a "Stalled review
                feedback" section of the summary issue with links. For PRs
