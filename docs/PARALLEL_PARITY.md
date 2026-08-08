@@ -24,10 +24,24 @@ draws **1,095** and maps **77**: only a component carrying
 only those 77 are ever subjects. Rendering the other 1,018 produces PNGs nothing
 reads.
 
-`--id` selects what the bundle *contains*; it does not scope the *render*, which
-walks the module regardless. `--exclude-preview-id` is what scopes it.
-[`m3-catalog#11`][pr11] worked this out and took the render from **~43 min to
-~4** by excluding the 1,018 unmapped previews.
+`--exclude-preview-id` scopes the render. [`m3-catalog#11`][pr11] found this while
+chasing a render that kept hitting its timeout, and excluding the 1,018 unmapped
+previews took it from **~43 min to ~4**.
+
+> **Measured caveat, and read it before assuming you need this.** #11's premise
+> was that `--id` selects what the bundle *contains* without scoping the render,
+> which walks the module regardless. On the first m3-catalog run through this
+> workflow that was **not** what happened: the exclusion list came back empty
+> (a probe bug, since fixed), so the render ran with 77 `--id`s and no
+> exclusions at all — and it drew **77 previews in 43 s**, not 1,095. On
+> `compose-preview` 0.19.45, `--id` does scope the render.
+>
+> So `--exclude-preview-id` is the *guarantee*, not necessarily the *speedup*.
+> Keep it — it is derived for free, it costs nothing when redundant, and it is
+> what makes a sharded render provably draw only its slice. But if you are
+> reaching for this doc because a render is slow, measure first: on a current
+> CLI the positive selection may already be doing the work, and the real cost is
+> somewhere else.
 
 **This costs no coverage** — the excluded previews were never comparison
 subjects. What it costs is maintenance: #11 derived the list by hand in the

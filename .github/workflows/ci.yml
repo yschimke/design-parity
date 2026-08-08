@@ -38,3 +38,8 @@ jobs:
             examples/design-parity.checks.json
       - name: Test
         run: npm test
+      # Shell, not TypeScript: the reusable workflow's capability probes live in
+      # `run:` blocks that `npm test` cannot reach, and a probe that fails open
+      # silently disables the feature it gates.
+      - name: Test reusable-workflow capability probes
+        run: scripts/test-workflow-probes.sh

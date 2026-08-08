@@ -329,8 +329,15 @@ jobs:
           # it does not. Worth checking rather than just passing it: an older
           # `shard` rejects unknown options, and one older still would swallow
           # the PATH as a component handle and scope the render off nonsense.
-          if npx -y "design-parity@${DP_VERSION}" shard 2>&1 \
-            | grep -q -- '--preview-universe'; then
+          #
+          # Capture first, THEN grep. `shard` with no selector prints usage and
+          # exits 2, and under `set -o pipefail` that exit code propagates out of
+          # `npx … | grep -q` no matter what grep found — so the piped form
+          # reported "too old" against every version, including ones carrying the
+          # flag. Same shape as the `merge` probe in the plan job, for the same
+          # reason.
+          usage="$(npx -y "design-parity@${DP_VERSION}" shard 2>&1 || true)"
+          if printf '%s' "$usage" | grep -q -- '--preview-universe'; then
             universe=true
           else
             universe=false
