@@ -69,9 +69,55 @@ Output:
 ```
 catalog.json            # the index: provenance, components, variants, greenlines
 tokens.dtcg.json        # the system token set (W3C DTCG)
+themes/<theme>.dtcg.json # one per alternate named theme, when the system declares any
 figma-variables.json    # Figma variable-collection projection
 images/<component>/<variant>__<state>[__theme][__size].png
 ```
+
+### Alternate themes
+
+`tokens.dtcg.json` is the **system** token set: the one resolved theme the
+stickers were rendered under. A system that declares alternate themes — a Compose
+`@ThemeCatalog` / `@WearThemeCatalog` provider (Brand Light, High Contrast, a
+watch face's night palette) — has more than one, and they differ in exactly the
+way a token set describes: colours, and often the typeface too, since a theme is
+free to swap the type scale.
+
+Pass them as `buildCatalog`'s fourth argument (or `catalogFromCandidates`'
+`themes` option) and each is written as its own DTCG file under `themes/`, listed
+in the manifest:
+
+```jsonc
+"tokensFile": "tokens.dtcg.json",        // still the system token set
+"themes": [
+  {
+    "id": "com.example.BrandDarkThemeCatalog",  // the provider FQN
+    "name": "Brand Dark",
+    "dark": true,
+    "tokensFile": "themes/com.example.branddarkthemecatalog.dtcg.json"
+  }
+]
+```
+
+They are **never lifted from the renders** the way `themeTokens` is: a
+component's semantics record the one theme it was rendered under, so the
+generator — which knows which render belongs to which declared theme — supplies
+them. A theme with a blank id or an empty token set is dropped rather than
+published as something a consumer can select and find nothing behind, and a
+repeated id keeps its first entry.
+
+The `id` is the provider FQN because that is what a preview server's
+`?theme=theme:<providerFqn>` deep link already names, so a consumer can join
+these tokens to the theme a page is showing without a second mapping. That is the
+point of publishing them at all: anything that wants to show what a theme **is**
+rather than what it is called — a picker chip painted in the theme's own colours
+and typeface, a per-theme Figma variable mode, a contrast audit across every
+theme a system ships — needs the tokens, and re-rendering to recover them is the
+expensive thing this export exists to avoid.
+
+`figma-variables.json` stays a projection of the **system** token set only:
+fanning it per theme is a variable-*modes* question for the importer to answer,
+not one to guess at here.
 
 ## Layout
 

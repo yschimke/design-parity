@@ -85,6 +85,59 @@ describe("writeCatalog", () => {
     expect(png.subarray(1, 4).toString("ascii")).toBe("PNG");
   });
 
+  it("writes one DTCG file per alternate theme, at the paths the manifest names", async () => {
+    const catalog = catalogWith(PNG_DATA_URI, PNG_DATA_URI);
+    catalog.themes = [
+      {
+        id: "com.example.BrandDarkThemeCatalog",
+        name: "Brand Dark",
+        group: "Brand",
+        dark: true,
+        tokens: {
+          colors: { primary: "#4dd0e1" },
+          typography: { titleMedium: { fontFamily: "Rubik", fontSize: 16 } },
+        },
+      },
+      {
+        id: "com.example.HighContrastThemeCatalog",
+        name: "High Contrast",
+        tokens: { colors: { primary: "#000000" } },
+      },
+    ];
+
+    const result = await writeCatalog(catalog, out);
+
+    const manifest = JSON.parse(await readFile(result.manifestPath, "utf8"));
+    // The SYSTEM token set is untouched — the themes are additive.
+    expect(manifest.tokensFile).toBe("tokens.dtcg.json");
+    expect(manifest.themes).toEqual([
+      {
+        id: "com.example.BrandDarkThemeCatalog",
+        name: "Brand Dark",
+        group: "Brand",
+        dark: true,
+        tokensFile: "themes/com.example.branddarkthemecatalog.dtcg.json",
+      },
+      {
+        id: "com.example.HighContrastThemeCatalog",
+        name: "High Contrast",
+        tokensFile: "themes/com.example.highcontrastthemecatalog.dtcg.json",
+      },
+    ]);
+
+    // Every declared path is really on disk and carries THAT theme's tokens —
+    // including the typeface, which is the half a colour-only export drops.
+    expect(result.themeTokensPaths).toHaveLength(2);
+    for (const entry of manifest.themes) {
+      const dtcg = JSON.parse(await readFile(join(out, entry.tokensFile), "utf8"));
+      expect(dtcg.color.primary.$value).toBe(entry.dark ? "#4dd0e1" : "#000000");
+    }
+    const brand = JSON.parse(
+      await readFile(join(out, manifest.themes[0].tokensFile), "utf8"),
+    );
+    expect(brand.type.titleMedium.$value.fontFamily).toBe("Rubik");
+  });
+
   it("skips token/figma files when the catalog has no themeTokens", async () => {
     const catalog: Catalog = {
       meta: { system: "x", title: "X" },

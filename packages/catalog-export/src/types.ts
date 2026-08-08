@@ -225,6 +225,51 @@ export interface CatalogComponent {
   wireframeSvg?: string;
 }
 
+/**
+ * One **named theme** the system publishes, with its own resolved token set.
+ *
+ * A catalog's {@link Catalog.themeTokens} is the *system* token set — one palette
+ * and type scale, the resolved theme the stickers were rendered under. But a
+ * system that declares alternate themes (a Compose `@ThemeCatalog` /
+ * `@WearThemeCatalog` provider: Brand Light, High Contrast, a watch face's night
+ * palette) has **more than one**, and they differ in exactly the way a token set
+ * describes — colours, and frequently the typeface too, since a theme is free to
+ * swap the type scale.
+ *
+ * Until these existed a consumer had no data for any of them: it could see a
+ * theme's *name* (a chip to click, a `?theme=` link) and a rendered PNG, and
+ * nothing else. Anything that wants to show what a theme IS rather than what it
+ * is called — a picker chip painted in the theme's own colours and typeface, a
+ * per-theme Figma variable mode, a contrast audit across every theme a system
+ * ships — needs the tokens, and re-rendering to recover them is the expensive
+ * thing this export exists to avoid.
+ *
+ * Each theme is written as its own DTCG file beside the system one; see
+ * `writeCatalog` and the manifest's `themes` array.
+ */
+export interface CatalogTheme {
+  /**
+   * Stable identifier — the provider FQN for a Compose `@ThemeCatalog`
+   * (`com.example.BrandDarkThemeCatalog`), which is what a preview server's
+   * `?theme=theme:<providerFqn>` deep link already names, so a consumer can join
+   * these tokens to the theme a page is showing without a second mapping.
+   */
+  id: string;
+  /** Human label as the system declares it, e.g. `"Brand Dark"`. */
+  name?: string;
+  /** Group the declaring provider belongs to, when it names one. */
+  group?: string;
+  /**
+   * Whether this theme is a dark one. Declared rather than derived: a consumer
+   * that pins a page's colour scheme to the selected theme needs to know, and
+   * guessing it from a palette's luminance is a heuristic the producing renderer
+   * doesn't have to make.
+   */
+  dark?: boolean;
+  /** This theme's resolved token set, in the same shape as the system's. */
+  tokens: DesignTokens;
+}
+
 /** A whole design-system catalog: provenance + token set + components. */
 export interface Catalog {
   meta: CatalogMeta;
@@ -234,5 +279,11 @@ export interface Catalog {
    * (`onSurface`, `bodyLarge`, `medium`). Exported as the catalog's DTCG file.
    */
   themeTokens?: DesignTokens;
+  /**
+   * The system's **alternate named themes**, each with its own token set — see
+   * {@link CatalogTheme}. Absent/empty for a system that declares none, which is
+   * most of them; {@link themeTokens} alone is then the whole token story.
+   */
+  themes?: CatalogTheme[];
   components: CatalogComponent[];
 }

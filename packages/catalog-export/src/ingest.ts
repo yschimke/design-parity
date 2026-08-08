@@ -21,6 +21,7 @@ import { buildWireframeSvg } from "./wireframe.js";
 import type {
   Catalog,
   CatalogComponent,
+  CatalogTheme,
   CatalogImage,
   CatalogMeta,
   ComponentReference,
@@ -80,11 +81,20 @@ export function buildComponent(source: ComponentSource): CatalogComponent {
  * from the first component whose semantics carry `themeTokens` (the resolved
  * `compose/theme` of the system) — so the system token set comes from the code,
  * not a hand-maintained list.
+ *
+ * `themes` are the system's ALTERNATE named themes, each with its own token set
+ * ({@link CatalogTheme}). They are never lifted: a component's semantics record
+ * the one theme it was rendered under, so the caller — which knows which render
+ * belongs to which declared theme — supplies them. An entry with a blank id or an
+ * empty token set is dropped rather than published as a theme a consumer can
+ * select and find nothing behind, and a repeated id keeps its first entry so one
+ * theme can never be published twice.
  */
 export function buildCatalog(
   meta: CatalogMeta,
   sources: readonly ComponentSource[],
   themeTokens?: DesignTokens,
+  themes?: readonly CatalogTheme[],
 ): Catalog {
   const components = sources.map(buildComponent);
   const resolvedTokens =
@@ -92,5 +102,29 @@ export function buildCatalog(
     components.find((c) => c.semantics?.themeTokens)?.semantics?.themeTokens;
   const catalog: Catalog = { meta, components };
   if (resolvedTokens) catalog.themeTokens = resolvedTokens;
+  const named = usableThemes(themes);
+  if (named.length > 0) catalog.themes = named;
   return catalog;
+}
+
+/** Whether a token set says anything at all. */
+function hasTokens(tokens: DesignTokens | undefined): boolean {
+  return (
+    !!tokens &&
+    Object.values(tokens).some((group) => group && Object.keys(group).length > 0)
+  );
+}
+
+/** Drop unusable / duplicate themes, preserving declaration order. */
+function usableThemes(
+  themes: readonly CatalogTheme[] | undefined,
+): CatalogTheme[] {
+  const seen = new Set<string>();
+  const out: CatalogTheme[] = [];
+  for (const theme of themes ?? []) {
+    if (!theme.id || seen.has(theme.id) || !hasTokens(theme.tokens)) continue;
+    seen.add(theme.id);
+    out.push(theme);
+  }
+  return out;
 }

@@ -22,6 +22,7 @@ import type {
   Catalog,
   CatalogDisplay,
   CatalogScreen,
+  CatalogTheme,
   ComponentReference,
 } from "./types.js";
 
@@ -179,6 +180,13 @@ export interface FromCandidatesOptions {
   generatedAt?: string;
   /** Explicit system token set; otherwise lifted from a component's semantics. */
   themeTokens?: DesignTokens;
+  /**
+   * The system's alternate named themes, each with its own resolved token set —
+   * see {@link CatalogTheme}. Never lifted from the renders (a component's
+   * semantics carry the one theme it was rendered under), so a generator that
+   * knows which render belongs to which declared theme supplies them here.
+   */
+  themes?: readonly CatalogTheme[];
 }
 
 export interface FromCandidatesResult {
@@ -287,6 +295,6 @@ export function catalogFromCandidates(
     ...(spec.display ? { display: spec.display } : {}),
   };
 
-  const catalog = buildCatalog(meta, sources, opts.themeTokens);
+  const catalog = buildCatalog(meta, sources, opts.themeTokens, opts.themes);
   return { catalog, missing, withoutSemantics };
 }
