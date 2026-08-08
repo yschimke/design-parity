@@ -7,6 +7,10 @@
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
+    "$comment": {
+      "type": "string",
+      "description": "Free-text rationale for the settings below, ignored by the bot. JSON has no comment syntax and `$comment` is the JSON Schema annotation keyword for exactly this; rejecting it pushed repos into deleting the reasoning for their own direction (yschimke/m3-catalog#11)."
+    },
     "direction": {
       "type": "string",
       "enum": ["auto", "design-led", "code-led"],

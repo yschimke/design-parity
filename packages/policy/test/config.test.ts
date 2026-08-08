@@ -57,6 +57,21 @@ describe("parity-config schema", () => {
     );
   });
 
+  // JSON has no comment syntax, so a repo explaining *why* it picked its
+  // direction has nowhere to put the reasoning. Rejecting `$comment` — the
+  // JSON Schema annotation keyword for exactly that — made deleting the
+  // rationale the only way to pass validation (yschimke/m3-catalog#11).
+  it("accepts a $comment carrying the config's rationale", () => {
+    expect(
+      validateParityConfig({ direction: "design-led", $comment: "why: the kit is authoritative" })
+        .valid,
+    ).toBe(true);
+  });
+
+  it("still rejects a non-string $comment", () => {
+    expect(validateParityConfig({ $comment: { why: "no" } }).valid).toBe(false);
+  });
+
   it("accepts the optional cmpCapable boolean", () => {
     expect(validateParityConfig({ direction: "code-led", cmpCapable: false }).valid).toBe(true);
     expect(validateParityConfig({ direction: "code-led", cmpCapable: true }).valid).toBe(true);
