@@ -9,6 +9,7 @@ import {
   FigmaRateLimitError,
 } from "./errors.js";
 import type {
+  FileMetaResponse,
   FileNodesResponse,
   ImagesResponse,
   VariablesResponse,
@@ -28,7 +29,24 @@ export interface FigmaRestClientOptions {
   baseUrl?: string;
   /** Injectable fetch. Defaults to `globalThis.fetch`. */
   fetch?: FetchLike;
+  /**
+   * Attempts per request before a retryable failure is raised. 1 disables
+   * retrying. Defaults to {@link DEFAULT_ATTEMPTS}.
+   */
+  attempts?: number;
+  /** Injectable delay (tests). Defaults to a real timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/**
+ * Four attempts: ~1s + ~2s + ~4s of backoff at worst, which clears the short
+ * per-token window Figma applies to a burst of node reads without turning a
+ * genuinely exhausted quota into a seven-minute job.
+ */
+export const DEFAULT_ATTEMPTS = 4;
+
+/** Ceiling on a single backoff wait, including a server-sent `Retry-After`. */
+const MAX_BACKOFF_MS = 60_000;
 
 export interface RenderedImage {
   bytes: Uint8Array;
@@ -40,6 +58,8 @@ export class FigmaRestClient {
   readonly #baseUrl: string;
   readonly #fetch: FetchLike;
   readonly #authHeaders: Record<string, string>;
+  readonly #attempts: number;
+  readonly #sleep: (ms: number) => Promise<void>;
 
   constructor(opts: FigmaRestClientOptions) {
     const fetchImpl = opts.fetch ?? (globalThis.fetch as FetchLike | undefined);
@@ -48,6 +68,9 @@ export class FigmaRestClient {
     }
     this.#fetch = fetchImpl;
     this.#baseUrl = (opts.baseUrl ?? "https://api.figma.com").replace(/\/$/, "");
+    this.#attempts = Math.max(1, opts.attempts ?? DEFAULT_ATTEMPTS);
+    this.#sleep =
+      opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
     if (opts.oauthToken) {
       this.#authHeaders = { Authorization: `Bearer ${opts.oauthToken}` };
@@ -60,8 +83,42 @@ export class FigmaRestClient {
     }
   }
 
+  /**
+   * One request, retried while the failure is transient.
+   *
+   * A 429 is the expected response to reading many nodes in a row, not an
+   * error: the limiter is per token, and a caller resolving a catalog's worth
+   * of references trips it by shape rather than by misuse. Retrying it here is
+   * what stops that turning into a missing component downstream — the adapter
+   * fails soft per reference, so an unretried 429 reads as "no reference" on an
+   * otherwise green run.
+   *
+   * `Retry-After` wins when the server sends one, since it knows the window;
+   * otherwise back off exponentially. 5xx gets the same treatment. Anything
+   * else — auth, a bad node id — is terminal, and retrying only delays it.
+   */
+  async #fetchRetrying(
+    url: string,
+    init?: { headers?: Record<string, string> },
+  ): Promise<Response> {
+    for (let attempt = 1; ; attempt++) {
+      const res = await this.#fetch(url, init);
+      const retryable = res.status === 429 || res.status >= 500;
+      if (res.ok || !retryable || attempt >= this.#attempts) return res;
+
+      const header = Number(res.headers.get("retry-after"));
+      const waitMs = Math.min(
+        MAX_BACKOFF_MS,
+        Number.isFinite(header) && header > 0
+          ? header * 1_000
+          : 2 ** attempt * 500,
+      );
+      await this.#sleep(waitMs);
+    }
+  }
+
   async #get<T>(path: string): Promise<T> {
-    const res = await this.#fetch(`${this.#baseUrl}${path}`, {
+    const res = await this.#fetchRetrying(`${this.#baseUrl}${path}`, {
       headers: this.#authHeaders,
     });
     if (res.ok) return (await res.json()) as T;
@@ -75,7 +132,7 @@ export class FigmaRestClient {
     if (res.status === 429) {
       const retry = Number(res.headers.get("retry-after"));
       throw new FigmaRateLimitError(
-        `figma: rate limited (429) for ${path}`,
+        `figma: rate limited (429) for ${path} after ${this.#attempts} attempt(s)`,
         Number.isFinite(retry) ? retry : undefined,
       );
     }
@@ -83,6 +140,18 @@ export class FigmaRestClient {
       res.status,
       `figma: request failed (${res.status}) for ${path}${body ? ` — ${body}` : ""}`,
     );
+  }
+
+  /**
+   * `GET /v1/files/:key?depth=1` — the file's own metadata, without dragging
+   * the document down the wire.
+   *
+   * `version` changes on every edit, so a caller holding cached references can
+   * decide in ONE request whether any of them can have moved, rather than
+   * re-reading every node to find out that nothing did.
+   */
+  async getFileMeta(fileKey: string): Promise<FileMetaResponse> {
+    return this.#get<FileMetaResponse>(`/v1/files/${fileKey}?depth=1`);
   }
 
   /** `GET /v1/files/:key/nodes?ids=` — structure for the requested nodes. */
@@ -137,7 +206,7 @@ export class FigmaRestClient {
     if (!url) {
       throw new FigmaNodeNotFoundError(fileKey, nodeId);
     }
-    const imgRes = await this.#fetch(url);
+    const imgRes = await this.#fetchRetrying(url);
     if (!imgRes.ok) {
       throw new FigmaApiError(
         imgRes.status,
