@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.42](https://github.com/yschimke/design-parity/compare/v0.1.41...v0.1.42) (2026-08-08)
+
+
+### Features
+
+* **page-backdrop:** make the manifest a versioned wire contract ([#297](https://github.com/yschimke/design-parity/issues/297)) ([b46cf0f](https://github.com/yschimke/design-parity/commit/b46cf0fc3e29f139636f9d10717e001f094b7713))
+
 ## [0.1.41](https://github.com/yschimke/design-parity/compare/v0.1.40...v0.1.41) (2026-08-08)
 
 
