@@ -25,6 +25,12 @@ import { pathToFileURL } from "node:url";
 import { renderIndex } from "@design-parity/report-html";
 
 import { mergeShards, verifyShardReports, type ShardReport } from "../shard.js";
+import {
+  RUN_MANIFEST_VERSION,
+  carryForward,
+  readRunManifest,
+  writeRunManifest,
+} from "../run-manifest.js";
 
 interface Args {
   shardDirs: string[];
@@ -33,6 +39,7 @@ interface Args {
   branch?: string;
   sourceCommit?: string;
   bundleImage?: string;
+  previousDir?: string;
 }
 
 export function parseArgs(args: string[]): Args {
@@ -58,6 +65,9 @@ export function parseArgs(args: string[]): Args {
         break;
       case "--bundle-image":
         out.bundleImage = next();
+        break;
+      case "--previous":
+        out.previousDir = next();
         break;
       default:
         if (a && !a.startsWith("-")) out.shardDirs.push(a);
@@ -127,7 +137,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     stdout.write(
       "design-parity merge <shard-out-dir|shard.json>... --out <dir> " +
         "[--repo-slug owner/repo --branch <branch> --source-commit <sha> " +
-        "--bundle-image <file>]\n",
+        "--bundle-image <file> --previous <dir>]\n",
     );
     return 2;
   }
@@ -155,8 +165,40 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   let components = 0;
   for (const dir of dirs) components += await copyComponentDirs(dir, outDir);
 
+  // Carry forward what this run did not produce. A reference the run could not
+  // read — rate limited, a source briefly unreachable — would otherwise vanish
+  // from the branch entirely, because publishing replaces it wholesale: the run
+  // would not merely lack a verdict for that component, it would delete the last
+  // one anybody had. Rolling the previous rows in makes the board complete and
+  // its rows individually dated, which is the honest description of a partial
+  // refresh (design-parity#289).
+  const previous = args.previousDir
+    ? await readRunManifest(resolvePath(cwd(), args.previousDir))
+    : undefined;
+  const carried = carryForward(merged.entries, previous);
+  for (const entry of carried) {
+    const dir = entry.reportPath?.split("/")[0];
+    if (!dir) continue;
+    await cp(
+      join(resolvePath(cwd(), args.previousDir!), dir),
+      join(outDir, dir),
+      { recursive: true },
+    ).catch(() => {
+      // The row survives without its report dir: a link to a missing page is a
+      // smaller loss than dropping the component off the board silently.
+    });
+  }
+  const entries = [...merged.entries, ...carried].sort((a, b) =>
+    a.code.localeCompare(b.code),
+  );
+
+  // The verdict covers the union. A blocking finding does not stop being one
+  // because this run could not re-measure it, and a run that went green by
+  // losing sight of the failure is the exact outcome this is guarding against.
+  const blocked = merged.blocked || carried.some((e) => e.status === "fail");
+
   const { readme, html } = renderIndex({
-    entries: merged.entries,
+    entries,
     ...(args.repoSlug ? { repoSlug: args.repoSlug } : {}),
     ...(args.branch ? { branch: args.branch } : {}),
     ...(args.sourceCommit ? { sourceCommit: args.sourceCommit } : {}),
@@ -164,19 +206,31 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   });
   await writeFile(join(outDir, "README.md"), readme);
   await writeFile(join(outDir, "index.html"), html);
+  await writeRunManifest(outDir, {
+    formatVersion: RUN_MANIFEST_VERSION,
+    ...(args.sourceCommit ? { sourceCommit: args.sourceCommit } : {}),
+    direction: merged.direction,
+    status: merged.status,
+    blocked,
+    entries,
+  });
 
   stdout.write(
     `Merged ${reports.length}/${merged.total} shard(s): ` +
       `${merged.entries.length} component(s), ${components} report dir(s), ` +
       `${merged.warnings.length} warning(s) → ${outDir}\n` +
-      `Parity ${merged.status} (${merged.direction})${merged.blocked ? " — blocking" : ""}\n`,
+      (carried.length > 0
+        ? `Carried ${carried.length} component(s) forward from the previous run ` +
+          `(not refreshed here) — ${entries.length} on the board.\n`
+        : "") +
+      `Parity ${merged.status} (${merged.direction})${blocked ? " — blocking" : ""}\n`,
   );
   if (merged.warnings.length > 0) {
     stdout.write(merged.warnings.map((w) => `  ! ${w}`).join("\n") + "\n");
   }
 
   // Verdict last, artifacts first — see the module header.
-  return merged.blocked ? 1 : 0;
+  return blocked ? 1 : 0;
 }
 
 if (import.meta.url === pathToFileURL(argv[1] ?? "").href) {

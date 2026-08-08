@@ -126,11 +126,14 @@ describe("merge", () => {
     const entries = (await readdir(out)).sort();
     expect(entries).toEqual([
       "README.md",
+      // The machine-readable twin of the two pages above: what the NEXT run
+      // reads to carry forward whatever it cannot refresh.
+      "run.json",
       "index.html",
       "ui-A-kt-One",
       "ui-B-kt-Two",
       "ui-C-kt-Three",
-    ]);
+    ].sort());
     // Every component's report survives the copy, from both shards.
     expect(await readFile(join(out, "ui-B-kt-Two", "report.html"), "utf8")).toContain(
       "ui/B.kt#Two",
@@ -189,5 +192,142 @@ describe("merge", () => {
     const { code, out } = await runMerge(["merge", "somewhere"]);
     expect(code).toBe(2);
     expect(out).toMatch(/design-parity merge/);
+  });
+});
+
+/** A previous run's published branch: `run.json` plus each row's report dir. */
+async function writePreviousDir(
+  root: string,
+  entries: Array<{ code: string; status?: "pass" | "fail"; carriedFrom?: string }>,
+  sourceCommit = "0000000previous",
+): Promise<string> {
+  const dir = join(root, "previous");
+  await mkdir(dir, { recursive: true });
+  for (const e of entries) {
+    const slug = e.code.replace(/[^a-z0-9_]+/gi, "-");
+    await mkdir(join(dir, slug), { recursive: true });
+    await writeFile(join(dir, slug, "report.html"), `<html>old ${e.code}</html>`);
+  }
+  await writeFile(
+    join(dir, "run.json"),
+    JSON.stringify({
+      formatVersion: 1,
+      sourceCommit,
+      direction: "design-led",
+      status: "pass",
+      blocked: false,
+      entries: entries.map((e) => ({
+        code: e.code,
+        status: e.status ?? "pass",
+        reportPath: `${e.code.replace(/[^a-z0-9_]+/gi, "-")}/report.html`,
+        ...(e.carriedFrom ? { carriedFrom: e.carriedFrom } : {}),
+      })),
+    }),
+  );
+  return dir;
+}
+
+describe("merge --previous (partial refresh)", () => {
+  it("carries forward rows this run did not produce, with their reports", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    const previous = await writePreviousDir(root, [
+      { code: "a/A.kt#A" },
+      { code: "b/B.kt#B" },
+    ]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+      "--source-commit",
+      "abc1234",
+    ]);
+
+    expect(code).toBe(0);
+    expect(log).toContain("Carried 1 component(s) forward");
+
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).toEqual([
+      "a/A.kt#A",
+      "b/B.kt#B",
+    ]);
+    // Refreshed this run, so no age; the other keeps the commit it came from.
+    expect(manifest.entries[0].carriedFrom).toBeUndefined();
+    expect(manifest.entries[1].carriedFrom).toBe("0000000previous");
+    // The carried row's report came along, or its link would 404.
+    expect(await readFile(join(out, "b-B-kt-B", "report.html"), "utf8")).toContain("old");
+  });
+
+  it("keeps the original commit when a row is carried more than once", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    const previous = await writePreviousDir(
+      root,
+      [{ code: "b/B.kt#B", carriedFrom: "1111111original" }],
+      "2222222lastrun",
+    );
+    const out = join(root, "out");
+
+    await runMerge(["merge", shard, "--out", out, "--previous", previous]);
+
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    const carried = manifest.entries.find((e: { code: string }) => e.code === "b/B.kt#B");
+    expect(carried.carriedFrom).toBe("1111111original");
+  });
+
+  it("blocks on a carried-forward failure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    const previous = await writePreviousDir(root, [
+      { code: "b/B.kt#B", status: "fail" },
+    ]);
+    const out = join(root, "out");
+
+    const { code } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(1);
+  });
+
+  it("is a no-op when the previous dir has no usable manifest", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      join(root, "does-not-exist"),
+    ]);
+
+    expect(code).toBe(0);
+    expect(log).not.toContain("Carried");
+  });
+
+  it("writes run.json even with no previous run, so the next one has a base", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    const out = join(root, "out");
+
+    await runMerge(["merge", shard, "--out", out, "--source-commit", "deadbee"]);
+
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.formatVersion).toBe(1);
+    expect(manifest.sourceCommit).toBe("deadbee");
+    expect(manifest.entries).toHaveLength(1);
   });
 });
