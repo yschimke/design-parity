@@ -605,6 +605,95 @@ describe("themeTokenSetsFromBundle", () => {
     expect(() => catalogTokensFromBundle(bundle)).not.toThrow();
   });
 
+  it("resolves each theme's provider FQN from the bundle's preview list", () => {
+    // The FQN is the theme's identity — what a preview server addresses it by and
+    // what `CatalogTheme.id` wants — so the join happens here rather than being
+    // left to every consumer (which could not do it: it lives on the preview
+    // entry's params, not on the sidecar).
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [
+        {
+          id: "wearthemecatalog__Google Sans Flex",
+          params: { wrapperClassName: "com.example.WearGoogleSansFlexThemeCatalog" },
+        },
+        { id: "wearthemecatalog__Coral", params: { wrapperClassName: "com.example.WearCoral" } },
+        { id: "unrelated", params: {} },
+      ],
+      entries: {
+        // The file name is the renderer's SANITIZED id (spaces folded), while the
+        // payload carries none — so this only joins if the fallback matches the
+        // way the renderer spells it.
+        "previews/wearthemecatalog__Google_Sans_Flex.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Google Sans Flex",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+        "previews/wearthemecatalog__Coral.catalog.json": themeSidecar(
+          "wearthemecatalog__Coral",
+          "Coral",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFFF6F61" } }],
+        ),
+      },
+    };
+    const byTheme = Object.fromEntries(
+      themeTokenSetsFromBundle(bundle).map((t) => [t.theme, t.providerFqn]),
+    );
+    expect(byTheme).toEqual({
+      Coral: "com.example.WearCoral",
+      "Google Sans Flex": "com.example.WearGoogleSansFlexThemeCatalog",
+    });
+  });
+
+  it("leaves the FQN absent when the preview list doesn't carry the specimen", () => {
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Brand.catalog.json": themeSidecar(
+          "themecatalog__Brand",
+          "Brand",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+        ),
+      },
+    };
+    const theme = themeTokenSetsFromBundle(bundle)[0];
+    expect(theme?.providerFqn).toBeUndefined();
+    expect(theme?.previewId).toBe("themecatalog__Brand");
+  });
+
+  it("survives a preview id that isn't a string", () => {
+    // The payload is JSON: `previewId` can be anything. Calling `.trim()` on a
+    // number took the whole bundle's themes down with it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Numeric.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Numeric",
+            previewId: 123,
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+          }),
+        ),
+        "previews/themecatalog__Good.catalog.json": themeSidecar(
+          "themecatalog__Good",
+          "Good",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+        ),
+      },
+    };
+    const themes = themeTokenSetsFromBundle(bundle);
+    expect(themes.map((t) => t.theme).sort()).toEqual(["Good", "Numeric"]);
+    // …and the bad id falls back to the one its own file name carries.
+    expect(themes.find((t) => t.theme === "Numeric")?.previewId).toBe(
+      "themecatalog__Numeric",
+    );
+  });
+
   it("is empty for a system that declares no themes", () => {
     expect(
       themeTokenSetsFromBundle({ manifest: {}, previews: [], entries: {} }),

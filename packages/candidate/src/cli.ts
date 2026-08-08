@@ -59,6 +59,15 @@ export interface PreviewParams {
   locale?: string;
   /** Variant state, if the renderer surfaces one (default/pressed/disabled). */
   state?: string;
+  /**
+   * Fully-qualified class name of the `PreviewWrapperProvider` this preview is
+   * wrapped in — for a `@ThemeCatalog` / `@WearThemeCatalog` specimen, the
+   * **provider FQN** that identifies the theme (`com.example.BrandDarkThemeCatalog`).
+   * It is how a preview server addresses a declared theme
+   * (`?theme=theme:<providerFqn>`), so it is the stable id for one, and
+   * `themeTokenSetsFromBundle` joins a theme's tokens to it.
+   */
+  wrapperClassName?: string;
 }
 
 /** One entry of `compose-preview show --json`. */
@@ -501,6 +510,8 @@ function pickParams(raw: Record<string, unknown>): PreviewParams {
     p.uiMode = src["uiMode"] as number | string;
   if (typeof src["locale"] === "string") p.locale = src["locale"];
   if (typeof src["state"] === "string") p.state = src["state"];
+  if (typeof src["wrapperClassName"] === "string")
+    p.wrapperClassName = src["wrapperClassName"];
   return p;
 }
 

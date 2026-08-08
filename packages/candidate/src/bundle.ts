@@ -563,13 +563,21 @@ export interface BundleThemeTokens {
    */
   theme: string;
   /**
-   * The specimen preview whose render resolved these — the join key back to
-   * `previews.json`, where the entry's `wrapperClassName` gives the provider FQN
-   * a preview server addresses the theme by (`?theme=theme:<providerFqn>`).
-   * Never empty: it falls back to the id in the sidecar's own path, and a sheet
-   * with neither is dropped rather than published with a key nothing can join on.
+   * The specimen preview whose render resolved these. Never empty: it falls back
+   * to the id in the sidecar's own path, and a sheet with neither is dropped
+   * rather than published with a key nothing can join on.
    */
   previewId: string;
+  /**
+   * The theme's **provider FQN** (`com.example.BrandDarkThemeCatalog`), resolved
+   * by joining {@link previewId} against the bundle's `previews.json`. This is
+   * the theme's stable identity — what a preview server addresses it by
+   * (`?theme=theme:<providerFqn>`) and what `CatalogTheme.id` wants — so the join
+   * is done here rather than left to every consumer. Absent when the bundle's
+   * preview list doesn't carry the specimen (an older producer, or a sidecar
+   * whose id matches no entry); a consumer then falls back to {@link previewId}.
+   */
+  providerFqn?: string;
   /** The theme's own colours and type scale. */
   tokens: DesignTokens;
 }
@@ -588,8 +596,13 @@ export interface BundleThemeTokens {
  * (a picker chip painted in it, a per-theme Figma variable mode, a contrast audit
  * across every theme a system ships) without re-rendering.
  *
+ * Each entry carries the theme's **provider FQN** where the bundle's preview list
+ * supplies one, so a consumer gets the theme's stable identity without a second
+ * lookup it has no typed way to perform.
+ *
  * Ordered by preview id so a regenerated bundle produces a stable list. Themes
- * that resolved no usable token are dropped. Pure; best-effort per sidecar.
+ * that resolved no usable token are dropped. Pure; best-effort per sidecar — a
+ * malformed, mistyped or newer-schema sheet is skipped, never fatal.
  */
 export function themeTokenSetsFromBundle(
   bundle: PreviewBundle,
@@ -599,12 +612,25 @@ export function themeTokenSetsFromBundle(
     if (!isThemeSidecar(sidecar)) continue;
     // The payload's own id is authoritative (it is the id `previews.json` uses);
     // the path's is the fallback, since the file name is derived from a sanitized
-    // form of it. Without either there is nothing to join on, so drop the sheet.
-    const previewId = sidecar.payload.previewId?.trim() || sidecar.pathId.trim();
+    // form of it. Type-checked rather than trusted: the payload is JSON, so a
+    // `previewId` that isn't a string would take the whole read down on `.trim()`
+    // — the same best-effort rule the guards above keep. Without either id there
+    // is nothing to join on, so the sheet is dropped.
+    const declaredId = sidecar.payload.previewId;
+    const previewId =
+      (typeof declaredId === "string" ? declaredId.trim() : "") ||
+      sidecar.pathId.trim();
     if (!previewId) continue;
     const tokens = tokensFrom([sidecar]);
     if (!tokens) continue;
-    out.push({ theme: sidecar.payload.theme ?? "", previewId, tokens });
+    const entry: BundleThemeTokens = {
+      theme: typeof sidecar.payload.theme === "string" ? sidecar.payload.theme : "",
+      previewId,
+      tokens,
+    };
+    const providerFqn = providerFqnFor(bundle, previewId);
+    if (providerFqn) entry.providerFqn = providerFqn;
+    out.push(entry);
   }
   return out.sort((a, b) => a.previewId.localeCompare(b.previewId));
 }
@@ -618,6 +644,33 @@ interface ReadSidecar {
 
 const SIDECAR_PREFIX = "previews/";
 const SIDECAR_SUFFIX = ".catalog.json";
+
+/**
+ * The `wrapperClassName` (provider FQN) of [previewId]'s entry in the bundle's
+ * `previews.json`. Matched on the entry id, then on the id the sidecar file name
+ * would have been derived from — the renderer sanitizes it for the path, so a
+ * sidecar that carried no `previewId` of its own can still be joined.
+ */
+function providerFqnFor(
+  bundle: PreviewBundle,
+  previewId: string,
+): string | undefined {
+  const exact = bundle.previews.find((p) => p.id === previewId);
+  const entry =
+    exact ?? bundle.previews.find((p) => sidecarId(p.id) === previewId);
+  const fqn = entry?.params?.wrapperClassName;
+  return typeof fqn === "string" && fqn.length > 0 ? fqn : undefined;
+}
+
+/**
+ * A preview id as the renderer spells it in a sidecar file name. Mirrors
+ * compose-ai-tools' `CatalogTokenSidecar.sanitize`, which folds exactly the
+ * characters a file name can't carry — deliberately narrow, so an id with a `$`
+ * or a `(` in it still matches rather than being over-folded into a miss.
+ */
+function sidecarId(id: string): string {
+  return id.replace(/[/\\:*?"<>|\s]/g, "_");
+}
 
 /** Every parseable `previews/<id>.catalog.json` payload in [bundle], with its path id. */
 function readCatalogSidecars(bundle: PreviewBundle): ReadSidecar[] {
