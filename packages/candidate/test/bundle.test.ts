@@ -501,6 +501,55 @@ describe("themeTokenSetsFromBundle", () => {
     expect(themes[1]?.previewId).toBe("wearthemecatalog__KotlinConf");
   });
 
+  it("treats a blank theme label as a theme, not as system tokens", () => {
+    // The tag's PRESENCE is the discriminator. A provider that declared no display
+    // name writes `theme: ""`; reading that as a system sheet would be the worst of
+    // both worlds — its repeated M3 roles overwriting the system's own tokens while
+    // the theme vanished from the list.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/colorcatalog__Palette.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            previewId: "colorcatalog__Palette",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FFAECBFA" } }],
+          }),
+        ),
+        "previews/themecatalog__Unnamed.catalog.json": themeSidecar(
+          "themecatalog__Unnamed",
+          "",
+          [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+        ),
+      },
+    };
+    expect(catalogTokensFromBundle(bundle)?.colors).toEqual({ primary: "#aecbfaff" });
+    const themes = themeTokenSetsFromBundle(bundle);
+    expect(themes).toHaveLength(1);
+    expect(themes[0]?.theme).toBe("");
+    expect(themes[0]?.tokens.colors).toEqual({ primary: "#7f52ffff" });
+  });
+
+  it("falls back to the sidecar's own path for a missing preview id", () => {
+    // The join key is what makes the tokens publishable — without it a consumer
+    // cannot reach `previews.json` for the provider FQN. The file name carries it.
+    const bundle: PreviewBundle = {
+      manifest: {},
+      previews: [],
+      entries: {
+        "previews/themecatalog__Brand.catalog.json": te.encode(
+          JSON.stringify({
+            schema: "compose-preview-catalog-tokens/v1",
+            theme: "Brand",
+            tokens: [{ label: "primary", kind: "COLOR", color: { hex: "#FF7F52FF" } }],
+          }),
+        ),
+      },
+    };
+    expect(themeTokenSetsFromBundle(bundle)[0]?.previewId).toBe("themecatalog__Brand");
+  });
+
   it("is empty for a system that declares no themes", () => {
     expect(
       themeTokenSetsFromBundle({ manifest: {}, previews: [], entries: {} }),

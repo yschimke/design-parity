@@ -543,7 +543,7 @@ function toTypographyToken(
 export function catalogTokensFromBundle(
   bundle: PreviewBundle,
 ): DesignTokens | undefined {
-  return tokensFrom(readCatalogSidecars(bundle).filter((s) => !s.theme));
+  return tokensFrom(readCatalogSidecars(bundle).filter((s) => !isThemeSidecar(s)));
 }
 
 /**
@@ -555,12 +555,19 @@ export function catalogTokensFromBundle(
  * axis from the system token set: one system, several themes.
  */
 export interface BundleThemeTokens {
-  /** The theme's display name, as the provider declared it (`"Brand Dark"`). */
+  /**
+   * The theme's display name, as the provider declared it (`"Brand Dark"`).
+   * Empty when it declared none — the sheet is still a theme (the tag's presence
+   * is what says so), and its identity is {@link previewId}, so a consumer that
+   * needs a label falls back to its own rather than losing the tokens.
+   */
   theme: string;
   /**
    * The specimen preview whose render resolved these — the join key back to
    * `previews.json`, where the entry's `wrapperClassName` gives the provider FQN
    * a preview server addresses the theme by (`?theme=theme:<providerFqn>`).
+   * Never empty: it falls back to the id in the sidecar's own path, and a sheet
+   * with neither is dropped rather than published with a key nothing can join on.
    */
   previewId: string;
   /** The theme's own colours and type scale. */
@@ -589,24 +596,41 @@ export function themeTokenSetsFromBundle(
 ): BundleThemeTokens[] {
   const out: BundleThemeTokens[] = [];
   for (const sidecar of readCatalogSidecars(bundle)) {
-    const theme = sidecar.theme;
-    if (!theme) continue;
+    if (!isThemeSidecar(sidecar)) continue;
+    // The payload's own id is authoritative (it is the id `previews.json` uses);
+    // the path's is the fallback, since the file name is derived from a sanitized
+    // form of it. Without either there is nothing to join on, so drop the sheet.
+    const previewId = sidecar.payload.previewId?.trim() || sidecar.pathId.trim();
+    if (!previewId) continue;
     const tokens = tokensFrom([sidecar]);
     if (!tokens) continue;
-    out.push({ theme, previewId: sidecar.previewId ?? "", tokens });
+    out.push({ theme: sidecar.payload.theme ?? "", previewId, tokens });
   }
   return out.sort((a, b) => a.previewId.localeCompare(b.previewId));
 }
 
-/** Every parseable `previews/<id>.catalog.json` payload in [bundle]. */
-function readCatalogSidecars(bundle: PreviewBundle): CatalogTokenSidecar[] {
-  const out: CatalogTokenSidecar[] = [];
+/** A parsed sidecar plus the preview id its own path names. */
+interface ReadSidecar {
+  payload: CatalogTokenSidecar;
+  /** `<id>` from `previews/<id>.catalog.json` — always present, unlike the payload's. */
+  pathId: string;
+}
+
+const SIDECAR_PREFIX = "previews/";
+const SIDECAR_SUFFIX = ".catalog.json";
+
+/** Every parseable `previews/<id>.catalog.json` payload in [bundle], with its path id. */
+function readCatalogSidecars(bundle: PreviewBundle): ReadSidecar[] {
+  const out: ReadSidecar[] = [];
   for (const [path, bytes] of Object.entries(bundle.entries)) {
-    if (!path.startsWith("previews/") || !path.endsWith(".catalog.json")) {
+    if (!path.startsWith(SIDECAR_PREFIX) || !path.endsWith(SIDECAR_SUFFIX)) {
       continue;
     }
     try {
-      out.push(JSON.parse(td.decode(bytes)) as CatalogTokenSidecar);
+      out.push({
+        payload: JSON.parse(td.decode(bytes)) as CatalogTokenSidecar,
+        pathId: path.slice(SIDECAR_PREFIX.length, -SIDECAR_SUFFIX.length),
+      });
     } catch {
       continue; // best-effort: a malformed sidecar doesn't sink the read
     }
@@ -614,14 +638,25 @@ function readCatalogSidecars(bundle: PreviewBundle): CatalogTokenSidecar[] {
   return out;
 }
 
+/**
+ * Whether a sidecar came from a THEME sheet. The discriminator is the tag's
+ * **presence**, not its truthiness: a provider that declared no display name
+ * writes `theme: ""`, and treating that as a system sheet would be the worst of
+ * both worlds — its repeated M3 roles would overwrite the system's own tokens
+ * while the theme itself vanished from the list.
+ */
+function isThemeSidecar(sidecar: ReadSidecar): boolean {
+  return sidecar.payload.theme !== undefined;
+}
+
 /** Fold [sidecars] into one {@link DesignTokens}, or undefined when they carry none. */
 function tokensFrom(
-  sidecars: readonly CatalogTokenSidecar[],
+  sidecars: readonly ReadSidecar[],
 ): DesignTokens | undefined {
   const colors: Record<string, string> = {};
   const typography: Record<string, TypographyToken> = {};
   for (const sidecar of sidecars) {
-    for (const token of sidecar.tokens ?? []) {
+    for (const token of sidecar.payload.tokens ?? []) {
       if (!token.label) continue;
       if (token.kind === "COLOR") {
         const css = argbToCssHex(token.color?.hex);
