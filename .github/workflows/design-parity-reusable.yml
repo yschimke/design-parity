@@ -8,14 +8,24 @@ name: design-parity (reusable)
 # render + reference fetch + diff per component. Past a few hundred components
 # the marginal part dominates and a single job walks into its own timeout.
 #
-# The workaround that has been reached for is to shrink the INPUT — compare only
-# the mapped components and exclude every other preview from the render, tuned by
-# hand in the consumer's own workflow (yschimke/m3-catalog#11). That buys time by
-# giving up coverage, and it has to be re-tuned by hand every time the catalog
-# grows. This workflow buys the same time without giving up coverage: N jobs each
-# render and compare a disjoint slice of the SAME exhaustive component list, and
-# `design-parity merge` unions the slices into the artifact set one serial run
-# would have produced. The consumer passes a number; nothing is hand-scoped.
+# Two different costs get confused here, so name them separately.
+#
+# SCOPING THE RENDER is not optional and costs no coverage. A catalog module
+# draws far more previews than any component maps to (m3-catalog: 1,095 drawn,
+# 77 mapped), and only mapped components are ever compared — so excluding the
+# unmapped previews from the render removes work nobody was going to look at.
+# yschimke/m3-catalog#11 did this by hand and took its render from ~43 min to
+# ~4. This workflow derives that same exclusion instead, from the discovery
+# manifest (`preview-manifest`), so the list is never hand-maintained.
+#
+# SHARDING divides what is left. Even correctly scoped, the marginal cost grows
+# with the mapped set; N jobs each render and compare a disjoint slice of the
+# SAME exhaustive component list, and `design-parity merge` unions the slices
+# into the artifact set one serial run would have produced.
+#
+# Scoping first, then shard if the scoped run is still too slow — `shards: 1`
+# with a correct `preview-manifest` is a complete answer for most catalogs, and
+# it is the one that does not multiply the reference API's rate limit by N.
 #
 # WHAT DIVIDES AND WHAT DOESN'T. Only the marginal cost divides — every shard
 # pays the fixed cost in full — so 4–8 is the useful range and a large fleet is
@@ -78,6 +88,22 @@ on:
           Comma-separated component handles to compare. Empty (the default) means
           EVERY component in `design-map.json` — the exhaustive run this workflow
           exists to make affordable. Set it only to deliberately narrow the run.
+        required: false
+        type: string
+        default: ""
+      preview-manifest:
+        description: >
+          Path to the `compose-preview` discovery manifest listing EVERY preview
+          the module can draw (`previews.json`), or a newline-delimited id list.
+          Empty (the default) derives it from `module`:
+          `:a:b` ⇒ `a/b/build/compose-previews/previews.json`.
+
+          This is what scopes the render. `--exclude-preview-id` is built as
+          "everything in this file, minus what this shard compares", so a module
+          holding previews no component maps to (the normal case for a catalog:
+          m3-catalog draws 1,095 and maps 77) still renders only the slice. If
+          the file is absent the render is NOT scoped — every shard draws the
+          whole module — so the run warns loudly rather than silently paying it.
         required: false
         type: string
         default: ""
@@ -255,6 +281,8 @@ jobs:
           SHARD: ${{ inputs.shards > 1 && matrix.shard || 1 }}
           SHARDS: ${{ inputs.shards }}
           COMPONENTS: ${{ inputs.components }}
+          MODULE: ${{ inputs.module }}
+          PREVIEW_MANIFEST: ${{ inputs.preview-manifest }}
         run: |
           set -euo pipefail
           scope=()
@@ -265,12 +293,28 @@ jobs:
           dp --shard 1/1 > all-components.txt
           dp --shard "${SHARD}/${SHARDS}" > slice-components.txt
           dp --shard "${SHARD}/${SHARDS}" --field previewId > slice-previews.txt
-          # The complement is what this shard must NOT render. A positive `--id`
-          # selection alone has been observed not to scope the render (it is the
-          # exclusion list that does), which is the flag m3-catalog#11 had to add
-          # by hand — derived here instead, from the same partition.
-          dp --shard "${SHARD}/${SHARDS}" --field previewId --complement \
-            > slice-excluded.txt
+
+          # The complement is what this shard must NOT render, and it is only as
+          # complete as the set it is taken against. Against the design map it
+          # names the previews the OTHER SHARDS own and nothing else — so a
+          # module holding unmapped previews (a catalog: m3-catalog draws 1,095,
+          # maps 77) would have every shard render all 1,018 unmapped ones and
+          # divide nothing. `--preview-universe` is what makes it the module's
+          # full preview set instead.
+          manifest="$PREVIEW_MANIFEST"
+          if [ -z "$manifest" ]; then
+            # `:a:b` ⇒ `a/b/build/compose-previews/previews.json`
+            path="${MODULE#:}"
+            manifest="${path//://}/build/compose-previews/previews.json"
+          fi
+          if [ -f "$manifest" ]; then
+            dp --shard "${SHARD}/${SHARDS}" --field previewId --complement \
+              --preview-universe "$manifest" > slice-excluded.txt
+          else
+            echo "::warning title=Render not scoped::No preview manifest at '${manifest}' — every shard will render the whole module. Set preview-manifest, or have design-map-command write the discovery manifest there."
+            dp --shard "${SHARD}/${SHARDS}" --field previewId --complement \
+              > slice-excluded.txt
+          fi
           {
             echo "components<<EOF"
             paste -sd, - < all-components.txt

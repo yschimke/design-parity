@@ -13,26 +13,56 @@ or a thousand. The marginal term is one render + reference fetch + diff per
 component. Past a few hundred components the marginal term dominates, the render
 step hits its `--timeout`, and not far behind it the job hits `timeout-minutes`.
 
-There are two ways out, and only one of them keeps the check honest.
+There are two levers, and they are not alternatives. **Do the first one always;
+reach for the second only if the first is not enough.**
 
-## The two levers
+## Lever 1: scope the render (free — do it first)
 
-**Shrink the input.** Compare fewer components; exclude the rest from the render.
-This is what [`m3-catalog#11`][pr11] did — 1,095 previews rendered to compare 77,
-so the render was scoped down to the 77 with an `--exclude-preview-id` list
-naming the other 1,018. It works, and it took the render from ~43 min to ~6.
-But what it buys, it buys with coverage: the 1,018 excluded previews are not
-checked, and the list has to be re-derived by hand in the consumer's own workflow
-every time the catalog grows. It is a workflow edit standing in for a capability.
+A catalog module draws far more previews than any component maps to. m3-catalog
+draws **1,095** and maps **77**: only a component carrying
+`@CatalogComponent(reference = …)` has a design reference to compare against, so
+only those 77 are ever subjects. Rendering the other 1,018 produces PNGs nothing
+reads.
 
-**Divide the work.** Run N jobs, each rendering and comparing a *disjoint slice
-of the same exhaustive component list*, then union the results. Nothing is
-excluded, nothing is hand-tuned, and the wall clock falls by roughly the marginal
-term over N. This is what this document describes, and it is a number in the
-caller's workflow rather than a list.
+`--id` selects what the bundle *contains*; it does not scope the *render*, which
+walks the module regardless. `--exclude-preview-id` is what scopes it.
+[`m3-catalog#11`][pr11] worked this out and took the render from **~43 min to
+~4** by excluding the 1,018 unmapped previews.
 
-The two compose — narrowing the run with `components:` still shards — but reach
-for sharding first. Deferral gives up coverage; sharding does not.
+**This costs no coverage** — the excluded previews were never comparison
+subjects. What it costs is maintenance: #11 derived the list by hand in the
+consumer's own workflow, and it has to be re-derived every time the catalog
+grows. So this workflow derives it instead, per shard, from the discovery
+manifest:
+
+```
+--exclude-preview-id  =  every preview the module draws
+                       −  the previews this shard compares
+```
+
+That is the `preview-manifest` input, and it is why the flag matters: the
+complement is only as complete as the set it is taken against. Taken against
+`design-map.json` it names the ~64 previews the *other shards* own and says
+nothing about the 1,018 unmapped ones — every shard would still render the whole
+module and sharding would divide nothing. Taken against the manifest, each shard
+renders only its slice.
+
+## Lever 2: divide what's left (shard)
+
+Even correctly scoped, the marginal term grows with the *mapped* set. Run N jobs,
+each rendering and comparing a disjoint slice of the same exhaustive component
+list, then union the results with `design-parity merge`. Nothing is excluded,
+nothing is hand-tuned, and the wall clock falls by roughly the marginal term
+over N.
+
+**Two reasons to try `shards: 1` with a correct `preview-manifest` first.** Every
+shard pays `fixed` in full, so a fan-out over a small mapped set buys little (see
+the table below). And each shard is an independent client of the reference API:
+N shards make N concurrent callers on one token. The Figma adapter surfaces a 429
+as a per-component failure with no retry — the component produces no verdict and
+the run stays green — so an over-sharded run degrades into silent under-coverage,
+which is the failure mode this document exists to avoid. `m3-catalog#12` is that
+happening at N=1.
 
 ## What divides and what doesn't
 
@@ -71,7 +101,7 @@ jobs:
       contents: write   # publish the artifacts to design-parity/main
     with:
       module: ':catalog'
-      shards: 6
+      shards: 1
       # Optional: regenerate design-map.json from the repo before partitioning,
       # e.g. by projecting it out of @CatalogComponent(reference = …) annotations.
       design-map-command: >
@@ -86,13 +116,30 @@ no artifacts, no merge — so a small catalog pays nothing for this machinery be
 available. The component universe defaults to **every** component in
 `design-map.json`; `components:` narrows it only if you want it narrowed.
 
+**Check the render is actually scoped before you raise `shards`.** The exclusion
+list comes from `preview-manifest`, which defaults to the path `module` implies
+(`:catalog` ⇒ `catalog/build/compose-previews/previews.json`). If your discovery
+pass writes it elsewhere, set the input — otherwise the job logs
+
+```
+Render not scoped: No preview manifest at '…' — every shard will render the
+whole module.
+```
+
+and each shard pays the full render, which is the cost sharding was supposed to
+divide. The per-shard log line to look for instead is
+
+```
+Shard 1/6: 13 of 77 component(s); 13 preview(s) to render, 1082 excluded.
+```
+
 ## The pieces, and the one invariant
 
 Three CLI surfaces carry this, all in the published `design-parity` package:
 
 | Command | What it does |
 | --- | --- |
-| `design-parity shard --shard i/N` | Prints this shard's slice — component handles, or (`--field previewId`) the render ids they map to, or (`--complement`) everything *not* in the slice, which is the render's exclusion list. |
+| `design-parity shard --shard i/N` | Prints this shard's slice — component handles, or (`--field previewId`) the render ids they map to, or (`--complement --preview-universe <manifest>`) every preview the module draws *except* this slice, which is the render's exclusion list. |
 | `design-parity run --shard i/N` | Compares this shard's slice and writes `shard.json` next to the reports. Partitions the **full** list it is given; a blocking verdict exits 0 here (see below). |
 | `design-parity merge <shard-dir>... --out <dir>` | Verifies the shards cover the run exactly once, copies every component's report subdir, regenerates the landing page from the unioned rows, and applies the run's verdict as its exit code. |
 
