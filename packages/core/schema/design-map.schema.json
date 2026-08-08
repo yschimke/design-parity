@@ -168,6 +168,11 @@
           "type": "string",
           "description": "Optional repo-relative path to a committed W3C DTCG token file whose tokens are this component's spec tokens. Populates the reference's tokens for sources that don't expose them (bundle, claude-design) or overrides what an adapter resolved. See design-parity issues #89 and #87.",
           "minLength": 1
+        },
+        "density": {
+          "type": "number",
+          "description": "Optional scale of the reference artwork: source pixels per density-independent pixel. A board drawn at 3x is 3. Lets a consumer quote the design's spacing and type in the same dp/sp the code side resolves, instead of naming the board's own pixel unit and leaving the reader to guess whether 'text 31.5px' and 'bodyMedium 14sp' agree (design-parity issue #279). Omit when unknown — a wrong factor silently rescales every spec, which is worse than a stated px.",
+          "exclusiveMinimum": 0
         }
       }
     }
