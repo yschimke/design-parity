@@ -15,9 +15,17 @@
  * and/or `--candidate-bundles <png|dir,...>` (compose-ai-tools preview-bundle
  * polyglots, read statically by `@design-parity/candidate`; issue #38 Phase 1).
  * When both are given, bundles win and the JSON is the fallback.
+ *
+ * `--shard <i>/<n>` runs one slice of the component list in this job and writes
+ * a `shard.json` next to the reports; `design-parity merge` unions the slices
+ * back into the artifact set a serial run would have produced. That is how an
+ * *exhaustive* comparison (every component, not just the ones a hand-tuned
+ * workflow could afford) fits inside a job timeout — see `../shard.ts` and
+ * `docs/PARALLEL_PARITY.md`.
  */
 import { argv, cwd, env, exit, stdout } from "node:process";
-import { resolve as resolvePath } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { resolve as resolveCorrespondences } from "@design-parity/resolver";
@@ -26,10 +34,17 @@ import { FigmaCanvasWriter } from "@design-parity/adapter-figma";
 import { buildCandidateProvider } from "../candidate.js";
 import { resolveRunConfig } from "../config.js";
 import { createAdapterRegistry } from "../registry.js";
-import { orchestrate } from "../orchestrate.js";
+import { orchestrate, type ParityReport } from "../orchestrate.js";
 import { loadSpecTokens } from "../specTokens.js";
 import { pushBack } from "../pushback.js";
 import { renderReport } from "../report.js";
+import {
+  parseShard,
+  partitionComponents,
+  SHARD_FORMAT_VERSION,
+  type ShardReport,
+  type ShardSelector,
+} from "../shard.js";
 
 interface Args {
   repoRoot: string;
@@ -43,6 +58,7 @@ interface Args {
   branch?: string;
   sourceCommit?: string;
   bundleImage?: string;
+  shard?: ShardSelector;
 }
 
 export function parseArgs(args: string[]): Args {
@@ -90,11 +106,50 @@ export function parseArgs(args: string[]): Args {
       case "--bundle-image":
         out.bundleImage = next();
         break;
+      // One slice of the run (`--shard 2/6`). Throws on a malformed or
+      // out-of-range selector: a typo that silently compared everything (or
+      // nothing) would land as a merged index that looks complete.
+      case "--shard":
+        out.shard = parseShard(next());
+        break;
       default:
         if (a && !a.startsWith("--")) out.components.push(a);
     }
   }
   return out;
+}
+
+/**
+ * Write this shard's `shard.json` — the declaration `design-parity merge` reads:
+ * what the shard was responsible for, and the landing-page rows it produced.
+ *
+ * Written even for an empty slice (see the caller), because the merge treats a
+ * shard that never reported as a hard error rather than an absence.
+ */
+export async function writeShardReport(
+  outDir: string,
+  shard: ShardSelector,
+  components: string[],
+  report: Pick<
+    ParityReport,
+    "direction" | "status" | "blocked" | "warnings" | "indexEntries"
+  >,
+): Promise<string> {
+  const doc: ShardReport = {
+    formatVersion: SHARD_FORMAT_VERSION,
+    index: shard.index,
+    total: shard.total,
+    components,
+    direction: report.direction,
+    status: report.status,
+    blocked: report.blocked,
+    warnings: report.warnings,
+    entries: report.indexEntries ?? [],
+  };
+  await mkdir(outDir, { recursive: true });
+  const path = join(outDir, "shard.json");
+  await writeFile(path, JSON.stringify(doc, null, 2) + "\n");
+  return path;
 }
 
 /** Landing-page link context from the CLI flags, or `undefined` when none set. */
@@ -114,15 +169,44 @@ export async function main(): Promise<number> {
       "design-parity run --components <code#Member,...> [--repo .] " +
         "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir] " +
         "[--repo-slug owner/repo --branch <branch> --source-commit <sha> --bundle-image <file>] " +
-        "[--push-back [--canvas-endpoint <url>]]\n",
+        "[--shard <index>/<total>] [--push-back [--canvas-endpoint <url>]]\n",
     );
     return 2;
   }
 
+  // This shard's slice, derived from the full list every shard is given — so the
+  // caller passes the same `--components` to all of them and no job has to know
+  // what its siblings took.
+  const components = args.shard
+    ? partitionComponents(args.components, args.shard)
+    : args.components;
+  if (args.shard) {
+    stdout.write(
+      `Shard ${args.shard.index}/${args.shard.total}: ${components.length} of ` +
+        `${new Set(args.components).size} component(s)\n`,
+    );
+  }
   const { designMap, direction, cmpCapable, warnings } = await resolveRunConfig(
     args.repoRoot,
   );
-  const resolved = resolveCorrespondences(args.components, { designMap });
+
+  // More shards than components leaves the tail shards empty. That is a no-op,
+  // not a failure — but it still has to write its `shard.json`, or the merge
+  // reports the shard as missing and refuses the whole run.
+  if (args.shard && components.length === 0) {
+    if (args.outDir) {
+      await writeShardReport(args.outDir, args.shard, components, {
+        status: "pass",
+        blocked: false,
+        direction,
+        warnings: [],
+        indexEntries: [],
+      });
+    }
+    return 0;
+  }
+
+  const resolved = resolveCorrespondences(components, { designMap });
   // Spec tokens a component declares via a committed DTCG file (design-map
   // `tokensFile`, issue #89), loaded once up front so a bad file warns (#1).
   const spec = await loadSpecTokens(designMap, args.repoRoot);
@@ -165,6 +249,13 @@ export async function main(): Promise<number> {
 
   stdout.write(renderReport(report) + "\n");
 
+  // Emitted before push-back and the page listing so a shard that dies in either
+  // still leaves the merge a complete declaration of what it did.
+  if (args.shard && args.outDir) {
+    const path = await writeShardReport(args.outDir, args.shard, components, report);
+    stdout.write(`\nWrote ${path}\n`);
+  }
+
   // Optional Code-to-Canvas push-back (#9): no-op (with a log) unless the
   // `--push-back` flag is set, the direction is `code-led`, and a figma bridge
   // endpoint is configured. A side effect only — it never affects the exit code.
@@ -189,6 +280,13 @@ export async function main(): Promise<number> {
     );
   }
 
+  // A blocking verdict is the RUN's verdict, not a shard's, so a sharded run
+  // reports it in `shard.json` and exits 0 here; `design-parity merge` applies it
+  // once, after the merged artifacts exist. Exiting non-zero per shard would take
+  // the fan-out down (fail-fast) and strand the reports that diagnose the very
+  // failure being reported — the same "publish, then apply the verdict" ordering
+  // a hand-written workflow has to get right by hand.
+  if (args.shard) return 0;
   return report.blocked ? 1 : 0;
 }
 

@@ -40,6 +40,15 @@ export {
   CMP_PROMOTION,
 } from "./report.js";
 
+export {
+  mergeShards,
+  parseShard,
+  partitionComponents,
+  verifyShardReports,
+  SHARD_FORMAT_VERSION,
+} from "./shard.js";
+export type { MergedShards, ShardReport, ShardSelector } from "./shard.js";
+
 export { selectMode } from "./mode.js";
 export type { ActionMode, ModeInputs } from "./mode.js";
 

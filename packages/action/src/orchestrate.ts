@@ -228,6 +228,15 @@ export interface ParityReport {
    * advisory only.
    */
   cmpCapable?: boolean;
+  /**
+   * The landing-page rows written alongside the per-component reports, present
+   * only when `outDir` was set. Retained (rather than being a private detail of
+   * the index write) so a **sharded** run can hand them to `design-parity merge`,
+   * which unions the shards' rows into one index instead of re-deriving them —
+   * re-derivation would need every shard's candidate renders in the merge job,
+   * which is the whole cost the fan-out just paid to avoid. See `shard.ts`.
+   */
+  indexEntries?: IndexEntry[];
 }
 
 function worst(a: VerdictStatus, b: VerdictStatus): VerdictStatus {
@@ -363,6 +372,7 @@ export async function orchestrate(
 
   // Stitch the per-component reports into a branch landing page so the published
   // branch has an entry point instead of a wall of machine-named directories.
+  let indexEntries: IndexEntry[] | undefined;
   if (options.outDir) {
     const entries: IndexEntry[] = results.map((r) => {
       const thumbnail = r.candidate
@@ -381,8 +391,16 @@ export async function orchestrate(
     await mkdir(options.outDir, { recursive: true });
     await writeFile(join(options.outDir, "README.md"), readme);
     await writeFile(join(options.outDir, "index.html"), html);
+    indexEntries = entries;
   }
 
   const blocked = directionPolicy(options.direction).blocksPr && status === "fail";
-  return { status, blocked, direction: options.direction, results, warnings };
+  return {
+    status,
+    blocked,
+    direction: options.direction,
+    results,
+    warnings,
+    ...(indexEntries ? { indexEntries } : {}),
+  };
 }

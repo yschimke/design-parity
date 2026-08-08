@@ -18,6 +18,7 @@ this repo.
 | --- | --- |
 | [adopting-cmp.md](./adopting-cmp.md) | Putting a Compose Multiplatform project under design parity, end to end. The Desktop/JVM target renders previews with no Android emulator, making it the cheapest way to try the tool. |
 | [candidate-sources.md](./candidate-sources.md) | The four candidate-render backends (static bundle, CLI, local-compose-web, daemon) behind one seam, and how a run picks or composes them. |
+| [PARALLEL_PARITY.md](./PARALLEL_PARITY.md) | Running an **exhaustive** check — every component, not a hand-picked subset — by splitting one run across N parallel jobs and merging them. The reusable workflow, how to pick a shard count, and why the alternative (excluding previews to fit the timeout) buys speed with coverage. |
 | [page-backdrops.md](./page-backdrops.md) | **Opt-in, off by default.** Importing key design pages as backdrops, linking every component instance on them to the code that implements it, and laying the code renders on top. |
 
 ## Contracts and formats
