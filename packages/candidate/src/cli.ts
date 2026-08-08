@@ -28,7 +28,14 @@ import {
   MissingComposePreviewError,
   NoPreviewsError,
   RenderError,
+  UnsupportedComposePreviewVersionError,
 } from "./errors.js";
+import {
+  isBelowMinimum,
+  parseCliVersion,
+  MINIMUM_COMPOSE_PREVIEW_VERSION,
+  type CliVersion,
+} from "./cli-version.js";
 import { readPngSize } from "./png.js";
 
 // ---------------------------------------------------------------------------
@@ -504,17 +511,30 @@ function toShowEntry(raw: unknown): ShowEntry | undefined {
   return entry;
 }
 
-/** Parse `compose-preview show --json` stdout into entries. */
-export function parseShow(stdout: string): ShowEntry[] {
+/**
+ * Parse `compose-preview show --json` stdout into entries.
+ *
+ * [cliVersion] is only used to make the failure legible. This is the single
+ * most likely place for a version skew to surface — the CLI owns this JSON
+ * shape and can change it — and "invalid JSON" alone points the reader at this
+ * package rather than at their toolchain. Naming the version that produced the
+ * payload is what turns it into something actionable.
+ */
+export function parseShow(stdout: string, cliVersion?: string): ShowEntry[] {
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   let data: unknown;
   try {
     data = JSON.parse(trimmed);
   } catch (cause) {
-    throw new RenderError("compose-preview show emitted invalid JSON", {
-      stderr: String(cause),
-    });
+    const from = cliVersion ? `compose-preview ${cliVersion}` : "compose-preview";
+    throw new RenderError(
+      `${from} emitted invalid JSON for 'show --json'.\n` +
+        `That output shape is owned by the CLI, so this is usually a version` +
+        ` skew — check '${cliVersion ? cliVersion : "compose-preview --version"}'` +
+        ` against the shape this wrapper reads (packages/candidate/src/cli.ts).`,
+      { stderr: String(cause) },
+    );
   }
   const arr = Array.isArray(data)
     ? data
@@ -566,6 +586,18 @@ export class SpawnComposePreviewCli implements ComposePreviewCli {
     return this.opts.readFile ?? ((p) => readFile(p));
   }
 
+  /**
+   * The version `--version` reported, once probed. `null` means we ran the
+   * probe but could not parse a version out of it (a locally built or wrapped
+   * binary); `undefined` means we have not probed yet.
+   */
+  private probedVersion: CliVersion | null | undefined;
+
+  /** Reported CLI version, or `null` if unparseable / not yet probed. */
+  get version(): CliVersion | null {
+    return this.probedVersion ?? null;
+  }
+
   async ensureInstalled(): Promise<void> {
     let result;
     try {
@@ -581,6 +613,18 @@ export class SpawnComposePreviewCli implements ComposePreviewCli {
       throw new RenderError(
         `'${this.cli} --version' exited ${result.code} — the CLI is present but not runnable`,
         { code: result.code, stderr: result.stderr },
+      );
+    }
+    // Until now the probe's output was discarded and this was a pure liveness
+    // check, so a CLI too old to speak the `show --json` contract failed much
+    // later with an unreadable payload. Parse it, keep it for diagnostics, and
+    // reject a version we know predates the contract.
+    this.probedVersion = parseCliVersion(`${result.stdout}\n${result.stderr}`);
+    if (this.probedVersion && isBelowMinimum(this.probedVersion)) {
+      throw new UnsupportedComposePreviewVersionError(
+        this.probedVersion.raw,
+        MINIMUM_COMPOSE_PREVIEW_VERSION,
+        this.cli,
       );
     }
   }
@@ -616,7 +660,7 @@ export class SpawnComposePreviewCli implements ComposePreviewCli {
       );
     }
 
-    const entries = parseShow(result.stdout);
+    const entries = parseShow(result.stdout, this.probedVersion?.raw);
     if (entries.length === 0) throw new NoPreviewsError(req);
 
     const rendered: RenderedPreview[] = [];

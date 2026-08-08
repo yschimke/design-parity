@@ -147,4 +147,13 @@ export {
   RenderError,
   InvalidBundleError,
   NotImplementedError,
+  UnsupportedComposePreviewVersionError,
 } from "./errors.js";
+
+export {
+  parseCliVersion,
+  compareCliVersions,
+  isBelowMinimum,
+  MINIMUM_COMPOSE_PREVIEW_VERSION,
+} from "./cli-version.js";
+export type { CliVersion } from "./cli-version.js";
