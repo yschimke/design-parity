@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.39](https://github.com/yschimke/design-parity/compare/v0.1.38...v0.1.39) (2026-08-08)
+
+
+### Features
+
+* **action:** shard a parity run across parallel jobs ([#284](https://github.com/yschimke/design-parity/issues/284)) ([718ee8c](https://github.com/yschimke/design-parity/commit/718ee8c9e37236f5c84488b4ad2b25f106262616))
+* **page-backdrop:** import key Figma pages as backdrops with linked components ([#281](https://github.com/yschimke/design-parity/issues/281)) ([060e57b](https://github.com/yschimke/design-parity/commit/060e57b2771084d12156d5397b024e20be2241f0))
+
 ## [0.1.38](https://github.com/yschimke/design-parity/compare/v0.1.37...v0.1.38) (2026-08-04)
 
 
