@@ -407,3 +407,146 @@ describe("importReferences", () => {
     ).resolves.toMatchObject({ complete: false });
   });
 });
+
+/**
+ * The structural half (#296). A variant carries neither its properties nor its
+ * siblings — both live on the component set — so an import that stores only the
+ * variants leaves a cache-only run unable to say what its references depict.
+ */
+describe("importReferences: component sets", () => {
+  const SET = "9:9";
+
+  /** Like `fakeFigma`, but every node reports it is a variant of one set. */
+  function kitFigma(): { fetch: FetchLike; paths: string[] } {
+    const paths: string[] = [];
+    const fetch: FetchLike = async (url) => {
+      paths.push(url.replace(BASE, ""));
+      if (url.includes("?depth=1")) {
+        return json({ name: "Kit", lastModified: "2026-01-01T00:00:00Z", version: "v1" });
+      }
+      if (url.includes("/variables/local")) return json({});
+      if (url.includes("/nodes?")) {
+        const ids = decodeURIComponent(new URL(url).searchParams.get("ids") ?? "").split(",");
+        const nodes: Record<string, unknown> = {};
+        for (const id of ids) {
+          nodes[id] =
+            id === SET
+              ? {
+                  document: {
+                    ...nodeDoc(id),
+                    type: "COMPONENT_SET",
+                    componentPropertyDefinitions: {
+                      "Show icon#1:0": { type: "BOOLEAN", defaultValue: true },
+                    },
+                    children: [{ id: "1:1", name: "Size=Small", type: "COMPONENT" }],
+                  },
+                }
+              : {
+                  document: nodeDoc(id),
+                  components: { [id]: { key: `k-${id}`, name: id, componentSetId: SET } },
+                };
+        }
+        return json({ nodes });
+      }
+      if (url.includes("/v1/images/")) {
+        const id = decodeURIComponent(new URL(url).searchParams.get("ids") ?? "");
+        return json({ err: null, images: { [id]: `https://img.test/${id}.svg` } });
+      }
+      return new Response(svg);
+    };
+    return { fetch, paths };
+  }
+
+  it("caches the set structure-only, and the pointer that finds it", async () => {
+    const dir = await cacheDir();
+    const { fetch } = kitFigma();
+    const result = await importReferences({
+      cacheDir: dir,
+      refs: [`figma:${FILE}/1:1`],
+      client: client(fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ refreshed: 1, sets: 1, complete: true });
+
+    const cache = (await ReferenceCache.open(dir))!;
+    const set = cache.entry(FILE, SET)!;
+    expect(set).toMatchObject({ structureOnly: true, fileVersion: "v1" });
+    expect(set.image).toBeUndefined(); // a render of a set compares against nothing
+    // The variant's pointer to its family survives the round trip.
+    const variant = await cache.node(FILE, "1:1");
+    expect(variant?.components?.["1:1"]?.componentSetId).toBe(SET);
+    // …and the set's own document carries the definitions the render used.
+    const cachedSet = await cache.node(FILE, SET);
+    expect(cachedSet?.document.componentPropertyDefinitions).toBeDefined();
+  });
+
+  it("re-reads nothing when the file has not moved", async () => {
+    const dir = await cacheDir();
+    const { fetch, paths } = kitFigma();
+    const opts = {
+      cacheDir: dir,
+      refs: [`figma:${FILE}/1:1`],
+      client: client(fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    };
+    await importReferences(opts);
+    const after = paths.length;
+
+    // Same version: the short-circuit fires before the set pass is reached.
+    const again = await importReferences(opts);
+    expect(again).toMatchObject({ refreshed: 0, sets: 0, unchanged: [FILE], complete: true });
+    expect(paths.slice(after)).toEqual([`/v1/files/${FILE}?depth=1`]);
+  });
+
+  it("gives a set its render once something references it by name", async () => {
+    const dir = await cacheDir();
+    const { fetch } = kitFigma();
+    // First import knows the set only as a variant's family: structure only.
+    await importReferences({
+      cacheDir: dir,
+      refs: [`figma:${FILE}/1:1`],
+      client: client(fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+    expect((await ReferenceCache.open(dir))!.entry(FILE, SET)?.image).toBeUndefined();
+
+    // Then the design map adds it as a `refSet` (#299) — an imageless entry is
+    // due, so it is refreshed properly rather than skipped as already cached.
+    const result = await importReferences({
+      cacheDir: dir,
+      refs: [`figma:${FILE}/1:1`, `figma:${FILE}/${SET}`],
+      client: client(fetch),
+      now: at("2026-01-02T00:00:00.000Z"),
+    });
+    expect(result.refreshed).toBe(1);
+    expect((await ReferenceCache.open(dir))!.entry(FILE, SET)?.image).toBeDefined();
+  });
+
+  it("keeps the reference when the set cannot be read", async () => {
+    const dir = await cacheDir();
+    const { fetch } = kitFigma();
+    let seenSet = false;
+    const flaky: FetchLike = async (url, init) => {
+      const ids = url.includes("/nodes?")
+        ? decodeURIComponent(new URL(url).searchParams.get("ids") ?? "")
+        : "";
+      if (ids === SET) {
+        seenSet = true;
+        return new Response("boom", { status: 500 });
+      }
+      return fetch(url, init);
+    };
+
+    const result = await importReferences({
+      cacheDir: dir,
+      refs: [`figma:${FILE}/1:1`],
+      client: client(flaky),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+
+    expect(seenSet).toBe(true);
+    expect(result).toMatchObject({ refreshed: 1, sets: 0, complete: true });
+    expect((await ReferenceCache.open(dir))!.entry(FILE, "1:1")).toBeDefined();
+  });
+});

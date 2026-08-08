@@ -75,7 +75,7 @@ the branch layout while each data-product file declares its own `schemaVersion`.
 
 ## Shape crosswalk
 
-design-parity findings (`visual`/`semantic`/`token`/`contrast`/`a11y`/`i18n`/`layout`)
+design-parity findings (`visual`/`semantic`/`token`/`contrast`/`a11y`/`i18n`/`layout`/`pairing`)
 overlap with compose-ai-tools' archived a11y/semantics data. Where they describe
 the same thing, the field conventions and severity vocabulary should stay
 aligned; where they diverge, that is intentional and noted here.
@@ -106,6 +106,7 @@ compose-ai-tools' a11y findings ([`a11y-atf.schema.json`][cat-a11y]) as:
 | `message` | `message` | **Aligned** — one-line human-readable. |
 | `kind: "a11y" \| "contrast"` | `type` (ATF check class) | **Overlapping** — both name the *kind* of a11y defect; design-parity's `kind` is a fixed taxonomy, ATF's `type` is the originating check class name. |
 | `detail` (expected/actual deltas) | `viewDescription` / `boundsInScreen` | **Diverges intentionally** — design-parity's findings are *comparative* (candidate vs reference), so the payload carries deltas; ATF findings are *absolute* per-render. |
+| `kind: "pairing"` | — | **design-parity only** — says the pair was not comparable (the reference depicts a different point in the component's property space) rather than reporting a difference. An `info` one states what the reference depicts; a `warn` one names the contradiction and records that the pair was left undiffed. Never `error`: the fix is a better reference, not a change to the code. |
 
 ### Stable references
 

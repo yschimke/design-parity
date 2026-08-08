@@ -60,5 +60,8 @@ export async function resolveReference(
   };
   if (base.ref !== undefined) merged.ref = base.ref;
   if (base.tokens) merged.tokens = base.tokens;
+  // What the primary node's render depicts (#296) — same provenance as its
+  // tokens, and the report and the pairing check both read it.
+  if (base.properties) merged.properties = base.properties;
   return merged;
 }

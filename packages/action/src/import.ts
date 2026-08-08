@@ -81,6 +81,12 @@ export interface ImportOptions {
 export interface ImportResult {
   /** Nodes re-read from Figma and rewritten. */
   refreshed: number;
+  /**
+   * Component sets cached alongside them (issue #296). Not catalog nodes: they
+   * are what tells a cache-only run what its references *depict* and what their
+   * siblings are, neither of which a variant's own document carries.
+   */
+  sets: number;
   /** Nodes left exactly as the cache already had them. */
   carried: number;
   /** Nodes that were due a refresh and did not get one. Subset of `carried`. */
@@ -177,6 +183,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
 
   const result: ImportResult = {
     refreshed: 0,
+    sets: 0,
     carried: 0,
     failed: 0,
     unchanged: [],
@@ -295,6 +302,8 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
         }
       }
     }
+
+    await importComponentSets(opts, writer, fileKey, version, fetched, wanted, result, now, log);
   }
 
   if (opts.prune) {
@@ -304,6 +313,66 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
 
   await writer.write();
   return result;
+}
+
+/**
+ * Cache the component **sets** the refreshed nodes belong to.
+ *
+ * A variant carries neither its properties nor its siblings — both live on the
+ * set — and Figma returns `componentPropertyDefinitions` only for nodes asked
+ * for directly. So without this pass a cache-only run cannot say what its
+ * references depict, which is the silent failure issue #296 is about: a
+ * reference rendered at `Show icon = true` diffed against label-only code.
+ *
+ * Structure-only by design: a render of a set is a grid of every variant at
+ * once, which nothing compares against. One batched request per file, and a
+ * failure is a warning — properties are additive, so their absence degrades the
+ * report rather than failing the import.
+ */
+async function importComponentSets(
+  opts: ImportOptions,
+  writer: ReferenceCacheWriter,
+  fileKey: string,
+  version: string,
+  fetched: ReadonlyMap<string, CachedNodeDoc>,
+  wanted: Set<string>,
+  result: ImportResult,
+  now: () => Date,
+  log: (message: string) => void,
+): Promise<void> {
+  const setIds = new Set<string>();
+  for (const [nodeId, node] of fetched) {
+    const setId = node.components?.[nodeId]?.componentSetId;
+    if (setId) setIds.add(setId);
+  }
+  for (const id of [...setIds]) {
+    // A set that is itself a catalog reference is already being imported as
+    // one — with a render, since something asked for it by name.
+    if (fetched.has(id)) {
+      setIds.delete(id);
+      continue;
+    }
+    wanted.add(cacheKeyOf(fileKey, id));
+    // Already current: the set only moves when the file does, and this pass is
+    // reached only for a file whose version moved.
+    const have = writer.entry(fileKey, id);
+    if (have?.structureOnly && have.fileVersion === version) setIds.delete(id);
+  }
+  if (setIds.size === 0) return;
+
+  const sets = await fetchStructures(opts.client, fileKey, [...setIds], result);
+  for (const [setId, node] of sets) {
+    await writer.put({
+      fileKey,
+      nodeId: setId,
+      fileVersion: version,
+      fetchedAt: now().toISOString(),
+      node,
+      structureOnly: true,
+    });
+    result.sets += 1;
+  }
+  log(`${fileKey}: cached ${sets.size} component set(s) for their properties and variants.`);
 }
 
 /**
@@ -330,6 +399,8 @@ async function fetchStructures(
           out.set(id, {
             document: entry.document,
             ...(entry.styles ? { styles: entry.styles } : {}),
+            // The pointer from a variant to the set that owns its properties.
+            ...(entry.components ? { components: entry.components } : {}),
           });
         } else {
           result.warnings.push(`${fileKey}/${id}: not present in the file`);

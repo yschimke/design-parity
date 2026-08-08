@@ -407,3 +407,104 @@ describe("renderBootstrapNotice", () => {
     expect(md).not.toContain("blocking");
   });
 });
+
+/**
+ * Sibling preference (#296). A candidate that declares which variant it is
+ * should be diffed against *that* variant, not against whichever one the map
+ * happens to point at — the source can answer "the same component, one axis
+ * moved" mechanically, so a mismatch nobody can act on is avoidable.
+ */
+describe("preferring the reference variant the candidate claims", () => {
+  /** An adapter with one Size axis and two nodes on it. */
+  const sizedAdapter = (
+    reference: DesignReference,
+    calls: { resolved: string[]; siblings: Array<[string, string]> },
+  ): ReferenceAdapter => ({
+    source: "figma",
+    resolve: async (code, ref) => {
+      calls.resolved.push(ref);
+      const value = ref.endsWith("1:43") ? "Medium" : "Small";
+      return {
+        ...reference,
+        componentId: code,
+        ref,
+        properties: [
+          { name: "Size", type: "variant", value, options: ["Small", "Medium"] },
+        ],
+      };
+    },
+    resolveSibling: async (ref, target) => {
+      calls.siblings.push([target.axis, target.value]);
+      if (target.axis !== "Size" || target.value !== "Medium") return undefined;
+      return "figma:AbCdEf123456/1:43";
+    },
+  });
+
+  const claiming = (candidate: CandidateRender, props: Record<string, string>) => ({
+    ...candidate,
+    images: candidate.images.map((i) => ({ ...i, props })),
+  });
+
+  it("re-targets to the sibling that matches, and diffs against it", async () => {
+    const { reference, candidate } = await load();
+    const calls = { resolved: [] as string[], siblings: [] as Array<[string, string]> };
+
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(sizedAdapter(reference, calls)),
+      correspondences: [corr],
+      candidate: async () => claiming(candidate, { Size: "Medium" }),
+      direction: "code-led",
+    });
+
+    expect(calls.siblings).toEqual([["Size", "Medium"]]);
+    expect(calls.resolved).toEqual([
+      "figma:AbCdEf123456/1:42",
+      "figma:AbCdEf123456/1:43",
+    ]);
+    expect(report.results[0]!.reference?.ref).toBe("figma:AbCdEf123456/1:43");
+    // Re-targeted, so nothing to report as unpairable.
+    expect(
+      report.results[0]!.verdict?.findings.some(
+        (f) => f.kind === "pairing" && f.severity === "warn",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps the mapped reference and reports it unpairable when no sibling exists", async () => {
+    const { reference, candidate } = await load();
+    const calls = { resolved: [] as string[], siblings: [] as Array<[string, string]> };
+
+    const report = await orchestrate({
+      repoRoot,
+      registry: reg(sizedAdapter(reference, calls)),
+      correspondences: [corr],
+      candidate: async () => claiming(candidate, { Size: "Jumbo" }),
+      direction: "code-led",
+    });
+
+    expect(calls.siblings).toEqual([["Size", "Jumbo"]]);
+    expect(report.results[0]!.reference?.ref).toBe("figma:AbCdEf123456/1:42");
+    expect(
+      report.results[0]!.verdict?.findings.some(
+        (f) => f.kind === "pairing" && f.severity === "warn",
+      ),
+    ).toBe(true);
+  });
+
+  it("asks for nothing when the candidate declares no properties", async () => {
+    const { reference, candidate } = await load();
+    const calls = { resolved: [] as string[], siblings: [] as Array<[string, string]> };
+
+    await orchestrate({
+      repoRoot,
+      registry: reg(sizedAdapter(reference, calls)),
+      correspondences: [corr],
+      candidate: async () => candidate,
+      direction: "code-led",
+    });
+
+    expect(calls.siblings).toEqual([]);
+    expect(calls.resolved).toEqual(["figma:AbCdEf123456/1:42"]);
+  });
+});

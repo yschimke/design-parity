@@ -22,10 +22,32 @@ export interface FigmaTypeStyle {
   letterSpacing?: number;
 }
 
+/**
+ * One entry of a node's `componentPropertyDefinitions`.
+ *
+ * `VARIANT` properties are the axes the variant name spells out
+ * (`Size=Small`); the other three are the silent ones — they have a
+ * `defaultValue` the renderer applies and nothing in the name records it.
+ */
+export interface FigmaComponentPropertyDefinition {
+  type: "BOOLEAN" | "TEXT" | "INSTANCE_SWAP" | "VARIANT";
+  defaultValue: boolean | string;
+  /** Allowed values, present for `VARIANT` (and sometimes `INSTANCE_SWAP`). */
+  variantOptions?: string[];
+}
+
 export interface FigmaNodeDoc {
   id: string;
   name: string;
   type: string;
+  /**
+   * The component properties this node defines. Figma returns it on a
+   * `COMPONENT_SET` (owning its variants' shared axes) and on a standalone
+   * `COMPONENT` — and **only for nodes asked for directly**, never for one
+   * reached by descending a page, which is why walking a file records
+   * properties for nothing. Keys carry an id suffix (`"Show icon#5590:0"`).
+   */
+  componentPropertyDefinitions?: Record<string, FigmaComponentPropertyDefinition>;
   absoluteBoundingBox?: { x: number; y: number; width: number; height: number };
   cornerRadius?: number;
   /** Auto-layout child spacing — the `gap` a redline reads. */
@@ -63,10 +85,30 @@ export interface FileMetaResponse {
   thumbnailUrl?: string;
 }
 
+/**
+ * A component's file-level metadata. The load-bearing field here is
+ * {@link componentSetId}: a variant node carries no pointer to the set that
+ * owns it in its own document, so this map is the only way to get from
+ * "the node I was given" to "the family whose properties it renders with".
+ */
+export interface FigmaComponentMeta {
+  key: string;
+  name: string;
+  description?: string;
+  /** Present when the component is a variant of a set; the set's node id. */
+  componentSetId?: string;
+}
+
 export interface FileNodesResponse {
   nodes: Record<
     string,
-    { document: FigmaNodeDoc; styles?: Record<string, FigmaStyleMeta> } | null
+    | {
+        document: FigmaNodeDoc;
+        styles?: Record<string, FigmaStyleMeta>;
+        /** Component metadata for this node and its descendants' instances. */
+        components?: Record<string, FigmaComponentMeta>;
+      }
+    | null
   >;
 }
 

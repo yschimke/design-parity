@@ -21,6 +21,12 @@ export type { DesignSystemOptions } from "./design-system.js";
 export { diffSemantics, referenceThemes, candidateThemes } from "./semantic.js";
 export { diffLayout, flattenPlaced } from "./layout.js";
 export type { PlacedElement } from "./layout.js";
+export {
+  propertyConflicts,
+  unpairableFinding,
+  depictionFinding,
+} from "./pairing.js";
+export type { PropertyConflict } from "./pairing.js";
 export { diffImagePair, imageKey } from "./visual.js";
 export type { VisualResult } from "./visual.js";
 export { renderSummary } from "./summary.js";

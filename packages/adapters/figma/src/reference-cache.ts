@@ -32,6 +32,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type {
+  FigmaComponentMeta,
   FigmaNodeDoc,
   FigmaStyleMeta,
   VariablesResponse,
@@ -66,6 +67,14 @@ export interface ReferenceCacheEntry {
   /** Rendered reference image, relative to the cache root. Absent ⇒ structure only. */
   image?: string;
   imageFormat?: "png" | "svg";
+  /**
+   * This entry is a **component set**, cached for its properties and its
+   * variant names rather than for a picture of it (issue #296). Rendering a set
+   * would produce a grid of every variant at once, which nothing compares
+   * against, so `image` is absent here **by design** rather than because an
+   * import half-finished — which is what a reader would otherwise conclude.
+   */
+  structureOnly?: boolean;
 }
 
 /** Per-file state: the last metadata seen, and where the variables landed. */
@@ -90,6 +99,13 @@ export interface ReferenceCacheDoc {
 export interface CachedNodeDoc {
   document: FigmaNodeDoc;
   styles?: Record<string, FigmaStyleMeta>;
+  /**
+   * The file-level component metadata the nodes response carried. The
+   * load-bearing field is `componentSetId`: a variant's document holds no
+   * pointer to the set that owns its properties, so a cache without this
+   * cannot tell that the node it holds *has* a family (issue #296).
+   */
+  components?: Record<string, FigmaComponentMeta>;
 }
 
 /** `1:42` ⇒ `1-42`: a directory name that is legal on every filesystem. */
@@ -304,6 +320,8 @@ export class ReferenceCacheWriter {
     fetchedAt: string;
     node: CachedNodeDoc;
     image?: { bytes: Uint8Array; format: "png" | "svg" };
+    /** Mark a component set, which is cached without a render. */
+    structureOnly?: boolean;
   }): Promise<ReferenceCacheEntry> {
     const dir = cacheEntryDir(input.fileKey, input.nodeId);
     const nodeRel = `${dir}/node.json`;
@@ -324,6 +342,7 @@ export class ReferenceCacheWriter {
       ...(imageRel && input.image
         ? { image: imageRel, imageFormat: input.image.format }
         : {}),
+      ...(input.structureOnly ? { structureOnly: true } : {}),
     };
     const at = this.#doc.entries.findIndex(
       (e) => e.fileKey === input.fileKey && e.nodeId === input.nodeId,

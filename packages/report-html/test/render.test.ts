@@ -375,3 +375,33 @@ describe("renderHtmlReport with an SVG reference", () => {
     expect(html).toMatch(/<img class="panel-img"[^>]*data-role="candidate"/);
   });
 });
+
+describe("what the reference depicts (#296)", () => {
+  it("shows the component properties the render used, marking the silent ones", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({
+      reference: {
+        ...reference,
+        properties: [
+          { name: "Show icon", type: "boolean", value: "true" },
+          { name: "Size", type: "variant", value: "Small", options: ["Small", "Large"] },
+        ],
+      },
+      candidate,
+      verdict,
+      repoRoot,
+    });
+
+    expect(html).toContain("Reference depicts");
+    // The boolean default is the one nothing else on the page states, so it is
+    // the one highlighted; the variant axis already labels every comparison.
+    expect(html).toContain(`<span class="chip chip-default">Show icon=true</span>`);
+    expect(html).toContain(`<span class="chip">Size=Small</span>`);
+  });
+
+  it("says nothing when the source exposes no properties", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+    expect(html).not.toContain("Reference depicts");
+  });
+});
