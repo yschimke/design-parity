@@ -73,6 +73,22 @@ describe("design-map schema", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("accepts a component declaring its reference board's density (issue #279)", () => {
+    const r = validateDesignMap({
+      components: [{ code: "a#b", source: "figma", ref: "figma:k/1-2", density: 3 }],
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects a non-positive density — it would divide every spec by zero or flip it", () => {
+    for (const density of [0, -3]) {
+      const r = validateDesignMap({
+        components: [{ code: "a#b", source: "figma", ref: "figma:k/1-2", density }],
+      });
+      expect(r.valid).toBe(false);
+    }
+  });
+
   it("rejects an unknown token kind", () => {
     const r = validateDesignMap({
       components: [],

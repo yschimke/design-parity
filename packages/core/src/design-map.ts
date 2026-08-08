@@ -82,6 +82,22 @@ export interface DesignMapEntry {
    * Material-role heuristic (issue #87) and the alias map (issue #78).
    */
   tokensFile?: string;
+  /**
+   * Optional scale of the reference artwork: **source pixels per dp**. A board
+   * drawn at 3× is `3`.
+   *
+   * Only the author knows it. A design tool reports its own pixels and nothing
+   * in the file says what they are pixels *of*, so a consumer quoting them
+   * against a render either names the unit and leaves the reader to work out
+   * whether `text 31.5px` and `bodyMedium 14sp` agree, or — worse — calls them
+   * `sp` and invents a threefold discrepancy (issue #277). With this the
+   * captured specs are converted into the code's own units and the two columns
+   * of a compare page are finally numerically comparable (issue #279).
+   *
+   * Omit when unknown. A wrong factor silently rescales every spec on the
+   * reference side, which is worse than an honestly stated `px`.
+   */
+  density?: number;
 }
 
 export interface DesignMap {

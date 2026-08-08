@@ -541,6 +541,10 @@ function semanticsNode(
   if (role) out.role = role;
   const label = node.label ?? node.text ?? node.layoutText;
   if (label !== undefined) out.label = label;
+  // Kept out of `label` on purpose — see `SemanticNode.testTag`. It is a name a
+  // reader can use (an annotation legend falls back to it rather than showing a
+  // bare numbered box), not an accessible name the a11y checks may accept.
+  if (node.testTag !== undefined) out.testTag = node.testTag;
   const bounds = parseScreenBounds(node.boundsInRoot);
   if (bounds) out.bounds = bounds;
 

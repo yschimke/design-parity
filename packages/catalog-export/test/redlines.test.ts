@@ -60,6 +60,32 @@ describe("buildRedlines", () => {
     expect(redlines.map((r) => r.cornerRadius ?? r.gap)).toEqual([12, 4]);
   });
 
+  it("carries the node's name and spacing provenance onto the redline", () => {
+    const tree: SemanticTree = {
+      root: {
+        testTag: "message-row",
+        bounds: { x: 0, y: 0, width: 80, height: 80 },
+        tokens: { spacing: { gap: 6 } },
+        spacingSource: "derived",
+      },
+    };
+    expect(buildRedlines(tree)[0]).toMatchObject({
+      testTag: "message-row",
+      spacingSource: "derived",
+    });
+  });
+
+  it("does not tag a radius-only redline as derived — a radius is always declared", () => {
+    const tree: SemanticTree = {
+      root: {
+        bounds: { x: 0, y: 0, width: 80, height: 80 },
+        tokens: { radius: { corner: 12 } },
+        spacingSource: "derived",
+      },
+    };
+    expect(buildRedlines(tree)[0]?.spacingSource).toBeUndefined();
+  });
+
   it("returns [] for an undefined tree", () => {
     expect(buildRedlines(undefined)).toEqual([]);
   });

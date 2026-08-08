@@ -85,6 +85,71 @@ describe("layout annotations", () => {
     );
     expect(annotation.label).toBe("gap 7.3dp");
   });
+
+  it("names an annotation by its test tag when it has no accessible label", () => {
+    // A third of a published catalog's annotations rendered as bare numbered
+    // boxes; the developer's own handle for the node is a name the reader can use.
+    const [annotation] = componentAnnotations(
+      component({
+        redlines: [
+          { bounds: { x: 0, y: 0, width: 8, height: 8 }, gap: 4, testTag: "message-row" },
+        ],
+      }),
+    );
+    expect(annotation.role).toBe("message-row");
+  });
+
+  it("prefers the accessible label over the test tag", () => {
+    const [annotation] = componentAnnotations(
+      component({
+        redlines: [
+          {
+            bounds: { x: 0, y: 0, width: 8, height: 8 },
+            gap: 4,
+            label: "Send",
+            testTag: "send-button",
+            role: "button",
+          },
+        ],
+      }),
+    );
+    expect(annotation.role).toBe("Send");
+  });
+
+  it("marks derived spacing, and only the phrases derivation covers", () => {
+    // The radius is always declared, so it keeps its plain form even here.
+    const [annotation] = componentAnnotations(
+      component({
+        redlines: [
+          {
+            bounds: { x: 0, y: 0, width: 100, height: 40 },
+            padding: { top: 16, bottom: 16, start: 16, end: 16 },
+            gap: 8,
+            cornerRadius: 20,
+            spacingSource: "derived",
+          },
+        ],
+      }),
+    );
+    expect(annotation.label).toBe("≈pad 16dp · ≈gap 8dp · r 20dp");
+    expect(annotation.detail?.spacingSource).toBe("derived");
+  });
+
+  it("leaves declared spacing unmarked", () => {
+    const [annotation] = componentAnnotations(
+      component({
+        redlines: [
+          {
+            bounds: { x: 0, y: 0, width: 8, height: 8 },
+            gap: 8,
+            spacingSource: "declared",
+          },
+        ],
+      }),
+    );
+    expect(annotation.label).toBe("gap 8dp");
+    expect(annotation.detail?.spacingSource).toBeUndefined();
+  });
 });
 
 describe("typography annotations", () => {
@@ -331,5 +396,54 @@ describe("published-catalog regressions", () => {
     );
     expect(annotation.label).toBe("bodyLarge 16sp/24");
     expect(annotation.detail?.unit).toBe("sp");
+  });
+});
+
+/**
+ * Naming the unit made the reference column honest; it did not make it useful.
+ * A reader still cannot tell whether `text 31.5px` and `bodyMedium 14sp` agree.
+ * A tree that knows its board's scale converts, and the two columns finally
+ * quote the same unit — which is the comparison the page exists for.
+ */
+describe("density-converted references", () => {
+  const board = (density?: number) =>
+    ({
+      layout: {
+        ...(density === undefined ? {} : { density }),
+        root: {
+          bounds: { x: 0, y: 0, width: 300, height: 120 },
+          tokens: {
+            spacing: { paddingStart: 48, paddingEnd: 48, gap: 24 },
+            radius: { corner: 36 },
+            typography: { text: { fontSize: 52.5, lineHeight: 63 } },
+          },
+        },
+      },
+    }) as never;
+
+  it("quotes a 3x board's type in sp, so it lines up with the code's", () => {
+    const type = referenceAnnotations(board(3)).find((a) => a.kind === "typography");
+    expect(type?.label).toBe("text 17.5sp/21");
+    expect(type?.detail).toMatchObject({ unit: "sp", density: "3", sourceUnit: "px" });
+  });
+
+  it("quotes the same board's spacing in dp", () => {
+    const layout = referenceAnnotations(board(3)).find((a) => a.kind === "layout");
+    expect(layout?.label).toBe("pad e 16dp s 16dp · gap 8dp · r 12dp");
+    expect(layout?.detail).toMatchObject({ unit: "dp", density: "3", sourceUnit: "px" });
+    expect(layout?.detail?.gap).toBe("8");
+  });
+
+  it("leaves the board in px when it does not know its scale", () => {
+    // Guessing a factor is worse than a stated px: it silently divides every spec.
+    const type = referenceAnnotations(board()).find((a) => a.kind === "typography");
+    expect(type?.label).toBe("text 52.5px/63");
+    expect(type?.detail?.density).toBeUndefined();
+  });
+
+  it("treats a 1x board as no conversion at all, rather than stamping noise", () => {
+    const type = referenceAnnotations(board(1)).find((a) => a.kind === "typography");
+    expect(type?.label).toBe("text 52.5px/63");
+    expect(type?.detail?.density).toBeUndefined();
   });
 });

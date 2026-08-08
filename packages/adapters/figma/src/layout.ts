@@ -19,7 +19,8 @@ import type {
   TypographyToken,
 } from "@design-parity/core";
 
-import type { FigmaNodeDoc } from "./figma-api.js";
+import type { FigmaNodeDoc, FigmaStyleMeta } from "./figma-api.js";
+import { tokenPath } from "./token-name.js";
 
 /**
  * The label a node matches on. Text nodes use their **visible string**
@@ -49,17 +50,114 @@ function roleOf(node: FigmaNodeDoc): string | undefined {
 }
 
 /**
- * Build a {@link SemanticTree} from a Figma structure node, or `undefined` when
- * the node carries no `absoluteBoundingBox` (nothing to compare — the diff then
- * treats the reference as having captured no geometry, which is honest).
- *
- * Bounds are made **root-relative** and rounded to whole dp: Figma's absolute
- * boxes are in canvas space, where a frame sitting at x=12040 would otherwise
- * make every delta meaningless. The root's own box becomes the frame on
- * `root.bounds`, matching what the claude-design side stamps.
+ * The union of a node's bounded children, in canvas space — the box the content
+ * actually occupies. `undefined` when no child carries a box.
  */
+function contentBox(
+  node: FigmaNodeDoc,
+): { left: number; top: number; right: number; bottom: number } | undefined {
+  const boxes = (node.children ?? [])
+    .map((c) => c.absoluteBoundingBox)
+    .filter((b): b is NonNullable<FigmaNodeDoc["absoluteBoundingBox"]> => b !== undefined);
+  if (boxes.length === 0) return undefined;
+  return {
+    left: Math.min(...boxes.map((b) => b.x)),
+    top: Math.min(...boxes.map((b) => b.y)),
+    right: Math.max(...boxes.map((b) => b.x + b.width)),
+    bottom: Math.max(...boxes.map((b) => b.y + b.height)),
+  };
+}
+
 /**
- * Read a node's spacing / shape / type spec into resolved tokens.
+ * The one spacing a node's children are evenly separated by, along whichever
+ * axis they stack on. `undefined` unless there are at least two children, they
+ * are laid out in a single non-overlapping run on exactly one axis, and every
+ * gap in that run agrees to within half a source pixel.
+ *
+ * The strictness is deliberate. A grid, an overlapping stack, or a run whose
+ * gaps differ has no single "the gap" — reporting the mean of 8, 8 and 24 would
+ * state a rhythm the artwork does not have, which is worse than saying nothing.
+ */
+function measuredGap(node: FigmaNodeDoc): number | undefined {
+  const boxes = (node.children ?? [])
+    .map((c) => c.absoluteBoundingBox)
+    .filter((b): b is NonNullable<FigmaNodeDoc["absoluteBoundingBox"]> => b !== undefined);
+  if (boxes.length < 2) return undefined;
+
+  const runGap = (
+    start: (b: (typeof boxes)[number]) => number,
+    end: (b: (typeof boxes)[number]) => number,
+  ): number | undefined => {
+    const sorted = [...boxes].sort((a, b) => start(a) - start(b));
+    const gaps: number[] = [];
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = start(sorted[i]!) - end(sorted[i - 1]!);
+      // A negative gap is an overlap, so this axis is not the stacking axis.
+      if (gap < 0) return undefined;
+      gaps.push(gap);
+    }
+    const first = gaps[0]!;
+    return gaps.every((g) => Math.abs(g - first) <= 0.5) ? first : undefined;
+  };
+
+  const vertical = runGap(
+    (b) => b.y,
+    (b) => b.y + b.height,
+  );
+  const horizontal = runGap(
+    (b) => b.x,
+    (b) => b.x + b.width,
+  );
+  // Both axes non-overlapping means the children are on a diagonal or a grid —
+  // no single stacking axis, so no gap to report.
+  if (vertical !== undefined && horizontal !== undefined) return undefined;
+  return vertical ?? horizontal;
+}
+
+/**
+ * Spacing **measured** from a node's child geometry, for a frame that declares
+ * none — which is most of them, since only an auto-layout frame carries Figma's
+ * `padding*` / `itemSpacing` fields and a hand-placed mock carries nothing.
+ *
+ * Without this the reference column of a compare page has no layout layer at
+ * all: the type sizes line up beside the render's, and the spacing — the more
+ * common design-review question — shows on the code side only.
+ *
+ * What it reports is an observation, not a spec, and the caller stamps
+ * {@link SemanticNode.spacingSource} `"derived"` so every consumer can say so.
+ * Two things are dropped rather than reported as zero, because a derived zero
+ * carries no information a reader can act on: an all-zero inset (a child that
+ * fills its parent, the usual wrapper frame) and a zero gap (children that abut
+ * or overlap). A negative inset means a child overflows its parent on that
+ * edge — not padding, so that edge is dropped too.
+ */
+function measuredSpacing(node: FigmaNodeDoc): Record<string, number> | undefined {
+  const box = node.absoluteBoundingBox;
+  const content = box ? contentBox(node) : undefined;
+  const out: Record<string, number> = {};
+
+  if (box && content) {
+    const insets: Record<string, number> = {
+      paddingStart: content.left - box.x,
+      paddingTop: content.top - box.y,
+      paddingEnd: box.x + box.width - content.right,
+      paddingBottom: box.y + box.height - content.bottom,
+    };
+    const kept = Object.entries(insets).filter(([, v]) => v >= 0);
+    if (kept.some(([, v]) => Math.round(v) > 0)) {
+      for (const [edge, value] of kept) out[edge] = Math.round(value);
+    }
+  }
+
+  const gap = measuredGap(node);
+  if (gap !== undefined && Math.round(gap) > 0) out.gap = Math.round(gap);
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Read a node's spacing / shape / type spec into resolved tokens, plus where the
+ * spacing came from (see {@link SemanticNode.spacingSource}).
  *
  * Geometry alone says where an element is; these say what it is *specified* as —
  * the padding, gap, radius and type style a designer reads off the frame. They
@@ -69,20 +167,42 @@ function roleOf(node: FigmaNodeDoc): string | undefined {
  *
  * Figma's `paddingLeft`/`paddingRight` are physical edges; they are mapped to
  * `start`/`end` on the LTR reading that the rest of this adapter already assumes.
+ * A frame that declares any of them is taken at its word; one that declares none
+ * falls back to {@link measuredSpacing}, which measures the same vocabulary off
+ * the children. Declared always wins — a partial auto-layout spec is still the
+ * designer's, and mixing a declared padding with a measured gap would produce
+ * one annotation whose halves mean different things.
  *
- * The type style is keyed `text` rather than invented as a design-system token
- * name: the node alone cannot say whether it is `labelLarge`, and a fabricated
- * token name would read as a spec claim the file never made.
+ * The type style is keyed `text` unless the node wears a **published text
+ * style**, in which case it is keyed by that style's own name (`Body/Large` →
+ * `body/large`). The distinction is the same one the rest of this adapter keeps:
+ * a node's local type properties cannot say whether they are `labelLarge`, and
+ * inventing a name would read as a spec claim the file never made — but a
+ * published style *is* the file saying what it calls that type, so quoting it is
+ * reporting, not inference. Resolving it needs the file-level `styles` map
+ * (style id → name), which only the caller has; without one every node falls
+ * back to `text` exactly as before.
  */
-function tokensOf(node: FigmaNodeDoc): DesignTokens | undefined {
-  const spacing: Record<string, number> = {};
-  if (node.paddingTop !== undefined) spacing.paddingTop = node.paddingTop;
-  if (node.paddingBottom !== undefined) spacing.paddingBottom = node.paddingBottom;
-  if (node.paddingLeft !== undefined) spacing.paddingStart = node.paddingLeft;
-  if (node.paddingRight !== undefined) spacing.paddingEnd = node.paddingRight;
-  if (node.itemSpacing !== undefined) spacing.gap = node.itemSpacing;
+function tokensOf(
+  node: FigmaNodeDoc,
+  styles: StyleMap | undefined,
+): { tokens: DesignTokens; spacingSource?: SemanticNode["spacingSource"] } | undefined {
+  const declared: Record<string, number> = {};
+  if (node.paddingTop !== undefined) declared.paddingTop = node.paddingTop;
+  if (node.paddingBottom !== undefined) declared.paddingBottom = node.paddingBottom;
+  if (node.paddingLeft !== undefined) declared.paddingStart = node.paddingLeft;
+  if (node.paddingRight !== undefined) declared.paddingEnd = node.paddingRight;
+  if (node.itemSpacing !== undefined) declared.gap = node.itemSpacing;
 
   const tokens: DesignTokens = {};
+  const spacing =
+    Object.keys(declared).length > 0 ? declared : (measuredSpacing(node) ?? declared);
+  const spacingSource: SemanticNode["spacingSource"] | undefined =
+    Object.keys(spacing).length === 0
+      ? undefined
+      : spacing === declared
+        ? "declared"
+        : "derived";
   if (Object.keys(spacing).length > 0) tokens.spacing = spacing;
   if (node.cornerRadius !== undefined) tokens.radius = { corner: node.cornerRadius };
 
@@ -94,15 +214,56 @@ function tokensOf(node: FigmaNodeDoc): DesignTokens | undefined {
     if (style.fontSize !== undefined) text.fontSize = style.fontSize;
     if (style.lineHeightPx !== undefined) text.lineHeight = style.lineHeightPx;
     if (style.letterSpacing !== undefined) text.letterSpacing = style.letterSpacing;
-    tokens.typography = { text };
+    tokens.typography = { [styleNameOf(node, styles) ?? "text"]: text };
   }
 
-  return Object.keys(tokens).length > 0 ? tokens : undefined;
+  if (Object.keys(tokens).length === 0) return undefined;
+  return spacingSource ? { tokens, spacingSource } : { tokens };
 }
 
-export function layoutFromNode(node: FigmaNodeDoc): SemanticTree | undefined {
+/** The published TEXT style a node wears, as a token key, or `undefined`. */
+function styleNameOf(node: FigmaNodeDoc, styles: StyleMap | undefined): string | undefined {
+  const meta = styles && node.styles?.text ? styles[node.styles.text] : undefined;
+  if (meta?.styleType !== "TEXT") return undefined;
+  const key = tokenPath(meta.name);
+  return key === "" ? undefined : key;
+}
+
+/** File-level published-style metadata, keyed by style id (`GET /v1/files/:key`). */
+export type StyleMap = Record<string, FigmaStyleMeta>;
+
+export interface LayoutOptions {
+  /**
+   * The file's published-style metadata, so a text node wearing a shared style
+   * is keyed by that style's name rather than the anonymous `text`.
+   */
+  styles?: StyleMap;
+  /**
+   * Source pixels per dp of this frame — see {@link SemanticTree.density}. Pass
+   * it when the board's scale relative to the code is known (a 3× board is `3`),
+   * so a consumer can quote the captured specs in the same unit as the render's.
+   * Omit rather than guess: a wrong factor is worse than a stated `px`.
+   */
+  density?: number;
+}
+
+/**
+ * Build a {@link SemanticTree} from a Figma structure node, or `undefined` when
+ * the node carries no `absoluteBoundingBox` (nothing to compare — the diff then
+ * treats the reference as having captured no geometry, which is honest).
+ *
+ * Bounds are made **root-relative** and rounded to whole source pixels: Figma's
+ * absolute boxes are in canvas space, where a frame sitting at x=12040 would
+ * otherwise make every delta meaningless. The root's own box becomes the frame
+ * on `root.bounds`, matching what the claude-design side stamps.
+ */
+export function layoutFromNode(
+  node: FigmaNodeDoc,
+  options: LayoutOptions = {},
+): SemanticTree | undefined {
   const frame = node.absoluteBoundingBox;
   if (!frame) return undefined;
+  const { styles, density } = options;
 
   const children: SemanticNode[] = [];
   const visit = (n: FigmaNodeDoc): void => {
@@ -112,11 +273,12 @@ export function layoutFromNode(node: FigmaNodeDoc): SemanticTree | undefined {
       const label = labelOf(n);
       if (box && label) {
         const role = roleOf(n);
-        const tokens = tokensOf(n);
+        const read = tokensOf(n, styles);
         children.push({
           label,
           ...(role ? { role } : {}),
-          ...(tokens ? { tokens } : {}),
+          ...(read ? { tokens: read.tokens } : {}),
+          ...(read?.spacingSource ? { spacingSource: read.spacingSource } : {}),
           bounds: {
             x: Math.round(box.x - frame.x),
             y: Math.round(box.y - frame.y),
@@ -131,12 +293,14 @@ export function layoutFromNode(node: FigmaNodeDoc): SemanticTree | undefined {
   visit(node);
 
   if (children.length === 0) return undefined;
-  const rootTokens = tokensOf(node);
+  const root = tokensOf(node, styles);
   return {
     root: {
       children,
-      ...(rootTokens ? { tokens: rootTokens } : {}),
+      ...(root ? { tokens: root.tokens } : {}),
+      ...(root?.spacingSource ? { spacingSource: root.spacingSource } : {}),
       bounds: { x: 0, y: 0, width: Math.round(frame.width), height: Math.round(frame.height) },
     },
+    ...(density !== undefined && Number.isFinite(density) && density > 0 ? { density } : {}),
   };
 }

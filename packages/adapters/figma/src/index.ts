@@ -23,7 +23,8 @@ export type {
 // reference-side redline/typography annotations, and re-deriving geometry in the
 // publisher would mean the two sides were measured by different code.
 export { layoutFromNode } from "./layout.js";
-export type { FigmaNodeDoc } from "./figma-api.js";
+export type { LayoutOptions, StyleMap } from "./layout.js";
+export type { FigmaNodeDoc, FigmaStyleMeta } from "./figma-api.js";
 
 export {
   parseFigmaRef,

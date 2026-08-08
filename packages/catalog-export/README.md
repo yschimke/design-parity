@@ -80,8 +80,28 @@ images/<component>/<variant>__<state>[__theme][__size].png
 | `types.ts` | The `Catalog` / `CatalogComponent` / `Greenline` model. |
 | `ingest.ts` | `buildCatalog` / `buildComponent` from normalized inputs. |
 | `greenlines.ts` | Findings + semantics → the greenline annotation layer. |
+| `redlines.ts` | Semantics → the redline (layout) annotation layer. |
+| `annotations.ts` | Redlines + typography → the `compose-preview-annotations/v1` manifest. |
 | `manifest.ts` | The pure `catalog.json` builder (paths only, no I/O). |
 | `figma.ts` | `DesignTokens` → a Figma variable collection. |
 | `write.ts` | The one I/O step: materialize the bundle to disk. |
 
 Depends only on `@design-parity/core`.
+
+## Annotation layers, and what they promise
+
+A compare page draws two annotated columns — the render (`previews`) and the
+design reference (`references`) — from the same walk, so a difference between
+the two labels is a difference in the spec rather than in how each side was
+measured. Two properties keep that true, and both are visible in the output:
+
+- **Units.** A render resolves `dp`/`sp`; a design board reports its own pixels.
+  A tree that carries a `density` (source px per dp) is converted into the code's
+  units, and `detail` records `density` + `sourceUnit` so the original number is
+  recoverable. A tree with no density has its own unit named (`text 52.5px`)
+  rather than guessed at — quoting a 3× board's pixels as `sp` would invent a
+  threefold discrepancy.
+- **Provenance.** Spacing a source *declared* is a spec. Spacing measured off
+  child geometry — which is how a hand-placed (non-auto-layout) design frame gets
+  a layout layer at all — is an observation, prefixed `≈` in the label and tagged
+  `detail.spacingSource = "derived"`.

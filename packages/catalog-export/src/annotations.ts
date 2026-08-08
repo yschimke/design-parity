@@ -13,6 +13,19 @@
  * reshapes them into the transport the server consumes
  * (`compose-preview-annotations/v1`) and formats the one-line labels.
  *
+ * Two things the labels must never blur, both of which cost the compare page its
+ * comparison when they do:
+ *
+ * - **Units.** A render resolves `dp`/`sp`; a design board reports its own
+ *   pixels. Quoting a 3× board's 52.5px as `52.5sp` invents a threefold
+ *   discrepancy (issue #277). A tree that carries a `density` is converted to the
+ *   code's units so the two columns can be read against each other; one that does
+ *   not has its own unit named and its numbers left alone.
+ * - **Provenance.** Spacing a source *declared* is a spec; spacing measured off
+ *   child geometry, because the source declared none, is an observation. Derived
+ *   phrases are prefixed `≈` and tagged in the detail, so a reference's measured
+ *   inset never reads as a number the design file actually asserts.
+ *
  * Pure functions over core types — no I/O, trivially testable.
  */
 import type {
@@ -43,11 +56,20 @@ export interface AnnotationBounds {
 export interface DesignAnnotation {
   kind: AnnotationKind;
   bounds: AnnotationBounds;
-  /** One-line spec as a designer would read it, e.g. `"pad 16dp · gap 8dp"`. */
+  /**
+   * One-line spec as a designer would read it, e.g. `"pad 16dp · gap 8dp"`.
+   * A `≈` prefix marks a phrase measured off geometry rather than declared.
+   */
   label: string;
   /** Node / slot name, shown as the annotation's title. */
   role?: string;
-  /** Structured payload for machine consumers. */
+  /**
+   * Structured payload for machine consumers: the same numbers as the label, in
+   * the unit `detail.unit` names. When the layer was converted from a design
+   * board's pixels, `detail.density` is the factor applied and
+   * `detail.sourceUnit` the unit it came from, so the source number is
+   * recoverable. `detail.spacingSource` is `"derived"` on a measured redline.
+   */
   detail?: Record<string, string>;
 }
 
@@ -59,9 +81,88 @@ export interface AnnotationManifest {
   references: Record<string, DesignAnnotation[]>;
 }
 
-/** Render a dp measurement the way a spec sheet writes it, without trailing zeros. */
-function dp(value: number): string {
-  return `${Number.isInteger(value) ? value : Number(value.toFixed(1))}dp`;
+/**
+ * The unit a **spacing** measurement is quoted in — the layout-layer counterpart
+ * of {@link TypeUnit}, and paired with it: a source that reports type in its own
+ * pixels reports padding in them too.
+ */
+export type SpaceUnit = "dp" | "px";
+
+/** The spacing unit that goes with a type unit. */
+function spaceUnitFor(unit: TypeUnit): SpaceUnit {
+  return unit === "px" ? "px" : "dp";
+}
+
+/** Trim a measurement to one decimal, without trailing zeros. */
+function round(value: number): number {
+  return Number.isInteger(value) ? value : Number(value.toFixed(1));
+}
+
+/** Render a measurement the way a spec sheet writes it, without trailing zeros. */
+function measure(value: number, unit: SpaceUnit): string {
+  return `${round(value)}${unit}`;
+}
+
+/**
+ * How a layer's numbers are to be quoted: the source's own unit, and the density
+ * that converts it to the code's.
+ *
+ * Both columns of a compare page are built by the same walk, so the difference
+ * between them is entirely here. The candidate's semantics already resolve
+ * `dp`/`sp`; a design board reports its own pixels, and only knows they are
+ * `dp`/`sp` if something tells it the board's scale.
+ */
+interface Quoting {
+  space: SpaceUnit;
+  type: TypeUnit;
+  /** Source pixels per dp, when known and worth applying. */
+  density?: number;
+  /** The unit the source's own numbers are in, recorded when a conversion applies. */
+  sourceSpace?: SpaceUnit;
+  sourceType?: TypeUnit;
+}
+
+/**
+ * Resolve how to quote a tree's numbers.
+ *
+ * With a usable density the source's pixels are converted, and the layer is
+ * quoted in `dp`/`sp` — the code side's units, which is the whole point: it is
+ * what lets a reader see that `text 31.5px` and `bodyMedium 14sp` are (or are
+ * not) the same type. Without one the source unit is named and left alone
+ * (issue #277): an unconverted pixel labelled `px` is checkable, while the same
+ * number labelled `sp` is quietly wrong by the density factor.
+ *
+ * A density of 1 converts nothing, so it is dropped rather than carried into
+ * every `detail` as noise.
+ */
+function quoting(unit: TypeUnit, density: number | undefined): Quoting {
+  const usable =
+    density !== undefined && Number.isFinite(density) && density > 0 && density !== 1;
+  if (!usable) return { space: spaceUnitFor(unit), type: unit };
+  return {
+    space: "dp",
+    type: "sp",
+    density,
+    sourceSpace: spaceUnitFor(unit),
+    sourceType: unit,
+  };
+}
+
+/** A source measurement in the unit {@link Quoting} says to quote it in. */
+function convert(value: number, quote: Quoting): number {
+  return quote.density === undefined ? value : value / quote.density;
+}
+
+/**
+ * Record the conversion on an annotation's `detail`, so a machine consumer can
+ * recover the source number instead of having to trust ours.
+ */
+function stampUnit(detail: Record<string, string>, unit: string, quote: Quoting): void {
+  detail.unit = unit;
+  if (quote.density === undefined) return;
+  detail.density = String(round(quote.density));
+  const source = unit === quote.type ? quote.sourceType : quote.sourceSpace;
+  if (source) detail.sourceUnit = source;
 }
 
 /**
@@ -72,43 +173,66 @@ function dp(value: number): string {
  * out per edge, because averaging asymmetric padding would state a spec the
  * component does not have.
  */
-function paddingPhrase(padding: Redline["padding"]): string | undefined {
+function paddingPhrase(padding: Redline["padding"], quote: Quoting): string | undefined {
   if (!padding) return undefined;
+  const at = (value: number): string => measure(convert(value, quote), quote.space);
   const { top, bottom, start, end } = padding;
   if (top === undefined && bottom === undefined && start === undefined && end === undefined) {
     return undefined;
   }
   if (top !== undefined && bottom !== undefined && start !== undefined && end !== undefined) {
-    if (top === bottom && start === end && top === start) return `pad ${dp(top)}`;
-    if (top === bottom && start === end) return `pad ${dp(top)}/${dp(start)}`;
+    if (top === bottom && start === end && top === start) return `pad ${at(top)}`;
+    if (top === bottom && start === end) return `pad ${at(top)}/${at(start)}`;
   }
   const parts: string[] = [];
-  if (top !== undefined) parts.push(`t ${dp(top)}`);
-  if (end !== undefined) parts.push(`e ${dp(end)}`);
-  if (bottom !== undefined) parts.push(`b ${dp(bottom)}`);
-  if (start !== undefined) parts.push(`s ${dp(start)}`);
+  if (top !== undefined) parts.push(`t ${at(top)}`);
+  if (end !== undefined) parts.push(`e ${at(end)}`);
+  if (bottom !== undefined) parts.push(`b ${at(bottom)}`);
+  if (start !== undefined) parts.push(`s ${at(start)}`);
   return `pad ${parts.join(" ")}`;
 }
 
-/** Build the one-line label and structured detail for a layout redline. */
-function layoutAnnotation(redline: Redline): DesignAnnotation | undefined {
+/**
+ * The name shown as an annotation's title. A bare numbered box makes the reader
+ * map box → number → row with nothing to hold on to, so fall through every
+ * handle the source offers: the accessible label, then the developer's test tag,
+ * then the role. A node carrying none of them stays untitled — inventing a name
+ * for it would be worse than a number.
+ */
+function titleOf(node: Pick<Redline, "label" | "role" | "testTag">): string | undefined {
+  return node.label ?? node.testTag ?? node.role;
+}
+
+/**
+ * Build the one-line label and structured detail for a layout redline.
+ *
+ * Derived spacing (measured off child geometry, not declared) is prefixed `≈` on
+ * every phrase it covers and tagged `spacingSource` in the detail. The radius is
+ * never derived, so it keeps its plain form even on a derived redline — which is
+ * the point of marking per phrase rather than per annotation.
+ */
+function layoutAnnotation(redline: Redline, quote: Quoting): DesignAnnotation | undefined {
   const parts: string[] = [];
   const detail: Record<string, string> = {};
+  const derived = redline.spacingSource === "derived";
+  const mark = (phrase: string): string => (derived ? `≈${phrase}` : phrase);
 
-  const pad = paddingPhrase(redline.padding);
+  const pad = paddingPhrase(redline.padding, quote);
   if (pad) {
-    parts.push(pad);
+    parts.push(mark(pad));
     for (const [edge, value] of Object.entries(redline.padding ?? {})) {
-      if (typeof value === "number") detail[`padding.${edge}`] = String(value);
+      if (typeof value === "number") {
+        detail[`padding.${edge}`] = String(round(convert(value, quote)));
+      }
     }
   }
   if (redline.gap !== undefined) {
-    parts.push(`gap ${dp(redline.gap)}`);
-    detail.gap = String(redline.gap);
+    parts.push(mark(`gap ${measure(convert(redline.gap, quote), quote.space)}`));
+    detail.gap = String(round(convert(redline.gap, quote)));
   }
   if (redline.cornerRadius !== undefined) {
-    parts.push(`r ${dp(redline.cornerRadius)}`);
-    detail.cornerRadius = String(redline.cornerRadius);
+    parts.push(`r ${measure(convert(redline.cornerRadius, quote), quote.space)}`);
+    detail.cornerRadius = String(round(convert(redline.cornerRadius, quote)));
   }
 
   // A redline with a box but no spacing spec says nothing a reader can act on —
@@ -116,11 +240,15 @@ function layoutAnnotation(redline: Redline): DesignAnnotation | undefined {
   // unlabelled rectangle.
   if (parts.length === 0) return undefined;
 
+  stampUnit(detail, quote.space, quote);
+  if (derived) detail.spacingSource = "derived";
+
+  const title = titleOf(redline);
   return {
     kind: "layout",
     bounds: redline.bounds,
     label: parts.join(" · "),
-    ...(redline.label ?? redline.role ? { role: redline.label ?? redline.role } : {}),
+    ...(title ? { role: title } : {}),
     detail,
   };
 }
@@ -140,15 +268,13 @@ export type TypeUnit = "sp" | "px";
 function typographyLabel(
   name: string,
   token: TypographyToken,
-  unit: TypeUnit,
+  quote: Quoting,
 ): string | undefined {
   if (token.fontSize === undefined) return undefined;
-  const size = Number.isInteger(token.fontSize) ? token.fontSize : Number(token.fontSize.toFixed(1));
+  const size = round(convert(token.fontSize, quote));
   const lineHeight =
-    token.lineHeight === undefined
-      ? ""
-      : `/${Number.isInteger(token.lineHeight) ? token.lineHeight : Number(token.lineHeight.toFixed(1))}`;
-  return `${name} ${size}${unit}${lineHeight}`;
+    token.lineHeight === undefined ? "" : `/${round(convert(token.lineHeight, quote))}`;
+  return `${name} ${size}${quote.type}${lineHeight}`;
 }
 
 /**
@@ -160,7 +286,7 @@ function typographyLabel(
  */
 function typographyAnnotations(
   tree: SemanticTree | undefined,
-  unit: TypeUnit = "sp",
+  quote: Quoting,
 ): DesignAnnotation[] {
   if (!tree) return [];
   const out: DesignAnnotation[] = [];
@@ -168,18 +294,24 @@ function typographyAnnotations(
     const styles = node.tokens?.typography;
     if (styles && node.bounds) {
       for (const [name, token] of Object.entries(styles)) {
-        const label = typographyLabel(name, token, unit);
+        const label = typographyLabel(name, token, quote);
         if (!label) continue;
-        const detail: Record<string, string> = { token: name, unit };
-        if (token.fontSize !== undefined) detail.fontSize = String(token.fontSize);
-        if (token.lineHeight !== undefined) detail.lineHeight = String(token.lineHeight);
+        const detail: Record<string, string> = { token: name };
+        stampUnit(detail, quote.type, quote);
+        if (token.fontSize !== undefined) {
+          detail.fontSize = String(round(convert(token.fontSize, quote)));
+        }
+        if (token.lineHeight !== undefined) {
+          detail.lineHeight = String(round(convert(token.lineHeight, quote)));
+        }
         if (token.fontWeight !== undefined) detail.fontWeight = String(token.fontWeight);
         if (token.fontFamily !== undefined) detail.fontFamily = token.fontFamily;
+        const title = titleOf(node);
         out.push({
           kind: "typography",
           bounds: node.bounds,
           label,
-          ...(node.label ?? node.role ? { role: node.label ?? node.role } : {}),
+          ...(title ? { role: title } : {}),
           detail,
         });
       }
@@ -192,10 +324,12 @@ function typographyAnnotations(
 
 /** Both layers for one component, in draw order (layout beneath typography). */
 export function componentAnnotations(component: CatalogComponent): DesignAnnotation[] {
+  // A rendered catalog is already in the code's own units, so nothing converts.
+  const quote = quoting("sp", component.semantics?.density);
   const layout = component.redlines
-    .map(layoutAnnotation)
+    .map((redline) => layoutAnnotation(redline, quote))
     .filter((a): a is DesignAnnotation => a !== undefined);
-  return [...layout, ...typographyAnnotations(component.semantics)];
+  return [...layout, ...typographyAnnotations(component.semantics, quote)];
 }
 
 /**
@@ -206,15 +340,22 @@ export function componentAnnotations(component: CatalogComponent): DesignAnnotat
  * raw tree, so this walks it first. Same extraction either way, which is the
  * point: the reference and actual columns have to be built the same way or
  * comparing them means comparing two different measurements.
+ *
+ * `unit` names the units the tree's own numbers are in. When the tree also
+ * carries a {@link SemanticTree.density} they are converted to `dp`/`sp` and the
+ * unit given here becomes the recorded `sourceUnit` — that conversion is what
+ * makes the two columns of a compare page numerically comparable rather than
+ * merely honestly labelled.
  */
 export function treeAnnotations(
   tree: SemanticTree | undefined,
   unit: TypeUnit = "sp",
 ): DesignAnnotation[] {
+  const quote = quoting(unit, tree?.density);
   const layout = buildRedlines(tree)
-    .map(layoutAnnotation)
+    .map((redline) => layoutAnnotation(redline, quote))
     .filter((a): a is DesignAnnotation => a !== undefined);
-  return [...layout, ...typographyAnnotations(tree, unit)];
+  return [...layout, ...typographyAnnotations(tree, quote)];
 }
 
 /**
