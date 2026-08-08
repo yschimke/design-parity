@@ -160,6 +160,26 @@ on:
         required: false
         type: string
         default: "design-parity/main"
+      reference-cache-branch:
+        description: >
+          Branch holding the committed reference cache that
+          `design-parity-import-reusable.yml` maintains. When set, the run reads
+          its references from there and makes **no Figma calls at all** — no rate
+          limit, no network flake, and a diff that is reproducible because the
+          reference is pinned rather than re-fetched (issue #289).
+
+          Empty (the default) keeps the old behaviour: every shard fetches every
+          reference it needs, live, on every run. That is what truncates a
+          catalog-sized run — 18 of 77 components was the observed figure — so
+          set this on anything bigger than a handful of components.
+
+          The cache is authoritative when set: a component the import has not
+          reached yet is reported as a cache miss on that component, not
+          silently fetched behind your back. Missing rows are visible; run the
+          import to fill them.
+        required: false
+        type: string
+        default: ""
       render-timeout:
         description: "Seconds `bundle pack` may spend rendering, per shard. This is the INNER timeout; keep `timeout-minutes` above it."
         required: false
@@ -275,8 +295,10 @@ jobs:
           DP_REF: ${{ inputs.design-parity-ref }}
           CACHE_PATHS: ${{ inputs.cache-paths }}
           FORCE: ${{ inputs.force-refresh }}
+          REFERENCE_CACHE_BRANCH: ${{ inputs.reference-cache-branch }}
         run: |
           set -euo pipefail
+          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
           parts=()
 
           # The code side: a git tree hash per named path. Exact — it moves iff a
@@ -292,15 +314,28 @@ jobs:
             fi
           done
 
-          # The reference side: the file version, which changes on any edit to
-          # the kit. One request answers "can any reference have moved?" for the
-          # whole file — and a token that cannot answer it means no skip.
-          if [ -n "${FIGMA_TOKEN:-}" ] && [ -f design-map.json ]; then
+          # The reference side.
+          #
+          # With a reference cache, the references this run will read ARE that
+          # branch's contents, so its head commit identifies them exactly — and
+          # costs no Figma call, which is the whole point of the split (#289).
+          # Without one, fall back to asking Figma for each file's `version`:
+          # one request per file to answer "can any reference have moved?", and
+          # a token that cannot answer it means no skip.
+          if [ -n "${REFERENCE_CACHE_BRANCH:-}" ]; then
+            head="$(git ls-remote "$repo" "refs/heads/${REFERENCE_CACHE_BRANCH}" | cut -f1)"
+            parts+=(--part "reference-cache=${head}")
+            if [ -z "$head" ]; then
+              echo "::warning title=No reference cache::'${REFERENCE_CACHE_BRANCH}' does not exist yet. Run the import workflow, or every figma reference will be reported as a cache miss."
+            fi
+          elif [ -n "${FIGMA_TOKEN:-}" ] && [ -f design-map.json ]; then
             for key in $(jq -r '[.components[].ref | select(startswith("figma:")) | split(":")[1] | split("/")[0]] | unique[]' design-map.json); do
               version="$(curl -sS -H "X-Figma-Token: ${FIGMA_TOKEN}" \
                 "https://api.figma.com/v1/files/${key}?depth=1" | jq -r '.version // ""')"
               parts+=(--part "figma:${key}=${version}")
             done
+          fi
+          if [ -f design-map.json ]; then
             parts+=(--part "design-map=$(sha256sum design-map.json | cut -d' ' -f1)")
           else
             parts+=(--part "design-map=")
@@ -593,6 +628,29 @@ jobs:
           # reporting "no candidate render available" on a green job.
           test -s build/design-parity/candidates.bundle.png
 
+      # The reference side, imported on its own schedule rather than re-fetched
+      # here. Every shard reads the same commit of the same branch, so N shards
+      # multiply the reference cost by nothing at all — where N live fan-outs
+      # multiplied it by N against a single per-token rate limiter (#289).
+      - name: Fetch the reference cache
+        id: refcache
+        if: ${{ inputs.reference-cache-branch != '' && steps.slice.outputs.count != '0' }}
+        env:
+          BRANCH: ${{ inputs.reference-cache-branch }}
+          CACHE_DIR: ${{ runner.temp }}/reference-cache
+        run: |
+          set -euo pipefail
+          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 --branch "$BRANCH" "$repo" "$CACHE_DIR" 2>/dev/null; then
+            rm -rf "$CACHE_DIR/.git"
+            echo "dir=${CACHE_DIR}" >> "$GITHUB_OUTPUT"
+            echo "Reference cache from ${BRANCH}: $(du -sh "$CACHE_DIR" | cut -f1)."
+          else
+            # Not fatal: the run proceeds and reports the references it cannot
+            # find, which is a visible gap rather than a silent one.
+            echo "::warning title=No reference cache::Could not read '${BRANCH}'. Run the import workflow (design-parity-import-reusable.yml) to build it."
+          fi
+
       - name: Run design-parity
         id: parity
         if: ${{ steps.slice.outputs.count != '0' }}
@@ -604,10 +662,15 @@ jobs:
           SHARD: ${{ inputs.shards > 1 && matrix.shard || 1 }}
           SHARDS: ${{ inputs.shards }}
           BRANCH: ${{ inputs.artifact-branch }}
+          REFERENCE_CACHE_BRANCH: ${{ inputs.reference-cache-branch }}
+          REFERENCE_CACHE: ${{ steps.refcache.outputs.dir }}
         run: |
           set -euo pipefail
-          if [ -z "${FIGMA_TOKEN:-}" ]; then
-            echo "::warning::FIGMA_TOKEN is not set — skipping the parity run."
+          # A token is only required when the run has to fetch references. With
+          # a cache branch configured it reads them off disk, so a repo running
+          # this way needs no Figma credential in its parity workflow at all.
+          if [ -z "${FIGMA_TOKEN:-}" ] && [ -z "${REFERENCE_CACHE_BRANCH:-}" ]; then
+            echo "::warning::FIGMA_TOKEN is not set and no reference-cache-branch is configured — skipping the parity run."
             exit 0
           fi
           # `--shard` makes the run write the `shard.json` the merge reads, and
@@ -620,9 +683,31 @@ jobs:
           else
             dp=(npx -y "design-parity@${DP_VERSION}")
           fi
+
+          # Does this CLI know the flag? Worth asking rather than just passing
+          # it: `run` ignores an unrecognised `--option` but treats the VALUE
+          # after it as a component handle, so an older CLI would compare a
+          # component named `/tmp/reference-cache` and report it unresolved.
+          #
+          # Capture first, THEN grep — the usage path exits 2, and under
+          # pipefail that status wins over grep's no matter what it matched.
+          refcache=()
+          if [ -n "${REFERENCE_CACHE:-}" ]; then
+            usage="$("${dp[@]}" run 2>&1 || true)"
+            if printf '%s' "$usage" | grep -q -- '--reference-cache'; then
+              # `--reference-cache-only` is the point, not a hardening extra:
+              # without it a cache miss falls back to the API and the run is
+              # back to being rate-limitable, just less often.
+              refcache=(--reference-cache "$REFERENCE_CACHE" --reference-cache-only)
+            else
+              echo "::warning title=CLI too old to read the reference cache::design-parity@${DP_VERSION} has no '--reference-cache', so this run will fetch every reference live. Raise design-parity-version."
+            fi
+          fi
+
           "${dp[@]}" run \
             --repo . \
             --components "$COMPONENTS" \
+            "${refcache[@]}" \
             --shard "${SHARD}/${SHARDS}" \
             --candidate-bundles build/design-parity/candidates.bundle.png \
             --out build/design-parity/out \

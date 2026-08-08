@@ -45,6 +45,31 @@ export {
   FigmaRateLimitError,
   FigmaNodeNotFoundError,
   FigmaBadRefError,
+  FigmaCacheMissError,
   FigmaApiError,
   type FigmaErrorCode,
 } from "./errors.js";
+
+// The committed reference cache: written by `design-parity import`, read by a
+// parity run. Public because the import lives in `@design-parity/action` —
+// the two halves of one contract, so the format is a published shape rather
+// than a private detail of either.
+export {
+  ReferenceCache,
+  ReferenceCacheWriter,
+  cacheEntryDir,
+  cacheKeyOf,
+  emptyReferenceCache,
+  nodeDirName,
+  readReferenceCacheDoc,
+  REFERENCE_CACHE_FORMAT_VERSION,
+  REFERENCE_CACHE_INDEX,
+} from "./reference-cache.js";
+export type {
+  CachedNodeDoc,
+  ReferenceCacheDoc,
+  ReferenceCacheEntry,
+  ReferenceCacheFile,
+} from "./reference-cache.js";
+
+export type { FileMetaResponse, VariablesResponse } from "./figma-api.js";
