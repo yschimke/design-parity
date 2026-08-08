@@ -180,6 +180,17 @@ export interface CatalogComponent {
   caption?: string;
   /** Published-kit reference for the seed import (code stays authoritative). */
   reference?: ComponentReference;
+  /**
+   * Handle of the component **family** {@link reference} is one variant of — a Figma component
+   * *set*, or whatever the source calls the node owning a component's variants.
+   *
+   * A plain handle string rather than a {@link ComponentReference}: it shares its source and kit
+   * with `reference`, so the only thing left to say is which node. Kept apart from `reference`
+   * because the two are read by consumers wanting opposite things — a parity diff needs the one
+   * concrete renderable node, while matching a component *instance* found on a whole screen needs
+   * the family, since a screen rarely uses the exact variant a catalog pictured.
+   */
+  referenceSet?: string;
   variants: ComponentVariants;
   /** Per-component resolved tokens (the padding / radius / type actually used). */
   tokens?: DesignTokens;

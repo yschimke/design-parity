@@ -58,6 +58,7 @@ describe("toCatalogManifest", () => {
         group: "Buttons",
         caption: "Primary action",
         reference: { source: "figma", url: "https://figma.com/..." },
+        referenceSet: "figma:AbCdEf/58114:20565",
         variants: {
           ideal: [
             {
@@ -112,6 +113,9 @@ describe("toCatalogManifest", () => {
     expect(c.group).toBe("Buttons");
     expect(c.caption).toBe("Primary action");
     expect(c.reference?.source).toBe("figma");
+    // The family handle has to survive onto the serialized manifest too, or the published
+    // catalog.json drops it even though buildComponent kept it.
+    expect(c.referenceSet).toBe("figma:AbCdEf/58114:20565");
     expect(c.tokens).toEqual({ radius: { container: 20 } });
     expect(c.greenlines).toHaveLength(1);
   });

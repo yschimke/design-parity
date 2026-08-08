@@ -65,6 +65,8 @@ export interface CatalogSpecComponent {
   caption?: string;
   /** Published-kit reference (URL or `figma:` handle) for the seed import. */
   reference?: ComponentReference;
+  /** Family handle for {@link reference}; see {@link CatalogComponent.referenceSet}. */
+  referenceSet?: string;
   /**
    * Extra state renders folded onto this component (see {@link CatalogSpecVariant}).
    * The default `preview` stays the grid hero; each variant's images are appended
@@ -269,6 +271,7 @@ export function catalogFromCandidates(
       };
       if (component.caption !== undefined) source.caption = component.caption;
       if (component.reference !== undefined) source.reference = component.reference;
+      if (component.referenceSet !== undefined) source.referenceSet = component.referenceSet;
       if (candidate.semantics) source.semantics = candidate.semantics;
       sources.push(source);
     }
