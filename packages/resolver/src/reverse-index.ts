@@ -37,6 +37,12 @@ export function buildReverseIndex(
 
   for (const entry of designMap?.components ?? []) {
     for (const variant of entryRefs(entry)) add(variant.ref, entry.code);
+    // The component family, when the entry names one. Indexed alongside the
+    // per-variant refs so a lookup by an instance's component *set* resolves to
+    // the same code — a screen rarely uses the exact variant a catalog pictured,
+    // and without this those instances go unlinked even though the component is
+    // mapped. Never replaces a variant ref; both point at the same handle.
+    if (entry.refSet) add(entry.refSet, entry.code);
   }
   for (const [code, ref] of Object.entries(codeConnect ?? {})) add(ref, code);
 

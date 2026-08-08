@@ -1,6 +1,6 @@
 {
   "name": "@design-parity/page-backdrop",
-  "version": "0.1.38",
+  "version": "0.1.24",
   "description": "Opt-in Figma page backdrops: import key pages/screens as background images, place each component instance on them, link every placement back to the code component, and view the page with the candidate renders overlaid on top.",
   "license": "Apache-2.0",
   "type": "module",
@@ -23,9 +23,9 @@
     "test": "vitest run --root ../.. packages/page-backdrop/test"
   },
   "dependencies": {
-    "@design-parity/core": "^0.1.38",
-    "@design-parity/resolver": "^0.1.38",
-    "@design-parity/adapter-figma": "^0.1.38"
+    "@design-parity/core": "^0.1.24",
+    "@design-parity/resolver": "^0.1.24",
+    "@design-parity/adapter-figma": "^0.1.24"
   },
   "devDependencies": {
     "ajv": "^8.17.1"
