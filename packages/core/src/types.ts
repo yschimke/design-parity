@@ -201,6 +201,21 @@ export interface ReferenceAdapter {
     ref: string,
     ctx: AdapterContext,
   ): Promise<DesignReference>;
+  /**
+   * Optional: warm whatever `resolve` will ask for, given every ref the run
+   * will use.
+   *
+   * A run resolves its correspondences one after another, so an adapter cannot
+   * coalesce requests on its own — each `resolve` has finished before the next
+   * begins, and there is nothing to batch with. This hook is where an adapter
+   * gets to see the whole list at once and fetch it in as few requests as its
+   * API allows.
+   *
+   * Best-effort by contract: a failure here must not fail the run, because
+   * everything it warms `resolve` can still fetch alone. Adapters that gain
+   * nothing from batching simply omit it.
+   */
+  prefetch?(refs: readonly string[], ctx: AdapterContext): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

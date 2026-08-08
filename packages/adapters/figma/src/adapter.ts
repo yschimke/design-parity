@@ -20,6 +20,20 @@ import {
 } from "./code-connect.js";
 import { FigmaBadRefError, FigmaNodeNotFoundError } from "./errors.js";
 import { formatFigmaRef, isFigmaRef, parseFigmaRef, type FigmaRef } from "./figma-ref.js";
+import type { FigmaNodeDoc, FigmaStyleMeta, VariablesResponse } from "./figma-api.js";
+
+/** What a nodes response carries per id — the document, and the styles it uses. */
+interface CachedNode {
+  document: FigmaNodeDoc;
+  styles?: Record<string, FigmaStyleMeta>;
+}
+
+/**
+ * Node ids per `GET /v1/files/:key/nodes` call. Chosen well under any documented
+ * ceiling: the win is going from one-per-component to a handful, and a chunk
+ * small enough to retry cheaply beats one large enough to be worth splitting.
+ */
+const NODE_BATCH = 50;
 import { pngSize } from "./png.js";
 import { svgSize } from "./svg.js";
 import { normalizeReference } from "./normalize.js";
@@ -83,9 +97,55 @@ function slug(s: string): string {
 export class FigmaAdapter implements ReferenceAdapter {
   readonly source = "figma" as const;
   readonly #opts: FigmaAdapterOptions;
+  /** `fileKey/nodeId` -> node entry, filled by {@link prefetch}. */
+  readonly #nodes = new Map<string, CachedNode>();
+  /** `fileKey` -> variables. One response per file, not one per component. */
+  readonly #variables = new Map<string, Promise<VariablesResponse>>();
 
   constructor(opts: FigmaAdapterOptions = {}) {
     this.#opts = opts;
+  }
+
+  /**
+   * Read every node the run will need, in as few requests as the API allows.
+   *
+   * `GET /v1/files/:key/nodes` takes a list, and the client has always accepted
+   * one — but `resolve` runs per component and asked for a single id each time,
+   * so a 77-component catalog made 77 requests for something two would have
+   * carried. Against a per-token limiter that is the difference between a run
+   * that completes and one that loses most of its references to 429s.
+   *
+   * Best-effort by contract: a chunk that fails is left out of the cache and
+   * `resolve` fetches it alone, so a partial warm degrades to today's behaviour
+   * rather than failing the run.
+   */
+  async prefetch(refs: readonly string[], ctx: AdapterContext): Promise<void> {
+    const byFile = new Map<string, Set<string>>();
+    for (const ref of refs) {
+      const parsed = parseFigmaRef(ref);
+      if (!parsed) continue;
+      const ids = byFile.get(parsed.fileKey) ?? new Set<string>();
+      ids.add(parsed.nodeId);
+      byFile.set(parsed.fileKey, ids);
+    }
+    if (byFile.size === 0) return;
+
+    const client = this.#client(ctx);
+    for (const [fileKey, idSet] of byFile) {
+      const ids = [...idSet];
+      for (let i = 0; i < ids.length; i += NODE_BATCH) {
+        const chunk = ids.slice(i, i + NODE_BATCH);
+        try {
+          const res = await client.getFileNodes(fileKey, chunk);
+          for (const id of chunk) {
+            const entry = res.nodes[id];
+            if (entry?.document) this.#nodes.set(`${fileKey}/${id}`, entry);
+          }
+        } catch {
+          // Leave the chunk unwarmed; `resolve` will ask for those ids itself.
+        }
+      }
+    }
   }
 
   async resolve(
@@ -97,14 +157,33 @@ export class FigmaAdapter implements ReferenceAdapter {
     const client = this.#client(ctx);
 
     // Structure (tokens) comes from the primary node; fail clearly if absent.
-    const nodes = await client.getFileNodes(figmaRef.fileKey, [figmaRef.nodeId]);
-    const entry = nodes.nodes[figmaRef.nodeId];
-    const node = entry?.document;
-    if (!node) {
+    // `prefetch` has usually put it here already; a miss is not an error, only
+    // a request this run had hoped to avoid.
+    const cacheKey = `${figmaRef.fileKey}/${figmaRef.nodeId}`;
+    let entry = this.#nodes.get(cacheKey);
+    if (!entry) {
+      const nodes = await client.getFileNodes(figmaRef.fileKey, [figmaRef.nodeId]);
+      const fetched = nodes.nodes[figmaRef.nodeId];
+      if (fetched?.document) {
+        entry = fetched;
+        this.#nodes.set(cacheKey, fetched);
+      }
+    }
+    if (!entry) {
       throw new FigmaNodeNotFoundError(figmaRef.fileKey, figmaRef.nodeId);
     }
+    const node = entry.document;
 
-    const variables = await client.getLocalVariables(figmaRef.fileKey);
+    // One response per file rather than one per component: the variables of a
+    // file do not vary by which node is being resolved, and 77 identical
+    // requests spend the same quota the references need. The promise is cached
+    // rather than the value, so concurrent callers share one request.
+    let variablesPromise = this.#variables.get(figmaRef.fileKey);
+    if (!variablesPromise) {
+      variablesPromise = client.getLocalVariables(figmaRef.fileKey);
+      this.#variables.set(figmaRef.fileKey, variablesPromise);
+    }
+    const variables = await variablesPromise;
 
     const targets = (await this.#opts.resolveTargets?.(figmaRef, ctx)) ?? [
       { nodeId: figmaRef.nodeId, state: "default" },
