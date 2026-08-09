@@ -187,18 +187,29 @@ jobs:
             # `npm i ${name}` resolve to the older release. Publish those under `backfill` and
             # leave `latest` where it is. Versions here are plain X.Y.Z (release-please's default),
             # which is all the comparison below assumes.
+            # Compare against the HIGHEST published version, not `npm view <pkg> version` — that
+            # reports wherever `latest` currently points, which is not the same thing. A `latest`
+            # deliberately rolled back to 0.1.43 while 0.1.45 exists would otherwise let a
+            # recovery of 0.1.44 look like a forward publish and move `latest` onto it.
             tag_flags=()
-            latest=$(npm view "${name}" version 2>/dev/null || true)
-            if [ -n "${latest}" ] && node -e '
+            highest=$(npm view "${name}" versions --json 2>/dev/null | node -e '
+              const raw = require("node:fs").readFileSync(0, "utf8").trim();
+              if (!raw) process.exit(0);
               const part = (s) => s.split(".").map(Number);
-              const [a, b] = [part(process.argv[1]), part(process.argv[2])];
-              for (let i = 0; i < 3; i++) {
-                if ((a[i] || 0) !== (b[i] || 0)) process.exit((a[i] || 0) < (b[i] || 0) ? 0 : 1);
-              }
-              process.exit(1);
-            ' "${version}" "${latest}"; then
+              const cmp = (a, b) => {
+                const [x, y] = [part(a), part(b)];
+                for (let i = 0; i < 3; i++) {
+                  if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0) ? -1 : 1;
+                }
+                return 0;
+              };
+              // `versions` is an array, or a bare string when only one has ever been published.
+              const highest = [].concat(JSON.parse(raw)).sort(cmp).at(-1);
+              if (highest && cmp(process.argv[1], highest) < 0) process.stdout.write(highest);
+            ' "${version}" || true)
+            if [ -n "${highest}" ]; then
               tag_flags=(--tag backfill)
-              echo "::warning::${name}@${version} is older than the published latest (${latest}) — publishing under the 'backfill' dist-tag so 'latest' stays put."
+              echo "::warning::${name}@${version} is behind the highest published version (${highest}) — publishing under the 'backfill' dist-tag so 'latest' is left alone."
             fi
             echo "publish ${name}@${version}"
             if ! npm publish --workspace "${name}" --access public \
