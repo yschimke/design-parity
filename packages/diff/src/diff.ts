@@ -36,7 +36,7 @@ import {
 } from "./pairing.js";
 import { diffSemantics } from "./semantic.js";
 import { renderSummary } from "./summary.js";
-import { collectTokens, diffTokens } from "./tokens.js";
+import { collectRadiusBoxes, collectTokens, diffTokens } from "./tokens.js";
 import {
   diffImagePair,
   imageKey,
@@ -189,8 +189,9 @@ export async function diff(
     candidateTokens,
     config,
     options.tokenAlias,
-    // The box the radii bound, so a corner can be read against what it rounds.
-    candidate.semantics.root.bounds,
+    // The box each radius bounds, per node — the root's frame is not what a
+    // descendant's corner is clamped against.
+    collectRadiusBoxes(candidate.semantics.root),
   );
   const designSystem = diffDesignSystem(
     reference.themeTokens,

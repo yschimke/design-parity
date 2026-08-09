@@ -16,6 +16,7 @@
 import {
   type DesignTokens,
   type Finding,
+  type Bounds,
   type SemanticNode,
   type TokenAliasMap,
   type TypographyToken,
@@ -41,6 +42,33 @@ export function collectTokens(root: SemanticNode): DesignTokens {
   const out: DesignTokens = {};
   const visit = (node: SemanticNode): void => {
     mergeInto(out, node.tokens);
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
+/**
+ * The candidate boxes each radius value was declared on.
+ *
+ * {@link collectTokens} flattens the tree, so by the time a radius reaches the
+ * comparison it has lost the node it belonged to — and a corner can only be
+ * judged clamped against the box it actually rounds. Handing over the ROOT's
+ * bounds instead is what made the first cut of this check inert in the real
+ * pipeline: a switch track is 32x20 inside a 137x84 sticker frame, and 16 is
+ * nowhere near half of 84, so nothing ever normalised.
+ *
+ * Keyed by value rather than by node, which is how a spec radius is paired with
+ * a candidate one in the first place — see {@link numericValueMatch}.
+ */
+export function collectRadiusBoxes(root: SemanticNode): Map<number, Bounds[]> {
+  const out = new Map<number, Bounds[]>();
+  const visit = (node: SemanticNode): void => {
+    if (node.bounds) {
+      for (const value of Object.values(node.tokens?.radius ?? {})) {
+        out.set(value, [...(out.get(value) ?? []), node.bounds]);
+      }
+    }
     for (const child of node.children ?? []) visit(child);
   };
   visit(root);
@@ -185,7 +213,7 @@ export function diffTokens(
   candidate: DesignTokens,
   config: DiffConfig,
   alias?: TokenAliasMap,
-  box?: { width: number; height: number },
+  radiusBoxes?: Map<number, Bounds[]>,
 ): Finding[] {
   const findings: Finding[] = [];
   if (!specInput) return findings;
@@ -209,7 +237,7 @@ export function diffTokens(
         candidate.radius,
         config.radiusTolerance,
         findings,
-        box,
+        radiusBoxes,
       );
     }
   }
@@ -295,7 +323,7 @@ function numericFinding(
   candidate: Record<string, number> | undefined,
   tolerance: number,
   findings: Finding[],
-  box?: { width: number; height: number },
+  radiusBoxes?: Map<number, Bounds[]>,
 ): void {
   // Prefer an exact name match; otherwise fall back to a value match. The
   // candidate carries resolved spacing/radius values under generic keys, not the
@@ -313,7 +341,8 @@ function numericFinding(
   // with whatever number cleared the clamp, so comparing the two as lengths
   // reports a Δ96 between two identical shapes. When BOTH sides are past the
   // clamp they describe the same corner, whatever they call it.
-  if (group === "radius" && box && fullyRounded(got, box) && fullyRounded(want, box)) return;
+  const boxes = group === "radius" ? radiusBoxes?.get(got) : undefined;
+  if (boxes && isPill(got, boxes) && isPill(want, boxes)) return;
 
   const delta = Math.abs(got - want);
   if (delta > tolerance) {
@@ -334,9 +363,11 @@ function numericFinding(
  * spec's `100` means dp or per cent, because either reading is past the clamp on
  * any box small enough for the question to arise.
  */
-function fullyRounded(radius: number, box: { width: number; height: number }): boolean {
-  const shorter = Math.min(box.width, box.height);
-  return shorter > 0 && radius >= shorter / 2;
+function isPill(radius: number, boxes: Bounds[]): boolean {
+  return boxes.some((b) => {
+    const shorter = Math.min(b.width, b.height);
+    return shorter > 0 && radius >= shorter / 2;
+  });
 }
 
 /** The candidate value closest to `want` within `tolerance`, or `undefined`. */
