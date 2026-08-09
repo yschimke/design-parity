@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.46](https://github.com/yschimke/design-parity/compare/v0.1.45...v0.1.46) (2026-08-09)
+
+
+### Bug Fixes
+
+* **release:** make the recovery dispatch safe to actually use ([#315](https://github.com/yschimke/design-parity/issues/315)) ([33a3092](https://github.com/yschimke/design-parity/commit/33a3092cf4dc1faf1d1b54e0ee1218c30647cb34))
+
 ## [0.1.45](https://github.com/yschimke/design-parity/compare/v0.1.44...v0.1.45) (2026-08-08)
 
 
