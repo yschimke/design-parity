@@ -270,10 +270,23 @@ export interface CatalogTheme {
   /** Group the declaring provider belongs to, when it names one. */
   group?: string;
   /**
-   * Whether this theme is a dark one. Declared rather than derived: a consumer
-   * that pins a page's colour scheme to the selected theme needs to know, and
-   * guessing it from a palette's luminance is a heuristic the producing renderer
-   * doesn't have to make.
+   * Whether this theme is a dark one — **resolved once, by the producer**.
+   *
+   * A consumer that pins a page's colour scheme to the selected theme needs the
+   * answer, and the field exists so that each of them doesn't work it out
+   * separately and disagree. The producer is the right place for it because it
+   * holds what the question is actually about: the surface the renderer composed
+   * that theme's specimen on. compose-ai-tools' export driver reads it from the
+   * theme's own `surface` (else `background`) and matches the threshold its
+   * preview server already uses, so the published flag and that server's palette
+   * projection cannot contradict each other.
+   *
+   * (This originally read "declared rather than derived", written when nothing in
+   * the pipeline could answer at all and the alternative was a consumer guessing.
+   * A producer that knows the rendered surface is not guessing.)
+   *
+   * Absent when the theme published no surface to judge by — which a consumer
+   * should treat as unknown, not as light.
    */
   dark?: boolean;
   /** This theme's resolved token set, in the same shape as the system's. */

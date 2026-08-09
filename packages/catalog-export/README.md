@@ -102,7 +102,9 @@ in the manifest:
 They are **never lifted from the renders** the way `themeTokens` is: a
 component's semantics record the one theme it was rendered under, so the
 generator — which knows which render belongs to which declared theme — supplies
-them. A theme with a blank id or an empty token set is dropped rather than
+them. That includes `dark`: the generator holds the surface the renderer composed
+each specimen on, so it answers once here rather than leaving every consumer to
+work it out from the palette and disagree. Absent means *unknown*, not light. A theme with a blank id or an empty token set is dropped rather than
 published as something a consumer can select and find nothing behind, and a
 repeated id keeps its first entry.
 
