@@ -93,9 +93,14 @@ jobs:
             *) echo "::error::'$TAG' is not a vX.Y.Z release tag."; exit 1 ;;
           esac
           # Resolving through git/ref/tags is the check that matters — a branch or SHA of the same
-          # spelling does not answer here.
-          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --silent 2>/dev/null; then
-            echo "::error::'$TAG' does not resolve to a tag in this repository."
+          # spelling does not answer here. Compare the returned ref rather than trusting the exit
+          # status: the singular git/ref/ endpoint 404s on a partial match today, but its plural
+          # sibling answers those with an ARRAY of near-misses, and a guard one character away
+          # from that behaviour should not depend on which one it is talking to. Anything that is
+          # not exactly this tag — an array, a null, a near-miss — fails closed.
+          resolved=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.ref' 2>/dev/null || true)
+          if [ "${resolved}" != "refs/tags/${TAG}" ]; then
+            echo "::error::'$TAG' does not resolve to exactly refs/tags/${TAG} (got: '${resolved:-nothing}')."
             exit 1
           fi
       # Recovery dispatches build the TAG, never the branch. `main` has moved on
