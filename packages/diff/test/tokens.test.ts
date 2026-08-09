@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { DesignTokens, SemanticNode } from "@design-parity/core";
 
 import { defaultDiffConfig } from "../src/config.js";
-import { collectTokens, diffTokens } from "../src/tokens.js";
+import { collectRadiusBoxes, collectTokens, diffTokens } from "../src/tokens.js";
 
 describe("collectTokens", () => {
   it("flattens a tree, merging distinctly-keyed tokens from every node", () => {
@@ -87,49 +87,72 @@ describe("diffTokens", () => {
   });
 
   describe("fully-rounded corners", () => {
-    // Real measurements from three M3 catalog components that each reported a
-    // ~Δ96 radius divergence against a shape identical to the kit's. The kit
-    // writes "fully rounded" as 100; Compose writes whatever cleared the clamp.
-    const pill = (radius: number) => ({ radius: { corner: radius } });
+    // A corner is judged against the box IT rounds, which is a descendant node —
+    // not the sticker frame around it. Building the tree the way the renderer
+    // does is the point of these fixtures: the first cut of this check read the
+    // root's bounds and silently normalised nothing in the real pipeline.
+    const tree = (radius: number, box: { width: number; height: number }): SemanticNode => ({
+      role: "frame",
+      bounds: { x: 0, y: 0, width: 137, height: 84 },
+      children: [
+        {
+          role: "switch",
+          bounds: { x: 0, y: 0, ...box },
+          tokens: { radius: { corner: radius } },
+        },
+      ],
+    });
     const rounded: DesignTokens = { radius: { corner: 100 } };
+    const boxesOf = (radius: number, box: { width: number; height: number }) =>
+      collectRadiusBoxes(tree(radius, box));
 
     it.each([
       ["Badge/Dot", 3.05, { width: 3, height: 3 }],
       ["Badge/Number", 3.81, { width: 7, height: 7 }],
       ["Switch/On", 16, { width: 32, height: 20 }],
-    ])("%s: %d on its box is the kit's 100", (_name, radius, box) => {
-      expect(diffTokens(rounded, pill(radius), defaultDiffConfig, undefined, box)).toEqual([]);
-    });
-
-    it("still reports a radius short of the clamp", () => {
-      // 4 on a 30x17 menu item is nowhere near half the shorter side, so
-      // nothing normalises it away — the divergence is real.
+    ])("%s: %d on its own box is the kit's 100", (_n, radius, box) => {
       const findings = diffTokens(
-        { radius: { corner: 16 } },
-        pill(4),
+        rounded,
+        { radius: { corner: radius } },
         defaultDiffConfig,
         undefined,
-        { width: 30, height: 17 },
+        boxesOf(radius, box),
+      );
+      expect(findings).toEqual([]);
+    });
+
+    it("is not fooled by the frame the node sits in", () => {
+      // 16 vs half of the 137x84 FRAME is not a pill; vs half of the 32x20
+      // track it is. Reading the frame is the bug this pins.
+      const boxes = boxesOf(16, { width: 32, height: 20 });
+      expect([...boxes.get(16)!.map((b) => `${b.width}x${b.height}`)]).toEqual(["32x20"]);
+    });
+
+    it("still reports a radius short of its own clamp", () => {
+      const findings = diffTokens(
+        { radius: { corner: 16 } },
+        { radius: { corner: 4 } },
+        defaultDiffConfig,
+        undefined,
+        boxesOf(4, { width: 30, height: 17 }),
       );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({ severity: "error" });
     });
 
     it("does not normalise when only the candidate is past the clamp", () => {
-      // A pill drawn where the spec asked for a 4dp corner is a real defect,
-      // not two spellings of one shape.
       const findings = diffTokens(
         { radius: { corner: 4 } },
-        pill(16),
+        { radius: { corner: 16 } },
         defaultDiffConfig,
         undefined,
-        { width: 32, height: 20 },
+        boxesOf(16, { width: 32, height: 20 }),
       );
       expect(findings).toHaveLength(1);
     });
 
-    it("reports normally when no box is known, rather than guessing", () => {
-      const findings = diffTokens(rounded, pill(16), defaultDiffConfig);
+    it("reports normally when no node carried bounds, rather than guessing", () => {
+      const findings = diffTokens(rounded, { radius: { corner: 16 } }, defaultDiffConfig);
       expect(findings).toHaveLength(1);
     });
 
@@ -139,7 +162,7 @@ describe("diffTokens", () => {
         { spacing: { padding: 16 } },
         defaultDiffConfig,
         undefined,
-        { width: 32, height: 20 },
+        boxesOf(16, { width: 32, height: 20 }),
       );
       expect(findings).toHaveLength(1);
     });
