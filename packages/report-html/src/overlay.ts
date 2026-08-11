@@ -13,9 +13,10 @@
  *   radius/padding render when present (a hand-authored or token-rich candidate
  *   node has them; the daemon's geometry and the reference's geometry-only
  *   capture don't yet, so they degrade to box + size).
- * - **typography** — per text node, a callout with `family · size · weight`
- *   (line-height when present) and the resolved text colour. Candidate-side
- *   today; the reference capture is geometry-only.
+ * - **typography** — one marker per resolved style, with adjacent uses surrounded
+ *   by a shared outline. The marker keys into the reference/candidate settings
+ *   table rendered beside the panels instead of repeating a wide callout over
+ *   every text node.
  * - **layout** — elements the structural layout diff flagged as shifted/resized,
  *   highlighted with their position/size drift read out. Driven by the verdict's
  *   `layout` findings, matched to a node by label.
@@ -31,19 +32,16 @@ import type {
   Bounds,
   SemanticNode,
   SemanticTree,
-  TypographyToken,
 } from "@design-parity/core";
 
 import { escapeHtml } from "./html.js";
+import { clusterTypography, typographyGroups } from "./typography.js";
 
 /** A bounded element pulled from a tree, with whatever spec it carries. */
 interface Placed {
   label?: string;
   role?: string;
   bounds: Bounds;
-  typography?: TypographyToken;
-  /** Resolved text colour (the node's foreground), when known. */
-  color?: string;
   /** Uniform padding (single value), when the node declares it. */
   padding?: number;
   /** Corner radius, when the node declares it. */
@@ -67,18 +65,12 @@ function flatten(tree: SemanticTree): Placed[] {
   const out: Placed[] = [];
   const visit = (n: SemanticNode): void => {
     if (n.bounds) {
-      const typography = first(n.tokens?.typography);
-      // The daemon records foreground before background, so the first colour is
-      // the text's own (insertion order is preserved).
-      const colors = n.tokens?.colors ? Object.values(n.tokens.colors) : [];
       const padding = n.tokens?.spacing?.["padding"];
       const radius = first(n.tokens?.radius);
       out.push({
         ...(n.label !== undefined ? { label: n.label } : {}),
         ...(n.role ? { role: n.role } : {}),
         bounds: n.bounds,
-        ...(typography ? { typography } : {}),
-        ...(colors[0] ? { color: colors[0] } : {}),
         ...(typeof padding === "number" ? { padding } : {}),
         ...(typeof radius === "number" ? { radius } : {}),
       });
@@ -141,25 +133,27 @@ function boxMark(n: Placed, u: number): string {
   return `<g class="anno-box">${pad}${box}${tag(x, y, detail.join(" "), u, "#16283a", "#cfe6ff")}</g>`;
 }
 
-/** Typography callout for one text node (the "typography" layer). */
-function typographyMark(n: Placed, u: number): string {
-  const t = n.typography!;
-  const parts: string[] = [];
-  if (t.fontFamily) parts.push(t.fontFamily);
-  if (t.fontSize !== undefined) parts.push(`${+t.fontSize}sp`);
-  if (t.fontWeight !== undefined) parts.push(String(t.fontWeight));
-  if (t.lineHeight !== undefined) parts.push(`lh ${+t.lineHeight}`);
-  const label = parts.join(" · ");
-  if (!label && !n.color) return "";
-  const { x, y } = n.bounds;
-  const fs = 2.6 * u;
-  const swatch = n.color
-    ? `<rect x="${r(x)}" y="${r(y - fs * 1.7)}" width="${r(fs * 1.4)}" height="${r(fs * 1.4)}" rx="${r(0.4 * u)}" fill="${escapeHtml(n.color)}" stroke="#000" stroke-width="${r(0.15 * u)}"/>`
-    : "";
-  const textX = n.color ? x + fs * 1.9 : x;
+/** One clustered typography region, keyed to the settings table by marker. */
+function typographyMark(bounds: Bounds, marker: string, u: number): string {
+  const { x, y, width, height } = bounds;
+  const stroke = 0.35 * u;
   return (
-    `<g class="anno-type">` + swatch + (label ? tag(textX, y - fs * 1.85, label, u, "#241a33", "#e6d8ff") : "") + `</g>`
+    `<g class="anno-type" data-type-marker="${escapeHtml(marker)}">` +
+    `<rect x="${r(x)}" y="${r(y)}" width="${r(width)}" height="${r(height)}" rx="${r(0.5 * u)}" fill="#7c5ce7" fill-opacity="0.08" stroke="#9f85ff" stroke-width="${r(stroke)}" stroke-dasharray="${r(1.2 * u)} ${r(0.8 * u)}"/>` +
+    tag(x, y, marker, u, "#6941c6", "#ffffff") +
+    `</g>`
   );
+}
+
+/** Exact text bounds, filled only while its style row is hovered or focused. */
+function typographyHit(bounds: Bounds, marker: string): string {
+  const { x, y, width, height } = bounds;
+  return `<rect class="anno-type-hit" data-type-marker="${escapeHtml(marker)}" x="${r(x)}" y="${r(y)}" width="${r(width)}" height="${r(height)}"/>`;
+}
+
+export interface AnnotationSvgOptions {
+  diff?: boolean;
+  typographyMarkers?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -206,7 +200,7 @@ function layoutMark(n: Placed, d: LayoutDelta, u: number): string {
 export function annotationSvg(
   tree: SemanticTree | undefined,
   deltas?: readonly LayoutDelta[],
-  opts?: { diff?: boolean },
+  opts?: AnnotationSvgOptions,
 ): string {
   if (!tree) return "";
   const nodes = flatten(tree);
@@ -248,9 +242,15 @@ export function annotationSvg(
     .filter((n) => n.label !== undefined || n.role)
     .map((n) => boxMark(n, u))
     .join("");
-  const typography = nodes
-    .filter((n) => n.typography)
-    .map((n) => typographyMark(n, u))
+  const typeGroups = typographyGroups(tree);
+  const typography = typeGroups
+    .map((group, index) => {
+      const marker = opts?.typographyMarkers?.get(group.key) ??
+        (index < 26 ? String.fromCharCode(65 + index) : String(index + 1));
+      return clusterTypography(group)
+        .map((bounds) => typographyMark(bounds, marker, u))
+        .join("") + group.nodes.map((node) => typographyHit(node.bounds, marker)).join("");
+    })
     .join("");
   if (!boxes && !typography && !layout) return "";
 

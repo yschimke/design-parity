@@ -29,7 +29,7 @@ describe("annotationSvg", () => {
     expect(svg).toMatch(/rx="8"[^>]*stroke="#7db4e8"/);
   });
 
-  it("draws a typography callout with family/size/weight/line-height", () => {
+  it("draws one marked typography region for adjacent uses of the same style", () => {
     const tree: SemanticTree = {
       root: {
         role: "group",
@@ -44,14 +44,24 @@ describe("annotationSvg", () => {
               colors: { label: "#ffffff" },
             },
           },
+          {
+            role: "text",
+            label: "Again",
+            bounds: { x: 100, y: 20, width: 80, height: 20 },
+            tokens: {
+              typography: { label: { fontFamily: "Roboto", fontSize: 14, fontWeight: 500, lineHeight: 20 } },
+            },
+          },
         ],
       },
     };
     const svg = annotationSvg(tree);
     expect(svg).toContain('<g data-layer="typography">');
-    expect(svg).toContain("Roboto · 14sp · 500 · lh 20");
-    // the resolved text colour renders as a swatch.
-    expect(svg).toContain('fill="#ffffff"');
+    expect(svg.match(/class="anno-type"/g)).toHaveLength(1);
+    expect(svg.match(/class="anno-type-hit"/g)).toHaveLength(2);
+    expect(svg).toContain('data-type-marker="A"');
+    expect(svg).toContain('stroke="#9f85ff"');
+    expect(svg).toContain(">A</text>");
   });
 
   it("degrades to box + size when a node carries no radius/padding/type", () => {

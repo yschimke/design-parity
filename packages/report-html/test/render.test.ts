@@ -154,9 +154,17 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain('<svg class="anno"');
     expect(html).toContain('<g data-layer="spacing">');
     expect(html).toContain('<g data-layer="typography">');
-    // Box-model detail (the fixture button is 160×48, r8, p12) and the type callout.
+    // Box-model detail (the fixture button is 160×48, r8, p12) and the grouped type settings.
     expect(html).toContain("160×48 r8 p12");
-    expect(html).toContain("Roboto · 14sp · 500");
+    expect(html).toContain('data-summary-layer="typography"');
+    expect(html).toContain('<span class="type-side">Candidate</span>');
+    expect(html).toContain("Roboto");
+    expect(html).toContain("14sp");
+    expect(html).toContain("wght 500");
+    expect(html).toContain("1 usage");
+    expect(html).toContain(">A</text>");
+    expect(html).toContain('data-type-row="A" tabindex="0"');
+    expect(html).toContain("addEventListener('mouseenter'");
     // Layers ship hidden; the inline script toggles them on.
     expect(html).toContain(".anno g[data-layer]{display:none}");
     expect(html).toContain("data-anno-layer");
@@ -170,6 +178,30 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     );
     // Each toggle scopes to its own variant.
     expect(html).toContain("closest('.variant')");
+  });
+
+  it("highlights parameters overridden from the most-used form of a typography token", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const children = candidate.semantics!.root.children!;
+    children.push(
+      {
+        ...children[0]!,
+        label: "Default copy",
+        bounds: { x: 12, y: 38, width: 80, height: 20 },
+      },
+      {
+        ...children[0]!,
+        label: "Emphasis",
+        bounds: { x: 12, y: 62, width: 80, height: 20 },
+        tokens: {
+          typography: {
+            label: { fontFamily: "Roboto", fontSize: 14, fontWeight: 700, lineHeight: 20 },
+          },
+        },
+      },
+    );
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+    expect(html).toContain('class="type-changed type-override" title="Changed from label default">wght 700</span>');
   });
 
   it("offers one mutually-exclusive view mode selector instead of showing every view at once", async () => {

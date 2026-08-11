@@ -23,7 +23,13 @@ import type {
 
 import { groupFindings, tokenDelta } from "./findings.js";
 import { escapeHtml, isSvgSource, pngDataUri, svgDataUri } from "./html.js";
-import { annotationSvg, type LayoutDelta } from "./overlay.js";
+import { annotationSvg, type AnnotationSvgOptions, type LayoutDelta } from "./overlay.js";
+import {
+  compareTypography,
+  normalizeFontFamily,
+  type TypographyComparison,
+  type TypographyGroup,
+} from "./typography.js";
 import type { DiffImage, ReportInput } from "./types.js";
 import { pairVariants, type Variant } from "./variants.js";
 
@@ -157,7 +163,7 @@ function panelMarkup(
   role: string,
   tree?: SemanticTree,
   deltas?: readonly LayoutDelta[],
-  opts?: { diff?: boolean },
+  opts?: AnnotationSvgOptions,
 ): string {
   let inner: string;
   if (panel.src) {
@@ -174,6 +180,85 @@ function panelMarkup(
             <figcaption>${escapeHtml(panel.label)}</figcaption>
             <div class="panel-body">${inner}</div>
           </figure>`;
+}
+
+type TypographyField = "token" | "family" | "size" | "lineHeight" | "weight" | "tracking" | "style";
+
+function typographyValue(group: TypographyGroup | undefined, field: TypographyField): string {
+  if (!group) return "—";
+  const type = group.typography;
+  if (field === "token") return group.token ?? "unmapped";
+  if (field === "family") return type.fontFamily ?? "unspecified";
+  if (field === "size") return type.fontSize === undefined ? "—" : `${+type.fontSize}sp`;
+  if (field === "lineHeight") return type.lineHeight === undefined ? "—" : String(+type.lineHeight);
+  if (field === "weight") return type.fontWeight === undefined ? "—" : String(type.fontWeight);
+  if (field === "tracking") return type.letterSpacing === undefined ? "default" : String(+type.letterSpacing);
+  return type.fontStyle ?? "normal";
+}
+
+function typographyComparable(group: TypographyGroup | undefined, field: TypographyField): string {
+  if (!group) return "—";
+  if (field === "family") return (normalizeFontFamily(group.typography.fontFamily) ?? "unspecified").toLowerCase();
+  if (field === "size") return group.typography.fontSize === undefined ? "—" : String(+group.typography.fontSize);
+  return typographyValue(group, field).toLowerCase();
+}
+
+function typographyInline(
+  side: "Reference" | "Candidate",
+  group: TypographyGroup | undefined,
+  other: TypographyGroup | undefined,
+  baseline: TypographyGroup | undefined,
+): string {
+  if (!group) return `<span class="type-inline"><span class="type-side">${side}</span> · No matching usage</span>`;
+  const changed = (field: TypographyField): boolean =>
+    !!other && typographyComparable(group, field) !== typographyComparable(other, field);
+  const overridden = (field: TypographyField): boolean =>
+    !!baseline && baseline !== group && typographyComparable(group, field) !== typographyComparable(baseline, field);
+  const piece = (value: string, isChanged: boolean, isOverride = false): string => {
+    const classes = [isChanged || isOverride ? "type-changed" : "", isOverride ? "type-override" : ""]
+      .filter(Boolean)
+      .join(" ");
+    const title = isOverride ? ` title="Changed from ${escapeHtml(group.token ?? "token")} default"` : "";
+    return `<span${classes ? ` class="${classes}"` : ""}${title}>${escapeHtml(value)}</span>`;
+  };
+  const type = group.typography;
+  const size = `${typographyValue(group, "size")}${type.lineHeight === undefined ? "" : `/${+type.lineHeight}`}`;
+  const sizeChanged = changed("size") || changed("lineHeight");
+  const sizeOverridden = overridden("size") || overridden("lineHeight");
+  const settings = [
+    piece(typographyValue(group, "token"), changed("token"), overridden("token")),
+    piece(typographyValue(group, "family"), changed("family"), overridden("family")),
+    piece(`wght ${typographyValue(group, "weight")}`, changed("weight"), overridden("weight")),
+    piece(size, sizeChanged, sizeOverridden),
+    ...(type.letterSpacing === undefined
+      ? []
+      : [piece(`tracking ${+type.letterSpacing}`, changed("tracking"), overridden("tracking"))]),
+    ...(type.fontStyle && type.fontStyle !== "normal"
+      ? [piece(type.fontStyle, changed("style"), overridden("style"))]
+      : []),
+  ];
+  const count = group ? `${group.nodes.length} ${group.nodes.length === 1 ? "usage" : "usages"}` : "No matching usage";
+  return `<span class="type-inline"><span class="type-side">${side}</span> · ${settings.join(" · ")} · <span class="type-count">${count}</span></span>`;
+}
+
+function typographyComparisonMarkup(comparison: TypographyComparison): string {
+  if (comparison.pairs.length === 0) return "";
+  const rows = comparison.pairs
+    .map((pair) => {
+      return `<article class="type-group" data-type-row="${escapeHtml(pair.marker)}" tabindex="0">
+                <span class="type-marker">${escapeHtml(pair.marker)}</span>
+                ${typographyInline("Reference", pair.reference, pair.candidate,
+                  pair.reference?.token ? comparison.referenceDefaults.get(pair.reference.token) : undefined)}
+                <span class="type-arrow" aria-hidden="true">→</span>
+                ${typographyInline("Candidate", pair.candidate, pair.reference,
+                  pair.candidate?.token ? comparison.candidateDefaults.get(pair.candidate.token) : undefined)}
+              </article>`;
+    })
+    .join("");
+  return `<section class="type-summary" data-summary-layer="typography" aria-label="Typography style comparison">
+            <h4>Typography styles</h4>
+            <div class="type-groups">${rows}</div>
+          </section>`;
 }
 
 /** Scale a node's geometry by a uniform factor — bounds only. Type sizes are
@@ -249,6 +334,7 @@ function variantMarkup(
   candTree: SemanticTree | undefined,
   deltas: readonly LayoutDelta[],
   controls: string,
+  typography: TypographyComparison,
 ): string {
   const meta = [variant.state, variant.theme, variant.size]
     .filter(Boolean)
@@ -267,8 +353,8 @@ function variantMarkup(
   const hasSlider = !!(refSrc && candSrc);
 
   const sideView = `<div class="view pair" data-view-panel="${index}" data-view-value="side">
-              ${panelMarkup(ref, "reference", refTree, deltas)}
-              ${panelMarkup(cand, "candidate", candTree, deltas)}
+              ${panelMarkup(ref, "reference", refTree, deltas, { typographyMarkers: typography.referenceMarkers })}
+              ${panelMarkup(cand, "candidate", candTree, deltas, { typographyMarkers: typography.candidateMarkers })}
             </div>`;
 
   // Differences: the pixel heatmap, with the layout-delta boxes available under
@@ -326,6 +412,7 @@ function variantMarkup(
               ${diffView}
               ${sliderView}
             </div>
+            ${typographyComparisonMarkup(typography)}
           </section>`;
 }
 
@@ -455,9 +542,22 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .anno{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .anno g[data-layer]{display:none}
 .anno g[data-layer].on{display:inline}
+.anno-type-hit{fill:transparent}.anno-type.active>rect{fill-opacity:.2}.anno-type-hit.active{fill:#9f85ff;fill-opacity:.28;stroke:#9f85ff;stroke-width:1}
 .anno-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .anno-controls-label{color:#9a9ab0;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
 .anno-toggle{display:flex;align-items:center;gap:6px;color:#c9c9dd;font-size:13px;cursor:pointer}
+.type-summary{display:none;margin-top:12px}
+.type-summary.on{display:block}
+.type-summary h4{margin:0 0 8px;color:#9a9ab0;text-transform:uppercase;font-size:11px;letter-spacing:.05em}
+.type-groups{display:grid;gap:6px;overflow-x:auto}
+.type-group{display:flex;align-items:center;gap:9px;min-width:max-content;padding:7px 10px;border:1px solid #30303b;border-radius:8px;background:#111118}
+.type-group:hover,.type-group:focus-visible{border-color:#7c5ce7;background:#19152a;outline:none}
+.type-marker{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#6941c6;color:#fff;font-size:10px;font-weight:700}
+.type-inline{color:#e7e7ef;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.type-side{color:#9a9ab0;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.type-changed{color:#f08a9c;font-weight:650}
+.type-override{text-decoration:underline 2px rgba(240,138,156,.55);text-underline-offset:2px}
+.type-count{color:#77778d;font-size:11px}.type-arrow{color:#9a9ab0}
 .overlay{margin-top:14px}
 .overlay-stack{position:relative;display:inline-block;border:1px solid #26262f;border-radius:8px;overflow:hidden;background:#0c0c11}
 .overlay-stack img{display:block;max-width:100%}
@@ -517,12 +617,27 @@ const SCRIPT = `(function(){
       var layer=box.getAttribute('data-anno-layer');
       var scope=box.closest('.variant')||document;
       function apply(){
-        var gs=scope.querySelectorAll('.anno g[data-layer="'+layer+'"]');
+        var gs=scope.querySelectorAll('.anno g[data-layer="'+layer+'"],[data-summary-layer="'+layer+'"]');
         for(var k=0;k<gs.length;k++){ gs[k].classList[box.checked?'add':'remove']('on'); }
       }
       box.addEventListener('change',apply);
       apply();
     })(toggles[j]);
+  }
+  var typeRows=document.querySelectorAll('[data-type-row]');
+  for(var r=0;r<typeRows.length;r++){
+    (function(row){
+      var marker=row.getAttribute('data-type-row');
+      var scope=row.closest('.variant')||document;
+      function active(on){
+        var nodes=scope.querySelectorAll('[data-type-marker="'+marker+'"]');
+        for(var n=0;n<nodes.length;n++){nodes[n].classList[on?'add':'remove']('active');}
+      }
+      row.addEventListener('mouseenter',function(){active(true);});
+      row.addEventListener('mouseleave',function(){active(false);});
+      row.addEventListener('focus',function(){active(true);});
+      row.addEventListener('blur',function(){active(false);});
+    })(typeRows[r]);
   }
 })();`;
 
@@ -558,6 +673,7 @@ export function renderHtmlReport(input: ReportInput): string {
   // internally; this is the matching fix for the overlay.
   const candTree = toDisplayFrame(candidate.semantics, refTree);
   const deltas = layoutDeltas(verdict);
+  const typography = compareTypography(refTree, candTree);
 
   const hasVariants = rendered.length > 0;
   // Show the annotation toggles only when at least one panel can draw them. They
@@ -565,12 +681,13 @@ export function renderHtmlReport(input: ReportInput): string {
   // the controls for a comparison are right where you're looking (scoped per
   // variant by the toggle script).
   const hasAnnotations =
-    !!annotationSvg(candTree, deltas) || !!annotationSvg(refTree, deltas);
+    !!annotationSvg(candTree, deltas, { typographyMarkers: typography.candidateMarkers }) ||
+    !!annotationSvg(refTree, deltas, { typographyMarkers: typography.referenceMarkers });
   const controls = hasAnnotations ? annotationControls(deltas.length > 0) : "";
 
   const detailsHtml = rendered
     .map((r) =>
-      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree, deltas, controls),
+      variantMarkup(r.variant, r.index, r.refSrc, r.candSrc, r.diffSrc, refTree, candTree, deltas, controls, typography),
     )
     .join("\n");
 
