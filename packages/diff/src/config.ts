@@ -29,6 +29,22 @@ export interface DiffConfig {
    */
   visualWarnRatio: number;
   /**
+   * Minimum reference alpha (0…1) for a pixel to count as opaque in the
+   * directional alpha-loss diagnostic.
+   */
+  visualAlphaOpaqueThreshold: number;
+  /**
+   * Maximum candidate alpha (0…1) for a pixel to count as transparent in the
+   * directional alpha-loss diagnostic.
+   */
+  visualAlphaTransparentThreshold: number;
+  /**
+   * Fraction of aligned pixels (0…1) that must be opaque in the reference and
+   * transparent in the candidate before a directional alpha-loss finding is
+   * raised. The finding remains an advisory visual warning.
+   */
+  visualAlphaLossWarnRatio: number;
+  /**
    * Max per-axis dimension delta (px) between reference and candidate that
    * counts as *density rounding* rather than a real size difference. Two render
    * tools rounding density differently (e.g. Robolectric 2.625 vs a
@@ -68,6 +84,9 @@ export const defaultDiffConfig: DiffConfig = {
   radiusTolerance: 1,
   pixelThreshold: 0.05,
   visualWarnRatio: 0,
+  visualAlphaOpaqueThreshold: 0.9,
+  visualAlphaTransparentThreshold: 0.1,
+  visualAlphaLossWarnRatio: 0.01,
   visualDimTolerancePx: 8,
   layoutTolerance: 4,
 };
