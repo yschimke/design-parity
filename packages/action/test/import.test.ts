@@ -16,7 +16,13 @@ import {
 } from "@design-parity/adapter-figma";
 import type { DesignMap } from "@design-parity/core";
 
-import { figmaRefsOf, importReferences, importTargets, refreshOrder } from "../src/import.js";
+import {
+  figmaContentsOnlyByNodeOf,
+  figmaRefsOf,
+  importReferences,
+  importTargets,
+  refreshOrder,
+} from "../src/import.js";
 
 const FILE = "AbCdEf123456";
 const BASE = "https://api.test";
@@ -114,6 +120,26 @@ describe("figmaRefsOf", () => {
     ]);
     expect(figmaRefsOf(undefined)).toEqual([]);
   });
+
+  it("collects per-reference export modes while component sets keep the fallback", () => {
+    const map: DesignMap = {
+      components: [
+        {
+          code: "a/A.kt#A",
+          source: "figma",
+          ref: `figma:${FILE}/1:1`,
+          refSet: `figma:${FILE}/9:9`,
+          referenceContentsOnly: false,
+        },
+        { code: "b/B.kt#B", source: "figma", ref: `figma:${FILE}/2:2` },
+      ],
+    };
+    expect([...figmaContentsOnlyByNodeOf(map)]).toEqual([
+      [`${FILE}/1:1`, false],
+      [`${FILE}/9:9`, true],
+      [`${FILE}/2:2`, true],
+    ]);
+  });
 });
 
 describe("importTargets", () => {
@@ -153,6 +179,21 @@ describe("refreshOrder", () => {
     const entries = new Map([["1:1", entry("1:1", "v1", "2026-01-01T00:00:00Z")]]);
     expect(refreshOrder(["1:1"], (id) => entries.get(id), "v1", false)).toEqual([]);
     expect(refreshOrder(["1:1"], (id) => entries.get(id), "v1", true)).toEqual(["1:1"]);
+  });
+
+  it("re-queues a current entry when the contents-only mode changes", () => {
+    const entries = new Map([
+      [
+        "1:1",
+        {
+          ...entry("1:1", "v1", "2026-01-01T00:00:00Z"),
+          imageContentsOnly: true,
+        },
+      ],
+    ]);
+    expect(
+      refreshOrder(["1:1"], (id) => entries.get(id), "v1", false, false),
+    ).toEqual(["1:1"]);
   });
 
   it("re-queues an entry that has structure but no image", () => {
@@ -204,6 +245,46 @@ describe("importReferences", () => {
     // must not look freshly imported.
     const cache = await ReferenceCache.open(dir);
     expect(cache!.entry(FILE, "1:1")?.fetchedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("refreshes only the node whose per-reference mode includes overlapping layers", async () => {
+    const dir = await cacheDir();
+    const refs = [`figma:${FILE}/1:1`, `figma:${FILE}/1:2`];
+    await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(fakeFigma().fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+
+    const second = fakeFigma();
+    const result = await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(second.fetch),
+      now: at("2026-02-01T00:00:00.000Z"),
+      imageContentsOnlyByNode: new Map([[`${FILE}/1:1`, false]]),
+    });
+
+    expect(result.refreshed).toBe(1);
+    expect(
+      new URL(BASE + second.paths.find((p) => p.includes("/v1/images/"))).searchParams.get(
+        "contents_only",
+      ),
+    ).toBe("false");
+    expect((await ReferenceCache.open(dir))!.entry(FILE, "1:1")?.imageContentsOnly).toBe(false);
+    expect((await ReferenceCache.open(dir))!.entry(FILE, "1:2")?.imageContentsOnly).toBe(true);
+
+    const third = fakeFigma();
+    const unchanged = await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(third.fetch),
+      now: at("2026-03-01T00:00:00.000Z"),
+      imageContentsOnlyByNode: new Map([[`${FILE}/1:1`, false]]),
+    });
+    expect(unchanged).toMatchObject({ refreshed: 0, unchanged: [FILE] });
+    expect(third.paths).toEqual([`/v1/files/${FILE}?depth=1`]);
   });
 
   it("re-reads every node once the file version moves", async () => {

@@ -90,6 +90,13 @@ on:
         required: false
         type: number
         default: 0
+      figma-contents-only:
+        description: >
+          Whether Figma exports only each referenced node. Set false to include overlapping layers,
+          such as a component-sheet background. Defaults true, matching Figma's API default.
+        required: false
+        type: boolean
+        default: true
       design-parity-version:
         description: "npm version of the `design-parity` CLI to run (must be >= the release carrying `import`)."
         required: false
@@ -242,6 +249,7 @@ jobs:
           MAX: ${{ inputs.max }}
           IMAGE_FORMAT: ${{ inputs.image-format }}
           IMAGE_SCALE: ${{ inputs.image-scale }}
+          FIGMA_CONTENTS_ONLY: ${{ inputs.figma-contents-only }}
           FORCE: ${{ inputs.force }}
           PRUNE: ${{ inputs.prune }}
         run: |
@@ -265,6 +273,7 @@ jobs:
             --repo . \
             --cache "$CACHE_DIR" \
             --format "${IMAGE_FORMAT}" \
+            --contents-only "${FIGMA_CONTENTS_ONLY}" \
             "${opts[@]}" | tee "$log"
 
           # The CLI prints `name=value` lines precisely so they can go straight

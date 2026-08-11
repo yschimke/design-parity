@@ -3,7 +3,7 @@
  * `design-parity import` — refresh the committed reference cache.
  *
  *   design-parity import --repo . --cache reference-cache [--max 200] \
- *     [--force] [--format svg|png] [--scale 2] [--prune]
+ *     [--force] [--format svg|png] [--scale 2] [--contents-only false] [--prune]
  *
  * Reads `design-map.json`, works out which Figma nodes the catalog needs, and
  * brings the cache directory up to date IN PLACE — refreshing what has moved,
@@ -32,13 +32,17 @@ import {
 } from "@design-parity/adapter-figma";
 
 import { resolveRunConfig } from "../config.js";
-import { figmaRefsOf, importReferences } from "../import.js";
+import {
+  figmaContentsOnlyByNodeOf,
+  figmaRefsOf,
+  importReferences,
+} from "../import.js";
 
 const TOKEN_ENV = ["FIGMA_TOKEN", "FIGMA_PAT", "FIGMA_ACCESS_TOKEN"] as const;
 
 export const USAGE =
   "design-parity import --cache <dir> [--repo .] [--max <n>] [--force] " +
-  "[--format svg|png] [--scale <n>] [--prune]\n";
+  "[--format svg|png] [--scale <n>] [--contents-only true|false] [--prune]\n";
 
 export interface ImportArgs {
   repoRoot: string;
@@ -48,6 +52,7 @@ export interface ImportArgs {
   prune: boolean;
   format: "png" | "svg";
   scale?: number;
+  contentsOnly: boolean;
 }
 
 export function parseArgs(args: string[]): ImportArgs {
@@ -57,6 +62,7 @@ export function parseArgs(args: string[]): ImportArgs {
     force: false,
     prune: false,
     format: "svg",
+    contentsOnly: true,
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -89,6 +95,9 @@ export function parseArgs(args: string[]): ImportArgs {
       }
       case "--scale":
         out.scale = Number(next() ?? 0) || undefined;
+        break;
+      case "--contents-only":
+        out.contentsOnly = next() !== "false";
         break;
       default:
         break;
@@ -136,6 +145,8 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     force: args.force,
     prune: args.prune,
     imageFormat: args.format,
+    imageContentsOnly: args.contentsOnly,
+    imageContentsOnlyByNode: figmaContentsOnlyByNodeOf(designMap, args.contentsOnly),
     ...(args.scale !== undefined ? { imageScale: args.scale } : {}),
     log: (m) => stdout.write(m + "\n"),
   });

@@ -68,6 +68,11 @@ export interface ReferenceCacheEntry {
   image?: string;
   imageFormat?: "png" | "svg";
   /**
+   * Figma `contents_only` mode used for this render. Older cache entries omit
+   * it and therefore mean Figma's default, `true`.
+   */
+  imageContentsOnly?: boolean;
+  /**
    * This entry is a **component set**, cached for its properties and its
    * variant names rather than for a picture of it (issue #296). Rendering a set
    * would produce a grid of every variant at once, which nothing compares
@@ -319,7 +324,11 @@ export class ReferenceCacheWriter {
     fileVersion: string;
     fetchedAt: string;
     node: CachedNodeDoc;
-    image?: { bytes: Uint8Array; format: "png" | "svg" };
+    image?: {
+      bytes: Uint8Array;
+      format: "png" | "svg";
+      contentsOnly?: boolean;
+    };
     /** Mark a component set, which is cached without a render. */
     structureOnly?: boolean;
   }): Promise<ReferenceCacheEntry> {
@@ -340,7 +349,11 @@ export class ReferenceCacheWriter {
       fetchedAt: input.fetchedAt,
       node: nodeRel,
       ...(imageRel && input.image
-        ? { image: imageRel, imageFormat: input.image.format }
+        ? {
+            image: imageRel,
+            imageFormat: input.image.format,
+            imageContentsOnly: input.image.contentsOnly ?? true,
+          }
         : {}),
       ...(input.structureOnly ? { structureOnly: true } : {}),
     };

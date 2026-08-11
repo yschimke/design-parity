@@ -191,7 +191,12 @@ export class FigmaRestClient {
   async renderImage(
     fileKey: string,
     nodeId: string,
-    opts: { scale?: number; format?: "png" | "svg" } = {},
+    opts: {
+      scale?: number;
+      format?: "png" | "svg";
+      /** Include only the node's own contents; false also renders overlapping layers. */
+      contentsOnly?: boolean;
+    } = {},
   ): Promise<RenderedImage> {
     const format = opts.format ?? "png";
     const scale = opts.scale ?? 2;
@@ -199,8 +204,10 @@ export class FigmaRestClient {
       format === "svg"
         ? `format=svg`
         : `format=png&scale=${scale}`;
+    const contentsOnly = opts.contentsOnly ?? true;
     const res = await this.#get<ImagesResponse>(
-      `/v1/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&${query}`,
+      `/v1/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&${query}` +
+        `&contents_only=${contentsOnly}`,
     );
     const url = res.images[nodeId];
     if (!url) {
