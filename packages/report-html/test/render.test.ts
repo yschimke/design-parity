@@ -180,6 +180,30 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain("closest('.variant')");
   });
 
+  it("highlights parameters overridden from the most-used form of a typography token", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const children = candidate.semantics!.root.children!;
+    children.push(
+      {
+        ...children[0]!,
+        label: "Default copy",
+        bounds: { x: 12, y: 38, width: 80, height: 20 },
+      },
+      {
+        ...children[0]!,
+        label: "Emphasis",
+        bounds: { x: 12, y: 62, width: 80, height: 20 },
+        tokens: {
+          typography: {
+            label: { fontFamily: "Roboto", fontSize: 14, fontWeight: 700, lineHeight: 20 },
+          },
+        },
+      },
+    );
+    const html = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+    expect(html).toContain('class="type-changed type-override" title="Changed from label default">wght 700</span>');
+  });
+
   it("offers one mutually-exclusive view mode selector instead of showing every view at once", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     const html = renderHtmlReport({

@@ -7,6 +7,7 @@ import {
   compareTypography,
   normalizeFontFamily,
   normalizeTypographyToken,
+  typographyDefaults,
   typographyGroups,
 } from "../src/typography.js";
 
@@ -68,5 +69,26 @@ describe("typography grouping", () => {
     expect(comparison.pairs[0]?.candidate?.token).toBe("bodyMedium");
     expect(comparison.referenceMarkers.get(comparison.pairs[0]!.reference!.key)).toBe("A");
     expect(comparison.candidateMarkers.get(comparison.pairs[0]!.candidate!.key)).toBe("A");
+  });
+
+  it("uses the most common resolved form as a token default and keeps overrides separate", () => {
+    const semanticTree = tree("bodyLarge", "Roboto", [
+      ["Default one", 10, 10],
+      ["Default two", 100, 10],
+    ]);
+    semanticTree.root.children!.push({
+      role: "text",
+      label: "Emphasis",
+      bounds: { x: 10, y: 50, width: 48, height: 20 },
+      tokens: {
+        typography: {
+          bodyLarge: { fontFamily: "Roboto", fontSize: 14, fontWeight: 700, lineHeight: 20 },
+        },
+      },
+    });
+    const groups = typographyGroups(semanticTree);
+    expect(groups).toHaveLength(2);
+    expect(typographyDefaults(groups).get("bodyLarge")?.nodes).toHaveLength(2);
+    expect(groups.find((group) => group.typography.fontWeight === 700)?.nodes).toHaveLength(1);
   });
 });

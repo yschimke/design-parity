@@ -201,22 +201,35 @@ function typographyInline(
   side: "Reference" | "Candidate",
   group: TypographyGroup | undefined,
   other: TypographyGroup | undefined,
+  baseline: TypographyGroup | undefined,
 ): string {
   if (!group) return `<span class="type-inline"><span class="type-side">${side}</span> · No matching usage</span>`;
   const changed = (field: TypographyField): boolean =>
     !!other && typographyComparable(group, field) !== typographyComparable(other, field);
-  const piece = (value: string, isChanged: boolean): string =>
-    `<span${isChanged ? ' class="type-changed"' : ""}>${escapeHtml(value)}</span>`;
+  const overridden = (field: TypographyField): boolean =>
+    !!baseline && baseline !== group && typographyComparable(group, field) !== typographyComparable(baseline, field);
+  const piece = (value: string, isChanged: boolean, isOverride = false): string => {
+    const classes = [isChanged || isOverride ? "type-changed" : "", isOverride ? "type-override" : ""]
+      .filter(Boolean)
+      .join(" ");
+    const title = isOverride ? ` title="Changed from ${escapeHtml(group.token ?? "token")} default"` : "";
+    return `<span${classes ? ` class="${classes}"` : ""}${title}>${escapeHtml(value)}</span>`;
+  };
   const type = group.typography;
   const size = `${typographyValue(group, "size")}${type.lineHeight === undefined ? "" : `/${+type.lineHeight}`}`;
   const sizeChanged = changed("size") || changed("lineHeight");
+  const sizeOverridden = overridden("size") || overridden("lineHeight");
   const settings = [
-    piece(typographyValue(group, "token"), changed("token")),
-    piece(typographyValue(group, "family"), changed("family")),
-    piece(`wght ${typographyValue(group, "weight")}`, changed("weight")),
-    piece(size, sizeChanged),
-    ...(type.letterSpacing === undefined ? [] : [piece(`tracking ${+type.letterSpacing}`, changed("tracking"))]),
-    ...(type.fontStyle && type.fontStyle !== "normal" ? [piece(type.fontStyle, changed("style"))] : []),
+    piece(typographyValue(group, "token"), changed("token"), overridden("token")),
+    piece(typographyValue(group, "family"), changed("family"), overridden("family")),
+    piece(`wght ${typographyValue(group, "weight")}`, changed("weight"), overridden("weight")),
+    piece(size, sizeChanged, sizeOverridden),
+    ...(type.letterSpacing === undefined
+      ? []
+      : [piece(`tracking ${+type.letterSpacing}`, changed("tracking"), overridden("tracking"))]),
+    ...(type.fontStyle && type.fontStyle !== "normal"
+      ? [piece(type.fontStyle, changed("style"), overridden("style"))]
+      : []),
   ];
   const count = group ? `${group.nodes.length} ${group.nodes.length === 1 ? "usage" : "usages"}` : "No matching usage";
   return `<span class="type-inline"><span class="type-side">${side}</span> · ${settings.join(" · ")} · <span class="type-count">${count}</span></span>`;
@@ -228,9 +241,11 @@ function typographyComparisonMarkup(comparison: TypographyComparison): string {
     .map((pair) => {
       return `<article class="type-group" data-type-row="${escapeHtml(pair.marker)}" tabindex="0">
                 <span class="type-marker">${escapeHtml(pair.marker)}</span>
-                ${typographyInline("Reference", pair.reference, pair.candidate)}
+                ${typographyInline("Reference", pair.reference, pair.candidate,
+                  pair.reference?.token ? comparison.referenceDefaults.get(pair.reference.token) : undefined)}
                 <span class="type-arrow" aria-hidden="true">→</span>
-                ${typographyInline("Candidate", pair.candidate, pair.reference)}
+                ${typographyInline("Candidate", pair.candidate, pair.reference,
+                  pair.candidate?.token ? comparison.candidateDefaults.get(pair.candidate.token) : undefined)}
               </article>`;
     })
     .join("");
@@ -511,6 +526,7 @@ th.matrix-row{text-align:left;white-space:nowrap;background:#13131a;font-family:
 .type-inline{color:#e7e7ef;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .type-side{color:#9a9ab0;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .type-changed{color:#f08a9c;font-weight:650}
+.type-override{text-decoration:underline 2px rgba(240,138,156,.55);text-underline-offset:2px}
 .type-count{color:#77778d;font-size:11px}.type-arrow{color:#9a9ab0}
 .overlay{margin-top:14px}
 .overlay-stack{position:relative;display:inline-block;border:1px solid #26262f;border-radius:8px;overflow:hidden;background:#0c0c11}

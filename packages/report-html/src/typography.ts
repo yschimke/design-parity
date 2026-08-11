@@ -30,6 +30,8 @@ export interface TypographyComparison {
   pairs: TypographyPair[];
   referenceMarkers: ReadonlyMap<string, string>;
   candidateMarkers: ReadonlyMap<string, string>;
+  referenceDefaults: ReadonlyMap<string, TypographyGroup>;
+  candidateDefaults: ReadonlyMap<string, TypographyGroup>;
 }
 
 function finite(value: number | string | undefined): number | undefined {
@@ -110,7 +112,19 @@ export function typographyGroups(tree: SemanticTree | undefined): TypographyGrou
   return [...groups.values()];
 }
 
+/** The most-used resolved form of a token is its local default; ties preserve tree order. */
+export function typographyDefaults(groups: readonly TypographyGroup[]): ReadonlyMap<string, TypographyGroup> {
+  const defaults = new Map<string, TypographyGroup>();
+  for (const group of groups) {
+    if (!group.token) continue;
+    const current = defaults.get(group.token);
+    if (!current || group.nodes.length > current.nodes.length) defaults.set(group.token, group);
+  }
+  return defaults;
+}
+
 function distance(left: TypographyGroup, right: TypographyGroup): number {
+  if (left.key === right.key) return -200;
   if (left.token && right.token && left.token === right.token) return -100;
   let commonRoles = 0;
   for (const role of left.roles) if (right.roles.has(role)) commonRoles += 1;
@@ -140,7 +154,8 @@ export function compareTypography(
   candidateTree: SemanticTree | undefined,
 ): TypographyComparison {
   const reference = typographyGroups(referenceTree);
-  const remaining = typographyGroups(candidateTree);
+  const candidateGroups = typographyGroups(candidateTree);
+  const remaining = [...candidateGroups];
   const pairs: Omit<TypographyPair, "marker">[] = reference.map((ref) => {
     let bestIndex = -1;
     let bestDistance = Infinity;
@@ -170,7 +185,13 @@ export function compareTypography(
     }
     return { marker, ...pair };
   });
-  return { pairs: marked, referenceMarkers, candidateMarkers };
+  return {
+    pairs: marked,
+    referenceMarkers,
+    candidateMarkers,
+    referenceDefaults: typographyDefaults(reference),
+    candidateDefaults: typographyDefaults(candidateGroups),
+  };
 }
 
 function touches(left: Bounds, right: Bounds, xGap: number, yGap: number): boolean {
