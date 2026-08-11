@@ -154,9 +154,17 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain('<svg class="anno"');
     expect(html).toContain('<g data-layer="spacing">');
     expect(html).toContain('<g data-layer="typography">');
-    // Box-model detail (the fixture button is 160×48, r8, p12) and the type callout.
+    // Box-model detail (the fixture button is 160×48, r8, p12) and the grouped type settings.
     expect(html).toContain("160×48 r8 p12");
-    expect(html).toContain("Roboto · 14sp · 500");
+    expect(html).toContain('data-summary-layer="typography"');
+    expect(html).toContain('<span class="type-side">Candidate</span>');
+    expect(html).toContain("Roboto");
+    expect(html).toContain("14sp");
+    expect(html).toContain("wght 500");
+    expect(html).toContain("1 usage");
+    expect(html).toContain(">A</text>");
+    expect(html).toContain('data-type-row="A" tabindex="0"');
+    expect(html).toContain("addEventListener('mouseenter'");
     // Layers ship hidden; the inline script toggles them on.
     expect(html).toContain(".anno g[data-layer]{display:none}");
     expect(html).toContain("data-anno-layer");
