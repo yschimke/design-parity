@@ -276,6 +276,22 @@ export async function diff(
         },
       });
     }
+    if (
+      v.alphaLossRatio !== undefined &&
+      v.alphaLossRatio > config.visualAlphaLossWarnRatio
+    ) {
+      visualFindings.push({
+        kind: "visual",
+        severity: "warn",
+        message: `${v.key}: ${(v.alphaLossRatio * 100).toFixed(1)}% of aligned pixels are opaque in the reference but transparent in the candidate`,
+        detail: {
+          key: v.key,
+          alphaLossRatio: round(v.alphaLossRatio),
+          alphaLossPixels: v.alphaLossPixels,
+          alphaComparedPixels: v.alphaComparedPixels,
+        },
+      });
+    }
     if (v.score > config.visualWarnRatio) {
       visualFindings.push({
         kind: "visual",

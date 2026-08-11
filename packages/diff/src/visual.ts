@@ -33,6 +33,12 @@ export interface VisualResult {
   score: number;
   diffPixels: number;
   totalPixels: number;
+  /** Reference-opaque pixels whose aligned candidate pixel is transparent. */
+  alphaLossPixels?: number;
+  /** Number of overlap pixels inspected for directional alpha loss. */
+  alphaComparedPixels?: number;
+  /** `alphaLossPixels / alphaComparedPixels`, when the pair can be aligned. */
+  alphaLossRatio?: number;
   /** Side-by-side reference | candidate | diff PNG. */
   triptych: Buffer;
   /**
@@ -209,12 +215,17 @@ export async function diffImagePair(
   let diffPixels: number;
   let diff: Raster | null = null;
   let diffPng: Buffer | undefined;
+  let alphaLossPixels: number | undefined;
+  let alphaComparedPixels: number | undefined;
+  let alphaLossRatio: number | undefined;
 
   if (ow > 0 && oh > 0) {
+    const refOverlap = cropTopLeft(ref, ow, oh);
+    const candOverlap = cropTopLeft(cand, ow, oh);
     const out = new PNG({ width: ow, height: oh });
     const overlapDiff = pixelmatch(
-      cropTopLeft(ref, ow, oh),
-      cropTopLeft(cand, ow, oh),
+      refOverlap,
+      candOverlap,
       out.data,
       ow,
       oh,
@@ -224,6 +235,15 @@ export async function diffImagePair(
     diffPng = PNG.sync.write(out);
     // Differing overlap pixels + the border only one image covers.
     diffPixels = overlapDiff + borderPixels;
+    alphaComparedPixels = ow * oh;
+    alphaLossPixels = countDirectionalAlphaLoss(
+      refOverlap,
+      candOverlap,
+      config.visualAlphaOpaqueThreshold,
+      config.visualAlphaTransparentThreshold,
+    );
+    alphaLossRatio =
+      alphaComparedPixels === 0 ? 0 : alphaLossPixels / alphaComparedPixels;
   } else {
     // No overlap at all (a zero-dimension side) — nothing to render or measure.
     diffPixels = totalPixels;
@@ -242,7 +262,30 @@ export async function diffImagePair(
     };
     result.borderPixels = borderPixels;
   }
+  if (alphaLossPixels !== undefined) result.alphaLossPixels = alphaLossPixels;
+  if (alphaComparedPixels !== undefined) {
+    result.alphaComparedPixels = alphaComparedPixels;
+  }
+  if (alphaLossRatio !== undefined) result.alphaLossRatio = alphaLossRatio;
   return result;
+}
+
+/** Count aligned pixels that lose an opaque reference surface entirely. */
+function countDirectionalAlphaLoss(
+  reference: Buffer,
+  candidate: Buffer,
+  opaqueThreshold: number,
+  transparentThreshold: number,
+): number {
+  const opaqueAlpha = Math.round(opaqueThreshold * 0xff);
+  const transparentAlpha = Math.round(transparentThreshold * 0xff);
+  let count = 0;
+  for (let i = 3; i < reference.length; i += 4) {
+    if (reference[i]! >= opaqueAlpha && candidate[i]! <= transparentAlpha) {
+      count++;
+    }
+  }
+  return count;
 }
 
 /**
