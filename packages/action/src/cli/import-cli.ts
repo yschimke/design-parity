@@ -32,7 +32,11 @@ import {
 } from "@design-parity/adapter-figma";
 
 import { resolveRunConfig } from "../config.js";
-import { figmaRefsOf, importReferences } from "../import.js";
+import {
+  figmaContentsOnlyByNodeOf,
+  figmaRefsOf,
+  importReferences,
+} from "../import.js";
 
 const TOKEN_ENV = ["FIGMA_TOKEN", "FIGMA_PAT", "FIGMA_ACCESS_TOKEN"] as const;
 
@@ -142,6 +146,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     prune: args.prune,
     imageFormat: args.format,
     imageContentsOnly: args.contentsOnly,
+    imageContentsOnlyByNode: figmaContentsOnlyByNodeOf(designMap, args.contentsOnly),
     ...(args.scale !== undefined ? { imageScale: args.scale } : {}),
     log: (m) => stdout.write(m + "\n"),
   });

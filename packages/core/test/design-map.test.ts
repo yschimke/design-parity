@@ -173,6 +173,20 @@ describe("design-map schema", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("accepts a per-reference Figma contents-only override", () => {
+    const r = validateDesignMap({
+      components: [
+        {
+          code: "ui/Search.kt#ExpandedSearch",
+          source: "figma",
+          ref: "figma:K/1:2",
+          referenceContentsOnly: false,
+        },
+      ],
+    });
+    expect(r.valid).toBe(true);
+  });
+
   it("rejects a previewId variant missing its handle (#111)", () => {
     const r = validateDesignMap({
       components: [

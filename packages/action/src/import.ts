@@ -75,6 +75,11 @@ export interface ImportOptions {
    */
   imageContentsOnly?: boolean;
   /**
+   * Per-node overrides keyed as `fileKey/nodeId`. Values from design-map
+   * `referenceContentsOnly` take precedence over [imageContentsOnly].
+   */
+  imageContentsOnlyByNode?: ReadonlyMap<string, boolean>;
+  /**
    * Delete cached nodes `refs` no longer names. Off by default: pruning
    * against a partial ref list throws away references the next full import has
    * to fetch again.
@@ -123,6 +128,37 @@ export function figmaRefsOf(map: DesignMap | undefined): string[] {
   return [...out];
 }
 
+/** Per-node Figma export modes declared by a design map. */
+export function figmaContentsOnlyByNodeOf(
+  map: DesignMap | undefined,
+  fallback = true,
+): Map<string, boolean> {
+  const out = new Map<string, boolean>();
+  if (!map) return out;
+
+  const add = (ref: string, contentsOnly: boolean) => {
+    try {
+      const parsed = parseFigmaRef(ref);
+      const key = cacheKeyOf(parsed.fileKey, parsed.nodeId);
+      const previous = out.get(key);
+      // One cache key can hold only one render. If duplicate mappings disagree,
+      // preserve the opt-in that needs overlapping content rather than silently
+      // dropping its authored backdrop.
+      out.set(key, previous === undefined ? contentsOnly : previous && contentsOnly);
+    } catch {
+      // figmaRefsOf/importTargets report unparseable handles through the normal warning path.
+    }
+  };
+
+  for (const entry of map.components) {
+    if (entry.source !== "figma") continue;
+    const contentsOnly = entry.referenceContentsOnly ?? fallback;
+    for (const variant of entryRefs(entry)) add(variant.ref, contentsOnly);
+    if (entry.refSet) add(entry.refSet, fallback);
+  }
+  return out;
+}
+
 /**
  * Parse `refs` into concrete nodes, grouped by file.
  *
@@ -163,12 +199,14 @@ export function refreshOrder(
   entryOf: (nodeId: string) => ReferenceCacheEntry | undefined,
   fileVersion: string,
   force: boolean,
-  imageContentsOnly = true,
+  imageContentsOnly: boolean | ((nodeId: string) => boolean) = true,
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
     if (!entry || !entry.image) return true;
-    if ((entry.imageContentsOnly ?? true) !== imageContentsOnly) return true;
+    const desired =
+      typeof imageContentsOnly === "function" ? imageContentsOnly(id) : imageContentsOnly;
+    if ((entry.imageContentsOnly ?? true) !== desired) return true;
     return force || entry.fileVersion !== fileVersion;
   });
   return due.sort((a, b) => {
@@ -186,6 +224,8 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
   const now = opts.now ?? (() => new Date());
   const log = opts.log ?? (() => {});
   const imageContentsOnly = opts.imageContentsOnly ?? true;
+  const contentsOnlyFor = (fileKey: string, nodeId: string) =>
+    opts.imageContentsOnlyByNode?.get(cacheKeyOf(fileKey, nodeId)) ?? imageContentsOnly;
   const format = opts.imageFormat ?? "svg";
   const limit = opts.limit && opts.limit > 0 ? opts.limit : Infinity;
 
@@ -239,7 +279,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       (id) => writer.entry(fileKey, id),
       version,
       opts.force === true,
-      imageContentsOnly,
+      (id) => contentsOnlyFor(fileKey, id),
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
@@ -283,10 +323,11 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
         continue;
       }
       try {
+        const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
         const rendered = await opts.client.renderImage(fileKey, nodeId, {
           format,
           ...(opts.imageScale !== undefined ? { scale: opts.imageScale } : {}),
-          contentsOnly: imageContentsOnly,
+          contentsOnly: nodeContentsOnly,
         });
         await writer.put({
           fileKey,
@@ -294,7 +335,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes: rendered.bytes, format, contentsOnly: imageContentsOnly },
+          image: { bytes: rendered.bytes, format, contentsOnly: nodeContentsOnly },
         });
         result.refreshed += 1;
       } catch (err) {

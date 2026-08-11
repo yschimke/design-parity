@@ -148,6 +148,10 @@
           "type": "string",
           "description": "Optional handle for the component FAMILY that `ref` is one variant of — a Figma component set, or whatever the source calls the node owning a component's variants. Sources without the concept omit it. Kept separate from `ref` because the two serve different consumers: parity diffs against `ref`, so that must be one concrete renderable variant, while whole-screen matching (page backdrops) sees an instance reporting its own variant plus its set, and a screen rarely uses the exact variant a catalog pictured. Figma: 'figma:<fileKey>/<nodeId>' naming a COMPONENT_SET."
         },
+        "referenceContentsOnly": {
+          "type": "boolean",
+          "description": "Whether a Figma export includes only the mapped node's own content. Defaults true. Set false only when this reference intentionally relies on overlapping sheet layers such as an authored backdrop."
+        },
         "previewId": {
           "description": "Optional compose-ai-tools preview id this code handle renders as. A string binds a single candidate preview (e.g. 'ee.app.FooKt.Bar'); a list of variant-tagged handles binds several themes/states/sizes authored as separate @Previews, each re-tagged onto its variant slot and merged into one candidate (issue #111). Links a preview-bundle/daemon candidate (keyed by preview id) to this reference (keyed by code handle). See design-parity issues #44 and #111.",
           "oneOf": [

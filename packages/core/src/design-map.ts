@@ -57,6 +57,12 @@ export interface DesignMapEntry {
    */
   refSet?: string;
   /**
+   * Whether Figma exports only the mapped node's own content. Defaults to true.
+   * Set false only for a reference that intentionally relies on overlapping
+   * sheet layers, such as an authored backdrop.
+   */
+  referenceContentsOnly?: boolean;
+  /**
    * Optional compose-ai-tools preview id this code handle renders as — the
    * authoritative link between a preview-bundle / daemon candidate (keyed by
    * preview id) and this reference (keyed by code handle), see issue #44.
