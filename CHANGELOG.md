@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.47](https://github.com/yschimke/design-parity/compare/v0.1.46...v0.1.47) (2026-08-11)
+
+
+### Features
+
+* configure per-reference Figma backgrounds ([#323](https://github.com/yschimke/design-parity/issues/323)) ([c6de0d3](https://github.com/yschimke/design-parity/commit/c6de0d30af40749d66bce6439f1821b6b402986b))
+* report directional alpha loss ([#321](https://github.com/yschimke/design-parity/issues/321)) ([febb483](https://github.com/yschimke/design-parity/commit/febb483c159e3cf6af271010a50dd34db6c6164b))
+
 ## [0.1.46](https://github.com/yschimke/design-parity/compare/v0.1.45...v0.1.46) (2026-08-09)
 
 
