@@ -155,6 +155,21 @@ describe("refreshOrder", () => {
     expect(refreshOrder(["1:1"], (id) => entries.get(id), "v1", true)).toEqual(["1:1"]);
   });
 
+  it("re-queues a current entry when the contents-only mode changes", () => {
+    const entries = new Map([
+      [
+        "1:1",
+        {
+          ...entry("1:1", "v1", "2026-01-01T00:00:00Z"),
+          imageContentsOnly: true,
+        },
+      ],
+    ]);
+    expect(
+      refreshOrder(["1:1"], (id) => entries.get(id), "v1", false, false),
+    ).toEqual(["1:1"]);
+  });
+
   it("re-queues an entry that has structure but no image", () => {
     const half = { ...entry("1:1", "v1", "2026-01-01T00:00:00Z"), image: undefined };
     expect(refreshOrder(["1:1"], () => half, "v1", false)).toEqual(["1:1"]);
@@ -204,6 +219,45 @@ describe("importReferences", () => {
     // must not look freshly imported.
     const cache = await ReferenceCache.open(dir);
     expect(cache!.entry(FILE, "1:1")?.fetchedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("refreshes once when overlapping layers are enabled", async () => {
+    const dir = await cacheDir();
+    const refs = [`figma:${FILE}/1:1`];
+    await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(fakeFigma().fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+
+    const second = fakeFigma();
+    const result = await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(second.fetch),
+      now: at("2026-02-01T00:00:00.000Z"),
+      imageContentsOnly: false,
+    });
+
+    expect(result.refreshed).toBe(1);
+    expect(
+      new URL(BASE + second.paths.find((p) => p.includes("/v1/images/"))).searchParams.get(
+        "contents_only",
+      ),
+    ).toBe("false");
+    expect((await ReferenceCache.open(dir))!.entry(FILE, "1:1")?.imageContentsOnly).toBe(false);
+
+    const third = fakeFigma();
+    const unchanged = await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(third.fetch),
+      now: at("2026-03-01T00:00:00.000Z"),
+      imageContentsOnly: false,
+    });
+    expect(unchanged).toMatchObject({ refreshed: 0, unchanged: [FILE] });
+    expect(third.paths).toEqual([`/v1/files/${FILE}?depth=1`]);
   });
 
   it("re-reads every node once the file version moves", async () => {

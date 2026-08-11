@@ -70,6 +70,11 @@ export interface ImportOptions {
   imageFormat?: "png" | "svg";
   imageScale?: number;
   /**
+   * Figma `contents_only` export mode. Defaults to true; false includes
+   * overlapping layers such as component-sheet backgrounds.
+   */
+  imageContentsOnly?: boolean;
+  /**
    * Delete cached nodes `refs` no longer names. Off by default: pruning
    * against a partial ref list throws away references the next full import has
    * to fetch again.
@@ -158,10 +163,12 @@ export function refreshOrder(
   entryOf: (nodeId: string) => ReferenceCacheEntry | undefined,
   fileVersion: string,
   force: boolean,
+  imageContentsOnly = true,
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
     if (!entry || !entry.image) return true;
+    if ((entry.imageContentsOnly ?? true) !== imageContentsOnly) return true;
     return force || entry.fileVersion !== fileVersion;
   });
   return due.sort((a, b) => {
@@ -178,6 +185,7 @@ export function refreshOrder(
 export async function importReferences(opts: ImportOptions): Promise<ImportResult> {
   const now = opts.now ?? (() => new Date());
   const log = opts.log ?? (() => {});
+  const imageContentsOnly = opts.imageContentsOnly ?? true;
   const format = opts.imageFormat ?? "svg";
   const limit = opts.limit && opts.limit > 0 ? opts.limit : Infinity;
 
@@ -231,6 +239,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       (id) => writer.entry(fileKey, id),
       version,
       opts.force === true,
+      imageContentsOnly,
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
@@ -277,6 +286,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
         const rendered = await opts.client.renderImage(fileKey, nodeId, {
           format,
           ...(opts.imageScale !== undefined ? { scale: opts.imageScale } : {}),
+          contentsOnly: imageContentsOnly,
         });
         await writer.put({
           fileKey,
@@ -284,7 +294,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes: rendered.bytes, format },
+          image: { bytes: rendered.bytes, format, contentsOnly: imageContentsOnly },
         });
         result.refreshed += 1;
       } catch (err) {

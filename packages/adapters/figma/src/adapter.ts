@@ -95,6 +95,11 @@ export interface FigmaAdapterOptions {
    * keeps the legacy raster export at {@link FigmaAdapterOptions.imageScale}.
    */
   imageFormat?: "png" | "svg";
+  /**
+   * Whether Figma exports only the referenced node's own contents. Defaults to
+   * true; false includes overlapping layers, such as a component-sheet backdrop.
+   */
+  imageContentsOnly?: boolean;
   /** Code Connect JSON to consult when `ref` is not a figma handle. */
   codeConnectPath?: string;
   /**
@@ -469,6 +474,7 @@ export class FigmaAdapter implements ReferenceAdapter {
         const rendered = await client().renderImage(figmaRef.fileKey, target.nodeId, {
           scale: this.#opts.imageScale,
           format,
+          contentsOnly: this.#opts.imageContentsOnly,
         });
         bytes = rendered.bytes;
         imageFormat = format;

@@ -12,6 +12,7 @@ describe("import CLI arguments", () => {
       force: false,
       prune: false,
       format: "svg",
+      contentsOnly: true,
     });
     expect(args.scale).toBeUndefined();
   });
@@ -25,8 +26,16 @@ describe("import CLI arguments", () => {
       "--prune",
       "--format", "png",
       "--scale", "2",
+      "--contents-only", "false",
     ]);
-    expect(args).toMatchObject({ max: 25, force: true, prune: true, format: "png", scale: 2 });
+    expect(args).toMatchObject({
+      max: 25,
+      force: true,
+      prune: true,
+      format: "png",
+      scale: 2,
+      contentsOnly: false,
+    });
   });
 
   it("ignores a format it cannot render rather than importing nonsense", () => {

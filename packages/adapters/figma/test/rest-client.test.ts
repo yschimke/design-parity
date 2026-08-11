@@ -129,3 +129,32 @@ describe("getFileMeta", () => {
     expect(calls[0]).toContain("/v1/files/KEY?depth=1");
   });
 });
+
+describe("renderImage", () => {
+  it("requests overlapping layers when contentsOnly is false", async () => {
+    const { client, calls } = clientFor([
+      json({ err: null, images: { "1:2": "https://images.test/1-2.png" } }),
+      new Response(new Uint8Array([1, 2, 3])),
+    ]);
+
+    await client.renderImage("KEY", "1:2", {
+      format: "png",
+      scale: 2,
+      contentsOnly: false,
+    });
+
+    const query = new URL(calls[0]);
+    expect(query.searchParams.get("contents_only")).toBe("false");
+  });
+
+  it("keeps Figma's contents-only default explicit", async () => {
+    const { client, calls } = clientFor([
+      json({ err: null, images: { "1:2": "https://images.test/1-2.svg" } }),
+      new Response("<svg/>"),
+    ]);
+
+    await client.renderImage("KEY", "1:2", { format: "svg" });
+
+    expect(new URL(calls[0]).searchParams.get("contents_only")).toBe("true");
+  });
+});
