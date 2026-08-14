@@ -37,7 +37,7 @@ source checkout.
   consumed as published artifacts — **no checkout of that repo**:
   - the **Gradle plugin** from Maven Central, applied in your app to emit the
     preview bundles design-parity reads —
-    `plugins { id("ee.schimke.composeai.preview") version "0.15.0" }`;
+    `plugins { id("ee.schimke.composeai.preview") version "1.3.0" }`;
   - **and/or** the **`compose-preview` CLI** binary, for on-demand renders and
     the daemon — install once with
     `curl -fsSL https://raw.githubusercontent.com/yschimke/skills/main/scripts/install.sh | bash`.
