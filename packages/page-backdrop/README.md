@@ -62,6 +62,10 @@ instances inside other instances, default `false`), and `overlay`
 ## Using it
 
 ```bash
+# What pages does the file have? This is where the node ids in `pages` come
+# from, so it runs before there is a config to opt in with. One request.
+design-parity-pages list --file ocdacdEsnHipMJD3egzxKb --slug material-3-kit
+
 # Is it on for this repo? (safe to run anywhere — says so when it isn't)
 design-parity-pages status
 
