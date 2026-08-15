@@ -316,6 +316,38 @@ export function rawPreviewIdForEntry(
   return typeof raw === "string" && raw.length > 0 ? raw : entry.id;
 }
 
+/** A preview's captures, with the implicit single default capture filled in. */
+function capturesOf(entry: PreviewEntry): PreviewCapture[] {
+  return entry.captures && entry.captures.length > 0
+    ? entry.captures
+    : [{} as PreviewCapture];
+}
+
+/**
+ * True when a listed preview carries no image at all — the shape compose-preview
+ * writes for a preview it was told not to render.
+ *
+ * `bundle pack --exclude-preview-id` (compose-ai-tools#2966) is how a sharded or
+ * scoped run skips the previews it will not compare: the excluded preview stays
+ * LISTED in `previews.json`, so it remains addressable on a serve host
+ * (compose-ai-tools#2965), and simply carries no PNG and no sidecars. A scoped
+ * parity run is the common case, not an edge one — m3-catalog draws 1,095
+ * previews and maps 77, so 1,018 of the listed entries have no image by design.
+ *
+ * Deliberately all-or-nothing. A preview that carries SOME of its captures and
+ * not others is a broken pack rather than a deferred one, and
+ * {@link previewToCandidate} still rejects it.
+ */
+export function previewHasNoRender(
+  bundle: PreviewBundle,
+  entry: PreviewEntry,
+): boolean {
+  if (!entry.id) return false;
+  return capturesOf(entry).every(
+    (capture) => !bundle.entries[imagePathFor(entry.id, capture)],
+  );
+}
+
 /**
  * Build the {@link CandidateRender} for one preview. A preview with no explicit
  * `captures[]` is treated as a single default capture keyed on its `id`.
@@ -334,10 +366,7 @@ export function previewToCandidate(
   if (!entry.id) {
     throw new InvalidBundleError("a previews.json entry is missing its `id`");
   }
-  const captures =
-    entry.captures && entry.captures.length > 0
-      ? entry.captures
-      : [{} as PreviewCapture];
+  const captures = capturesOf(entry);
 
   const images: Image[] = [];
   let semantics: SemanticTree | undefined;
@@ -453,12 +482,36 @@ export function mergeCandidateRenders(
   return merged;
 }
 
-/** Map every preview in a bundle to a {@link CandidateRender}. */
+/**
+ * Map every *rendered* preview in a bundle to a {@link CandidateRender}.
+ *
+ * Previews the pack was told to skip carry no image (see
+ * {@link previewHasNoRender}) and are dropped here rather than throwing. They
+ * used to take the whole run with them: one deferred entry made the bundle
+ * "invalid", every component's comparison failed soft against that same error,
+ * and the board published nothing — for a scoped run, where the deferred
+ * previews outnumber the compared ones by an order of magnitude, that is the
+ * normal shape of the bundle rather than a corruption of it. A component whose
+ * own preview is missing still reports as "no candidate render", which is the
+ * honest signal and one the report already models.
+ *
+ * A bundle in which *nothing* is rendered is still an error: it means the pack
+ * produced no images at all, which no scoping explains.
+ */
 export function bundleToCandidates(
   bundle: PreviewBundle,
   resolveComponentId?: ComponentIdResolver,
 ): CandidateRender[] {
-  return bundle.previews.map((entry) =>
+  const rendered = bundle.previews.filter(
+    (entry) => !previewHasNoRender(bundle, entry),
+  );
+  if (bundle.previews.length > 0 && rendered.length === 0) {
+    throw new InvalidBundleError(
+      `none of the ${bundle.previews.length} listed preview(s) carry an image; ` +
+        "the pack rendered nothing",
+    );
+  }
+  return rendered.map((entry) =>
     previewToCandidate(bundle, entry, resolveComponentId),
   );
 }

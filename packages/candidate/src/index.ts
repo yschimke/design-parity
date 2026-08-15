@@ -91,6 +91,7 @@ export {
   parsePreviewBundle,
   bundleToCandidates,
   previewToCandidate,
+  previewHasNoRender,
   rawPreviewIdForEntry,
   mergeCandidateRenders,
   loadPreviewBundle,
