@@ -141,12 +141,26 @@ ranges stay coherent. Auth is **npm Trusted Publishing (OIDC)** — there is no
 is generated automatically.
 
 **One-time setup per package** (and once for every *new* package added later) —
-**one step, done before the package's first release:**
+**two steps, both done before the package's first release, in this order:**
 
-**Register the trusted publisher** on npmjs.com → *Add package* / the package's
-*Settings → Trusted Publisher*. npm accepts a package **name that does not exist
-yet**, as long as the scope is yours, and the release then creates it on its
-first OIDC publish. Four fields, all load-bearing:
+**1. Claim the name with one manual publish.** A trusted publisher is a setting
+*on a package*, so the package has to exist before one can be attached. Both
+routes agree on this: the web UI lives at
+`https://www.npmjs.com/package/<name>/access`, which 404s for a name nobody has
+published, and `npm trust` documents the same requirement.
+
+```sh
+npm publish --workspace <package> --access public
+```
+
+Pass `--tag bootstrap` if you would rather `latest` not point at this throwaway
+version until the first real release moves it.
+
+**2. Register the trusted publisher** at
+`https://www.npmjs.com/package/<name>/access` → *Trusted publishing* (or
+`npm trust github <name> --repo yschimke/design-parity --file release.yml
+--allow-publish`, which needs npm ≥ 11.15 and account-level 2FA). Four fields,
+all load-bearing:
 
 | Field | Value |
 | --- | --- |
@@ -156,13 +170,17 @@ first OIDC publish. Four fields, all load-bearing:
 | Environment | **blank** — the `publish` job declares no `environment:`, so its token carries no such claim and setting one rejects every publish |
 | Allowed actions | **`publish`** only. The release runs a plain `npm publish`; `stage publish` grants a staged-then-promoted flow this pipeline never uses |
 
-That is the whole setup. **Do not hand-publish a first version to "bootstrap"
-the name** — it is unnecessary, it is the slower path, and the artifact it
-produces is strictly worse: a manual publish carries no provenance, whereas the
-release's first OIDC publish signs one like every other. `@design-parity/kit-index`
-was added at `0.1.48` this way — registered while the name was still a 404, then
-created by run [31879034769](https://github.com/yschimke/design-parity/actions/runs/31879034769)
-with a signed provenance statement, no token anywhere.
+Every release after that publishes over OIDC with provenance, with no token
+anywhere. Only the one bootstrap version is unprovenanced, and that is the cost
+of the chicken-and-egg, not a choice.
+
+> **This section used to say the opposite** — that npm accepts a not-yet-existing
+> name and that hand-publishing to bootstrap was unnecessary. It is wrong, and
+> the registry says so: `@design-parity/kit-index@0.1.47` carries **no**
+> attestations (a manual publish, 10:11:35Z) and `0.1.48` carries provenance
+> (OIDC, 10:16:57Z). The name was claimed by hand and the publisher registered
+> against it five minutes later — which is the order above. Anyone following the
+> old text meets a 404 on the settings page and has nowhere to go.
 
 **Registering after the release reddens it.** The publish loop in
 [`release.yml`](./.github/workflows/release.yml) is per-workspace precisely so
@@ -178,8 +196,8 @@ only the one that was missing. Cutting a fresh version to carry a package that
 the existing tag already builds is wasted, and `0.1.41` shipping
 `page-backdrop` is what that mistake looked like, not the required path.
 
-Register up front anyway, in the same sitting as the package's first PR —
-because a recovery publish is deliberately **unprovenanced**
+Do both setup steps up front anyway, in the same sitting as the package's first
+PR — because a recovery publish is deliberately **unprovenanced**
 (`--provenance=false`; the dispatch's ref points at `main` while the tarball is
 built from the tag, so any attestation it emitted would name a commit that
 never produced the artifact). Later releases skip the version as already
