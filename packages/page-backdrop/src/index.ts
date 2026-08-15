@@ -31,6 +31,7 @@ export type {
 export { PAGE_BACKDROP_VERSION } from "./types.js";
 
 export type {
+  BackdropFormat,
   DisabledReason,
   OverlayBlend,
   OverlayConfig,
@@ -48,6 +49,19 @@ export {
 
 export type { ComponentMeta, PageDocument, PageFetcher, PageNode } from "./fetcher.js";
 export { figmaRestPageFetcher } from "./fetcher.js";
+
+// Reading an addressable SVG backdrop. Public because the manifest says a page
+// is `format: "svg"` and any consumer that draws one — a preview server, an IDE
+// panel — then has to find elements by node id, which is this and only this.
+export {
+  assertAddressableSvg,
+  canonicalNodeId,
+  countNodeIds,
+  inlineableSvg,
+  nodeIdsIn,
+  svgFrameSize,
+  svgNodeId,
+} from "./svg-backdrop.js";
 
 export type { InstanceHit } from "./instances.js";
 export { collectInstances, frameSize } from "./instances.js";

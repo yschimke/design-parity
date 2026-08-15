@@ -1,5 +1,5 @@
 /**
- * The import run: key pages in, committed manifest + backdrop PNGs out.
+ * The import run: key pages in, committed manifest + backdrop images out.
  *
  * Deliberately a one-shot, human-invoked step rather than anything the PR bot
  * does per run. Importing touches a live design tool and rewrites committed
@@ -14,7 +14,8 @@ import { slugify } from "./config.js";
 import type { PageFetcher } from "./fetcher.js";
 import { collectInstances, frameSize } from "./instances.js";
 import { linkInstances, type LinkInputs } from "./link.js";
-import type { BackdropPage, PageBackdropManifest } from "./types.js";
+import { assertAddressableSvg } from "./svg-backdrop.js";
+import type { BackdropImage, BackdropPage, PageBackdropManifest } from "./types.js";
 import { PAGE_BACKDROP_VERSION } from "./types.js";
 
 /** What an import produced, before anything touches the filesystem. */
@@ -53,6 +54,42 @@ function uniqueId(id: string, taken: Set<string>): string {
 }
 
 /**
+ * Export one page's backdrop, in whichever format the config asked for.
+ *
+ * The SVG path validates before it returns anything. An export that came back
+ * without ids still renders as a perfectly good picture, so nothing downstream
+ * would report it — every placement would just quietly fail to find its element,
+ * and the viewer would look like it worked. A repo that asked for an addressable
+ * backdrop and got a picture should hear about it here, once, rather than never.
+ */
+async function exportBackdrop(
+  fetcher: PageFetcher,
+  config: PageBackdropConfig,
+  nodeId: string,
+  id: string,
+): Promise<{ bytes: Uint8Array; meta: BackdropImage }> {
+  if (config.backdrop === "svg") {
+    if (!fetcher.renderPageSvg) {
+      throw new Error(
+        "page-backdrop: this source cannot export an addressable SVG; set 'backdrop' to 'png'",
+      );
+    }
+    const svg = await fetcher.renderPageSvg(config.fileKey, nodeId);
+    assertAddressableSvg(svg, nodeId);
+    return {
+      bytes: new TextEncoder().encode(svg),
+      // `scale` is carried unchanged and means nothing here: a vector has no
+      // raster size. Dropping it would make the field conditional for every
+      // reader of the manifest, to save four bytes.
+      meta: { uri: `${id}.svg`, scale: config.scale, format: "svg" },
+    };
+  }
+
+  const png = await fetcher.renderPage(config.fileKey, nodeId, config.scale);
+  return { bytes: png, meta: { uri: `${id}.png`, scale: config.scale, format: "png" } };
+}
+
+/**
  * Import every page named in the config.
  *
  * Pages are fetched in the order the config lists them, so the manifest's page
@@ -77,15 +114,15 @@ export async function importPages({
     const linked = linkInstances(hits, config.fileKey, inputs);
     warnings.push(...linked.warnings);
 
-    const png = await fetcher.renderPage(config.fileKey, selector.nodeId, config.scale);
-    images.set(id, png);
+    const image = await exportBackdrop(fetcher, config, selector.nodeId, id);
+    images.set(id, image.bytes);
 
     pages.push({
       id,
       name: doc.document.name,
       nodeId: selector.nodeId,
       frame: frameSize(doc),
-      image: { uri: `${id}.png`, scale: config.scale },
+      image: image.meta,
       placements: linked.placements,
     });
   }

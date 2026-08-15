@@ -41,10 +41,28 @@ function fakeFetcher(pages: Record<string, PageDocument>): PageFetcher & { calls
   };
 }
 
+/** A fetcher that also exports SVG, returning whatever markup the test hands it. */
+function svgFetcher(
+  pages: Record<string, PageDocument>,
+  svg: string,
+): PageFetcher & { calls: string[] } {
+  const base = fakeFetcher(pages);
+  return {
+    ...base,
+    async renderPageSvg(_fileKey, nodeId) {
+      base.calls.push(`svg:${nodeId}`);
+      return svg;
+    },
+  };
+}
+
+const ADDRESSABLE = `<svg viewBox="0 0 360 720"><g data-node-id="2-1"/></svg>`;
+
 const config = (over: Partial<PageBackdropConfig> = {}): PageBackdropConfig => ({
   source: "figma",
   fileKey: FILE,
   pages: [{ nodeId: "1:2" }],
+  backdrop: "png",
   scale: 2,
   nested: false,
   outDir: "/unused",
@@ -193,5 +211,47 @@ describe("parseManifest", () => {
     expect(() => parseManifest(null)).toThrow(/not a page-backdrop manifest/);
     expect(() => parseManifest({ pages: "no" })).toThrow(/not a page-backdrop manifest/);
     expect(() => parseManifest({ version: 99, pages: [] })).toThrow(/version 99/);
+  });
+});
+
+describe("an SVG backdrop", () => {
+  it("exports the page as an addressable SVG and records the format", async () => {
+    const fetcher = svgFetcher({ "1:2": pageDoc("Buttons", [button("2:1", 100)]) }, ADDRESSABLE);
+    const result = await importPages({ config: config({ backdrop: "svg" }), fetcher });
+
+    const page = result.manifest.pages[0]!;
+    expect(page.image).toEqual({ uri: "buttons.svg", scale: 2, format: "svg" });
+    expect(new TextDecoder().decode(result.images.get("buttons")!)).toBe(ADDRESSABLE);
+    expect(fetcher.calls).toContain("svg:1:2");
+    // Never both: an SVG page costs one export, not two.
+    expect(fetcher.calls.some((c) => c.startsWith("render:"))).toBe(false);
+  });
+
+  it("refuses an export that came back as a picture", async () => {
+    // The failure this check exists for: an export with no ids still renders
+    // perfectly, so nothing downstream would report it — every placement would
+    // just quietly fail to find its element.
+    const fetcher = svgFetcher(
+      { "1:2": pageDoc("Buttons", [button("2:1", 100)]) },
+      `<svg viewBox="0 0 360 720"><rect/></svg>`,
+    );
+    await expect(
+      importPages({ config: config({ backdrop: "svg" }), fetcher }),
+    ).rejects.toThrow(/carries no data-node-id/);
+  });
+
+  it("says so when the source cannot export one, rather than falling back", async () => {
+    const fetcher = fakeFetcher({ "1:2": pageDoc("Buttons", [button("2:1", 100)]) });
+    await expect(
+      importPages({ config: config({ backdrop: "svg" }), fetcher }),
+    ).rejects.toThrow(/cannot export an addressable SVG/);
+  });
+
+  it("writes it under its own extension", async () => {
+    const fetcher = svgFetcher({ "1:2": pageDoc("Buttons", [button("2:1", 100)]) }, ADDRESSABLE);
+    const result = await importPages({ config: config({ backdrop: "svg" }), fetcher });
+    const dir = await mkdtemp(join(tmpdir(), "page-backdrop-svg-"));
+    await writeImport(result, dir);
+    expect((await readdir(dir)).sort()).toEqual(["buttons.svg", MANIFEST_FILENAME]);
   });
 });

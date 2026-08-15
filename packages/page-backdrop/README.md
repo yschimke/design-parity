@@ -55,9 +55,36 @@ the configuration — which file, which frames, where the output goes — can be
 landed and reviewed *before* anyone switches the feature on. Reviewing the
 config never silently turns it on.
 
-Optional keys: `scale` (PNG export scale, default `2`), `nested` (record
-instances inside other instances, default `false`), and `overlay`
-(`{ enabled, opacity, blend }`, defaulting to off / `0.5` / `normal`).
+Optional keys: `backdrop` (`"png"` or `"svg"`, default `"png"` — see below),
+`scale` (PNG export scale, default `2`), `nested` (record instances inside other
+instances, default `false`), and `overlay` (`{ enabled, opacity, blend }`,
+defaulting to off / `0.5` / `normal`).
+
+## `"backdrop": "svg"` — a backdrop you can address
+
+A PNG backdrop is a picture: the only way to say anything about a part of it is
+to have recorded where that part was, and the only way to show a code render
+against it is to lay one image over another and squint.
+
+Exported with `svg_include_node_id`, the page comes back with `data-node-id` on
+every element. That turns the backdrop into a **document**: given a placement's
+node id, the element is right there. The viewer uses this to **cut the design
+element out from under a code render** — a toggle that replaces the design's
+button with yours, in the design's own layout, so a size or alignment difference
+reads as a gap instead of a ghost. It also removes a second, weaker source of
+truth, since an element's box is whatever the browser measures rather than a
+number the manifest had to record and be trusted about.
+
+The import refuses an export that came back without ids. A picture renders
+perfectly well, so nothing downstream would report it — every placement would
+quietly fail to find its element and the viewer would look like it worked.
+
+`png` stays the default. It is the safe answer for a screen built from
+photography and effects, where a vector export is large and can differ from what
+the design tool itself draws. `svg` is the right answer for the component
+specimen sheets a design kit is mostly made of — which is also the part of a kit
+worth putting renders on top of, because a definition sheet is exactly the claim
+a catalog is trying to reproduce.
 
 ## Using it
 

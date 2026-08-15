@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="720" viewBox="0 0 360 720" fill="none">
+  <rect width="360" height="720" fill="#1b1830"/>
+  <text x="16" y="420" font-family="monospace" font-size="12" fill="#8b83b8">Now Playing — scenery below is not addressable</text>
+  <circle cx="180" cy="226" r="90" fill="#2a2545"/>
+  <g data-node-id="2-1"><rect x="0" y="0" width="360" height="56" rx="8" fill="#4a4370" stroke="#6f66a8"/><text x="8" y="18" font-family="monospace" font-size="11" fill="#cfc9ee">Top app bar</text></g>
+  <g data-node-id="2-2"><rect x="16" y="76" width="328" height="300" rx="8" fill="#3a3350" stroke="#6f66a8"/><text x="24" y="94" font-family="monospace" font-size="11" fill="#cfc9ee">Album art</text></g>
+  <g data-node-id="2-3"><rect x="16" y="458.19" width="71.81" height="30.8" rx="8" fill="#4a4370" stroke="#6f66a8"/><text x="24" y="476.19" font-family="monospace" font-size="11" fill="#cfc9ee">Chip/Shuffle</text></g>
+  <g data-node-id="2-4"><rect x="95.81" y="458.19" width="72.25" height="30.8" rx="8" fill="#4a4370" stroke="#6f66a8"/><text x="103.81" y="476.19" font-family="monospace" font-size="11" fill="#cfc9ee">Chip/Repeat</text></g>
+  <g data-node-id="2-5"><rect x="176.06" y="458.19" width="63.81" height="30.8" rx="8" fill="#4a4370" stroke="#6f66a8"/><text x="184.06" y="476.19" font-family="monospace" font-size="11" fill="#cfc9ee">Chip/Lyrics</text></g>
+  <g data-node-id="2-7"><rect x="146" y="514.98" width="68" height="68" rx="34" fill="#4a4370" stroke="#6f66a8"/><text x="154" y="532.98" font-family="monospace" font-size="11" fill="#cfc9ee">Button/Play</text></g>
+  <g data-node-id="2-6"><rect x="76" y="526.98" width="44" height="44" rx="22" fill="#4a4370" stroke="#6f66a8"/><text x="84" y="544.98" font-family="monospace" font-size="11" fill="#cfc9ee">IconButton/Previous</text></g>
+  <g data-node-id="2-8"><rect x="240" y="526.98" width="44" height="44" rx="22" fill="#4a4370" stroke="#6f66a8"/><text x="248" y="544.98" font-family="monospace" font-size="11" fill="#cfc9ee">IconButton/Next</text></g>
+  <g data-node-id="2-9"><rect x="16" y="608.98" width="328" height="72" rx="8" fill="#4a4370" stroke="#6f66a8"/><text x="24" y="626.98" font-family="monospace" font-size="11" fill="#cfc9ee">UpNextCard</text></g>
+</svg>

@@ -108,10 +108,20 @@ export interface Placement {
 
 /** The exported backdrop image for a page. */
 export interface BackdropImage {
-  /** Path to the PNG, relative to the manifest file. */
+  /** Path to the image, relative to the manifest file. */
   uri: string;
   /** Export scale the PNG was rendered at (`2` → the PNG is 2× `frame`). */
   scale: number;
+  /**
+   * How the backdrop was exported. Absent means `png` — the only format the
+   * first version of this manifest had, so an older committed file reads
+   * correctly without being rewritten.
+   *
+   * `svg` means the file carries `data-node-id` on every element, i.e. the
+   * backdrop is addressable: a consumer can find the element for any
+   * {@link Placement.nodeId} rather than only knowing where it is.
+   */
+  format?: "png" | "svg";
 }
 
 /** One imported key page. */

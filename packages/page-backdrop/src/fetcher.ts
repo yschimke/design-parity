@@ -50,6 +50,18 @@ export interface PageFetcher {
   fetchPage(fileKey: string, nodeId: string): Promise<PageDocument>;
   /** A PNG of that frame, rendered at `scale`. */
   renderPage(fileKey: string, nodeId: string, scale: number): Promise<Uint8Array>;
+  /**
+   * That frame as an SVG carrying `data-node-id` on every element — a backdrop
+   * the viewer can address rather than merely display (see `svg-backdrop.ts`).
+   *
+   * Optional because it is a strictly stronger request than {@link renderPage}:
+   * a source with a page-level read API but no structured export still
+   * implements the port, and a repo that hasn't asked for SVG backdrops never
+   * calls this. The importer says so plainly rather than falling back, since a
+   * silent downgrade to a picture is the failure this whole path exists to
+   * avoid.
+   */
+  renderPageSvg?(fileKey: string, nodeId: string): Promise<string>;
 }
 
 /** Raw `GET /v1/files/:key/nodes` shape, narrowed to what this package reads. */
@@ -94,6 +106,14 @@ export function figmaRestPageFetcher(client: FigmaRestClient): PageFetcher {
         scale,
       });
       return bytes;
+    },
+
+    async renderPageSvg(fileKey, nodeId) {
+      const { bytes } = await client.renderImage(fileKey, nodeId, {
+        format: "svg",
+        includeNodeId: true,
+      });
+      return new TextDecoder().decode(bytes);
     },
   };
 }

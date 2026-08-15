@@ -243,13 +243,29 @@ export class FigmaRestClient {
       format?: "png" | "svg";
       /** Include only the node's own contents; false also renders overlapping layers. */
       contentsOnly?: boolean;
+      /**
+       * SVG only: stamp `data-node-id` onto every exported element.
+       *
+       * This is what turns an export from a picture into a **document you can
+       * address**. Given a node id, a consumer can find that shape in the
+       * markup — hide it, outline it, or drop a code render into the hole it
+       * leaves — none of which a raster can answer, because a raster has no
+       * structure to ask.
+       *
+       * `svg_outline_text` is deliberately left at Figma's default (`true`):
+       * outlined text renders identically everywhere, and a specimen sheet is
+       * mostly labels, so a font substitution on the reader's machine would
+       * make the design half of a comparison wrong in exactly the way it is
+       * supposed to be right.
+       */
+      includeNodeId?: boolean;
     } = {},
   ): Promise<RenderedImage> {
     const format = opts.format ?? "png";
     const scale = opts.scale ?? 2;
     const query =
       format === "svg"
-        ? `format=svg`
+        ? `format=svg&svg_include_node_id=${opts.includeNodeId ?? false}`
         : `format=png&scale=${scale}`;
     const contentsOnly = opts.contentsOnly ?? true;
     const res = await this.#get<ImagesResponse>(
