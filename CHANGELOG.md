@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.49](https://github.com/yschimke/design-parity/compare/v0.1.48...v0.1.49) (2026-08-15)
+
+
+### Features
+
+* **kit-index:** resolve declared variant renders into the design map ([#333](https://github.com/yschimke/design-parity/issues/333)) ([278f7ea](https://github.com/yschimke/design-parity/commit/278f7ea21a1bfd79b5c64189dc52ec0b571a6cfc))
+* **kit-index:** resolve kit axes that fold two knobs into one value ([#335](https://github.com/yschimke/design-parity/issues/335)) ([5f2ee2d](https://github.com/yschimke/design-parity/commit/5f2ee2d4ba62a3064ffd08389272791a6513da4f))
+
 ## [0.1.48](https://github.com/yschimke/design-parity/compare/v0.1.47...v0.1.48) (2026-08-15)
 
 
