@@ -455,7 +455,7 @@ jobs:
       # at ~4 min instead of ~10. Read-only by default: N shards racing to write
       # one cache entry gains nothing, and a run triggered from a fork must not
       # write it at all.
-      - uses: gradle/actions/setup-gradle@67621b124fd2e251c5e8a0e6e3b91318f2287669 # v6.3.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: ${{ inputs.gradle-cache-read-only }}
 
