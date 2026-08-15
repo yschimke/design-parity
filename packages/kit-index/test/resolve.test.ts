@@ -82,6 +82,79 @@ describe("axis resolution", () => {
   });
 });
 
+describe("axes that fold two knobs into one value", () => {
+  // The Checkboxes set files error states as `Type=Error selected`, not as a
+  // `State` beside `Selected` — one published value carrying what a catalog
+  // spells as two knobs. Without fusing, the second seed finds no axis left
+  // that accepts it and variants the catalog already renders resolve to
+  // nothing. `51859:5665` is `Type=Unselected, State=Enabled`.
+  const unselected = ref("51859:5665");
+
+  it("reaches a fused value from two seeds", () => {
+    expect(
+      resolver.resolveVariant(unselected, [
+        { key: "status", raw: "error" },
+        { key: "state", raw: "unchecked" },
+      ]),
+    ).toEqual({
+      nodeId: "51859:5668",
+      name: "Type=Error unselected, State=Enabled",
+    });
+  });
+
+  it("fuses across a value the base does not already carry", () => {
+    expect(
+      resolver.resolveVariant(unselected, [
+        { key: "state", raw: "checked" },
+        { key: "status", raw: "error" },
+      ]),
+    ).toEqual({
+      nodeId: "51859:5633",
+      name: "Type=Error selected, State=Enabled",
+    });
+  });
+
+  it("is sensitive to seed order when the first seed is a no-op", () => {
+    // `state=unchecked` against an already-Unselected base is a no-op, and a
+    // one-axis no-op is skipped before it can claim the axis the fusion would
+    // need. Pinned rather than smoothed over: this matches the upstream
+    // implementation exactly, and the catalog's annotation order is what feeds
+    // it. Flipping the two seeds resolves, as the case above shows.
+    expect(
+      resolver.resolveVariant(unselected, [
+        { key: "state", raw: "unchecked" },
+        { key: "status", raw: "error" },
+      ]),
+    ).toBeUndefined();
+  });
+
+  it("does not fuse a single seed into a two-word value", () => {
+    // Set EQUALITY, not containment — otherwise `unchecked` alone would claim
+    // `Error unselected` and silently add an error state nobody asked for.
+    expect(
+      resolver.resolveVariant(unselected, { key: "state", raw: "unchecked" }),
+    ).toBeUndefined();
+  });
+});
+
+describe("interaction states", () => {
+  const unselected = ref("51859:5665");
+
+  it("resolves the hovered, focused and pressed states the kit draws", () => {
+    expect(resolver.resolveVariant(unselected, { key: "state", raw: "hovered" })?.name)
+      .toBe("Type=Unselected, State=Hovered");
+    expect(resolver.resolveVariant(unselected, { key: "state", raw: "focused" })?.name)
+      .toBe("Type=Unselected, State=Focused");
+    expect(resolver.resolveVariant(unselected, { key: "state", raw: "pressed" })?.name)
+      .toBe("Type=Unselected, State=Pressed");
+  });
+
+  it("reaches a disabled state through the status knob", () => {
+    expect(resolver.resolveVariant(unselected, { key: "status", raw: "disabled" })?.name)
+      .toBe("Type=Unselected, State=Disabled");
+  });
+});
+
 describe("hidden sets and their render aliases", () => {
   it("uses visible examples for hidden component-set definitions", () => {
     expect(resolver.renderableRef(ref("53977:33611"))).toBe(ref("53977:34289"));

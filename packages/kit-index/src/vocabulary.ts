@@ -36,7 +36,10 @@ export interface Vocabulary {
  * guess — each entry is checked against the set's real axis list before use.
  */
 export const DEFAULT_AXIS_ALIASES: AxisAliases = {
-  status: ["State"],
+  // `status` is a code word for error/disabled. Material-3-shaped kits file
+  // `Disabled` under `State` and `Error …` under `Type`, so the knob names both
+  // axes and the value decides which one answers.
+  status: ["State", "Type"],
   state: ["State", "Type", "Selected", "Configuration"],
   selected: ["Selected", "Type"],
   size: ["Size"],
@@ -88,6 +91,14 @@ export const DEFAULT_VALUE_ALIASES: ValueAliases = {
   icon: ["Icon only", "True"],
   disabled: ["Disabled"],
   enabled: ["Enabled"],
+  hovered: ["Hovered"],
+  focused: ["Focused"],
+  // `Presssed` is the Material 3 kit's own misspelling, on all ten
+  // `Button - outline` press variants and nowhere else. The kit is read-only to
+  // us, so the choice is to carry the typo or leave that component's press
+  // state uncompared; the correct spelling is tried first, so this only ever
+  // catches the one set that needs it.
+  pressed: ["Pressed", "Presssed"],
   selected: ["True", "Selected"],
   unselected: ["False", "Unselected"],
   checked: ["Selected", "True"],
@@ -140,6 +151,15 @@ export const norm = (s: unknown): string =>
   String(s)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+/** The distinct lowercase words in a name or value, for set-wise comparison. */
+export const wordsOf = (s: unknown): Set<string> =>
+  new Set(
+    String(s)
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean),
+  );
 
 /** `actions` and `action` name the same thing; our knobs pluralise, the kit does not. */
 export const singular = (s: string): string =>
