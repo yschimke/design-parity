@@ -92,6 +92,7 @@ export type {
 } from "./reference-cache.js";
 
 export type {
+  FileComponentsResponse,
   FileMetaResponse,
   FileNodesResponse,
   FilePagesResponse,

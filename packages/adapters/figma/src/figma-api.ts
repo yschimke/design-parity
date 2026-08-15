@@ -147,6 +147,26 @@ export interface FilePagesResponse {
   document: { id: string; name: string; children?: FigmaNodeDoc[] };
 }
 
+/**
+ * `GET /v1/files/:key/components` — the components the file itself PUBLISHES.
+ *
+ * Exact and cheap, but only for a publishing file: a community duplicate
+ * subscribes to the original library rather than republishing it, and then
+ * returns nothing. A caller that needs to work either way falls back to walking
+ * the tree.
+ */
+export interface FileComponentsResponse {
+  meta?: {
+    components: {
+      key: string;
+      name: string;
+      node_id: string;
+      description?: string;
+      containing_frame?: { name?: string; pageName?: string };
+    }[];
+  };
+}
+
 export interface ImagesResponse {
   err: string | null;
   images: Record<string, string | null>;

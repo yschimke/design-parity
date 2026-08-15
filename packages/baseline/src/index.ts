@@ -56,3 +56,28 @@ export type {
   ApplyOptions,
   ApplyResult,
 } from "./bootstrap.js";
+
+// Reference proposals: rank a design file's components against a code
+// component's name. Interactive only — this proposes, it never writes a map.
+export {
+  candidatesFromTree,
+  candidateWeight,
+  confidenceOf,
+  isBuildingBlock,
+  isIcon,
+  isPrivate,
+  isXr,
+  rankCandidates,
+  score,
+  subjectFor,
+  subjectsFromPreviewManifest,
+} from "./ref-proposals.js";
+export type {
+  CandidateNode,
+  Confidence,
+  KitCandidate,
+  PreviewManifestLike,
+  ProposalSubject,
+  RankedCandidate,
+  RankOptions,
+} from "./ref-proposals.js";
