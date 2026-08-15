@@ -35,6 +35,7 @@ import {
   norm,
   TRUTHY,
   valueCandidates,
+  wordsOf,
   type Vocabulary,
 } from "./vocabulary.js";
 
@@ -228,14 +229,64 @@ export class KitIndexResolver {
     return scored[0]?.[2];
   }
 
+  /** The values an axis actually publishes across a set's variants. */
+  #axisValues(set: KitSet, axis: string): string[] {
+    const out = new Set<string>();
+    for (const variant of set.variants) {
+      const value = this.#variants.get(variant.id)?.axes[axis];
+      if (value !== undefined) out.add(value);
+    }
+    return [...out];
+  }
+
+  /**
+   * The published value that means BOTH `chosen` and `want` on the same axis.
+   *
+   * A kit sometimes folds two code knobs into one of its axes: a checkbox's
+   * error state is not a `State` beside `Selected`, it is `Type=Error selected`
+   * — one value carrying what a catalog spells as `state=unchecked,
+   * status=error`. Without this each seed claims its own axis, the second finds
+   * none left that accepts it, and variants the catalog already renders resolve
+   * to nothing.
+   *
+   * Matched on the SET of words rather than by concatenation, so the published
+   * value's word order need not agree with the seeds': `Error unselected`
+   * matches `unselected` + `error` as readily as `error` + `unselected`.
+   * Requiring set EQUALITY rather than containment is what keeps this from
+   * being a wildcard — `Error unselected` is not a candidate for `unselected`
+   * alone, and a third word in the published value means it says something
+   * neither seed did.
+   *
+   * Note this is about the two values being fused, not about the order the
+   * seeds arrive in: a seed that resolves to a no-op on its own axis is
+   * skipped before it can claim one, so which seed comes first can still decide
+   * whether a fusion is reached at all. Pinned as-is in the tests rather than
+   * smoothed over, because the search order is what the catalog's own
+   * annotation order feeds.
+   */
+  #fuseAxisValue(
+    set: KitSet,
+    axis: string,
+    chosen: string,
+    want: string,
+  ): string | undefined {
+    const wanted = new Set([...wordsOf(chosen), ...wordsOf(want)]);
+    if (wanted.size < 2) return undefined;
+    return this.#axisValues(set, axis).find((value) => {
+      const have = wordsOf(value);
+      return have.size === wanted.size && [...have].every((w) => wanted.has(w));
+    });
+  }
+
   /**
    * The kit node reached by applying every seed to a set variant's axis vector,
    * or `undefined` when the kit models no such axis.
    *
-   * Every seed must map to a DISTINCT axis and the exact resulting vector must
-   * name a real sibling. Searching axis-by-axis with backtracking (rather than
-   * committing to the first plausible axis) is what lets a multi-seed cell
-   * resolve when the obvious pairing is the wrong one.
+   * Every seed must map to a DISTINCT axis — except where the kit publishes one
+   * value meaning both, which {@link #fuseAxisValue} handles — and the exact
+   * resulting vector must name a real sibling. Searching axis-by-axis with
+   * backtracking (rather than committing to the first plausible axis) is what
+   * lets a multi-seed cell resolve when the obvious pairing is the wrong one.
    */
   #resolveSetVariant(
     base: IndexedVariant,
@@ -268,7 +319,19 @@ export class KitIndexResolver {
         seed.raw,
         this.#vocabulary,
       )) {
-        if (usedAxes.has(axis)) continue;
+        if (usedAxes.has(axis)) {
+          // The axis is taken, which is not automatically a dead end: the kit
+          // may model both seeds as one value of it.
+          const chosen = target[axis];
+          if (chosen === undefined) continue;
+          for (const want of valueCandidates(seed.raw, this.#vocabulary)) {
+            const fused = this.#fuseAxisValue(set, axis, chosen, want);
+            if (!fused || eq(base.axes[axis], fused)) continue;
+            const match = search(i + 1, { ...target, [axis]: fused }, usedAxes);
+            if (match) return match;
+          }
+          continue;
+        }
         for (const want of valueCandidates(seed.raw, this.#vocabulary)) {
           const noOp = eq(base.axes[axis], want);
           // Some shared matrices spell their default size explicitly in a

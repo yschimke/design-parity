@@ -1686,6 +1686,137 @@
           "default": false
         }
       }
+    },
+    "51859:5628": {
+      "name": "Checkboxes",
+      "variants": [
+        {
+          "id": "51859:5742",
+          "name": "Type=Error unselected, State=Disabled"
+        },
+        {
+          "id": "51859:5675",
+          "name": "Type=Error unselected, State=Pressed"
+        },
+        {
+          "id": "51859:5720",
+          "name": "Type=Error unselected, State=Focused"
+        },
+        {
+          "id": "51859:5714",
+          "name": "Type=Error unselected, State=Hovered"
+        },
+        {
+          "id": "51859:5668",
+          "name": "Type=Error unselected, State=Enabled"
+        },
+        {
+          "id": "51859:5735",
+          "name": "Type=Error indeterminate, State=Disabled"
+        },
+        {
+          "id": "51859:5660",
+          "name": "Type=Error indeterminate, State=Pressed"
+        },
+        {
+          "id": "51859:5707",
+          "name": "Type=Error indeterminate, State=Focused"
+        },
+        {
+          "id": "51859:5691",
+          "name": "Type=Error indeterminate, State=Hovered"
+        },
+        {
+          "id": "51859:5641",
+          "name": "Type=Error indeterminate, State=Enabled"
+        },
+        {
+          "id": "51859:5727",
+          "name": "Type=Error selected, State=Disabled"
+        },
+        {
+          "id": "51859:5650",
+          "name": "Type=Error selected, State=Pressed"
+        },
+        {
+          "id": "51859:5699",
+          "name": "Type=Error selected, State=Focused"
+        },
+        {
+          "id": "51859:5683",
+          "name": "Type=Error selected, State=Hovered"
+        },
+        {
+          "id": "51859:5633",
+          "name": "Type=Error selected, State=Enabled"
+        },
+        {
+          "id": "51859:5739",
+          "name": "Type=Unselected, State=Disabled"
+        },
+        {
+          "id": "51859:5671",
+          "name": "Type=Unselected, State=Pressed"
+        },
+        {
+          "id": "51859:5717",
+          "name": "Type=Unselected, State=Focused"
+        },
+        {
+          "id": "51859:5711",
+          "name": "Type=Unselected, State=Hovered"
+        },
+        {
+          "id": "51859:5665",
+          "name": "Type=Unselected, State=Enabled"
+        },
+        {
+          "id": "51859:5731",
+          "name": "Type=Indeterminate, State=Disabled"
+        },
+        {
+          "id": "51859:5655",
+          "name": "Type=Indeterminate, State=Pressed"
+        },
+        {
+          "id": "51859:5703",
+          "name": "Type=Indeterminate, State=Focused"
+        },
+        {
+          "id": "51859:5687",
+          "name": "Type=Indeterminate, State=Hovered"
+        },
+        {
+          "id": "51859:5637",
+          "name": "Type=Indeterminate, State=Enabled"
+        },
+        {
+          "id": "51859:5723",
+          "name": "Type=Selected, State=Disabled"
+        },
+        {
+          "id": "51859:5645",
+          "name": "Type=Selected, State=Pressed"
+        },
+        {
+          "id": "51859:5695",
+          "name": "Type=Selected, State=Focused"
+        },
+        {
+          "id": "51859:5679",
+          "name": "Type=Selected, State=Hovered"
+        },
+        {
+          "id": "51859:5629",
+          "name": "Type=Selected, State=Enabled"
+        }
+      ],
+      "properties": {
+        "Show focus indicator": {
+          "type": "BOOLEAN",
+          "default": false
+        }
+      }
     }
   },
   "standalone": {
