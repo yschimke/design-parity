@@ -89,6 +89,22 @@ export {
   validateKitIndex,
 } from "./load.js";
 
+export {
+  DESIGN_MAP_VARIANTS_SCHEMA,
+  resolveDesignMapVariants,
+} from "./design-map.js";
+export type {
+  ComponentVariantDeclaration,
+  DefaultedContentReport,
+  DesignMapVariants,
+  PropertyVariantReport,
+  ResolveDesignMapOptions,
+  ResolveDesignMapResult,
+  UnresolvedVariantReport,
+  VariantCollisionReport,
+  VariantRenderDeclaration,
+} from "./design-map.js";
+
 export type {
   InventoryComponent,
   InventoryInstance,

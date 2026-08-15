@@ -43,6 +43,57 @@ Only the two generation steps touch the network, and both are deliberate
 **Resolution runs against the committed index, never the live kit**, so a parity
 run reports the same thing for everyone and needs no design-tool credentials.
 
+## Where the code side comes from
+
+For a Compose catalog, the map and its variant declarations are **derived from
+annotations** rather than authored. That half lives upstream in
+[`compose-ai-tools`](https://github.com/yschimke/compose-ai-tools), because
+every field it reads (`@CatalogComponent(reference = …)`, `@CatalogVariant`,
+`@OverrideVariant`) is defined there — and it stops at the point where a design
+kit's vocabulary would be needed:
+
+```text
+  previews.json
+      │  emit-design-map.mjs             compose-ai-tools: knows the ANNOTATIONS
+      ├──▶ design-map.json               base refs, one per component
+      └──▶ design-map-variants.json      "same component, these knobs turned" —
+           (compose-preview-design-map-      unresolved, because `size=l` is a
+            variants/v1)                     Compose fact and `Size=Large` is a
+      │                                      kit fact
+      │  design-parity-kit-index resolve  THIS PACKAGE: knows the KIT
+      ▼
+  design-map.json with a tagged ref/previewId pair per variant
+```
+
+`resolve` reads only committed files, so unlike `dump`/`build` it needs no
+credential and is safe on every build:
+
+```console
+$ design-parity-kit-index resolve
+Wrote design-map.json: 1 variant reference(s) across 1 component(s).
+
+1 variant(s) are a component PROPERTY in the kit, not a variant beside it. A
+definition node renders at the defaults, and no exact configured instance was
+indexed for these values, so they remain unpaired:
+  - Button/Filled / true (icon=true) — Button: `Icon` (INSTANCE_SWAP, default "54616:25409")
+
+1 reference(s) draw optional content by default. Every render made from them
+includes it, so a sticker that leaves it out is compared against something it
+never claimed:
+  - Button/Filled — Button: `Show icon`
+```
+
+Three kinds of miss are reported apart because they have different owners: a
+variant the kit models **neither way** is a real gap; a **property-shaped** one
+means the kit has the thing and a node reference just cannot ask for it; and
+**defaulted content** means the reference resolved but draws more than the code
+did. Rolling them together is what makes a retired pattern read as neglect.
+
+`--check` turns it into a drift gate instead of a writer. A **collision** — two
+previews resolving to one node — is refused outright (exit 2, nothing written):
+the same node cannot be both previews' counterpart, and a map that said so would
+have the diff report one of the two renders as wrong.
+
 ## Three kinds of variation — and only two are addressable
 
 |  | What it is | Addressable? |
@@ -130,6 +181,9 @@ component properties, 61 configured instance render handle(s).
 
 $ design-parity-kit-index validate
 figma-kit-index.json is a valid kit index.
+
+$ design-parity-kit-index resolve --check   # CI: fail if the committed map drifted
+design-map.json is up to date.
 ```
 
 Two steps rather than one because they fail differently: `dump` is the expensive

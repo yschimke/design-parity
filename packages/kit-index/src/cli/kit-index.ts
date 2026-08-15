@@ -7,21 +7,30 @@
  *   design-parity-kit-index build --file <key> [--map design-map.json]
  *                                 [--inventory figma-inventory.json]
  *                                 [--out figma-kit-index.json]
+ *   design-parity-kit-index resolve  [--map design-map.json]
+ *                                 [--variants design-map-variants.json]
+ *                                 [--index figma-kit-index.json] [--check]
  *   design-parity-kit-index validate [--index figma-kit-index.json]
  *
- * Two steps rather than one, because they fail differently. `dump` is the
- * expensive walk of a whole design file — one request per page, retried — and
- * its output is disposable. `build` is the cheap projection of that walk into
- * the small file that gets committed, and it is the step worth re-running while
- * a design map is still changing.
+ * Two groups of subcommand, with different costs and different cadences.
  *
- * Both need `FIGMA_TOKEN` (personal access token) or `FIGMA_OAUTH_TOKEN`;
- * `build` degrades without one, writing an index with no property vocabulary
- * and saying so. `validate` never touches the network.
+ * `dump` and `build` **refresh the vocabulary**. `dump` is the expensive walk of
+ * a whole design file — one request per page, retried — and its output is
+ * disposable; `build` is the cheap projection of that walk into the small file
+ * that gets committed. Both read a live design tool and rewrite committed
+ * files, so they are human-invoked, belonging in a deliberate "refresh the kit
+ * vocabulary" commit a reviewer can see. Both want `FIGMA_TOKEN` (personal
+ * access token) or `FIGMA_OAUTH_TOKEN`; `build` degrades without one, writing
+ * an index with no property vocabulary and saying so.
  *
- * This is deliberately a human-invoked step, not something a parity run does:
- * it reads a live design tool and rewrites a committed file, which belongs in a
- * "refresh the kit vocabulary" commit a reviewer can see.
+ * `resolve` **uses** it, and is the opposite: it reads only committed files, so
+ * it needs no credential, produces the same map for everyone, and is safe to
+ * run on every build. It folds the variant sidecar
+ * (`compose-preview-design-map-variants/v1`, written by compose-ai-tools'
+ * `emit-design-map.mjs`) into the design map as tagged `ref`/`previewId` pairs.
+ * `--check` makes it a drift gate instead of a writer.
+ *
+ * `validate` never touches the network either.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { argv, env, exit, stderr, stdout } from "node:process";
@@ -30,8 +39,13 @@ import { FigmaRestClient } from "@design-parity/adapter-figma";
 import type { DesignMap } from "@design-parity/core";
 
 import { buildKitIndex, referencedNodeIds } from "../build.js";
+import {
+  resolveDesignMapVariants,
+  type DesignMapVariants,
+} from "../design-map.js";
 import { dumpInventory, DEFAULT_WALK_DEPTH } from "../inventory.js";
-import { KIT_INDEX_FILENAME, parseKitIndex, validateKitIndex } from "../load.js";
+import { KIT_INDEX_FILENAME, loadKitIndex, parseKitIndex, validateKitIndex } from "../load.js";
+import { KitIndexResolver } from "../resolve.js";
 import type { KitIndex, KitInventory } from "../types.js";
 
 const USAGE = `design-parity-kit-index — refresh a design kit's committed vocabulary
@@ -41,9 +55,14 @@ const USAGE = `design-parity-kit-index — refresh a design kit's committed voca
   design-parity-kit-index build --file <fileKey> [--map design-map.json]
                                 [--inventory figma-inventory.json]
                                 [--out ${KIT_INDEX_FILENAME}]
+  design-parity-kit-index resolve  [--map design-map.json]
+                                [--variants design-map-variants.json]
+                                [--index ${KIT_INDEX_FILENAME}] [--out <map>]
+                                [--check] [--strict]
   design-parity-kit-index validate [--index ${KIT_INDEX_FILENAME}]
 
 Environment: FIGMA_TOKEN (personal access token) or FIGMA_OAUTH_TOKEN.
+\`resolve\` and \`validate\` never touch the network.
 `;
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -51,6 +70,9 @@ function arg(name: string, fallback?: string): string | undefined {
   const value = i >= 0 ? argv[i + 1] : undefined;
   return value && !value.startsWith("--") ? value : fallback;
 }
+
+/** Presence flags, read at call time so each subcommand states what it honours. */
+const flag = (name: string): boolean => argv.includes(`--${name}`);
 
 const log = (message: string): void => {
   stdout.write(`${message}\n`);
@@ -189,6 +211,133 @@ async function build(): Promise<void> {
   );
 }
 
+/**
+ * Fold the variant sidecar into the design map.
+ *
+ * The one subcommand a downstream repo runs on every parity build: it reads
+ * only committed files, so it needs no credential and produces the same map for
+ * everyone. `--check` regenerates in memory and fails if the committed map has
+ * drifted — the CI posture, since the map is an output.
+ */
+async function resolve(): Promise<void> {
+  const mapPath = arg("map", "design-map.json") as string;
+  const variantsPath = arg("variants", "design-map-variants.json") as string;
+  const indexPath = arg("index", KIT_INDEX_FILENAME) as string;
+  const outPath = arg("out", mapPath) as string;
+
+  const index = await loadKitIndex(indexPath);
+  const map = JSON.parse(await readFile(mapPath, "utf8")) as DesignMap;
+
+  let variants: DesignMapVariants;
+  try {
+    variants = JSON.parse(await readFile(variantsPath, "utf8")) as DesignMapVariants;
+  } catch {
+    // No sidecar is the normal state for a catalog whose components declare no
+    // variant axes. Nothing to fold in, and the map is already correct.
+    log(`No variant sidecar at ${variantsPath} — the map already stands alone.`);
+    return;
+  }
+
+  const { map: resolved, diagnostics } = resolveDesignMapVariants({
+    map,
+    variants,
+    resolver: new KitIndexResolver(index),
+  });
+  const text = `${JSON.stringify(resolved, null, 2)}\n`;
+
+  // A contradiction must never reach the committed file: the same node cannot
+  // be two previews' counterpart, and a map that said so would have the diff
+  // report one of the two renders as wrong.
+  if (diagnostics.collisions.length) {
+    stderr.write(
+      `::error::${diagnostics.collisions.length} variant(s) resolved to a node ` +
+        `another variant already owns; refusing to write ${outPath}.\n`,
+    );
+    for (const c of diagnostics.collisions) {
+      stderr.write(
+        `  ${c.componentId}: '${c.duplicate}' and '${c.owner}' both resolve to ${c.ref}\n`,
+      );
+    }
+    exit(2);
+  }
+
+  if (flag("check")) {
+    const current = await readFile(outPath, "utf8").catch(() => null);
+    if (current !== text) {
+      stderr.write(
+        `::error::${outPath} is out of date — regenerate with ` +
+          `\`design-parity-kit-index resolve\`.\n`,
+      );
+      exit(1);
+    }
+    log(`${outPath} is up to date.`);
+  } else {
+    await writeFile(outPath, text);
+    log(
+      `Wrote ${outPath}: ${diagnostics.resolved} variant reference(s) across ` +
+        `${diagnostics.components} component(s).`,
+    );
+  }
+
+  if (diagnostics.propertyVariants.length) {
+    log(
+      `\n${diagnostics.propertyVariants.length} variant(s) are a component ` +
+        `PROPERTY in the kit, not a variant beside it. A definition node renders ` +
+        `at the defaults, and no exact configured instance was indexed for these ` +
+        `values, so they remain unpaired:`,
+    );
+    for (const v of diagnostics.propertyVariants) {
+      const named = v.properties
+        .map((p) => `\`${p.name}\` (${p.type}, default ${JSON.stringify(p.default)})`)
+        .join(", ");
+      log(
+        `  - ${v.componentId} / ${v.variant} (${v.vector}) — ${v.setName}: ${named}` +
+          (v.coversVariant ? " — the reference already draws THIS variant" : ""),
+      );
+    }
+  }
+
+  if (diagnostics.unresolved.length) {
+    log(
+      `\n${diagnostics.unresolved.length} variant(s) have no counterpart in the ` +
+        `kit — neither an axis nor a property, so they are left uncompared:`,
+    );
+    for (const v of diagnostics.unresolved) {
+      log(`  - ${v.componentId} / ${v.variant} (${v.vector})`);
+    }
+  }
+
+  if (diagnostics.defaulted.length) {
+    log(
+      `\n${diagnostics.defaulted.length} reference(s) draw optional content by ` +
+        `default. Every render made from them includes it, so a sticker that ` +
+        `leaves it out is compared against something it never claimed:`,
+    );
+    for (const d of diagnostics.defaulted) {
+      log(
+        `  - ${d.componentId} — ${d.setName}: ` +
+          d.properties.map((p) => `\`${p}\``).join(", "),
+      );
+    }
+  }
+
+  if (diagnostics.orphaned.length) {
+    log(
+      `\n${diagnostics.orphaned.length} declaration(s) name a code handle the ` +
+        `map has no entry for — the two files were generated from different runs:`,
+    );
+    for (const code of diagnostics.orphaned) log(`  - ${code}`);
+  }
+
+  if (flag("strict") && (diagnostics.unresolved.length || diagnostics.orphaned.length)) {
+    stderr.write(
+      `::error::--strict: ${diagnostics.unresolved.length} unresolved variant(s), ` +
+        `${diagnostics.orphaned.length} orphaned declaration(s).\n`,
+    );
+    exit(1);
+  }
+}
+
 async function validate(): Promise<void> {
   const indexPath = arg("index", KIT_INDEX_FILENAME) as string;
   let parsed: unknown;
@@ -209,7 +358,12 @@ async function validate(): Promise<void> {
 }
 
 const command = argv[2];
-const commands: Record<string, () => Promise<void>> = { dump, build, validate };
+const commands: Record<string, () => Promise<void>> = {
+  dump,
+  build,
+  resolve,
+  validate,
+};
 const run = command ? commands[command] : undefined;
 if (!run) {
   stderr.write(USAGE);
