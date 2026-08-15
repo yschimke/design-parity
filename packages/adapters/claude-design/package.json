@@ -27,6 +27,6 @@
   "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/adapters/claude-design#readme",
   "bugs": "https://github.com/yschimke/design-parity/issues",
   "optionalDependencies": {
-    "puppeteer-core": "^25.0.0"
+    "puppeteer-core": "25.7.0"
   }
 }
