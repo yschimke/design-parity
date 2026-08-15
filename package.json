@@ -17,7 +17,7 @@
     "validate": "npm run build --workspace @design-parity/core && node packages/core/dist/cli/validate-design-map.js"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^24.0.0",
     "typescript": "^5.7.2",
     "vitest": "^4.0.0"
   },
