@@ -11,6 +11,7 @@ import {
 import type {
   FileMetaResponse,
   FileNodesResponse,
+  FilePagesResponse,
   ImagesResponse,
   VariablesResponse,
 } from "./figma-api.js";
@@ -154,13 +155,37 @@ export class FigmaRestClient {
     return this.#get<FileMetaResponse>(`/v1/files/${fileKey}?depth=1`);
   }
 
-  /** `GET /v1/files/:key/nodes?ids=` — structure for the requested nodes. */
+  /**
+   * `GET /v1/files/:key/nodes?ids=` — structure for the requested nodes.
+   *
+   * `depth` bounds how far the response descends. Omitted, Figma returns the
+   * whole subtree, which for a kit page is megabytes; `depth: 1` is enough when
+   * the caller only wants the node's own fields (its
+   * `componentPropertyDefinitions`, its name), and a deeper bound is how a
+   * page walk trades request size against how much of the tree it can see.
+   */
   async getFileNodes(
     fileKey: string,
     ids: string[],
+    opts: { depth?: number } = {},
   ): Promise<FileNodesResponse> {
     const q = encodeURIComponent(ids.join(","));
-    return this.#get<FileNodesResponse>(`/v1/files/${fileKey}/nodes?ids=${q}`);
+    const depth = opts.depth === undefined ? "" : `&depth=${opts.depth}`;
+    return this.#get<FileNodesResponse>(
+      `/v1/files/${fileKey}/nodes?ids=${q}${depth}`,
+    );
+  }
+
+  /**
+   * `GET /v1/files/:key?depth=1` — the document with its children truncated to
+   * the page level, i.e. every page's `id` and `name` and nothing else.
+   *
+   * Distinct from {@link getFileMeta}, which reads the same response for its
+   * `version`. Enumerating pages any other way costs one full subtree dump per
+   * page; this is one request for the whole file.
+   */
+  async getFilePages(fileKey: string): Promise<FilePagesResponse> {
+    return this.#get<FilePagesResponse>(`/v1/files/${fileKey}?depth=1`);
   }
 
   /**

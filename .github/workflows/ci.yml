@@ -36,6 +36,13 @@ jobs:
         run: |
           node packages/checks/dist/cli/validate-checks.js \
             examples/design-parity.checks.json
+      # The kit index is generated rather than authored, so there is no example
+      # to validate — but the shipped `validate` bin is the thing a consumer
+      # runs against their own generated index, and nothing else exercises it.
+      - name: Validate kit-index fixture through the CLI
+        run: |
+          node packages/kit-index/dist/cli/kit-index.js validate \
+            --index packages/kit-index/test/fixtures/m3-kit-index.json
       - name: Test
         run: npm test
       # Shell, not TypeScript: the reusable workflow's capability probes live in

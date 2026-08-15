@@ -1,0 +1,36 @@
+{
+  "name": "@design-parity/kit-index",
+  "version": "0.1.24",
+  "description": "The kit vocabulary a design map resolves variants against: walk a design kit's pages, project the referenced component sets into a committed kit index, and resolve a catalog variant knob to the exact kit node (variant axis, component property, or configured instance) that depicts it.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./schema/kit-index.schema.json": "./schema/kit-index.schema.json"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "bin": {
+    "design-parity-kit-index": "./dist/cli/kit-index.js"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --root ../.. packages/kit-index/test"
+  },
+  "dependencies": {
+    "@design-parity/adapter-figma": "^0.1.24",
+    "@design-parity/core": "^0.1.24",
+    "ajv": "^8.17.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/kit-index"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/kit-index#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
+}

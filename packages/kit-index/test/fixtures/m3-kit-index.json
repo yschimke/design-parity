@@ -1,0 +1,1728 @@
+{
+  "fileKey": "ocdacdEsnHipMJD3egzxKb",
+  "generatedBy": "design-parity-kit-index",
+  "sets": {
+    "57994:2328": {
+      "name": "Toggle button",
+      "variants": [
+        {
+          "id": "57994:2449",
+          "name": "Type=Square, Size=XLarge, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20310",
+          "name": "Type=Square, Size=XLarge, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20430",
+          "name": "Type=Square, Size=XLarge, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20550",
+          "name": "Type=Square, Size=XLarge, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20670",
+          "name": "Type=Square, Size=XLarge, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2451",
+          "name": "Type=Square, Size=Large, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20312",
+          "name": "Type=Square, Size=Large, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20432",
+          "name": "Type=Square, Size=Large, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20552",
+          "name": "Type=Square, Size=Large, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20672",
+          "name": "Type=Square, Size=Large, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2453",
+          "name": "Type=Square, Size=Medium, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20314",
+          "name": "Type=Square, Size=Medium, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20434",
+          "name": "Type=Square, Size=Medium, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20554",
+          "name": "Type=Square, Size=Medium, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20674",
+          "name": "Type=Square, Size=Medium, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2455",
+          "name": "Type=Square, Size=Small, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20316",
+          "name": "Type=Square, Size=Small, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20436",
+          "name": "Type=Square, Size=Small, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20556",
+          "name": "Type=Square, Size=Small, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20676",
+          "name": "Type=Square, Size=Small, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2457",
+          "name": "Type=Square, Size=XSmall, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20318",
+          "name": "Type=Square, Size=XSmall, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20438",
+          "name": "Type=Square, Size=XSmall, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20558",
+          "name": "Type=Square, Size=XSmall, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20678",
+          "name": "Type=Square, Size=XSmall, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2459",
+          "name": "Type=Square, Size=XLarge, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19830",
+          "name": "Type=Square, Size=XLarge, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19950",
+          "name": "Type=Square, Size=XLarge, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20070",
+          "name": "Type=Square, Size=XLarge, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20190",
+          "name": "Type=Square, Size=XLarge, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2461",
+          "name": "Type=Square, Size=Large, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19832",
+          "name": "Type=Square, Size=Large, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19952",
+          "name": "Type=Square, Size=Large, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20072",
+          "name": "Type=Square, Size=Large, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20192",
+          "name": "Type=Square, Size=Large, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2463",
+          "name": "Type=Square, Size=Medium, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19834",
+          "name": "Type=Square, Size=Medium, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19954",
+          "name": "Type=Square, Size=Medium, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20074",
+          "name": "Type=Square, Size=Medium, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20194",
+          "name": "Type=Square, Size=Medium, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2465",
+          "name": "Type=Square, Size=Small, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19836",
+          "name": "Type=Square, Size=Small, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19956",
+          "name": "Type=Square, Size=Small, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20076",
+          "name": "Type=Square, Size=Small, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20196",
+          "name": "Type=Square, Size=Small, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2467",
+          "name": "Type=Square, Size=XSmall, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19838",
+          "name": "Type=Square, Size=XSmall, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19958",
+          "name": "Type=Square, Size=XSmall, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20078",
+          "name": "Type=Square, Size=XSmall, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20198",
+          "name": "Type=Square, Size=XSmall, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2469",
+          "name": "Type=Round, Size=XLarge, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20320",
+          "name": "Type=Round, Size=XLarge, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20440",
+          "name": "Type=Round, Size=XLarge, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20560",
+          "name": "Type=Round, Size=XLarge, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20680",
+          "name": "Type=Round, Size=XLarge, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2471",
+          "name": "Type=Round, Size=Large, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20322",
+          "name": "Type=Round, Size=Large, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20442",
+          "name": "Type=Round, Size=Large, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20562",
+          "name": "Type=Round, Size=Large, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20682",
+          "name": "Type=Round, Size=Large, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2473",
+          "name": "Type=Round, Size=Medium, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20324",
+          "name": "Type=Round, Size=Medium, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20444",
+          "name": "Type=Round, Size=Medium, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20564",
+          "name": "Type=Round, Size=Medium, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20684",
+          "name": "Type=Round, Size=Medium, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2475",
+          "name": "Type=Round, Size=Small, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20326",
+          "name": "Type=Round, Size=Small, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20446",
+          "name": "Type=Round, Size=Small, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20566",
+          "name": "Type=Round, Size=Small, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20686",
+          "name": "Type=Round, Size=Small, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2477",
+          "name": "Type=Round, Size=XSmall, State=Enabled, Selected=True"
+        },
+        {
+          "id": "58653:20328",
+          "name": "Type=Round, Size=XSmall, State=Hovered, Selected=True"
+        },
+        {
+          "id": "58653:20448",
+          "name": "Type=Round, Size=XSmall, State=Focused, Selected=True"
+        },
+        {
+          "id": "58653:20568",
+          "name": "Type=Round, Size=XSmall, State=Pressed, Selected=True"
+        },
+        {
+          "id": "58653:20688",
+          "name": "Type=Round, Size=XSmall, State=Disabled, Selected=True"
+        },
+        {
+          "id": "57994:2479",
+          "name": "Type=Round, Size=XLarge, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19840",
+          "name": "Type=Round, Size=XLarge, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19960",
+          "name": "Type=Round, Size=XLarge, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20080",
+          "name": "Type=Round, Size=XLarge, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20200",
+          "name": "Type=Round, Size=XLarge, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2481",
+          "name": "Type=Round, Size=Large, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19842",
+          "name": "Type=Round, Size=Large, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19962",
+          "name": "Type=Round, Size=Large, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20082",
+          "name": "Type=Round, Size=Large, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20202",
+          "name": "Type=Round, Size=Large, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2483",
+          "name": "Type=Round, Size=Medium, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19844",
+          "name": "Type=Round, Size=Medium, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19964",
+          "name": "Type=Round, Size=Medium, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20084",
+          "name": "Type=Round, Size=Medium, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20204",
+          "name": "Type=Round, Size=Medium, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2485",
+          "name": "Type=Round, Size=Small, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19846",
+          "name": "Type=Round, Size=Small, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19966",
+          "name": "Type=Round, Size=Small, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20086",
+          "name": "Type=Round, Size=Small, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20206",
+          "name": "Type=Round, Size=Small, State=Disabled, Selected=False"
+        },
+        {
+          "id": "57994:2487",
+          "name": "Type=Round, Size=XSmall, State=Enabled, Selected=False"
+        },
+        {
+          "id": "58653:19848",
+          "name": "Type=Round, Size=XSmall, State=Hovered, Selected=False"
+        },
+        {
+          "id": "58653:19968",
+          "name": "Type=Round, Size=XSmall, State=Focused, Selected=False"
+        },
+        {
+          "id": "58653:20088",
+          "name": "Type=Round, Size=XSmall, State=Pressed, Selected=False"
+        },
+        {
+          "id": "58653:20208",
+          "name": "Type=Round, Size=XSmall, State=Disabled, Selected=False"
+        }
+      ],
+      "properties": {
+        "Label text": {
+          "type": "TEXT",
+          "default": "Label"
+        },
+        "Show icon": {
+          "type": "BOOLEAN",
+          "default": true
+        },
+        "Icon": {
+          "type": "INSTANCE_SWAP",
+          "default": "54616:25411"
+        },
+        "Show focus indicator": {
+          "type": "BOOLEAN",
+          "default": false
+        },
+        "Icon (selected)": {
+          "type": "INSTANCE_SWAP",
+          "default": "54616:25409"
+        }
+      }
+    },
+    "57994:2227": {
+      "name": "Button",
+      "variants": [
+        {
+          "id": "57994:2308",
+          "name": "Type=Square, Size=XLarge, State=Enabled"
+        },
+        {
+          "id": "58651:12273",
+          "name": "Type=Square, Size=XLarge, State=Hovered"
+        },
+        {
+          "id": "58651:12393",
+          "name": "Type=Square, Size=XLarge, State=Focused"
+        },
+        {
+          "id": "58651:12513",
+          "name": "Type=Square, Size=XLarge, State=Pressed"
+        },
+        {
+          "id": "58651:12633",
+          "name": "Type=Square, Size=XLarge, State=Disabled"
+        },
+        {
+          "id": "57994:2310",
+          "name": "Type=Square, Size=Large, State=Enabled"
+        },
+        {
+          "id": "58651:12275",
+          "name": "Type=Square, Size=Large, State=Hovered"
+        },
+        {
+          "id": "58651:12395",
+          "name": "Type=Square, Size=Large, State=Focused"
+        },
+        {
+          "id": "58651:12515",
+          "name": "Type=Square, Size=Large, State=Pressed"
+        },
+        {
+          "id": "58651:12635",
+          "name": "Type=Square, Size=Large, State=Disabled"
+        },
+        {
+          "id": "57994:2312",
+          "name": "Type=Square, Size=Medium, State=Enabled"
+        },
+        {
+          "id": "58651:12277",
+          "name": "Type=Square, Size=Medium, State=Hovered"
+        },
+        {
+          "id": "58651:12397",
+          "name": "Type=Square, Size=Medium, State=Focused"
+        },
+        {
+          "id": "58651:12517",
+          "name": "Type=Square, Size=Medium, State=Pressed"
+        },
+        {
+          "id": "58651:12637",
+          "name": "Type=Square, Size=Medium, State=Disabled"
+        },
+        {
+          "id": "57994:2314",
+          "name": "Type=Square, Size=Small, State=Enabled"
+        },
+        {
+          "id": "58651:12279",
+          "name": "Type=Square, Size=Small, State=Hovered"
+        },
+        {
+          "id": "58651:12399",
+          "name": "Type=Square, Size=Small, State=Focused"
+        },
+        {
+          "id": "58651:12519",
+          "name": "Type=Square, Size=Small, State=Pressed"
+        },
+        {
+          "id": "58651:12639",
+          "name": "Type=Square, Size=Small, State=Disabled"
+        },
+        {
+          "id": "57994:2316",
+          "name": "Type=Square, Size=XSmall, State=Enabled"
+        },
+        {
+          "id": "58651:12281",
+          "name": "Type=Square, Size=XSmall, State=Hovered"
+        },
+        {
+          "id": "58651:12401",
+          "name": "Type=Square, Size=XSmall, State=Focused"
+        },
+        {
+          "id": "58651:12521",
+          "name": "Type=Square, Size=XSmall, State=Pressed"
+        },
+        {
+          "id": "58651:12641",
+          "name": "Type=Square, Size=XSmall, State=Disabled"
+        },
+        {
+          "id": "57994:2318",
+          "name": "Type=Round, Size=XLarge, State=Enabled"
+        },
+        {
+          "id": "58651:12283",
+          "name": "Type=Round, Size=XLarge, State=Hovered"
+        },
+        {
+          "id": "58651:12403",
+          "name": "Type=Round, Size=XLarge, State=Focused"
+        },
+        {
+          "id": "58651:12523",
+          "name": "Type=Round, Size=XLarge, State=Pressed"
+        },
+        {
+          "id": "58651:12643",
+          "name": "Type=Round, Size=XLarge, State=Disabled"
+        },
+        {
+          "id": "57994:2320",
+          "name": "Type=Round, Size=Large, State=Enabled"
+        },
+        {
+          "id": "58651:12285",
+          "name": "Type=Round, Size=Large, State=Hovered"
+        },
+        {
+          "id": "58651:12405",
+          "name": "Type=Round, Size=Large, State=Focused"
+        },
+        {
+          "id": "58651:12525",
+          "name": "Type=Round, Size=Large, State=Pressed"
+        },
+        {
+          "id": "58651:12645",
+          "name": "Type=Round, Size=Large, State=Disabled"
+        },
+        {
+          "id": "57994:2322",
+          "name": "Type=Round, Size=Medium, State=Enabled"
+        },
+        {
+          "id": "58651:12287",
+          "name": "Type=Round, Size=Medium, State=Hovered"
+        },
+        {
+          "id": "58651:12407",
+          "name": "Type=Round, Size=Medium, State=Focused"
+        },
+        {
+          "id": "58651:12527",
+          "name": "Type=Round, Size=Medium, State=Pressed"
+        },
+        {
+          "id": "58651:12647",
+          "name": "Type=Round, Size=Medium, State=Disabled"
+        },
+        {
+          "id": "57994:2324",
+          "name": "Type=Round, Size=Small, State=Enabled"
+        },
+        {
+          "id": "58651:12289",
+          "name": "Type=Round, Size=Small, State=Hovered"
+        },
+        {
+          "id": "58651:12409",
+          "name": "Type=Round, Size=Small, State=Focused"
+        },
+        {
+          "id": "58651:12529",
+          "name": "Type=Round, Size=Small, State=Pressed"
+        },
+        {
+          "id": "58651:12649",
+          "name": "Type=Round, Size=Small, State=Disabled"
+        },
+        {
+          "id": "57994:2326",
+          "name": "Type=Round, Size=XSmall, State=Enabled"
+        },
+        {
+          "id": "58651:12291",
+          "name": "Type=Round, Size=XSmall, State=Hovered"
+        },
+        {
+          "id": "58651:12411",
+          "name": "Type=Round, Size=XSmall, State=Focused"
+        },
+        {
+          "id": "58651:12531",
+          "name": "Type=Round, Size=XSmall, State=Pressed"
+        },
+        {
+          "id": "58651:12651",
+          "name": "Type=Round, Size=XSmall, State=Disabled"
+        }
+      ],
+      "properties": {
+        "Label text": {
+          "type": "TEXT",
+          "default": "Label"
+        },
+        "Show icon": {
+          "type": "BOOLEAN",
+          "default": true
+        },
+        "Icon": {
+          "type": "INSTANCE_SWAP",
+          "default": "54616:25409"
+        },
+        "Show focus indicator": {
+          "type": "BOOLEAN",
+          "default": false
+        }
+      }
+    },
+    "58663:30358": {
+      "name": "Icon button - standard",
+      "variants": [
+        {
+          "id": "57994:10082",
+          "name": "Type=Square, Size=XLarge, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31577",
+          "name": "Type=Square, Size=XLarge, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31677",
+          "name": "Type=Square, Size=XLarge, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31777",
+          "name": "Type=Square, Size=XLarge, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31877",
+          "name": "Type=Square, Size=XLarge, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10084",
+          "name": "Type=Square, Size=XLarge, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30910",
+          "name": "Type=Square, Size=XLarge, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31010",
+          "name": "Type=Square, Size=XLarge, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31110",
+          "name": "Type=Square, Size=XLarge, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31210",
+          "name": "Type=Square, Size=XLarge, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10086",
+          "name": "Type=Square, Size=XLarge, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30410",
+          "name": "Type=Square, Size=XLarge, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30610",
+          "name": "Type=Square, Size=XLarge, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30710",
+          "name": "Type=Square, Size=XLarge, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30810",
+          "name": "Type=Square, Size=XLarge, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10088",
+          "name": "Type=Square, Size=Large, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31579",
+          "name": "Type=Square, Size=Large, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31679",
+          "name": "Type=Square, Size=Large, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31779",
+          "name": "Type=Square, Size=Large, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31879",
+          "name": "Type=Square, Size=Large, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10090",
+          "name": "Type=Square, Size=Large, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30912",
+          "name": "Type=Square, Size=Large, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31012",
+          "name": "Type=Square, Size=Large, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31112",
+          "name": "Type=Square, Size=Large, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31212",
+          "name": "Type=Square, Size=Large, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10092",
+          "name": "Type=Square, Size=Large, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30412",
+          "name": "Type=Square, Size=Large, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30612",
+          "name": "Type=Square, Size=Large, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30712",
+          "name": "Type=Square, Size=Large, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30812",
+          "name": "Type=Square, Size=Large, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10094",
+          "name": "Type=Square, Size=Medium, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31581",
+          "name": "Type=Square, Size=Medium, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31681",
+          "name": "Type=Square, Size=Medium, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31781",
+          "name": "Type=Square, Size=Medium, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31881",
+          "name": "Type=Square, Size=Medium, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10096",
+          "name": "Type=Square, Size=Medium, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30914",
+          "name": "Type=Square, Size=Medium, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31014",
+          "name": "Type=Square, Size=Medium, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31114",
+          "name": "Type=Square, Size=Medium, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31214",
+          "name": "Type=Square, Size=Medium, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10098",
+          "name": "Type=Square, Size=Medium, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30414",
+          "name": "Type=Square, Size=Medium, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30614",
+          "name": "Type=Square, Size=Medium, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30714",
+          "name": "Type=Square, Size=Medium, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30814",
+          "name": "Type=Square, Size=Medium, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10100",
+          "name": "Type=Square, Size=Small, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31583",
+          "name": "Type=Square, Size=Small, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31683",
+          "name": "Type=Square, Size=Small, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31783",
+          "name": "Type=Square, Size=Small, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31883",
+          "name": "Type=Square, Size=Small, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10102",
+          "name": "Type=Square, Size=Small, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30916",
+          "name": "Type=Square, Size=Small, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31016",
+          "name": "Type=Square, Size=Small, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31116",
+          "name": "Type=Square, Size=Small, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31216",
+          "name": "Type=Square, Size=Small, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10104",
+          "name": "Type=Square, Size=Small, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30416",
+          "name": "Type=Square, Size=Small, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30616",
+          "name": "Type=Square, Size=Small, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30716",
+          "name": "Type=Square, Size=Small, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30816",
+          "name": "Type=Square, Size=Small, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10106",
+          "name": "Type=Square, Size=XSmall, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31585",
+          "name": "Type=Square, Size=XSmall, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31685",
+          "name": "Type=Square, Size=XSmall, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31785",
+          "name": "Type=Square, Size=XSmall, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31885",
+          "name": "Type=Square, Size=XSmall, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10108",
+          "name": "Type=Square, Size=XSmall, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30918",
+          "name": "Type=Square, Size=XSmall, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31018",
+          "name": "Type=Square, Size=XSmall, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31118",
+          "name": "Type=Square, Size=XSmall, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31218",
+          "name": "Type=Square, Size=XSmall, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10110",
+          "name": "Type=Square, Size=XSmall, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30418",
+          "name": "Type=Square, Size=XSmall, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30618",
+          "name": "Type=Square, Size=XSmall, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30718",
+          "name": "Type=Square, Size=XSmall, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30818",
+          "name": "Type=Square, Size=XSmall, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10112",
+          "name": "Type=Round, Size=XLarge, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31587",
+          "name": "Type=Round, Size=XLarge, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31687",
+          "name": "Type=Round, Size=XLarge, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31787",
+          "name": "Type=Round, Size=XLarge, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31887",
+          "name": "Type=Round, Size=XLarge, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10114",
+          "name": "Type=Round, Size=XLarge, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30920",
+          "name": "Type=Round, Size=XLarge, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31020",
+          "name": "Type=Round, Size=XLarge, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31120",
+          "name": "Type=Round, Size=XLarge, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31220",
+          "name": "Type=Round, Size=XLarge, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10116",
+          "name": "Type=Round, Size=XLarge, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30420",
+          "name": "Type=Round, Size=XLarge, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30620",
+          "name": "Type=Round, Size=XLarge, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30720",
+          "name": "Type=Round, Size=XLarge, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30820",
+          "name": "Type=Round, Size=XLarge, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10118",
+          "name": "Type=Round, Size=Large, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31589",
+          "name": "Type=Round, Size=Large, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31689",
+          "name": "Type=Round, Size=Large, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31789",
+          "name": "Type=Round, Size=Large, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31889",
+          "name": "Type=Round, Size=Large, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10120",
+          "name": "Type=Round, Size=Large, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30922",
+          "name": "Type=Round, Size=Large, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31022",
+          "name": "Type=Round, Size=Large, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31122",
+          "name": "Type=Round, Size=Large, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31222",
+          "name": "Type=Round, Size=Large, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10122",
+          "name": "Type=Round, Size=Large, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30422",
+          "name": "Type=Round, Size=Large, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30622",
+          "name": "Type=Round, Size=Large, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30722",
+          "name": "Type=Round, Size=Large, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30822",
+          "name": "Type=Round, Size=Large, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10124",
+          "name": "Type=Round, Size=Medium, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31591",
+          "name": "Type=Round, Size=Medium, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31691",
+          "name": "Type=Round, Size=Medium, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31791",
+          "name": "Type=Round, Size=Medium, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31891",
+          "name": "Type=Round, Size=Medium, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10126",
+          "name": "Type=Round, Size=Medium, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30924",
+          "name": "Type=Round, Size=Medium, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31024",
+          "name": "Type=Round, Size=Medium, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31124",
+          "name": "Type=Round, Size=Medium, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31224",
+          "name": "Type=Round, Size=Medium, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10128",
+          "name": "Type=Round, Size=Medium, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30424",
+          "name": "Type=Round, Size=Medium, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30624",
+          "name": "Type=Round, Size=Medium, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30724",
+          "name": "Type=Round, Size=Medium, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30824",
+          "name": "Type=Round, Size=Medium, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10130",
+          "name": "Type=Round, Size=Small, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31593",
+          "name": "Type=Round, Size=Small, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31693",
+          "name": "Type=Round, Size=Small, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31793",
+          "name": "Type=Round, Size=Small, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31893",
+          "name": "Type=Round, Size=Small, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10132",
+          "name": "Type=Round, Size=Small, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30926",
+          "name": "Type=Round, Size=Small, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31026",
+          "name": "Type=Round, Size=Small, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31126",
+          "name": "Type=Round, Size=Small, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31226",
+          "name": "Type=Round, Size=Small, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10134",
+          "name": "Type=Round, Size=Small, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30426",
+          "name": "Type=Round, Size=Small, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30626",
+          "name": "Type=Round, Size=Small, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30726",
+          "name": "Type=Round, Size=Small, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30826",
+          "name": "Type=Round, Size=Small, Width=Narrow, State=Disabled"
+        },
+        {
+          "id": "57994:10136",
+          "name": "Type=Round, Size=XSmall, Width=Wide, State=Enabled"
+        },
+        {
+          "id": "58663:31595",
+          "name": "Type=Round, Size=XSmall, Width=Wide, State=Hovered"
+        },
+        {
+          "id": "58663:31695",
+          "name": "Type=Round, Size=XSmall, Width=Wide, State=Focused"
+        },
+        {
+          "id": "58663:31795",
+          "name": "Type=Round, Size=XSmall, Width=Wide, State=Pressed"
+        },
+        {
+          "id": "58663:31895",
+          "name": "Type=Round, Size=XSmall, Width=Wide, State=Disabled"
+        },
+        {
+          "id": "57994:10138",
+          "name": "Type=Round, Size=XSmall, Width=Default, State=Enabled"
+        },
+        {
+          "id": "58663:30928",
+          "name": "Type=Round, Size=XSmall, Width=Default, State=Hovered"
+        },
+        {
+          "id": "58663:31028",
+          "name": "Type=Round, Size=XSmall, Width=Default, State=Focused"
+        },
+        {
+          "id": "58663:31128",
+          "name": "Type=Round, Size=XSmall, Width=Default, State=Pressed"
+        },
+        {
+          "id": "58663:31228",
+          "name": "Type=Round, Size=XSmall, Width=Default, State=Disabled"
+        },
+        {
+          "id": "57994:10140",
+          "name": "Type=Round, Size=XSmall, Width=Narrow, State=Enabled"
+        },
+        {
+          "id": "58663:30428",
+          "name": "Type=Round, Size=XSmall, Width=Narrow, State=Hovered"
+        },
+        {
+          "id": "58663:30628",
+          "name": "Type=Round, Size=XSmall, Width=Narrow, State=Focused"
+        },
+        {
+          "id": "58663:30728",
+          "name": "Type=Round, Size=XSmall, Width=Narrow, State=Pressed"
+        },
+        {
+          "id": "58663:30828",
+          "name": "Type=Round, Size=XSmall, Width=Narrow, State=Disabled"
+        }
+      ],
+      "properties": {
+        "Icon": {
+          "type": "INSTANCE_SWAP",
+          "default": "54616:25409"
+        },
+        "Show focus indicator": {
+          "type": "BOOLEAN",
+          "default": false
+        }
+      }
+    },
+    "54563:40023": {
+      "name": "Tabs",
+      "variants": [
+        {
+          "id": "54563:40024",
+          "name": "Configuration=Fixed, Style=Secondary, Layout=Label & icon"
+        },
+        {
+          "id": "54563:40032",
+          "name": "Configuration=Scrollable, Style=Secondary, Layout=Label & icon"
+        },
+        {
+          "id": "54563:40047",
+          "name": "Configuration=Fixed, Style=Secondary, Layout=Label only"
+        },
+        {
+          "id": "54563:40055",
+          "name": "Configuration=Scrollable, Style=Secondary, Layout=Label only"
+        },
+        {
+          "id": "54563:40070",
+          "name": "Configuration=Fixed, Style=Primary, Layout=Icon only"
+        },
+        {
+          "id": "54563:40078",
+          "name": "Configuration=Scrollable, Style=Primary, Layout=Icon only"
+        },
+        {
+          "id": "54563:40093",
+          "name": "Configuration=Fixed, Style=Primary, Layout=Label & icon"
+        },
+        {
+          "id": "54563:40101",
+          "name": "Configuration=Scrollable, Style=Primary, Layout=Label & icon"
+        },
+        {
+          "id": "54563:40116",
+          "name": "Configuration=Fixed, Style=Primary, Layout=Label only"
+        },
+        {
+          "id": "54563:40124",
+          "name": "Configuration=Scrollable, Style=Primary, Layout=Label only"
+        }
+      ],
+      "properties": {
+        "Tab group": {
+          "type": "SLOT",
+          "default": {
+            "guid": {
+              "sessionID": -1,
+              "localID": -1
+            }
+          }
+        }
+      }
+    },
+    "53977:33575": {
+      "name": "Snackbar",
+      "variants": [
+        {
+          "id": "53977:33576",
+          "name": "Configuration=Text & longer action, # of lines=Two lines, Show close affordance=True"
+        },
+        {
+          "id": "53977:33582",
+          "name": "Configuration=Text & longer action, # of lines=Two lines, Show close affordance=False"
+        },
+        {
+          "id": "53977:33587",
+          "name": "Configuration=Text & action, # of lines=Two lines, Show close affordance=True",
+          "renderId": "53977:34282"
+        },
+        {
+          "id": "53977:33592",
+          "name": "Configuration=Text & action, # of lines=Two lines, Show close affordance=False"
+        },
+        {
+          "id": "53977:33595",
+          "name": "Configuration=Text only, # of lines=Two lines, Show close affordance=True"
+        },
+        {
+          "id": "53977:33598",
+          "name": "Configuration=Text only, # of lines=Two lines, Show close affordance=False",
+          "renderId": "53977:34285"
+        },
+        {
+          "id": "53977:33600",
+          "name": "Configuration=Text & action, # of lines=One line, Show close affordance=True",
+          "renderId": "53977:34286"
+        },
+        {
+          "id": "53977:33605",
+          "name": "Configuration=Text & action, # of lines=One line, Show close affordance=False",
+          "renderId": "53977:34287"
+        },
+        {
+          "id": "53977:33608",
+          "name": "Configuration=Text only, # of lines=One line, Show close affordance=True",
+          "renderId": "53977:34288"
+        },
+        {
+          "id": "53977:33611",
+          "name": "Configuration=Text only, # of lines=One line, Show close affordance=False",
+          "renderId": "53977:34289"
+        }
+      ],
+      "properties": {
+        "Supporting text": {
+          "type": "TEXT",
+          "default": "Snackbar supporting text"
+        }
+      }
+    },
+    "57998:43095": {
+      "name": "Extended FAB",
+      "variants": [
+        {
+          "id": "57998:43096",
+          "name": "Size=Large, Color=Tertiary, State=Pressed"
+        },
+        {
+          "id": "57998:43101",
+          "name": "Size=Large, Color=Tertiary, State=Focused"
+        },
+        {
+          "id": "57998:43105",
+          "name": "Size=Large, Color=Tertiary, State=Hovered"
+        },
+        {
+          "id": "57998:43109",
+          "name": "Size=Large, Color=Tertiary, State=Enabled"
+        },
+        {
+          "id": "57998:43113",
+          "name": "Size=Large, Color=Secondary, State=Pressed"
+        },
+        {
+          "id": "57998:43118",
+          "name": "Size=Large, Color=Secondary, State=Focused"
+        },
+        {
+          "id": "57998:43122",
+          "name": "Size=Large, Color=Secondary, State=Hovered"
+        },
+        {
+          "id": "57998:43126",
+          "name": "Size=Large, Color=Secondary, State=Enabled"
+        },
+        {
+          "id": "57998:43130",
+          "name": "Size=Large, Color=Primary, State=Pressed"
+        },
+        {
+          "id": "57998:43135",
+          "name": "Size=Large, Color=Primary, State=Focused"
+        },
+        {
+          "id": "57998:43139",
+          "name": "Size=Large, Color=Primary, State=Hovered"
+        },
+        {
+          "id": "57998:43143",
+          "name": "Size=Large, Color=Primary, State=Enabled"
+        },
+        {
+          "id": "57998:43147",
+          "name": "Size=Large, Color=Tertiary container, State=Pressed"
+        },
+        {
+          "id": "57998:43152",
+          "name": "Size=Large, Color=Tertiary container, State=Focused"
+        },
+        {
+          "id": "57998:43156",
+          "name": "Size=Large, Color=Tertiary container, State=Hovered"
+        },
+        {
+          "id": "57998:43160",
+          "name": "Size=Large, Color=Tertiary container, State=Enabled"
+        },
+        {
+          "id": "57998:43164",
+          "name": "Size=Large, Color=Secondary container, State=Pressed"
+        },
+        {
+          "id": "57998:43169",
+          "name": "Size=Large, Color=Secondary container, State=Focused"
+        },
+        {
+          "id": "57998:43173",
+          "name": "Size=Large, Color=Secondary container, State=Hovered"
+        },
+        {
+          "id": "57998:43177",
+          "name": "Size=Large, Color=Secondary container, State=Enabled"
+        },
+        {
+          "id": "57998:43181",
+          "name": "Size=Large, Color=Primary container, State=Pressed"
+        },
+        {
+          "id": "57998:43186",
+          "name": "Size=Large, Color=Primary container, State=Focused"
+        },
+        {
+          "id": "57998:43190",
+          "name": "Size=Large, Color=Primary container, State=Hovered"
+        },
+        {
+          "id": "57998:43194",
+          "name": "Size=Large, Color=Primary container, State=Enabled"
+        },
+        {
+          "id": "57998:43198",
+          "name": "Size=Medium, Color=Tertiary, State=Pressed"
+        },
+        {
+          "id": "57998:43203",
+          "name": "Size=Medium, Color=Tertiary, State=Focused"
+        },
+        {
+          "id": "57998:43207",
+          "name": "Size=Medium, Color=Tertiary, State=Hovered"
+        },
+        {
+          "id": "57998:43211",
+          "name": "Size=Medium, Color=Tertiary, State=Enabled"
+        },
+        {
+          "id": "57998:43215",
+          "name": "Size=Medium, Color=Secondary, State=Pressed"
+        },
+        {
+          "id": "57998:43220",
+          "name": "Size=Medium, Color=Secondary, State=Focused"
+        },
+        {
+          "id": "57998:43224",
+          "name": "Size=Medium, Color=Secondary, State=Hovered"
+        },
+        {
+          "id": "57998:43228",
+          "name": "Size=Medium, Color=Secondary, State=Enabled"
+        },
+        {
+          "id": "57998:43232",
+          "name": "Size=Medium, Color=Primary, State=Pressed"
+        },
+        {
+          "id": "57998:43237",
+          "name": "Size=Medium, Color=Primary, State=Focused"
+        },
+        {
+          "id": "57998:43241",
+          "name": "Size=Medium, Color=Primary, State=Hovered"
+        },
+        {
+          "id": "57998:43245",
+          "name": "Size=Medium, Color=Primary, State=Enabled"
+        },
+        {
+          "id": "57998:43249",
+          "name": "Size=Medium, Color=Tertiary container, State=Pressed"
+        },
+        {
+          "id": "57998:43254",
+          "name": "Size=Medium, Color=Tertiary container, State=Focused"
+        },
+        {
+          "id": "57998:43258",
+          "name": "Size=Medium, Color=Tertiary container, State=Hovered"
+        },
+        {
+          "id": "57998:43262",
+          "name": "Size=Medium, Color=Tertiary container, State=Enabled"
+        },
+        {
+          "id": "57998:43266",
+          "name": "Size=Medium, Color=Secondary container, State=Pressed"
+        },
+        {
+          "id": "57998:43271",
+          "name": "Size=Medium, Color=Secondary container, State=Focused"
+        },
+        {
+          "id": "57998:43275",
+          "name": "Size=Medium, Color=Secondary container, State=Hovered"
+        },
+        {
+          "id": "57998:43279",
+          "name": "Size=Medium, Color=Secondary container, State=Enabled"
+        },
+        {
+          "id": "57998:43283",
+          "name": "Size=Medium, Color=Primary container, State=Pressed"
+        },
+        {
+          "id": "57998:43288",
+          "name": "Size=Medium, Color=Primary container, State=Focused"
+        },
+        {
+          "id": "57998:43292",
+          "name": "Size=Medium, Color=Primary container, State=Hovered"
+        },
+        {
+          "id": "57998:43296",
+          "name": "Size=Medium, Color=Primary container, State=Enabled"
+        },
+        {
+          "id": "57998:43300",
+          "name": "Size=Small, Color=Tertiary, State=Pressed"
+        },
+        {
+          "id": "57998:43305",
+          "name": "Size=Small, Color=Tertiary, State=Focused"
+        },
+        {
+          "id": "57998:43309",
+          "name": "Size=Small, Color=Tertiary, State=Hovered"
+        },
+        {
+          "id": "57998:43313",
+          "name": "Size=Small, Color=Tertiary, State=Enabled"
+        },
+        {
+          "id": "57998:43317",
+          "name": "Size=Small, Color=Secondary, State=Pressed"
+        },
+        {
+          "id": "57998:43322",
+          "name": "Size=Small, Color=Secondary, State=Focused"
+        },
+        {
+          "id": "57998:43326",
+          "name": "Size=Small, Color=Secondary, State=Hovered"
+        },
+        {
+          "id": "57998:43330",
+          "name": "Size=Small, Color=Secondary, State=Enabled"
+        },
+        {
+          "id": "57998:43334",
+          "name": "Size=Small, Color=Primary, State=Pressed"
+        },
+        {
+          "id": "57998:43339",
+          "name": "Size=Small, Color=Primary, State=Focused"
+        },
+        {
+          "id": "57998:43343",
+          "name": "Size=Small, Color=Primary, State=Hovered"
+        },
+        {
+          "id": "57998:43347",
+          "name": "Size=Small, Color=Primary, State=Enabled"
+        },
+        {
+          "id": "57998:43351",
+          "name": "Size=Small, Color=Tertiary container, State=Pressed"
+        },
+        {
+          "id": "57998:43356",
+          "name": "Size=Small, Color=Tertiary container, State=Focused"
+        },
+        {
+          "id": "57998:43360",
+          "name": "Size=Small, Color=Tertiary container, State=Hovered"
+        },
+        {
+          "id": "57998:43364",
+          "name": "Size=Small, Color=Tertiary container, State=Enabled"
+        },
+        {
+          "id": "57998:43368",
+          "name": "Size=Small, Color=Secondary container, State=Pressed"
+        },
+        {
+          "id": "57998:43373",
+          "name": "Size=Small, Color=Secondary container, State=Focused"
+        },
+        {
+          "id": "57998:43377",
+          "name": "Size=Small, Color=Secondary container, State=Hovered"
+        },
+        {
+          "id": "57998:43381",
+          "name": "Size=Small, Color=Secondary container, State=Enabled"
+        },
+        {
+          "id": "57998:43385",
+          "name": "Size=Small, Color=Primary container, State=Pressed"
+        },
+        {
+          "id": "57998:43390",
+          "name": "Size=Small, Color=Primary container, State=Focused"
+        },
+        {
+          "id": "57998:43394",
+          "name": "Size=Small, Color=Primary container, State=Hovered"
+        },
+        {
+          "id": "57998:43398",
+          "name": "Size=Small, Color=Primary container, State=Enabled"
+        }
+      ],
+      "properties": {
+        "Label text": {
+          "type": "TEXT",
+          "default": "Label"
+        },
+        "Icon": {
+          "type": "INSTANCE_SWAP",
+          "default": "54616:25409"
+        },
+        "Show focus indicator": {
+          "type": "BOOLEAN",
+          "default": false
+        }
+      }
+    }
+  },
+  "standalone": {
+    "51816:5866": {
+      "name": "Vertical/Middle-inset"
+    },
+    "51816:5864": {
+      "name": "Vertical/Inset"
+    },
+    "51816:5862": {
+      "name": "Vertical/Full-width"
+    },
+    "51816:5872": {
+      "name": "Horizontal/Divider with subhead"
+    },
+    "51816:5870": {
+      "name": "Horizontal/Middle-inset"
+    },
+    "51816:5868": {
+      "name": "Horizontal/Inset"
+    },
+    "51816:5860": {
+      "name": "Horizontal/Full-width"
+    }
+  },
+  "specimens": {
+    "53699:35493": {
+      "name": "Schematic group",
+      "type": "FRAME"
+    },
+    "58548:7181": {
+      "name": "Corner scale",
+      "type": "SECTION"
+    },
+    "58186:19244": {
+      "name": "typescale",
+      "type": "FRAME"
+    }
+  }
+}

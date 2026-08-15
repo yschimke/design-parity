@@ -1,0 +1,176 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yschimke/design-parity/schema/kit-index.schema.json",
+  "title": "Design kit index",
+  "description": "The committed vocabulary of a design kit, scoped to what a design-map.json references: the component sets and their variant axes, the component properties a render silently applies, and the already-configured instances that stand in for property vectors no definition can express. Generated \u2014 regenerate rather than edit.",
+  "type": "object",
+  "required": [
+    "fileKey",
+    "sets",
+    "standalone"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "fileKey": {
+      "type": "string",
+      "description": "The design file every node id in this index is addressed within. Node ids are unique per file only, so an index without this cannot be checked against the refs that use it.",
+      "minLength": 1
+    },
+    "generatedBy": {
+      "type": "string",
+      "description": "What wrote this file, for a reader who finds it and wonders whether to edit it."
+    },
+    "sets": {
+      "type": "object",
+      "description": "Component sets, keyed by node id. A set is the vocabulary for every component whose ref names one of its variants.",
+      "additionalProperties": {
+        "$ref": "#/definitions/set"
+      }
+    },
+    "standalone": {
+      "type": "object",
+      "description": "Components that are not variants of a set, keyed by node id. Kits that model a family as sibling components in a folder use these; the folder is then the variant vocabulary.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "specimens": {
+      "type": "object",
+      "description": "Referenced nodes that are no component at all \u2014 typography, colour and shape sheets. Recorded so the index can prove the reference exists without pretending it has a variant vocabulary.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "name",
+          "type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "The source's own node type, e.g. FRAME."
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "set": {
+      "type": "object",
+      "required": [
+        "name",
+        "variants"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The variant COMPONENT's node id \u2014 the vocabulary handle."
+              },
+              "name": {
+                "type": "string",
+                "description": "The axis vector, e.g. 'Type=Round, Size=Small, State=Enabled'."
+              },
+              "renderId": {
+                "type": "string",
+                "description": "A different node to export images from, when the definition cannot be rendered. Hidden component sets are real vocabulary but export as a placeholder; the kit's own visible instance is the render handle."
+              }
+            }
+          }
+        },
+        "properties": {
+          "type": "object",
+          "description": "Component properties the set declares, keyed by the name a designer sees (the source's opaque '#id' suffix is stripped). These are the values a render applies when nobody overrides them.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "type",
+              "default"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "BOOLEAN",
+                  "TEXT",
+                  "INSTANCE_SWAP",
+                  "SLOT"
+                ],
+                "description": "VARIANT is absent by design: those axes are already spelled out in each variant's name, and recording them twice invites the two to disagree. SLOT is present but never pairable \u2014 a slot names a region, not the content a knob describes."
+              },
+              "default": {
+                "type": [
+                  "boolean",
+                  "string",
+                  "number",
+                  "object"
+                ],
+                "description": "What an unparameterised render of this set gets. A SLOT default is an opaque object (a source guid), kept as-is because nothing here interprets it."
+              }
+            }
+          }
+        },
+        "instances": {
+          "type": "array",
+          "description": "Visible instances already configured at a known property vector \u2014 renderable node ids for points in property space a definition cannot express.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "componentId",
+              "properties"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The INSTANCE's own node id: what gets rendered."
+              },
+              "componentId": {
+                "type": "string",
+                "description": "The variant COMPONENT this is an instance of. An instance of a sibling variant carries the right property vector on the wrong component."
+              },
+              "properties": {
+                "type": "object",
+                "description": "The full vector this instance renders at \u2014 every property the set declares, at the instance's chosen value or the set's default. Complete rather than sparse, so matching is an equality check on the whole vector.",
+                "additionalProperties": {
+                  "type": [
+                    "boolean",
+                    "string",
+                    "number",
+                    "object"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

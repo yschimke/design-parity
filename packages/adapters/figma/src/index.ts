@@ -40,6 +40,7 @@ export type {
   FigmaNodeDoc,
   FigmaStyleMeta,
   FigmaComponentMeta,
+  FigmaComponentProperty,
   FigmaComponentPropertyDefinition,
 } from "./figma-api.js";
 
@@ -90,4 +91,9 @@ export type {
   ReferenceCacheFile,
 } from "./reference-cache.js";
 
-export type { FileMetaResponse, VariablesResponse } from "./figma-api.js";
+export type {
+  FileMetaResponse,
+  FileNodesResponse,
+  FilePagesResponse,
+  VariablesResponse,
+} from "./figma-api.js";
