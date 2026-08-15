@@ -205,6 +205,21 @@ new KitIndexResolver(index, {
 });
 ```
 
+`resolve` reads the same shape from a **`kit-vocabulary.json`** beside the index
+— picked up automatically when present, or named with `--vocabulary`:
+
+```jsonc
+{
+  "axes":   { "density": ["Density", "Compactness"] },
+  "values": { "cosy": ["Comfortable"] }
+}
+```
+
+That file exists so a catalog can learn one more of its kit's spellings without
+waiting for a release of this package. Only the *tables* live there — a rule
+about how values are matched at all (the multi-word slug match, the fused-axis
+search) is logic, and belongs here where it can be tested.
+
 ## Files
 
 `figma-kit-index.json` is **generated** — regenerate it, never hand-edit it. It

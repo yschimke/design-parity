@@ -53,7 +53,9 @@ export const DEFAULT_AXIS_ALIASES: AxisAliases = {
   trailing: ["Show trailing icon", "Trailing icon", "Configuration"],
   icon: ["Icon", "Show icon"],
   style: ["Style"],
-  layout: ["Layout"],
+  // `layout` is a code word for both: a card's content arrangement is the kit's
+  // `Layout`, a time picker's is its `Orientation`. The value decides.
+  layout: ["Layout", "Orientation"],
   mode: ["Type"],
   hours: ["Format"],
   header: ["Show back", "Configuration"],
