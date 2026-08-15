@@ -2,5 +2,13 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "local>yschimke/renovate-config"
+  ],
+  "packageRules": [
+    {
+      "description": "`engines.node` states the range this repo supports, not a version to track. Pinning it to a single release makes `npm ci --engine-strict` reject every runtime the workflows actually use (Node 24) and every future patch of the pinned line.",
+      "matchDepTypes": ["engines"],
+      "matchPackageNames": ["node"],
+      "enabled": false
+    }
   ]
 }
