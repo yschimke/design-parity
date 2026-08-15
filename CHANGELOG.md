@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.48](https://github.com/yschimke/design-parity/compare/v0.1.47...v0.1.48) (2026-08-15)
+
+
+### Features
+
+* **kit-index:** add @design-parity/kit-index ([#327](https://github.com/yschimke/design-parity/issues/327)) ([b2ab2fe](https://github.com/yschimke/design-parity/commit/b2ab2fe2008e253628e77ec9b0cf14a04926d1bf))
+
+
+### Bug Fixes
+
+* **candidate:** skip a scoped pack's deferred previews instead of rejecting the bundle ([#330](https://github.com/yschimke/design-parity/issues/330)) ([f3f2b53](https://github.com/yschimke/design-parity/commit/f3f2b53ce58932b282945ddc779a1c5243db3967))
+
 ## [0.1.47](https://github.com/yschimke/design-parity/compare/v0.1.46...v0.1.47) (2026-08-11)
 
 
