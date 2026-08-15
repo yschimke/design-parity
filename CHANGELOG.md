@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.50](https://github.com/yschimke/design-parity/compare/v0.1.49...v0.1.50) (2026-08-15)
+
+
+### Features
+
+* **kit-index:** match slugged values against the axis's own spelling ([#346](https://github.com/yschimke/design-parity/issues/346)) ([88a675b](https://github.com/yschimke/design-parity/commit/88a675bf131a071a1e24ac1ab07b764f50a1e86c))
+
 ## [0.1.49](https://github.com/yschimke/design-parity/compare/v0.1.48...v0.1.49) (2026-08-15)
 
 
