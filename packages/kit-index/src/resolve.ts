@@ -87,6 +87,24 @@ export function slotFor(
     : { state: variantName };
 }
 
+/**
+ * Why a vector resolved to nothing — see {@link KitIndexResolver.explainUnresolved}.
+ *
+ * Three answers, and a reader does something different with each: `base` is not
+ * a gap, `combination` is a gap in the kit's matrix rather than in its
+ * vocabulary, and `seeds` names what to go and look for.
+ */
+export type UnresolvedReason =
+  /** The reference already draws this: the base variant carries every seeded value. */
+  | { kind: "base"; variant: string }
+  /** Each seed resolves alone; the kit draws no node carrying them together. */
+  | { kind: "combination"; seeds: string[] }
+  /** These seeds have no counterpart at all — the actual gap. */
+  | { kind: "seeds"; missing: string[] };
+
+/** `key=value`, the form the reports quote a seed in. */
+const vectorPart = (seed: VariantSeed): string => `${seed.key}=${String(seed.raw)}`;
+
 export interface KitIndexResolverOptions {
   /** Per-kit overrides merged over the built-in translation tables. */
   vocabulary?: Partial<Vocabulary>;
@@ -499,6 +517,65 @@ export class KitIndexResolver {
         seeded !== undefined &&
         properties.every((p) => p.type === "BOOLEAN" && p.default === seeded),
     };
+  }
+
+  /**
+   * Why a set of seeds resolved to nothing.
+   *
+   * "No counterpart in the kit" is true of every miss and useful about almost
+   * none of them, because it collapses three different situations a reader has
+   * to act on differently. Working out which one you are looking at otherwise
+   * means re-resolving seeds by hand against the kit index — which is exactly
+   * what this does, once, at the point the miss is recorded.
+   *
+   * Call only after {@link resolveVariant} has already returned `undefined`;
+   * on a resolvable vector the answer is meaningless.
+   */
+  explainUnresolved(ref: string, seeds: VariantSeed[]): UnresolvedReason {
+    // A seed whose value the base variant already carries is not a gap at all:
+    // the reference IS that variant, and the render duplicates it. `Size=Small`
+    // on a catalog whose base preview is the small one reads as a missing node
+    // otherwise, and there is nothing to go looking for.
+    const base = this.#baseVariant(ref);
+    if (base) {
+      const covered = seeds.filter((seed) => this.#seedMatchesBase(base, seed));
+      if (covered.length === seeds.length) {
+        return { kind: "base", variant: base.name };
+      }
+    }
+
+    // Each seed alone. The split matters: if they all resolve individually the
+    // kit knows every value and simply draws no node at their intersection,
+    // which is a fact about the kit's matrix. If some do not, those are the
+    // gap, and naming them is the difference between a lead and a list.
+    const missing = seeds.filter((seed) => !this.resolveVariant(ref, [seed]));
+    if (missing.length === 0) {
+      return { kind: "combination", seeds: seeds.map(vectorPart) };
+    }
+    return { kind: "seeds", missing: missing.map(vectorPart) };
+  }
+
+  /** The indexed variant a ref points at, when it points at one. */
+  #baseVariant(ref: string): IndexedVariant | undefined {
+    const nodeId = this.#nodeIdOf(ref);
+    return nodeId ? this.#variants.get(nodeId) : undefined;
+  }
+
+  /** True when the base variant already sits at the value this seed asks for. */
+  #seedMatchesBase(base: IndexedVariant, seed: VariantSeed): boolean {
+    for (const axis of axisCandidates(
+      seed.key,
+      base.axes,
+      seed.raw,
+      this.#vocabulary,
+    )) {
+      const at = base.axes[axis];
+      if (at === undefined) continue;
+      for (const candidate of valueCandidates(seed.raw, this.#vocabulary)) {
+        if (norm(at) === norm(candidate)) return true;
+      }
+    }
+    return false;
   }
 
   /**

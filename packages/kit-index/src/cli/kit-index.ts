@@ -45,7 +45,7 @@ import {
 } from "../design-map.js";
 import { dumpInventory, DEFAULT_WALK_DEPTH } from "../inventory.js";
 import { KIT_INDEX_FILENAME, loadKitIndex, parseKitIndex, validateKitIndex } from "../load.js";
-import { KitIndexResolver } from "../resolve.js";
+import { KitIndexResolver, type UnresolvedReason } from "../resolve.js";
 import type { Vocabulary } from "../vocabulary.js";
 import type { KitIndex, KitInventory } from "../types.js";
 
@@ -82,6 +82,28 @@ const flag = (name: string): boolean => argv.includes(`--${name}`);
 const log = (message: string): void => {
   stdout.write(`${message}\n`);
 };
+
+/**
+ * One line of prose per kind of miss.
+ *
+ * The wording is chosen so the three are skimmable apart in a list of a
+ * hundred: only `no counterpart` names something to go and fix, `the reference
+ * already draws this` is not a gap at all, and the middle one says the kit's
+ * matrix has a hole rather than its vocabulary.
+ */
+function explain(reason: UnresolvedReason): string {
+  switch (reason.kind) {
+    case "base":
+      return `the reference already draws this (\`${reason.variant}\`)`;
+    case "combination":
+      return (
+        `each of ${reason.seeds.map((s) => `\`${s}\``).join(", ")} exists in the kit, ` +
+        `but no node carries them together`
+      );
+    case "seeds":
+      return `no counterpart for ${reason.missing.map((s) => `\`${s}\``).join(", ")}`;
+  }
+}
 
 function client(): FigmaRestClient {
   const token = env.FIGMA_TOKEN;
@@ -322,11 +344,12 @@ async function resolve(): Promise<void> {
 
   if (diagnostics.unresolved.length) {
     log(
-      `\n${diagnostics.unresolved.length} variant(s) have no counterpart in the ` +
-        `kit — neither an axis nor a property, so they are left uncompared:`,
+      `\n${diagnostics.unresolved.length} variant(s) are left uncompared. Each ` +
+        `line says which kind of miss it is — only \`no counterpart\` is a value ` +
+        `nobody has mapped:`,
     );
     for (const v of diagnostics.unresolved) {
-      log(`  - ${v.componentId} / ${v.variant} (${v.vector})`);
+      log(`  - ${v.componentId} / ${v.variant} (${v.vector}) — ${explain(v.reason)}`);
     }
   }
 

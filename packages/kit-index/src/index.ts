@@ -39,6 +39,7 @@ export type {
   DefaultedContent,
   KitIndexResolverOptions,
   SeedProperty,
+  UnresolvedReason,
 } from "./resolve.js";
 export { KitIndexResolver, slotFor } from "./resolve.js";
 

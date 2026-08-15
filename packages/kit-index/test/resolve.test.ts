@@ -316,3 +316,47 @@ describe("slugged values the kit spells with its own spacing", () => {
     ).toEqual({ nodeId: "52949:27946", name: "Format=24 hour, Orientation=Vertical" });
   });
 });
+
+describe("saying why a vector resolved to nothing", () => {
+  // "No counterpart in the kit" is true of every miss and useful about almost
+  // none of them. These three are what a reader actually has to tell apart, and
+  // the first two are not gaps at all — reading them as gaps sends someone
+  // looking through a design file for a node that was never missing.
+
+  it("recognises a reference that already draws the variant", () => {
+    // The base IS `Size=XLarge`, so `size=xl` duplicates it. Reported as a gap,
+    // this reads as a missing XLarge button in a kit that plainly has one.
+    const reason = resolver.explainUnresolved(ref("57994:2308"), [
+      { key: "size", raw: "xl" },
+    ]);
+    expect(reason).toEqual({ kind: "base", variant: "Type=Square, Size=XLarge, State=Enabled" });
+  });
+
+  it("separates a hole in the matrix from a hole in the vocabulary", () => {
+    // Both values are real and the kit draws each of them from this base — a
+    // `Text & longer action` snackbar and a one-line one — but it draws no
+    // one-line `Text & longer action`. Nothing is missing from the vocabulary
+    // here, so pointing a reader at the seeds would waste their time; the kit's
+    // own matrix simply skips that cell.
+    const reason = resolver.explainUnresolved(ref("53977:33595"), [
+      { key: "labels", raw: "text-longer-action" },
+      { key: "lines", raw: "one" },
+    ]);
+    expect(reason).toEqual({
+      kind: "combination",
+      seeds: ["labels=text-longer-action", "lines=one"],
+    });
+  });
+
+  it("names only the seeds that are actually missing", () => {
+    // The failure that motivated this: a two-seed render where one seed is
+    // perfectly well known. Quoting the whole vector sends the reader after
+    // both, and `state=unselected` is not the problem.
+    const reason = resolver.explainUnresolved(ref("51859:5629"), [
+      { key: "state", raw: "unchecked" },
+      { key: "elevation", raw: "3" },
+    ]);
+    expect(reason.kind).toBe("seeds");
+    expect(reason).toMatchObject({ missing: ["elevation=3"] });
+  });
+});

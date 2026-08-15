@@ -164,6 +164,7 @@ describe("misses, reported apart", () => {
         componentId: "Button/Filled",
         variant: "x",
         vector: "elevation=3",
+        reason: { kind: "seeds", missing: ["elevation=3"] },
       },
     ]);
     expect(diagnostics.propertyVariants).toEqual([]);

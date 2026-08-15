@@ -128,6 +128,22 @@ Under a `design-led` direction a bad reference drives the code away from the kit
 it is copying — and does so while reporting a clean parity result, which is the
 worst outcome available. Every unresolved seed is surfaced as unresolved.
 
+Surfaced *with a reason*, though, because "no counterpart in the kit" is true of
+every miss and actionable for almost none. `resolve` classifies each one
+([`explainUnresolved`](./src/resolve.ts)):
+
+| Reason | What it means | What to do |
+| --- | --- | --- |
+| `the reference already draws this` | The base variant carries every seeded value — the render duplicates the reference | Nothing. Not a gap. |
+| `each of … exists, but no node carries them together` | Both values are real; the kit's matrix skips their intersection | Nothing here — the kit would have to draw the cell |
+| `no counterpart for …` | These seeds have no counterpart at all | The actual lead: map the value, or accept the gap |
+
+The third column is the point. On a real catalog this turned
+`error-unselected (state=unselected, status=error)` — where `state=unselected`
+resolves perfectly well on its own — into `no counterpart for status=error`,
+and stopped two `size=small` renders being read as missing kit nodes when the
+reference *is* the small variant.
+
 That rule is why the matching is fussier than it first looks. A boolean axis
 accepts `True` from *any* knob, so a naive matcher had `footer=true` resolving
 to `Show back=True` and `supporting=on` resolving to `Leading icon=True` — both

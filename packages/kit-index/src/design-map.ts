@@ -37,7 +37,7 @@
  */
 import type { DesignMap, DesignMapEntry, RefVariant } from "@design-parity/core";
 
-import { slotFor, type KitIndexResolver } from "./resolve.js";
+import { slotFor, type KitIndexResolver, type UnresolvedReason } from "./resolve.js";
 import type { VariantSeed } from "./types.js";
 
 /** The sidecar `schema` string this module reads. Anything else is refused. */
@@ -88,6 +88,13 @@ export interface UnresolvedVariantReport {
   componentId: string;
   variant: string;
   vector: string;
+  /**
+   * Which kind of miss this is. Without it every entry reads "no counterpart in
+   * the kit", which is true of all of them and actionable for none — a reader
+   * cannot tell a reference that already draws the variant from a vector the
+   * kit's matrix skips from a value nobody has mapped.
+   */
+  reason: UnresolvedReason;
 }
 
 /** A reference that draws optional content whatever the code drew. */
@@ -225,6 +232,7 @@ export function resolveDesignMapVariants(
             componentId: declaration.componentId,
             variant: render.name,
             vector,
+            reason: resolver.explainUnresolved(declaration.reference, render.seeds),
           });
         }
         continue;
