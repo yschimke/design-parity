@@ -46,7 +46,11 @@ import {
 import { dumpInventory, DEFAULT_WALK_DEPTH } from "../inventory.js";
 import { KIT_INDEX_FILENAME, loadKitIndex, parseKitIndex, validateKitIndex } from "../load.js";
 import { KitIndexResolver } from "../resolve.js";
+import type { Vocabulary } from "../vocabulary.js";
 import type { KitIndex, KitInventory } from "../types.js";
+
+/** Where a repo's own axis/value spellings live, when it has any. */
+const DEFAULT_VOCABULARY_FILE = "kit-vocabulary.json";
 
 const USAGE = `design-parity-kit-index — refresh a design kit's committed vocabulary
 
@@ -58,6 +62,7 @@ const USAGE = `design-parity-kit-index — refresh a design kit's committed voca
   design-parity-kit-index resolve  [--map design-map.json]
                                 [--variants design-map-variants.json]
                                 [--index ${KIT_INDEX_FILENAME}] [--out <map>]
+                                [--vocabulary kit-vocabulary.json]
                                 [--check] [--strict]
   design-parity-kit-index validate [--index ${KIT_INDEX_FILENAME}]
 
@@ -228,6 +233,24 @@ async function resolve(): Promise<void> {
   const index = await loadKitIndex(indexPath);
   const map = JSON.parse(await readFile(mapPath, "utf8")) as DesignMap;
 
+  // Per-kit vocabulary, merged over the built-in tables key by key. A kit files
+  // its variants how it likes, and the alternative to this file is a release of
+  // this package every time a downstream catalog learns one more of its
+  // spellings — which is a slow way to say something that is just data.
+  const vocabularyPath = arg("vocabulary");
+  let vocabulary: Partial<Vocabulary> | undefined;
+  if (vocabularyPath) {
+    vocabulary = JSON.parse(await readFile(vocabularyPath, "utf8")) as Partial<Vocabulary>;
+  } else {
+    // Honour the conventional filename without being asked, so a repo that has
+    // one cannot forget the flag in one of its several workflows and silently
+    // resolve fewer variants than the last run did.
+    vocabulary = await readFile(DEFAULT_VOCABULARY_FILE, "utf8")
+      .then((raw) => JSON.parse(raw) as Partial<Vocabulary>)
+      .catch(() => undefined);
+    if (vocabulary) log(`Using the kit vocabulary at ${DEFAULT_VOCABULARY_FILE}.`);
+  }
+
   let variants: DesignMapVariants;
   try {
     variants = JSON.parse(await readFile(variantsPath, "utf8")) as DesignMapVariants;
@@ -241,7 +264,7 @@ async function resolve(): Promise<void> {
   const { map: resolved, diagnostics } = resolveDesignMapVariants({
     map,
     variants,
-    resolver: new KitIndexResolver(index),
+    resolver: new KitIndexResolver(index, vocabulary ? { vocabulary } : {}),
   });
   const text = `${JSON.stringify(resolved, null, 2)}\n`;
 

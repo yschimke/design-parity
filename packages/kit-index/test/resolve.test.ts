@@ -272,3 +272,47 @@ describe("reporting what a reference silently depicts", () => {
     expect(resolver.defaultedContent(ref("51816:5860"))).toEqual([]);
   });
 });
+
+describe("slugged values the kit spells with its own spacing", () => {
+  it("reaches a multi-word published value from a hyphenated knob", () => {
+    // `center-aligned-hero` is the kit's `Center-aligned hero` — a hyphen in one
+    // place and a space in the other, which no amount of swapping one for the
+    // other reaches. Normalising both sides to letters and digits does, and it
+    // can only ever return a value the axis actually publishes.
+    expect(
+      resolver.resolveVariant(ref("53912:27481"), {
+        key: "layout",
+        raw: "center-aligned-hero",
+      }),
+    ).toEqual({
+      nodeId: "54577:25914",
+      name: "Context=Tablet, Layout=Center-aligned hero",
+    });
+  });
+
+  it("still refuses a spelling the kit does not publish", () => {
+    expect(
+      resolver.resolveVariant(ref("53912:27481"), {
+        key: "layout",
+        raw: "left-aligned-hero",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("does not normalise a bare number, which would reach the wrong value", () => {
+    // `progress=1.0` normalises to `10`, a real value of a `Progress` axis and
+    // the wrong one; the candidate list already turns 1.0 into `100`. A hyphen
+    // or a space is what says "this is a phrase the kit spells its own way".
+    expect(
+      resolver.resolveVariant(ref("53912:27481"), { key: "layout", raw: "1.0" }),
+    ).toBeUndefined();
+  });
+
+  it("reads a second axis the same knob names on another component", () => {
+    // `layout` is a code word for both a card's `Layout` and a picker's
+    // `Orientation`; the value decides which answers.
+    expect(
+      resolver.resolveVariant(ref("52949:28014"), { key: "layout", raw: "vertical" }),
+    ).toEqual({ nodeId: "52949:27946", name: "Format=24 hour, Orientation=Vertical" });
+  });
+});

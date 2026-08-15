@@ -1817,6 +1817,108 @@
           "default": false
         }
       }
+    },
+    "53912:27480": {
+      "name": "Carousel",
+      "variants": [
+        {
+          "id": "53912:27481",
+          "name": "Context=Tablet, Layout=Multi-browse"
+        },
+        {
+          "id": "54577:25998",
+          "name": "Context=Tablet, Layout=Uncontained"
+        },
+        {
+          "id": "54577:25914",
+          "name": "Context=Tablet, Layout=Center-aligned hero"
+        },
+        {
+          "id": "54577:25956",
+          "name": "Context=Tablet, Layout=Hero"
+        },
+        {
+          "id": "53912:27490",
+          "name": "Context=Mobile, Layout=Multi-browse"
+        },
+        {
+          "id": "54577:26035",
+          "name": "Context=Mobile, Layout=Uncontained"
+        },
+        {
+          "id": "53912:27497",
+          "name": "Context=Mobile, Layout=Center-aligned hero"
+        },
+        {
+          "id": "54490:25276",
+          "name": "Context=Mobile, Layout=Hero"
+        },
+        {
+          "id": "58973:3142",
+          "name": "Context=Mobile, Layout=Multi-aspect ratio"
+        },
+        {
+          "id": "58973:3148",
+          "name": "Context=Tablet, Layout=Multi-aspect ratio"
+        }
+      ],
+      "properties": {
+        "Item 1": {
+          "type": "INSTANCE_SWAP",
+          "default": "58973:3163"
+        },
+        "Item 2": {
+          "type": "INSTANCE_SWAP",
+          "default": "58973:3168"
+        },
+        "Item 3": {
+          "type": "INSTANCE_SWAP",
+          "default": "58973:3173"
+        },
+        "Item 4": {
+          "type": "INSTANCE_SWAP",
+          "default": "58973:3183"
+        },
+        "Item 5": {
+          "type": "INSTANCE_SWAP",
+          "default": "58973:3178"
+        },
+        "Show 4th item": {
+          "type": "BOOLEAN",
+          "default": true
+        },
+        "Show 5th item": {
+          "type": "BOOLEAN",
+          "default": true
+        }
+      }
+    },
+    "52949:27916": {
+      "name": "Dial picker",
+      "variants": [
+        {
+          "id": "52949:28014",
+          "name": "Format=24 hour, Orientation=Horizontal"
+        },
+        {
+          "id": "52949:27946",
+          "name": "Format=24 hour, Orientation=Vertical"
+        },
+        {
+          "id": "52949:27985",
+          "name": "Format=12 hour, Orientation=Horizontal"
+        },
+        {
+          "id": "52949:27917",
+          "name": "Format=12 hour, Orientation=Vertical"
+        }
+      ],
+      "properties": {
+        "Headline": {
+          "type": "TEXT",
+          "default": "Select time"
+        }
+      }
     }
   },
   "standalone": {

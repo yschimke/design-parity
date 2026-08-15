@@ -279,6 +279,34 @@ export class KitIndexResolver {
   }
 
   /**
+   * The axis's own spelling of `want`, matched without separators or case.
+   *
+   * Code knobs slug what a kit spaces and capitalises — `center-aligned-hero`
+   * is the kit's `Center-aligned hero`, hyphen in one place and space in the
+   * other, which no amount of swapping one for the other reaches. Normalising
+   * both sides to letters and digits does, and it can only ever return a value
+   * the axis actually publishes, so a spelling the kit does not have still
+   * resolves to nothing. This is the general form of the hand-written
+   * `secondary-container` style entries in {@link DEFAULT_VALUE_ALIASES}.
+   */
+  #publishedValue(
+    set: KitSet,
+    axis: string,
+    want: string | undefined,
+  ): string | undefined {
+    if (want === undefined) return undefined;
+    // Only for MULTI-WORD slugs. Normalising strips every separator, and that
+    // is too strong for a bare number: `progress=1.0` normalises to `10`, which
+    // is a real value of a `Progress` axis and the wrong one — the candidate
+    // list already turns 1.0 into `100` for exactly that axis. A hyphen or a
+    // space is what says "this is a phrase the kit spells with its own
+    // spacing".
+    if (!/[-\s]/.test(want)) return undefined;
+    const target = norm(want);
+    return this.#axisValues(set, axis).find((value) => norm(value) === target);
+  }
+
+  /**
    * The kit node reached by applying every seed to a set variant's axis vector,
    * or `undefined` when the kit models no such axis.
    *
@@ -332,7 +360,8 @@ export class KitIndexResolver {
           }
           continue;
         }
-        for (const want of valueCandidates(seed.raw, this.#vocabulary)) {
+        for (const candidate of valueCandidates(seed.raw, this.#vocabulary)) {
+          const want = this.#publishedValue(set, axis, candidate) ?? candidate;
           const noOp = eq(base.axes[axis], want);
           // Some shared matrices spell their default size explicitly in a
           // combination (`size=s, width=narrow, shape=square`). That seed is a
