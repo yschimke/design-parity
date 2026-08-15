@@ -5,6 +5,12 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2023"],
+    // Declared explicitly rather than left to automatic `@types` discovery,
+    // which TypeScript 7 no longer performs: without this, `node` never enters
+    // the program and `console`, `import.meta.url` and every `node:*` import
+    // fail to resolve. Packages needing a different set override `types`
+    // (see packages/figma-plugin/figma/tsconfig.json).
+    "types": ["node"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
