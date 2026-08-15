@@ -3,7 +3,9 @@ name: release
 # release-please drives releases. On every push to main it maintains a single
 # "release PR" (one shared version + one CHANGELOG for the whole repo). Merging
 # that PR makes release-please tag `vX.Y.Z`, cut the GitHub release, and — in the
-# same run — publish all 15 packages to npm.
+# same run — publish every non-private workspace to npm (16 packages today; the
+# loop enumerates the root `workspaces` globs, so adding one needs no edit here
+# beyond registering its npm trusted publisher — see AGENTS.md § Releasing).
 #
 # IMPORTANT: this file is `release.yml` because the npm Trusted Publisher (OIDC)
 # for each package is bound to this exact workflow filename. Don't rename it, or
