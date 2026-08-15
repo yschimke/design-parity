@@ -13,13 +13,15 @@
     "dist"
   ],
   "bin": {
-    "design-parity-bootstrap": "./dist/cli/bootstrap.js"
+    "design-parity-bootstrap": "./dist/cli/bootstrap.js",
+    "design-parity-propose-refs": "./dist/cli/propose-refs.js"
   },
   "scripts": {
     "build": "tsc --build",
     "test": "vitest run --root ../.. packages/baseline/test"
   },
   "dependencies": {
+    "@design-parity/adapter-figma": "^0.1.24",
     "@design-parity/checks": "^0.1.24",
     "@design-parity/core": "^0.1.24",
     "@design-parity/policy": "^0.1.24"

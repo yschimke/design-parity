@@ -9,6 +9,7 @@ import {
   FigmaRateLimitError,
 } from "./errors.js";
 import type {
+  FileComponentsResponse,
   FileMetaResponse,
   FileNodesResponse,
   FilePagesResponse,
@@ -186,6 +187,27 @@ export class FigmaRestClient {
    */
   async getFilePages(fileKey: string): Promise<FilePagesResponse> {
     return this.#get<FilePagesResponse>(`/v1/files/${fileKey}?depth=1`);
+  }
+
+  /**
+   * `GET /v1/files/:key/components` — what the file publishes.
+   *
+   * Returns `{}` rather than throwing on 403/404, because "this file publishes
+   * nothing" is a normal answer for a community duplicate and the caller's
+   * fallback is a tree walk, not a failure.
+   */
+  async getFileComponents(fileKey: string): Promise<FileComponentsResponse> {
+    try {
+      return await this.#get<FileComponentsResponse>(`/v1/files/${fileKey}/components`);
+    } catch (err) {
+      if (
+        err instanceof FigmaAuthError ||
+        (err instanceof FigmaApiError && err.status === 404)
+      ) {
+        return {};
+      }
+      throw err;
+    }
   }
 
   /**

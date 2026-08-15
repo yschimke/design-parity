@@ -1,0 +1,1078 @@
+{
+  "note": "Material 3 Design Kit component names, and the reference a human accepted for each catalogued component of github.com/yschimke/m3-catalog. Regression baseline for rankCandidates - see ref-proposals.fixture.test.ts.",
+  "fileKey": "ocdacdEsnHipMJD3egzxKb",
+  "candidates": [
+    {
+      "name": "Basic dialog",
+      "nodeId": "50723:10929",
+      "containing": ""
+    },
+    {
+      "name": "Bottom app bar",
+      "nodeId": "51159:5105",
+      "containing": ""
+    },
+    {
+      "name": "Badges",
+      "nodeId": "51592:4768",
+      "containing": ""
+    },
+    {
+      "name": "Radio buttons",
+      "nodeId": "51739:4608",
+      "containing": ""
+    },
+    {
+      "name": "Horizontal/Full-width",
+      "nodeId": "51816:5860",
+      "containing": ""
+    },
+    {
+      "name": "Vertical/Full-width",
+      "nodeId": "51816:5862",
+      "containing": ""
+    },
+    {
+      "name": "Vertical/Inset",
+      "nodeId": "51816:5864",
+      "containing": ""
+    },
+    {
+      "name": "Vertical/Middle-inset",
+      "nodeId": "51816:5866",
+      "containing": ""
+    },
+    {
+      "name": "Horizontal/Inset",
+      "nodeId": "51816:5868",
+      "containing": ""
+    },
+    {
+      "name": "Horizontal/Middle-inset",
+      "nodeId": "51816:5870",
+      "containing": ""
+    },
+    {
+      "name": "Horizontal/Divider with subhead",
+      "nodeId": "51816:5872",
+      "containing": ""
+    },
+    {
+      "name": "Bottom sheet",
+      "nodeId": "51827:5859",
+      "containing": ""
+    },
+    {
+      "name": "Checkboxes",
+      "nodeId": "51859:5628",
+      "containing": ""
+    },
+    {
+      "name": "Modal date picker",
+      "nodeId": "51954:18136",
+      "containing": ""
+    },
+    {
+      "name": "List dialog",
+      "nodeId": "52112:28937",
+      "containing": ""
+    },
+    {
+      "name": "Stacked card",
+      "nodeId": "52346:27573",
+      "containing": ""
+    },
+    {
+      "name": "Text field",
+      "nodeId": "52798:24373",
+      "containing": ""
+    },
+    {
+      "name": "Dial picker",
+      "nodeId": "52949:27916",
+      "containing": ""
+    },
+    {
+      "name": "Keyboard picker",
+      "nodeId": "52949:28053",
+      "containing": ""
+    },
+    {
+      "name": "Search bar",
+      "nodeId": "52977:33813",
+      "containing": ""
+    },
+    {
+      "name": "Side Sheet",
+      "nodeId": "53198:27851",
+      "containing": ""
+    },
+    {
+      "name": "Carousel",
+      "nodeId": "53912:27480",
+      "containing": ""
+    },
+    {
+      "name": "Input chip",
+      "nodeId": "53923:27888",
+      "containing": ""
+    },
+    {
+      "name": "Assistive chip",
+      "nodeId": "53923:28089",
+      "containing": ""
+    },
+    {
+      "name": "Filter chip",
+      "nodeId": "53923:28270",
+      "containing": ""
+    },
+    {
+      "name": "Suggestion chip",
+      "nodeId": "53923:28679",
+      "containing": ""
+    },
+    {
+      "name": "Segmented button",
+      "nodeId": "53923:36615",
+      "containing": ""
+    },
+    {
+      "name": "Snackbar",
+      "nodeId": "53977:33575",
+      "containing": ""
+    },
+    {
+      "name": "Rich Tooltip",
+      "nodeId": "54061:33872",
+      "containing": ""
+    },
+    {
+      "name": "Plain Tooltip",
+      "nodeId": "54061:33881",
+      "containing": ""
+    },
+    {
+      "name": "Switch",
+      "nodeId": "54446:25289",
+      "containing": ""
+    },
+    {
+      "name": "Tabs",
+      "nodeId": "54563:40023",
+      "containing": ""
+    },
+    {
+      "name": "Icon button",
+      "nodeId": "57994:10081",
+      "containing": ""
+    },
+    {
+      "name": "Split button",
+      "nodeId": "57994:15751",
+      "containing": ""
+    },
+    {
+      "name": "Button",
+      "nodeId": "57994:2227",
+      "containing": ""
+    },
+    {
+      "name": "Toggle button",
+      "nodeId": "57994:2328",
+      "containing": ""
+    },
+    {
+      "name": "Extended FAB",
+      "nodeId": "57998:43095",
+      "containing": ""
+    },
+    {
+      "name": "FAB",
+      "nodeId": "57998:43426",
+      "containing": ""
+    },
+    {
+      "name": "Linear-determinate progress indicator",
+      "nodeId": "58005:7997",
+      "containing": ""
+    },
+    {
+      "name": "Circular-determinate progress indicator",
+      "nodeId": "58005:8459",
+      "containing": ""
+    },
+    {
+      "name": "Loading indicator",
+      "nodeId": "58005:8555",
+      "containing": ""
+    },
+    {
+      "name": "Standard slider",
+      "nodeId": "58008:10356",
+      "containing": ""
+    },
+    {
+      "name": "Range slider",
+      "nodeId": "58008:11810",
+      "containing": ""
+    },
+    {
+      "name": "Navigation Rail: Expanded",
+      "nodeId": "58016:36670",
+      "containing": ""
+    },
+    {
+      "name": "Navigation Rail",
+      "nodeId": "58016:36879",
+      "containing": ""
+    },
+    {
+      "name": "Navigation Bar: Vertical items",
+      "nodeId": "58016:37259",
+      "containing": ""
+    },
+    {
+      "name": "App bar",
+      "nodeId": "58114:20565",
+      "containing": ""
+    },
+    {
+      "name": "Toolbar",
+      "nodeId": "58467:8206",
+      "containing": ""
+    },
+    {
+      "name": "Shape Set",
+      "nodeId": "58548:7248",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Circle",
+      "nodeId": "58548:7249",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Square",
+      "nodeId": "58548:7251",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Slanted",
+      "nodeId": "58548:7253",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Arch",
+      "nodeId": "58548:7255",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Fan",
+      "nodeId": "58548:7257",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Arrow",
+      "nodeId": "58548:7259",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Semicircle",
+      "nodeId": "58548:7261",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Oval",
+      "nodeId": "58548:7263",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Pill",
+      "nodeId": "58548:7265",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Triangle",
+      "nodeId": "58548:7267",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Diamond",
+      "nodeId": "58548:7269",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Hexagon",
+      "nodeId": "58548:7271",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Pentagon",
+      "nodeId": "58548:7273",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Gem",
+      "nodeId": "58548:7275",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Very sunny",
+      "nodeId": "58548:7277",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Sunny",
+      "nodeId": "58548:7279",
+      "containing": ""
+    },
+    {
+      "name": "Shape=4-sided cookie",
+      "nodeId": "58548:7281",
+      "containing": ""
+    },
+    {
+      "name": "Shape=6-sided cookie",
+      "nodeId": "58548:7283",
+      "containing": ""
+    },
+    {
+      "name": "Shape=7-sided cookie",
+      "nodeId": "58548:7285",
+      "containing": ""
+    },
+    {
+      "name": "Shape=9-sided cookie",
+      "nodeId": "58548:7287",
+      "containing": ""
+    },
+    {
+      "name": "Shape=12-sided cookie",
+      "nodeId": "58548:7289",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Ghost-ish",
+      "nodeId": "58548:7291",
+      "containing": ""
+    },
+    {
+      "name": "Shape=4-leaf clover",
+      "nodeId": "58548:7293",
+      "containing": ""
+    },
+    {
+      "name": "Shape=8-leaf clover",
+      "nodeId": "58548:7295",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Burst",
+      "nodeId": "58548:7297",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Soft burst",
+      "nodeId": "58548:7299",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Boom",
+      "nodeId": "58548:7301",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Soft boom",
+      "nodeId": "58548:7303",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Flower",
+      "nodeId": "58548:7305",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Puffy",
+      "nodeId": "58548:7307",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Puffy diamond",
+      "nodeId": "58548:7309",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Pixel Circle",
+      "nodeId": "58548:7311",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Pixel triangle",
+      "nodeId": "58548:7313",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Bun",
+      "nodeId": "58548:7315",
+      "containing": ""
+    },
+    {
+      "name": "Shape=Heart",
+      "nodeId": "58548:7317",
+      "containing": ""
+    },
+    {
+      "name": "Button - outline",
+      "nodeId": "58650:10213",
+      "containing": ""
+    },
+    {
+      "name": "Button - text",
+      "nodeId": "58650:8094",
+      "containing": ""
+    },
+    {
+      "name": "Button - elevated",
+      "nodeId": "58650:9294",
+      "containing": ""
+    },
+    {
+      "name": "Button - tonal",
+      "nodeId": "58651:11237",
+      "containing": ""
+    },
+    {
+      "name": "Toggle button - elevated",
+      "nodeId": "58653:13968",
+      "containing": ""
+    },
+    {
+      "name": "Toggle button - outline",
+      "nodeId": "58653:16237",
+      "containing": ""
+    },
+    {
+      "name": "Toggle button - tonal",
+      "nodeId": "58653:17539",
+      "containing": ""
+    },
+    {
+      "name": "Icon button - standard",
+      "nodeId": "58663:30358",
+      "containing": ""
+    },
+    {
+      "name": "Icon button - outline",
+      "nodeId": "58663:30359",
+      "containing": ""
+    },
+    {
+      "name": "Icon button - tonal",
+      "nodeId": "58665:33976",
+      "containing": ""
+    },
+    {
+      "name": "Menu",
+      "nodeId": "58966:3975",
+      "containing": ""
+    },
+    {
+      "name": "List",
+      "nodeId": "59106:13028",
+      "containing": ""
+    },
+    {
+      "name": "Search full-screen layout",
+      "nodeId": "59178:4963",
+      "containing": ""
+    },
+    {
+      "name": "Search docked layout",
+      "nodeId": "59178:4992",
+      "containing": ""
+    }
+  ],
+  "components": [
+    {
+      "label": "Badge/Dot",
+      "subject": "Badges Badge Dot",
+      "accepted": "51592:4768"
+    },
+    {
+      "label": "Badge/Number",
+      "subject": "Badges Badge Number",
+      "accepted": "51592:4768"
+    },
+    {
+      "label": "BottomAppBar/Standard",
+      "subject": "Bottom app bar BottomAppBar Standard",
+      "accepted": "51159:5105"
+    },
+    {
+      "label": "BottomSheet/Modal",
+      "subject": "Bottom sheets BottomSheet Modal",
+      "accepted": "51827:5859"
+    },
+    {
+      "label": "Button/Elevated",
+      "subject": "Buttons Button Elevated",
+      "accepted": "58650:9294"
+    },
+    {
+      "label": "Button/Filled",
+      "subject": "Buttons Button Filled",
+      "accepted": "57994:2227"
+    },
+    {
+      "label": "Button/Outlined",
+      "subject": "Buttons Button Outlined",
+      "accepted": "58650:10213"
+    },
+    {
+      "label": "Button/Text",
+      "subject": "Buttons Button Text",
+      "accepted": "58650:8094"
+    },
+    {
+      "label": "Button/Tonal",
+      "subject": "Buttons Button Tonal",
+      "accepted": "58651:11237"
+    },
+    {
+      "label": "Card/Elevated",
+      "subject": "Cards Card Elevated",
+      "accepted": "52346:27573"
+    },
+    {
+      "label": "Card/Filled",
+      "subject": "Cards Card Filled",
+      "accepted": "52346:27573"
+    },
+    {
+      "label": "Card/Outlined",
+      "subject": "Cards Card Outlined",
+      "accepted": "52346:27573"
+    },
+    {
+      "label": "Carousel/MultiBrowse",
+      "subject": "Carousel Carousel MultiBrowse",
+      "accepted": "53912:27480"
+    },
+    {
+      "label": "Carousel/Uncontained",
+      "subject": "Carousel Carousel Uncontained",
+      "accepted": "53912:27480"
+    },
+    {
+      "label": "Checkbox/Checked",
+      "subject": "Checkbox Checkbox Checked",
+      "accepted": "51859:5628"
+    },
+    {
+      "label": "Chip/Assist",
+      "subject": "Chips Chip Assist",
+      "accepted": "53923:28089"
+    },
+    {
+      "label": "Chip/Filter",
+      "subject": "Chips Chip Filter",
+      "accepted": "53923:28270"
+    },
+    {
+      "label": "Chip/Input",
+      "subject": "Chips Chip Input",
+      "accepted": "53923:27888"
+    },
+    {
+      "label": "Chip/Suggestion",
+      "subject": "Chips Chip Suggestion",
+      "accepted": "53923:28679"
+    },
+    {
+      "label": "Color/Role grid",
+      "subject": "Color Color Role grid",
+      "accepted": "53699:35493"
+    },
+    {
+      "label": "DatePicker/Modal",
+      "subject": "Date pickers DatePicker Modal",
+      "accepted": "51954:18136"
+    },
+    {
+      "label": "DatePicker/Range",
+      "subject": "Date pickers DatePicker Range",
+      "accepted": "51954:18136"
+    },
+    {
+      "label": "Dialog/Basic",
+      "subject": "Dialogs Dialog Basic",
+      "accepted": "50723:10929"
+    },
+    {
+      "label": "Dialog/List",
+      "subject": "Dialogs Dialog List",
+      "accepted": "52112:28937"
+    },
+    {
+      "label": "Divider/Horizontal",
+      "subject": "Divider Divider Horizontal",
+      "accepted": "51816:5860"
+    },
+    {
+      "label": "Divider/Vertical",
+      "subject": "Divider Divider Vertical",
+      "accepted": "51816:5862"
+    },
+    {
+      "label": "Fab/Extended",
+      "subject": "FAB Fab Extended",
+      "accepted": "57998:43095"
+    },
+    {
+      "label": "Fab/Standard",
+      "subject": "FAB Fab Standard",
+      "accepted": "57998:43426"
+    },
+    {
+      "label": "IconButton/Filled",
+      "subject": "Icon buttons IconButton Filled",
+      "accepted": "57994:10081"
+    },
+    {
+      "label": "IconButton/Outlined",
+      "subject": "Icon buttons IconButton Outlined",
+      "accepted": "58663:30359"
+    },
+    {
+      "label": "IconButton/Standard",
+      "subject": "Icon buttons IconButton Standard",
+      "accepted": "58663:30358"
+    },
+    {
+      "label": "IconButton/Tonal",
+      "subject": "Icon buttons IconButton Tonal",
+      "accepted": "58665:33976"
+    },
+    {
+      "label": "List/Group",
+      "subject": "Lists List Group",
+      "accepted": "59106:13028"
+    },
+    {
+      "label": "List/Item",
+      "subject": "Lists List Item",
+      "accepted": "51964:63037"
+    },
+    {
+      "label": "LoadingIndicator/Contained",
+      "subject": "Loading indicator LoadingIndicator Contained",
+      "accepted": "58005:8555"
+    },
+    {
+      "label": "LoadingIndicator/Uncontained",
+      "subject": "Loading indicator LoadingIndicator Uncontained",
+      "accepted": "58005:8555"
+    },
+    {
+      "label": "Menu/Dropdown",
+      "subject": "Menus Menu Dropdown",
+      "accepted": "58966:3975"
+    },
+    {
+      "label": "NavigationBar/Short",
+      "subject": "Navigation bar NavigationBar Short",
+      "accepted": "58016:37259"
+    },
+    {
+      "label": "NavigationRail/Standard",
+      "subject": "Navigation rail NavigationRail Standard",
+      "accepted": "58016:36879"
+    },
+    {
+      "label": "NavigationRail/Wide",
+      "subject": "Navigation rail NavigationRail Wide",
+      "accepted": "58016:36670"
+    },
+    {
+      "label": "Progress/Circular",
+      "subject": "Progress indicators Progress Circular",
+      "accepted": "58005:8459"
+    },
+    {
+      "label": "Progress/CircularWavy",
+      "subject": "Progress indicators Progress CircularWavy",
+      "accepted": "58005:8459"
+    },
+    {
+      "label": "Progress/Linear",
+      "subject": "Progress indicators Progress Linear",
+      "accepted": "58005:7997"
+    },
+    {
+      "label": "Progress/LinearWavy",
+      "subject": "Progress indicators Progress LinearWavy",
+      "accepted": "58005:7997"
+    },
+    {
+      "label": "RadioButton/Selected",
+      "subject": "Radio button RadioButton Selected",
+      "accepted": "51739:4608"
+    },
+    {
+      "label": "Search/AppBar",
+      "subject": "Search Search AppBar",
+      "accepted": "58114:20565"
+    },
+    {
+      "label": "Search/Bar",
+      "subject": "Search Search Bar",
+      "accepted": "52977:33813"
+    },
+    {
+      "label": "Search/Docked",
+      "subject": "Search Search Docked",
+      "accepted": "52977:33813"
+    },
+    {
+      "label": "Search/ExpandedDocked",
+      "subject": "Search Search ExpandedDocked",
+      "accepted": "59178:4992"
+    },
+    {
+      "label": "Search/ExpandedFullScreen",
+      "subject": "Search Search ExpandedFullScreen",
+      "accepted": "59178:4963"
+    },
+    {
+      "label": "SegmentedButton/MultiChoice",
+      "subject": "Segmented buttons SegmentedButton MultiChoice",
+      "accepted": "53923:36615"
+    },
+    {
+      "label": "SegmentedButton/SingleChoice",
+      "subject": "Segmented buttons SegmentedButton SingleChoice",
+      "accepted": "53923:36615"
+    },
+    {
+      "label": "Shape/Arch",
+      "subject": "Shapes Shape Arch",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Arrow",
+      "subject": "Shapes Shape Arrow",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Boom",
+      "subject": "Shapes Shape Boom",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Bun",
+      "subject": "Shapes Shape Bun",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Burst",
+      "subject": "Shapes Shape Burst",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Circle",
+      "subject": "Shapes Shape Circle",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/ClamShell",
+      "subject": "Shapes Shape ClamShell",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Clover4Leaf",
+      "subject": "Shapes Shape Clover4Leaf",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Clover8Leaf",
+      "subject": "Shapes Shape Clover8Leaf",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Cookie12Sided",
+      "subject": "Shapes Shape Cookie12Sided",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Cookie4Sided",
+      "subject": "Shapes Shape Cookie4Sided",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Cookie6Sided",
+      "subject": "Shapes Shape Cookie6Sided",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Cookie7Sided",
+      "subject": "Shapes Shape Cookie7Sided",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Cookie9Sided",
+      "subject": "Shapes Shape Cookie9Sided",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Corner scale",
+      "subject": "Shapes Shape Corner scale",
+      "accepted": "58548:7181"
+    },
+    {
+      "label": "Shape/Diamond",
+      "subject": "Shapes Shape Diamond",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Fan",
+      "subject": "Shapes Shape Fan",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Flower",
+      "subject": "Shapes Shape Flower",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Gem",
+      "subject": "Shapes Shape Gem",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Ghostish",
+      "subject": "Shapes Shape Ghostish",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Heart",
+      "subject": "Shapes Shape Heart",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Oval",
+      "subject": "Shapes Shape Oval",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Pentagon",
+      "subject": "Shapes Shape Pentagon",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Pill",
+      "subject": "Shapes Shape Pill",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/PixelCircle",
+      "subject": "Shapes Shape PixelCircle",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/PixelTriangle",
+      "subject": "Shapes Shape PixelTriangle",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Puffy",
+      "subject": "Shapes Shape Puffy",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/PuffyDiamond",
+      "subject": "Shapes Shape PuffyDiamond",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/SemiCircle",
+      "subject": "Shapes Shape SemiCircle",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Slanted",
+      "subject": "Shapes Shape Slanted",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/SoftBoom",
+      "subject": "Shapes Shape SoftBoom",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/SoftBurst",
+      "subject": "Shapes Shape SoftBurst",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Square",
+      "subject": "Shapes Shape Square",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Sunny",
+      "subject": "Shapes Shape Sunny",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/Triangle",
+      "subject": "Shapes Shape Triangle",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "Shape/VerySunny",
+      "subject": "Shapes Shape VerySunny",
+      "accepted": "58548:7248"
+    },
+    {
+      "label": "SideSheet/Standard",
+      "subject": "Side sheets SideSheet Standard",
+      "accepted": "53198:27851"
+    },
+    {
+      "label": "Slider/Continuous",
+      "subject": "Sliders Slider Continuous",
+      "accepted": "58008:10356"
+    },
+    {
+      "label": "Slider/Range",
+      "subject": "Sliders Slider Range",
+      "accepted": "58008:11810"
+    },
+    {
+      "label": "Slider/Vertical",
+      "subject": "Sliders Slider Vertical",
+      "accepted": "58008:10356"
+    },
+    {
+      "label": "Snackbar/Message",
+      "subject": "Snackbar Snackbar Message",
+      "accepted": "53977:34289"
+    },
+    {
+      "label": "SplitButton/Filled",
+      "subject": "Split button SplitButton Filled",
+      "accepted": "57994:15751"
+    },
+    {
+      "label": "Switch/On",
+      "subject": "Switch Switch On",
+      "accepted": "54446:25289"
+    },
+    {
+      "label": "Tabs/Primary",
+      "subject": "Tabs Tabs Primary",
+      "accepted": "54563:40023"
+    },
+    {
+      "label": "Tabs/PrimaryScrollable",
+      "subject": "Tabs Tabs PrimaryScrollable",
+      "accepted": "54563:40023"
+    },
+    {
+      "label": "Tabs/Secondary",
+      "subject": "Tabs Tabs Secondary",
+      "accepted": "54563:40023"
+    },
+    {
+      "label": "Tabs/SecondaryScrollable",
+      "subject": "Tabs Tabs SecondaryScrollable",
+      "accepted": "54563:40023"
+    },
+    {
+      "label": "TextField/Filled",
+      "subject": "Text fields TextField Filled",
+      "accepted": "52798:24373"
+    },
+    {
+      "label": "TextField/Outlined",
+      "subject": "Text fields TextField Outlined",
+      "accepted": "52798:24373"
+    },
+    {
+      "label": "TimePicker/Dial",
+      "subject": "Time pickers TimePicker Dial",
+      "accepted": "52949:27916"
+    },
+    {
+      "label": "TimePicker/Input",
+      "subject": "Time pickers TimePicker Input",
+      "accepted": "52949:28053"
+    },
+    {
+      "label": "ToggleButton/Elevated",
+      "subject": "Toggle buttons ToggleButton Elevated",
+      "accepted": "58653:13968"
+    },
+    {
+      "label": "ToggleButton/Filled",
+      "subject": "Toggle buttons ToggleButton Filled",
+      "accepted": "57994:2328"
+    },
+    {
+      "label": "ToggleButton/Outlined",
+      "subject": "Toggle buttons ToggleButton Outlined",
+      "accepted": "58653:16237"
+    },
+    {
+      "label": "ToggleButton/Tonal",
+      "subject": "Toggle buttons ToggleButton Tonal",
+      "accepted": "58653:17539"
+    },
+    {
+      "label": "Toolbar/HorizontalFloating",
+      "subject": "Toolbars Toolbar HorizontalFloating",
+      "accepted": "58467:8206"
+    },
+    {
+      "label": "Toolbar/VerticalFloating",
+      "subject": "Toolbars Toolbar VerticalFloating",
+      "accepted": "58467:8206"
+    },
+    {
+      "label": "Tooltip/Plain",
+      "subject": "Tooltips Tooltip Plain",
+      "accepted": "54061:33881"
+    },
+    {
+      "label": "Tooltip/Rich",
+      "subject": "Tooltips Tooltip Rich",
+      "accepted": "54061:33872"
+    },
+    {
+      "label": "TopAppBar/CenterAligned",
+      "subject": "Top app bar TopAppBar CenterAligned",
+      "accepted": "58114:20565"
+    },
+    {
+      "label": "TopAppBar/Large",
+      "subject": "Top app bar TopAppBar Large",
+      "accepted": "58114:20565"
+    },
+    {
+      "label": "TopAppBar/Medium",
+      "subject": "Top app bar TopAppBar Medium",
+      "accepted": "58114:20565"
+    },
+    {
+      "label": "TopAppBar/Small",
+      "subject": "Top app bar TopAppBar Small",
+      "accepted": "58114:20565"
+    },
+    {
+      "label": "Typography/Type scale",
+      "subject": "Typography Typography Type scale",
+      "accepted": "58186:19244"
+    }
+  ]
+}

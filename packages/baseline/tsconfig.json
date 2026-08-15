@@ -4,10 +4,21 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*"
+  ],
   "references": [
-    { "path": "../core" },
-    { "path": "../checks" },
-    { "path": "../policy" }
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../checks"
+    },
+    {
+      "path": "../policy"
+    },
+    {
+      "path": "../adapters/figma"
+    }
   ]
 }

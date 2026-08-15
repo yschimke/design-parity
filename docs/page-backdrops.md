@@ -73,6 +73,7 @@ Three deliberate steps, only the first of which touches a design tool:
    time.**
 
 ```bash
+design-parity-pages list --file <fileKey>      # what pages exist? (no config needed)
 design-parity-pages status                     # is it on for this repo?
 design-parity-pages import --code-connect figma.connect.json --design-map design-map.json
 design-parity-pages view --render ui/Player.kt#PlayButton=build/previews/PlayButton.png
@@ -85,6 +86,13 @@ priority order — nothing is auto-discovered. "Key pages" is a judgement about
 what matters in a product, and it belongs in a reviewed commit rather than in a
 heuristic that silently starts importing forty frames when a designer
 reorganises a file.
+
+Hand-written is not the same as hand-*discovered*, though: the ids have to come
+from somewhere, and hunting them out of a browser URL one page at a time is how
+a config ends up with two pages in it. `design-parity-pages list --file <key>`
+prints every page in the file as a markdown table — id, name, and a deep link —
+in one request, and is deliberately the one subcommand that runs *before* the
+opt-in config exists, since it is what you use to write one.
 
 ## How linking works
 
