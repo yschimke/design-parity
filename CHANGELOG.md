@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.51](https://github.com/yschimke/design-parity/compare/v0.1.50...v0.1.51) (2026-08-15)
+
+
+### Features
+
+* **kit-index:** say WHY a variant resolved to nothing ([#352](https://github.com/yschimke/design-parity/issues/352)) ([014fdad](https://github.com/yschimke/design-parity/commit/014fdad990983da1cb57785f6cb5ef5b9d0d811c))
+* list a design file's pages, and propose a reference per component ([#349](https://github.com/yschimke/design-parity/issues/349)) ([c4601dc](https://github.com/yschimke/design-parity/commit/c4601dca418052143cfd3da63416c2385bbfa1b3))
+* **page-backdrop:** import a page as an addressable SVG ([#350](https://github.com/yschimke/design-parity/issues/350)) ([a8f0627](https://github.com/yschimke/design-parity/commit/a8f06273968eccca35c376a1a4ee04156ec1db20))
+
+
+### Bug Fixes
+
+* **deps:** pin dependencies ([#337](https://github.com/yschimke/design-parity/issues/337)) ([edcfc02](https://github.com/yschimke/design-parity/commit/edcfc028db4ae97ca247ba12fa80a7c94335cb76))
+
 ## [0.1.50](https://github.com/yschimke/design-parity/compare/v0.1.49...v0.1.50) (2026-08-15)
 
 
