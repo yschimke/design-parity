@@ -39,7 +39,12 @@ yourself.*
   the manifest. Position by ratio (`x / frame.width`) and no density arithmetic
   is needed anywhere.
 - **Images:** `image.uri` is relative to the manifest file. It is the page as the
-  design tool renders it — the backdrop, not a component.
+  design tool renders it — the backdrop, not a component. `image.format` says
+  which kind it is: absent or `png` for a raster, `svg` for an export carrying
+  `data-node-id` on every element. An `svg` backdrop is **addressable** — a
+  consumer can find the element for any `placement.nodeId` and act on it (hide
+  it, outline it, measure it) rather than only knowing the box the manifest
+  recorded. A consumer that just draws the image needs no change either way.
 - **Ordering:** pages follow the committed config's order (the repo's stated
   priority); placements are ordered top-left first, so a re-import produces a
   readable diff rather than a reshuffle.

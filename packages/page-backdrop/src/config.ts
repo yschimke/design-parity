@@ -42,6 +42,9 @@ export interface OverlayConfig {
   blend: OverlayBlend;
 }
 
+/** How a page's backdrop is exported. */
+export type BackdropFormat = "png" | "svg";
+
 /** One key page to import, as named in the committed config. */
 export interface PageSelector {
   /** Figma node id of the frame, e.g. `"1:2"`. */
@@ -57,7 +60,19 @@ export interface PageBackdropConfig {
   fileKey: string;
   /** The key pages — explicit, never auto-discovered. */
   pages: PageSelector[];
-  /** PNG export scale for the backdrops. */
+  /**
+   * What a backdrop is exported as. `png` is a picture; `svg` is a document
+   * carrying `data-node-id` on every element, which lets the viewer cut the
+   * design element out from under a code render instead of laying the render
+   * over it (see `svg-backdrop.ts`).
+   *
+   * `png` remains the default: it is the safe answer for a screen assembled
+   * from photography and effects, where a vector export is large and can differ
+   * from what the design tool itself draws. `svg` is the right answer for the
+   * component specimen sheets a design kit is mostly made of.
+   */
+  backdrop: BackdropFormat;
+  /** PNG export scale for the backdrops. Ignored for an SVG, which has no raster size. */
   scale: number;
   /**
    * Record instances nested inside another instance. Off by default: the
@@ -182,6 +197,11 @@ export function readPageBackdropConfig(
   const pages = parsePages(raw.pages);
   if (typeof pages === "string") return off("invalid", `${configPath}: ${pages}`);
 
+  const backdrop = raw.backdrop ?? "png";
+  if (backdrop !== "png" && backdrop !== "svg") {
+    return off("invalid", `${configPath}: 'backdrop' must be 'png' or 'svg'`);
+  }
+
   const scale = raw.scale ?? DEFAULT_SCALE;
   if (typeof scale !== "number" || !(scale > 0 && scale <= 4)) {
     return off("invalid", `${configPath}: 'scale' must be a number in (0, 4]`);
@@ -207,6 +227,7 @@ export function readPageBackdropConfig(
       source: "figma",
       fileKey,
       pages,
+      backdrop,
       scale,
       nested,
       outDir: isAbsolute(outDirRaw) ? outDirRaw : resolve(base, outDirRaw),

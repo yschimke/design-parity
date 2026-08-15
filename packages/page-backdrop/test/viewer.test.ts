@@ -33,6 +33,20 @@ const manifest = (placements: Placement[] = [placement()]): PageBackdropManifest
 
 const backdrops = new Map([["home", png(1)]]);
 
+/** The same manifest, with the backdrop exported as an addressable SVG. */
+const svgManifest = (placements: Placement[] = [placement()]): PageBackdropManifest => {
+  const m = manifest(placements);
+  m.pages[0]!.image = { uri: "home.svg", scale: 2, format: "svg" };
+  return m;
+};
+
+const svgBytes = (svg: string) => new Map([["home", new TextEncoder().encode(svg)]]);
+
+const EXPORTED_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 720">` +
+  `<g data-node-id="2-1"><rect width="180" height="48"/></g>` +
+  `</svg>`;
+
 describe("renderPageBackdropHtml", () => {
   it("inlines the backdrop so the page is self-contained", () => {
     const html = renderPageBackdropHtml({ manifest: manifest(), backdrops });
@@ -147,5 +161,68 @@ describe("renderPageBackdropHtml", () => {
     const once = renderPageBackdropHtml({ manifest: manifest(), backdrops });
     const twice = renderPageBackdropHtml({ manifest: manifest(), backdrops });
     expect(once).toBe(twice);
+  });
+});
+
+describe("an addressable SVG backdrop", () => {
+  const renders = new Map([["ui/Button.kt#PrimaryButton", png(2)]]);
+
+  it("inlines the markup rather than wrapping it in an img", () => {
+    // Inside an <img> the export is an opaque box and its ids are unreachable,
+    // which is the entire reason to ask for them.
+    const html = renderPageBackdropHtml({
+      manifest: svgManifest(),
+      backdrops: svgBytes(EXPORTED_SVG),
+    });
+    expect(html).toContain('<div class="backdrop backdrop-svg"><svg');
+    expect(html).toContain('data-node-id="2-1"');
+    expect(html).not.toContain("data:image/png;base64,iVBO");
+  });
+
+  it("cuts the design element out from under a placement that has a render", () => {
+    const html = renderPageBackdropHtml({
+      manifest: svgManifest(),
+      backdrops: svgBytes(EXPORTED_SVG),
+      renders,
+    });
+    expect(html).toContain(
+      'body.cut [data-page="home"] [data-node-id="2-1"]{visibility:hidden}',
+    );
+    expect(html).toContain('id="t-cut"');
+  });
+
+  it("cuts nothing for a placement with no render", () => {
+    // A hole with nothing in it is just a hole.
+    const html = renderPageBackdropHtml({
+      manifest: svgManifest(),
+      backdrops: svgBytes(EXPORTED_SVG),
+    });
+    expect(html).not.toContain("visibility:hidden");
+  });
+
+  it("offers no cut-out control when nothing can honour it", () => {
+    const html = renderPageBackdropHtml({ manifest: manifest(), backdrops, renders });
+    expect(html).not.toContain('id="t-cut"');
+  });
+
+  it("strips a script the export should never have carried", () => {
+    const hostile =
+      `<?xml version="1.0"?><svg viewBox="0 0 1 1" data-node-id="2-1">` +
+      `<script>alert(1)</script><rect/></svg>`;
+    const html = renderPageBackdropHtml({
+      manifest: svgManifest(),
+      backdrops: svgBytes(hostile),
+    });
+    expect(html).not.toContain("alert(1)");
+    expect(html).not.toContain("<?xml");
+  });
+
+  it("is deterministic", () => {
+    const opts = () => ({
+      manifest: svgManifest(),
+      backdrops: svgBytes(EXPORTED_SVG),
+      renders,
+    });
+    expect(renderPageBackdropHtml(opts())).toBe(renderPageBackdropHtml(opts()));
   });
 });

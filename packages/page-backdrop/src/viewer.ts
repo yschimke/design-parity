@@ -25,8 +25,14 @@
  * CSS.
  */
 import type { OverlayConfig } from "./config.js";
-import { escapeHtml, pct, pngDataUri } from "./html.js";
+import { cssEscape, escapeHtml, pct, pngDataUri } from "./html.js";
+import { inlineableSvg, svgNodeId } from "./svg-backdrop.js";
 import type { BackdropPage, PageBackdropManifest, Placement } from "./types.js";
+
+/** Decode exported SVG bytes and make them safe to embed in this document. */
+function inlineSvg(bytes: Uint8Array): string {
+  return inlineableSvg(new TextDecoder().decode(bytes));
+}
 
 export interface ViewerOptions {
   manifest: PageBackdropManifest;
@@ -138,10 +144,34 @@ function renderPage(
   opts: ViewerOptions,
   seenRenders: Map<string, string>,
 ): string {
-  const png = opts.backdrops.get(page.id);
-  const backdrop = png
-    ? `<img class="backdrop" src="${pngDataUri(png)}" alt="${escapeHtml(page.name)}">`
-    : `<div class="backdrop backdrop-missing">backdrop image not supplied</div>`;
+  const bytes = opts.backdrops.get(page.id);
+  const svg = bytes && page.image.format === "svg";
+  // An SVG backdrop is inlined rather than dropped in an `<img>`: an image
+  // element is an opaque box to the surrounding document, so the very
+  // `data-node-id`s the export was requested for would be unreachable. Inlined,
+  // they are ordinary elements this page can address.
+  const backdrop = !bytes
+    ? `<div class="backdrop backdrop-missing">backdrop image not supplied</div>`
+    : svg
+      ? `<div class="backdrop backdrop-svg">${inlineSvg(bytes)}</div>`
+      : `<img class="backdrop" src="${pngDataUri(bytes)}" alt="${escapeHtml(page.name)}">`;
+
+  // With an addressable backdrop the design element under a render can be
+  // hidden outright, which is a strictly better comparison than blending two
+  // pictures: what remains is the code's output sitting in the design's own
+  // layout, so a size or alignment difference reads as a gap rather than as a
+  // ghost. Only placements that HAVE a render are cut — a hole with nothing in
+  // it would just be a hole.
+  const cutIds = svg
+    ? page.placements
+        .filter((p) => p.code && opts.renders?.has(p.code))
+        .map((p) => svgNodeId(p.nodeId))
+    : [];
+  const cutStyle = cutIds.length
+    ? `<style>${cutIds
+        .map((id) => `body.cut [data-page="${cssEscape(page.id)}"] [data-node-id="${cssEscape(id)}"]`)
+        .join(",")}{visibility:hidden}</style>`
+    : "";
 
   const spots = page.placements
     .map((p) => renderSpot(page, p, opts.renders, seenRenders))
@@ -160,6 +190,7 @@ function renderPage(
     `<div class="page-body">` +
     `<div class="stage-wrap">` +
     `<div class="stage" style="aspect-ratio:${page.frame.width} / ${page.frame.height}">` +
+    cutStyle +
     backdrop +
     `<div class="spots">${spots}</div>` +
     `</div>` +
@@ -194,6 +225,8 @@ main{padding:20px 28px}
 .stage-wrap{background:#0c0c11;border:1px solid #26262f;border-radius:10px;padding:12px}
 .stage{position:relative;width:100%;overflow:hidden;background:#15151c;border-radius:6px}
 .backdrop{display:block;width:100%;height:100%;object-fit:contain}
+.backdrop-svg{position:absolute;inset:0}
+.backdrop-svg svg{display:block;width:100%;height:100%}
 .backdrop-missing{display:flex;align-items:center;justify-content:center;height:100%;color:#6e6e86;font-size:12px}
 .spots{position:absolute;inset:0}
 .spot{position:absolute;border:1px solid transparent;border-radius:3px;cursor:pointer}
@@ -241,6 +274,12 @@ const SCRIPT = `(function(){
   if(op)op.addEventListener('input',apply);
   bind('t-blend',function(el){root.style.setProperty('--overlay-blend',el.value)});
   bind('t-unlinked',function(el){body.classList.toggle('only-unlinked',el.checked)});
+  // Cutting the design out only says anything while the renders are visible, so
+  // turning it on turns the overlay on with it rather than emptying the page.
+  bind('t-cut',function(el){
+    body.classList.toggle('cut',el.checked);
+    if(el.checked&&ov&&!ov.checked){ov.checked=true;apply()}
+  });
   apply();
 
   var tabs=[].slice.call(document.querySelectorAll('.tab'));
@@ -310,6 +349,13 @@ export function renderPageBackdropHtml(opts: ViewerOptions): string {
     { total: 0, linked: 0 },
   );
 
+  // The cut-out control only appears when at least one page can honour it: an
+  // inert checkbox that silently does nothing on a PNG backdrop is worse than
+  // no checkbox, because it reads as "I tried that and it didn't help".
+  const anyAddressable = manifest.pages.some(
+    (p) => p.image.format === "svg" && opts.backdrops.has(p.id),
+  );
+
   const opacityPct = Math.round(overlay.opacity * 100);
   const controls =
     `<div class="controls">` +
@@ -320,6 +366,9 @@ export function renderPageBackdropHtml(opts: ViewerOptions): string {
     `<option value="normal"${overlay.blend === "normal" ? " selected" : ""}>normal</option>` +
     `<option value="difference"${overlay.blend === "difference" ? " selected" : ""}>difference</option>` +
     `</select></label>` +
+    (anyAddressable
+      ? `<label><input type="checkbox" id="t-cut"> Cut design out under renders</label>`
+      : "") +
     `<label><input type="checkbox" id="t-unlinked"> Only unlinked</label>` +
     `</div>`;
 

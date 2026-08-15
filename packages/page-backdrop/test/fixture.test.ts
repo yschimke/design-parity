@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 
 import { parseManifest } from "../src/import.js";
+import { assertAddressableSvg, nodeIdsIn, svgFrameSize } from "../src/svg-backdrop.js";
 import { renderPageBackdropHtml } from "../src/viewer.js";
 
 const dir = fileURLToPath(new URL("../../../fixtures/page-backdrop/", import.meta.url));
@@ -44,5 +45,43 @@ describe("the committed page-backdrop fixture", () => {
     expect(html.split('<div class="spot"').length - 1).toBe(placements.length);
     expect(html).not.toMatch(/src="(?!data:)/);
     expect(html).toContain("8 of 9 component instances linked to code");
+  });
+
+  it("has an addressable SVG twin covering the same placements", async () => {
+    // The same screen exported the other way, so the cut-out path is exercised
+    // by the fixture rather than only by hand-written markup — and so it stays
+    // covered as the viewer changes.
+    const { manifest } = await loadFixture();
+    const svg = await readFile(`${dir}now-playing.svg`, "utf8");
+    assertAddressableSvg(svg, "1:2");
+
+    const addressable = new Set(nodeIdsIn(svg));
+    for (const placement of manifest.pages[0]?.placements ?? []) {
+      expect(addressable).toContain(placement.nodeId);
+    }
+    expect(svgFrameSize(svg)).toEqual(manifest.pages[0]?.frame);
+  });
+
+  it("cuts every rendered placement out of the SVG backdrop", async () => {
+    const { manifest, renders } = await loadFixture();
+    const svg = await readFile(`${dir}now-playing.svg`, "utf8");
+    manifest.pages[0]!.image = { uri: "now-playing.svg", scale: 1, format: "svg" };
+
+    const html = renderPageBackdropHtml({
+      manifest,
+      backdrops: new Map([["now-playing", new TextEncoder().encode(svg)]]),
+      renders,
+    });
+
+    const rendered = (manifest.pages[0]?.placements ?? []).filter(
+      (p) => p.code && renders.has(p.code),
+    );
+    expect(rendered.length).toBeGreaterThan(0);
+    for (const placement of rendered) {
+      expect(html).toContain(`[data-node-id="${placement.nodeId.replace(":", "-")}"]`);
+    }
+    // The unlinked album art keeps its design element: there is nothing to put
+    // in the hole.
+    expect(html).not.toContain('[data-node-id="2-2"]');
   });
 });

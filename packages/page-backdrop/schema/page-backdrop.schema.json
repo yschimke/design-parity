@@ -102,12 +102,16 @@
       "properties": {
         "uri": {
           "type": "string",
-          "description": "Path to the PNG, relative to the manifest file."
+          "description": "Path to the image, relative to the manifest file."
         },
         "scale": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Export scale the PNG was rendered at; 2 means the PNG is 2x `frame`."
+          "description": "Export scale the PNG was rendered at; 2 means the PNG is 2x `frame`. Carried but meaningless for an SVG, which has no raster size."
+        },
+        "format": {
+          "enum": ["png", "svg"],
+          "description": "How the backdrop was exported. Absent means `png` — the only format version 1 originally had, so an older committed manifest reads correctly unchanged. `svg` means the file carries `data-node-id` on every element, i.e. a consumer can find the element for any placement's `nodeId` rather than only knowing where it sits."
         }
       }
     },

@@ -94,6 +94,36 @@ prints every page in the file as a markdown table — id, name, and a deep link 
 in one request, and is deliberately the one subcommand that runs *before* the
 opt-in config exists, since it is what you use to write one.
 
+## PNG or SVG?
+
+`"backdrop": "svg"` exports the page with `svg_include_node_id`, so every
+element carries `data-node-id`. The backdrop stops being a picture and becomes a
+document: the viewer can find the element for any placement and **cut it out**
+from under that placement's code render, rather than blending two images. What
+you then see is the code's own output sitting in the design's layout, where a
+size or alignment difference is a gap rather than a ghost.
+
+It also retires a second source of truth. A raster has no structure, so every
+placement's geometry has to be recorded next to it and believed; with an SVG the
+element's box is whatever the browser measures.
+
+The same fixture screen, renders on top of the design and then with the design
+cut out from under them:
+
+![Renders over an SVG backdrop](./images/page-backdrop/svg-overlay.png)
+
+![The same page with the design cut out under each render](./images/page-backdrop/svg-cut.png)
+
+In the second shot the design's own chips, play button and up-next card are
+gone; what is left is the code's output standing in the design's layout. The top
+app bar and the album art keep their design elements, because no render was
+supplied for them — a hole with nothing in it is just a hole.
+
+Default is `png`, which is right for a screen built from photography and
+effects. `svg` is right for the component specimen sheets a kit is mostly made
+of. An SVG export that comes back with no ids is rejected at import: it would
+render perfectly and fail silently, one placement at a time.
+
 ## How linking works
 
 The same precedence as the per-component resolver, applied per instance: **Code

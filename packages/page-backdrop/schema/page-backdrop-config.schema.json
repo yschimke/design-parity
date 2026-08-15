@@ -44,12 +44,17 @@
         }
       }
     },
+    "backdrop": {
+      "enum": ["png", "svg"],
+      "default": "png",
+      "description": "What a backdrop is exported as. `png` is a picture. `svg` carries `data-node-id` on every element, which lets a viewer cut the design element out from under a code render instead of laying the render over it — the right answer for the component specimen sheets a design kit is mostly made of. `png` stays the default: it is the safe answer for a screen built from photography and effects, where a vector export is large and can differ from what the design tool itself draws."
+    },
     "scale": {
       "type": "number",
       "exclusiveMinimum": 0,
       "maximum": 4,
       "default": 2,
-      "description": "PNG export scale for the backdrop images."
+      "description": "PNG export scale for the backdrop images. Ignored when `backdrop` is `svg`."
     },
     "nested": {
       "type": "boolean",
