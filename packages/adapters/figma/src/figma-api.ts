@@ -36,6 +36,15 @@ export interface FigmaComponentPropertyDefinition {
   variantOptions?: string[];
 }
 
+/**
+ * One entry of an instance's `componentProperties` — a property definition with
+ * the value this instance chose, rather than the one the component defaults to.
+ */
+export interface FigmaComponentProperty {
+  type: "BOOLEAN" | "TEXT" | "INSTANCE_SWAP" | "VARIANT";
+  value: boolean | string;
+}
+
 export interface FigmaNodeDoc {
   id: string;
   name: string;
@@ -48,8 +57,22 @@ export interface FigmaNodeDoc {
    * properties for nothing. Keys carry an id suffix (`"Show icon#5590:0"`).
    */
   componentPropertyDefinitions?: Record<string, FigmaComponentPropertyDefinition>;
+  /**
+   * The values an `INSTANCE` was actually configured with — the other half of
+   * {@link componentPropertyDefinitions}. A definition says what the knob is
+   * and what it defaults to; this says what someone chose. Only instances carry
+   * it, and it is the only way to find a node that renders a component at a
+   * property vector other than its defaults.
+   */
+  componentProperties?: Record<string, FigmaComponentProperty>;
+  /** For an `INSTANCE`, the id of the `COMPONENT` it instantiates. */
+  componentId?: string;
+  /** Figma omits this for visible layers; only a hidden one says `false`. */
+  visible?: boolean;
   absoluteBoundingBox?: { x: number; y: number; width: number; height: number };
   cornerRadius?: number;
+  /** Per-corner radii, when the corners differ (`cornerRadius` is then absent). */
+  rectangleCornerRadii?: number[];
   /** Auto-layout child spacing — the `gap` a redline reads. */
   itemSpacing?: number;
   paddingLeft?: number;
@@ -110,6 +133,18 @@ export interface FileNodesResponse {
       }
     | null
   >;
+}
+
+/**
+ * `GET /v1/files/:key?depth=1` read for its *structure* rather than its
+ * metadata: the document's children are the file's pages, truncated to one
+ * level, so this is the cheapest enumeration of "what pages exist".
+ */
+export interface FilePagesResponse {
+  name: string;
+  lastModified: string;
+  version: string;
+  document: { id: string; name: string; children?: FigmaNodeDoc[] };
 }
 
 export interface ImagesResponse {
