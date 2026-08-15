@@ -169,9 +169,21 @@ with a signed provenance statement, no token anywhere.
 one unpublishable package doesn't abort the rest — but it still sets `fail=1`
 and exits non-zero. Release `0.1.40` failed exactly this way when
 `@design-parity/page-backdrop` was added before its trusted publisher existed:
-the other 14 packages published cleanly and the job went red anyway. Recovering
-costs a whole release cycle — `0.1.41` was what actually shipped it — so
-register the publisher in the same sitting as the package's first PR.
+the other 14 packages published cleanly and the job went red anyway.
+
+**Recovering does not need a new version.** Register the publisher, then
+dispatch `release.yml` with its `tag` input set to the release that was cut
+(`v0.1.40`); the publish loop skips every version already on npm and publishes
+only the one that was missing. Cutting a fresh version to carry a package that
+the existing tag already builds is wasted, and `0.1.41` shipping
+`page-backdrop` is what that mistake looked like, not the required path.
+
+Register up front anyway, in the same sitting as the package's first PR —
+because a recovery publish is deliberately **unprovenanced**
+(`--provenance=false`; the dispatch's ref points at `main` while the tarball is
+built from the tag, so any attestation it emitted would name a commit that
+never produced the artifact). Later releases skip the version as already
+published, so the package stays unsigned at that version for good.
 
 If a new package isn't ready to ship, marking it `"private": true` keeps
 releases green — the loop filters private workspaces — at the cost of it staying
