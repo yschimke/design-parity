@@ -16,6 +16,7 @@ import {
   bundleToCandidates,
   loadPreviewBundle,
   previewToCandidate,
+  previewHasNoRender,
   rawPreviewIdForEntry,
   mergeCandidateRenders,
   catalogTokensFromBundle,
@@ -200,6 +201,60 @@ describe("readPreviewBundle", () => {
     // A bare PNG signature with no appended zip is not a bundle.
     const notABundle = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5, 6, 7, 8);
     expect(() => parsePreviewBundle(notABundle)).toThrow(InvalidBundleError);
+  });
+});
+
+describe("a scoped pack's deferred previews", () => {
+  // `bundle pack --exclude-preview-id` keeps a preview it was told not to render
+  // LISTED in previews.json, carrying no PNG (compose-ai-tools#2966/#2965). This
+  // is the normal shape of a scoped parity run's bundle, not a corrupt one: the
+  // m3-catalog run that froze its board rendered 77 mapped previews and listed
+  // 1,018 it had excluded.
+  const pngPath = resolve(repoRoot, "fixtures/figma/button-primary.light.png");
+
+  async function bundleWith(previews: PreviewEntry[], rendered: string[]) {
+    const png = new Uint8Array(await readFile(pngPath));
+    const entries: Record<string, Uint8Array> = {};
+    for (const id of rendered) entries[`previews/${id}.png`] = png;
+    const bundle: PreviewBundle = { manifest: {}, previews, entries };
+    return bundle;
+  }
+
+  it("skips a listed preview that carries no image, keeping the rendered ones", async () => {
+    const bundle = await bundleWith(
+      [{ id: "app.Kt.Rendered" }, { id: "app.Kt.Deferred" }],
+      ["app.Kt.Rendered"],
+    );
+    // Guard the guard: the fixture must really be one of each.
+    expect(previewHasNoRender(bundle, bundle.previews[0]!)).toBe(false);
+    expect(previewHasNoRender(bundle, bundle.previews[1]!)).toBe(true);
+
+    const candidates = bundleToCandidates(bundle);
+    expect(candidates.map((c) => c.componentId)).toEqual(["app.Kt.Rendered"]);
+  });
+
+  it("still rejects a preview that carries only some of its captures", async () => {
+    const bundle = await bundleWith([], []);
+    const png = new Uint8Array(await readFile(pngPath));
+    bundle.previews = [
+      {
+        id: "app.Kt.Half",
+        captures: [{ image: "previews/app.Kt.Half.light.png" }, {}],
+      },
+    ];
+    bundle.entries = { "previews/app.Kt.Half.light.png": png };
+
+    // Half-packed is a broken pack, not a deferred preview.
+    expect(previewHasNoRender(bundle, bundle.previews[0]!)).toBe(false);
+    expect(() => bundleToCandidates(bundle)).toThrow(InvalidBundleError);
+  });
+
+  it("rejects a bundle in which nothing at all was rendered", async () => {
+    const bundle = await bundleWith(
+      [{ id: "app.Kt.One" }, { id: "app.Kt.Two" }],
+      [],
+    );
+    expect(() => bundleToCandidates(bundle)).toThrow(/none of the 2 listed preview/);
   });
 });
 
