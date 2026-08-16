@@ -6,7 +6,17 @@ design-parity supports Figma, Google Stitch, committed Claude Design HTML export
 
 The public command is `npx design-parity`; reusable packages are published under `@design-parity/*`. Node.js 22 or newer is required for development. Source code and issue tracking are at https://github.com/yschimke/design-parity.
 
-## Start here
+Agents should start with the skills repository: it provides the installation and task-oriented workflows that drive compose-preview and design-parity. The links in this repository document the underlying tools, contracts, and architecture.
+
+## Agent workflows
+
+- [Compose agent skills](https://raw.githubusercontent.com/yschimke/skills/main/README.md): Installable agent workflows for rendering, reviewing, arranging, and delivering Compose UI; this is the primary entry point for agents.
+- [compose-preview skill](https://raw.githubusercontent.com/yschimke/skills/main/skills/compose-preview/SKILL.md): Render Jetpack Compose and Compose Multiplatform `@Preview` functions to PNG outside Android Studio.
+- [compose-preview-review skill](https://raw.githubusercontent.com/yschimke/skills/main/skills/compose-preview-review/SKILL.md): Render and compare base and head revisions when reviewing or authoring UI pull requests.
+- [compose-design-catalog skill](https://raw.githubusercontent.com/yschimke/skills/main/skills/compose-design-catalog/SKILL.md): Generate code-led design-artifact catalogs with variants, tokens, and accessibility greenlines.
+- [figma-catalog-import skill](https://raw.githubusercontent.com/yschimke/skills/main/skills/figma-catalog-import/SKILL.md): Reconcile generated catalogs into Figma and create `design-map.json` correspondence.
+
+## Project documentation
 
 - [Project overview](https://raw.githubusercontent.com/yschimke/design-parity/main/README.md): Architecture, packages, installation, CLI usage, CI usage, development commands, and contribution pointers.
 - [Documentation index](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/README.md): Curated index of adoption guides, contracts, design-artifact workflows, and research conclusions.
