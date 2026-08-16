@@ -19,6 +19,7 @@ import type {
   CatalogComponent,
   CatalogDisplay,
   CatalogImage,
+  CatalogMotion,
   CatalogScreen,
   ComponentReference,
   Greenline,
@@ -69,6 +70,12 @@ export interface CatalogManifestComponent {
   /** Stated reason there is no {@link reference}; see {@link CatalogComponent.noReference}. */
   noReference?: string;
   images: CatalogManifestImage[];
+  /**
+   * The component's animated captures, alongside — never inside — {@link images}, which every
+   * consumer reads as a set of stills. Absent for a component with no motion, and for a catalog
+   * exported before the axis existed. See {@link CatalogMotion}.
+   */
+  motion?: CatalogMotion[];
   tokens?: DesignTokens;
   greenlines: Greenline[];
   /** Layout spacing spec — per-node box + padding + gap + corner radius. */
@@ -317,6 +324,9 @@ function manifestComponent(
     greenlines: component.greenlines,
     redlines: component.redlines,
   };
+  if (component.motion !== undefined && component.motion.length > 0) {
+    out.motion = component.motion;
+  }
   if (component.section !== undefined) out.section = component.section;
   if (component.group !== undefined) out.group = component.group;
   if (component.caption !== undefined) out.caption = component.caption;

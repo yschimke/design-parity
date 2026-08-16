@@ -9,7 +9,7 @@ import {
   themeTokensPath,
   toCatalogManifest,
 } from "../src/manifest.js";
-import type { Catalog } from "../src/types.js";
+import type { Catalog, CatalogMotion } from "../src/types.js";
 
 describe("slug", () => {
   it("lowercases and replaces unsafe runs, never empty", () => {
@@ -254,5 +254,58 @@ describe("livePreviewUrl", () => {
     ).toBe(
       "https://preview.coo.ee/p/fab__ideal__default__dark?session=compose-m3",
     );
+  });
+});
+
+describe("toCatalogManifest motion", () => {
+  const withMotion = (motion?: CatalogMotion[]): Catalog => ({
+    meta: { system: "compose-m3", title: "Compose Material 3" },
+    components: [
+      {
+        componentId: "Switch/On",
+        variants: {
+          ideal: [
+            { state: "default", theme: "light", uri: "a", width: 137, height: 84 },
+            { state: "default", theme: "dark", uri: "b", width: 137, height: 84 },
+          ],
+        },
+        greenlines: [],
+        redlines: [],
+        ...(motion ? { motion } : {}),
+      },
+    ],
+  });
+
+  it("carries the animated captures onto the component, beside its stills", () => {
+    const motion: CatalogMotion[] = [
+      {
+        path: "motion/switch-on/ideal__default__light.apng",
+        kind: "interaction",
+        caption: "Toggle quickly — the thumb resolves through FastSpatial.",
+        theme: "light",
+      },
+      {
+        path: "motion/switch-on/ideal__default__dark.apng",
+        kind: "interaction",
+        theme: "dark",
+      },
+    ];
+
+    const manifest = toCatalogManifest(withMotion(motion));
+
+    expect(manifest.components[0].motion).toEqual(motion);
+    // Never folded into `images[]`, which every consumer reads as a set of stills.
+    expect(manifest.components[0].images).toHaveLength(2);
+    expect(manifest.components[0].images.every((i) => i.path.endsWith(".png"))).toBe(true);
+  });
+
+  it("omits the field entirely for a component with no captures", () => {
+    const manifest = toCatalogManifest(withMotion());
+    expect("motion" in manifest.components[0]).toBe(false);
+  });
+
+  it("omits the field for an empty capture list rather than publishing an empty array", () => {
+    const manifest = toCatalogManifest(withMotion([]));
+    expect("motion" in manifest.components[0]).toBe(false);
   });
 });

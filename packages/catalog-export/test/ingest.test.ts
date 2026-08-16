@@ -4,6 +4,7 @@ import type { Image, SemanticTree } from "@design-parity/core";
 
 import { buildCatalog, buildComponent } from "../src/ingest.js";
 import type { ComponentSource } from "../src/ingest.js";
+import type { CatalogMotion } from "../src/types.js";
 
 const ideal: Image[] = [{ state: "default", uri: "a.png", width: 10, height: 10 }];
 
@@ -128,5 +129,24 @@ describe("buildCatalog", () => {
   it("leaves themes unset when none are declared", () => {
     expect(buildCatalog(meta, [{ componentId: "A", ideal }], undefined, []).themes).toBeUndefined();
     expect(buildCatalog(meta, [{ componentId: "A", ideal }]).themes).toBeUndefined();
+  });
+});
+
+describe("buildComponent motion", () => {
+  const source = (motion?: CatalogMotion[]): ComponentSource => ({
+    componentId: "Switch/On",
+    ideal: [{ state: "default", theme: "light", uri: "a", width: 137, height: 84 }],
+    ...(motion ? { motion } : {}),
+  });
+
+  it("carries a source's animated captures onto the component", () => {
+    const motion: CatalogMotion[] = [
+      { path: "previews/SwitchOn_Light.apng", kind: "interaction", theme: "light" },
+    ];
+    expect(buildComponent(source(motion)).motion).toEqual(motion);
+  });
+
+  it("leaves the field absent when the source declares none", () => {
+    expect("motion" in buildComponent(source())).toBe(false);
   });
 });

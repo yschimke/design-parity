@@ -24,6 +24,7 @@ import type {
   CatalogTheme,
   CatalogImage,
   CatalogMeta,
+  CatalogMotion,
   ComponentReference,
 } from "./types.js";
 
@@ -43,6 +44,8 @@ export interface ComponentSource {
   ideal: CatalogImage[];
   /** Layout/wireframe image(s) from `compose/semantics-wireframe`. */
   layout?: CatalogImage[];
+  /** Animated capture(s) published beside the stills; see {@link CatalogMotion}. */
+  motion?: CatalogMotion[];
   /** Per-component resolved tokens (padding / radius / type used). */
   tokens?: DesignTokens;
   /** Component semantic tree (carries bounds + per-node tokens + themeTokens). */
@@ -66,6 +69,7 @@ export function buildComponent(source: ComponentSource): CatalogComponent {
     greenlines: buildGreenlines(source.findings, source.semantics),
     redlines: buildRedlines(source.semantics),
   };
+  if (source.motion !== undefined) component.motion = source.motion;
   if (source.section !== undefined) component.section = source.section;
   if (source.group !== undefined) component.group = source.group;
   if (source.caption !== undefined) component.caption = source.caption;

@@ -18,6 +18,7 @@ import type {
   Image,
   SemanticTree,
   Severity,
+  Theme,
 } from "@design-parity/core";
 
 /**
@@ -170,6 +171,38 @@ export interface Redline {
 }
 
 /** One component on the sticker sheet, in its primary modes. */
+/**
+ * One **animated capture** a component publishes beside its stills — a short recording of the
+ * component moving, produced upstream by `@InteractionPreview` (a scripted pointer gesture) or
+ * `@AnimatedPreview` (a self-running animation).
+ *
+ * A sibling axis to {@link ComponentVariants}, never another entry inside it, because every
+ * consumer of the variant images assumes a still: the sticker sheet lays them out as a grid, a
+ * parity run diffs each against a kit node, the importer writes them into a frame. There is no
+ * meaningful "diff this APNG against a kit node", and a sheet that pasted a 114-frame recording in
+ * as a sticker would publish its first frame and silently drop the point.
+ *
+ * Additive: a component with no captures carries no `motion`, and a consumer that has never heard
+ * of the axis reads exactly the catalog it always did.
+ */
+export interface CatalogMotion {
+  /** Bundle-relative path to the capture (`motion/<component>/<variant>.apng`). */
+  path: string;
+  /** `"interaction"` (a scripted gesture) or `"animation"` (a self-running animation). */
+  kind: string;
+  /**
+   * What the reader should watch for. Worth carrying: a motion capture without one is close to
+   * useless — the reader can see *that* something moved, and this is what names the property they
+   * are being shown.
+   */
+  caption?: string;
+  /**
+   * Theme of the sticker this capture accompanies, so a viewer can pair it with the card the
+   * reader is looking at. Absent on an unthemed catalog, where the capture belongs to every card.
+   */
+  theme?: Theme;
+}
+
 export interface CatalogComponent {
   /** Stable component id, e.g. `"Button/Filled"`. */
   componentId: string;
@@ -210,6 +243,8 @@ export interface CatalogComponent {
    */
   noReference?: string;
   variants: ComponentVariants;
+  /** The component's animated captures; see {@link CatalogMotion}. */
+  motion?: CatalogMotion[];
   /** Per-component resolved tokens (the padding / radius / type actually used). */
   tokens?: DesignTokens;
   /** Accessibility annotation layer for this component. */
