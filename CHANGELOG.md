@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.52](https://github.com/yschimke/design-parity/compare/v0.1.51...v0.1.52) (2026-08-16)
+
+
+### Features
+
+* **catalog-export:** carry a component's motion axis through the export ([#354](https://github.com/yschimke/design-parity/issues/354)) ([4e4ecf9](https://github.com/yschimke/design-parity/commit/4e4ecf982d5defef7cf382c6e3e09c54e8262b1b))
+
 ## [0.1.51](https://github.com/yschimke/design-parity/compare/v0.1.50...v0.1.51) (2026-08-15)
 
 
