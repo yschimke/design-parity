@@ -1,0 +1,44 @@
+# design-parity
+
+> design-parity is an open-source TypeScript/Node toolchain for checking whether Compose UI code matches its intended design reference. It resolves code-to-design correspondence, renders candidates through compose-preview, compares visual, semantic, accessibility, internationalization, and design-token properties, and produces deterministic pull-request verdicts.
+
+design-parity supports Figma, Google Stitch, committed Claude Design HTML exports, and portable image bundles as reference sources. Its free core runs entirely in a consumer's own CI: AI may help generate committed setup artifacts interactively, but steady-state checks make no model calls. Accessibility and internationalization findings take priority over pixel matching. Compose Multiplatform is recommended for efficient rendering but is not required.
+
+The public command is `npx design-parity`; reusable packages are published under `@design-parity/*`. Node.js 22 or newer is required for development. Source code and issue tracking are at https://github.com/yschimke/design-parity.
+
+## Start here
+
+- [Project overview](https://raw.githubusercontent.com/yschimke/design-parity/main/README.md): Architecture, packages, installation, CLI usage, CI usage, development commands, and contribution pointers.
+- [Documentation index](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/README.md): Curated index of adoption guides, contracts, design-artifact workflows, and research conclusions.
+- [Principles](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/PRINCIPLES.md): Binding product and architecture constraints, including deterministic CI, accessibility and internationalization priority, baseline bootstrapping, parity direction, and Compose Multiplatform guidance.
+- [Non-goals](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/NON-GOALS.md): Deliberate project boundaries and the reasoning behind them.
+
+## Use design-parity
+
+- [Compose Multiplatform adoption guide](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/adopting-cmp.md): End-to-end setup using the emulator-free Desktop/JVM render path.
+- [Candidate sources](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/candidate-sources.md): Static bundle, CLI, local Compose for Web, and daemon candidate-render backends.
+- [Parallel parity checks](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/PARALLEL_PARITY.md): Exhaustive catalog checks split across GitHub Actions jobs and merged into one result.
+- [Reference cache](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/REFERENCE_CACHE.md): Importing design references separately so parity checks make no live Figma calls.
+- [CLI package](https://raw.githubusercontent.com/yschimke/design-parity/main/packages/cli/README.md): Detailed documentation for the unscoped `design-parity` npm package.
+
+## Concepts and contracts
+
+- [Correspondence and token matching](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/correspondence-and-token-matching.md): How code previews map to design references and how design tokens are compared.
+- [Report format](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/report-format.md): Versioning and compatibility of the published `verdict.json` wire format.
+- [Page backdrops](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/page-backdrops.md): Optional whole-screen design backdrops with linked component instances and overlaid code renders.
+- [Page backdrop contract](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/page-backdrop-contract.md): The `PageBackdropManifest` wire format and cross-repository compatibility rules.
+- [Fixture guide](https://raw.githubusercontent.com/yschimke/design-parity/main/fixtures/README.md): Offline golden references and candidate renders used to test every source without live services.
+
+## Code-to-design workflows
+
+- [Design-artifact catalog plan](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/design-artifacts/PLAN.md): Generating importable sticker-sheet catalogs from rendered code.
+- [Reference kits](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/design-artifacts/REFERENCE_KITS.md): Why published design kits are seed material rather than canonical truth in a code-led workflow.
+- [Figma import guide](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/design-artifacts/FIGMA_IMPORT.md): Importing a generated design-artifact delivery branch into Figma and keeping it current.
+
+## Optional
+
+- [Compose for Web and Wasm feasibility](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/cmp-web-wasm-feasibility.md): Research verdict explaining why the web/Wasm candidate backend remains a deliberate stub.
+- [Claude Design sync impact](https://raw.githubusercontent.com/yschimke/design-parity/main/docs/claude-design-sync-impact.md): Analysis of how Claude Design's beta sync bridge affects the committed-export adapter model.
+- [Changelog](https://raw.githubusercontent.com/yschimke/design-parity/main/CHANGELOG.md): Release history for the lockstep-versioned monorepo.
+- [Contributing guide](https://raw.githubusercontent.com/yschimke/design-parity/main/AGENTS.md): Repository conventions for contributors and coding agents.
+- [License](https://raw.githubusercontent.com/yschimke/design-parity/main/LICENSE): Apache License 2.0.
