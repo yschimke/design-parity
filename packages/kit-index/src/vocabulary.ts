@@ -196,12 +196,19 @@ export const sameName = (a: unknown, b: unknown): boolean => {
   return x && y ? x === y : exact();
 };
 
-/** The distinct lowercase words in a name or value, for set-wise comparison. */
+/**
+ * The distinct lowercase words in a name or value, for set-wise comparison.
+ *
+ * Split on anything that is not a letter or a digit **in any script**. An ASCII-only split drops
+ * every non-Latin word rather than separating them, which left the fused-axis search unable to see
+ * a localised kit's values at all — and that search is the one a declaration relies on when two
+ * seeds share an axis.
+ */
 export const wordsOf = (s: unknown): Set<string> =>
   new Set(
     String(s)
       .toLowerCase()
-      .split(/[^a-z0-9]+/)
+      .split(/[^\p{L}\p{N}]+/u)
       .filter(Boolean),
   );
 

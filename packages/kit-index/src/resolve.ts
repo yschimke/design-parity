@@ -274,7 +274,10 @@ export class KitIndexResolver {
     // wrong answer somebody would declare their way out of.
     if (seed.kitValue !== undefined) {
       const declared = seed.kitValue;
-      return peers.find((peer) => sameName(this.#leafOf(peer), declared));
+      const named = peers.filter((peer) => sameName(this.#leafOf(peer), declared));
+      // Same rule as a declared axis or value: two siblings answering to one declaration means the
+      // declaration did not say which, and emitting either is wrong half the time.
+      return named.length === 1 ? named[0] : undefined;
     }
     const want = [String(seed.raw), seed.key, `${seed.key}-${seed.raw}`].map(
       norm,

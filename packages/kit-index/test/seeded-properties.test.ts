@@ -301,3 +301,26 @@ describe("a seed that declares the kit's own names", () => {
     ).toEqual(["Show focus indicator"]);
   });
 });
+
+describe("a declared value on a text property", () => {
+  it("goes in verbatim rather than through the falsy reading", () => {
+    // `none` / `False` are code words for "there is no text here" when they
+    // come off a knob. Declared, they are what the kit actually renders, and
+    // substituting the empty string misses the instance carrying them.
+    const text = { name: "Label text", type: "TEXT", default: "Label" } as const;
+    expect(seededPropertyValue(text, { key: "label", raw: "none" }, [])).toBe("");
+    expect(
+      seededPropertyValue(text, { key: "label", raw: "none", kitValue: "None" }, []),
+    ).toBe("None");
+  });
+
+  it("refuses a declared property name two properties both answer to", () => {
+    const properties = {
+      "Show icon": { type: "BOOLEAN", default: true },
+      "Show-icon": { type: "BOOLEAN", default: false },
+    } as const;
+    expect(
+      matchSeedProperty(properties, { key: "x", raw: "true", kitAxis: "Show icon" }),
+    ).toBeUndefined();
+  });
+});

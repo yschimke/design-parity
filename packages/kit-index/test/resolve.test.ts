@@ -802,3 +802,54 @@ describe("what a declared name may not quietly match", () => {
     ).toBeUndefined();
   });
 });
+
+describe("a declaration in a kit whose own names collide or are localised", () => {
+  it("refuses a sibling declaration two folder leaves both answer to", () => {
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {},
+      standalone: {
+        "1:1": { name: "Horizontal/Full-width" },
+        "1:2": { name: "Horizontal/Middle inset" },
+        "1:3": { name: "Horizontal/Middle-inset" },
+      },
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "inset",
+        raw: "middle",
+        kitValue: "Middleinset",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("fuses two declared seeds onto a localised compound value", () => {
+    // `#fuseAxisValue` compares WORD SETS, and the tokenizer used to split on
+    // ASCII only — so every non-Latin value came back as no words at all and
+    // the compound was unreachable however precisely it was declared.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "チェックボックス",
+          variants: [
+            { id: "1:2", name: "種類=未選択" },
+            { id: "1:3", name: "種類=選択済み" },
+            { id: "1:4", name: "種類=エラー 選択済み" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", [
+        { key: "state", raw: "checked", kitAxis: "種類", kitValue: "選択済み" },
+        { key: "status", raw: "error", kitAxis: "種類", kitValue: "エラー 選択済み" },
+      ]),
+    ).toEqual({ nodeId: "1:4", name: "種類=エラー 選択済み" });
+  });
+});

@@ -126,7 +126,13 @@ export function matchSeedProperty(
 ): MatchedProperty[] | undefined {
   if (!seed.kitAxis) return matchProperty(properties, seed.key, vocabulary);
   const declared = seed.kitAxis;
-  const hit = Object.entries(properties ?? {}).find(([name]) => sameName(name, declared));
+  const hits = Object.entries(properties ?? {}).filter(([name]) =>
+    sameName(name, declared),
+  );
+  // Two property names answering to one declaration — `Show icon` beside `Show-icon` — is not a
+  // tie to break by declaration order. Setting the wrong one leaves the intended property at its
+  // default and returns an instance that renders something nobody asked for.
+  const hit = hits.length === 1 ? hits[0] : undefined;
   return hit ? [{ name: hit[0], type: hit[1].type, default: hit[1].default }] : undefined;
 }
 
@@ -150,7 +156,8 @@ export function seededPropertyValue(
   // A declared kit value is what the kit calls this cell, so it is what the property should be set
   // to: `raw: "hidden"` with `kitValue: "False"` means the switch is off, and translating `hidden`
   // instead would leave the seed unresolved for want of a word no table knows.
-  const raw = String(seed.kitValue ?? seed.raw);
+  const declared = seed.kitValue;
+  const raw = String(declared ?? seed.raw);
   const lower = raw.toLowerCase();
 
   if (property.type === "BOOLEAN") {
@@ -174,6 +181,11 @@ export function seededPropertyValue(
   }
 
   if (property.type === "TEXT") {
+    // A DECLARED value is the kit's own word for this cell and goes in verbatim. The reading below
+    // is a translation of a code knob — `content=none` meaning "no text here" — and applying it to
+    // a declaration would turn a literal `False` or `none` the kit really renders into an empty
+    // string, then miss the instance that carries it.
+    if (declared !== undefined) return declared;
     // When a sibling visibility property is off, its hidden text stays at the
     // default. A lone text property uses the empty string to express absence.
     if (FALSY.has(lower)) {
