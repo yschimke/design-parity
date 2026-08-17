@@ -732,3 +732,73 @@ describe("a value-only declaration on a property-shaped knob", () => {
     });
   });
 });
+
+describe("what a declared name may not quietly match", () => {
+  it("keeps a decimal apart from the whole number it would flatten to", () => {
+    // Dropping separators turns `1.0` into `10` — a real value of the Carousel
+    // fixture's neighbours and, on a `Progress` axis, exactly the confident
+    // wrong node the slug matcher is already careful to avoid.
+    const numeric = new KitIndexResolver({
+      fileKey: "NumKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Progress indicator",
+          variants: [
+            { id: "1:2", name: "Progress=0" },
+            { id: "1:3", name: "Progress=10" },
+            { id: "1:4", name: "Progress=100" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      numeric.resolveVariant("figma:NumKit/1:2", {
+        key: "progress",
+        raw: "1.0",
+        kitAxis: "Progress",
+        kitValue: "1.0",
+      }),
+    ).toBeUndefined();
+    expect(
+      numeric.resolveVariant("figma:NumKit/1:2", {
+        key: "progress",
+        raw: "1.0",
+        kitAxis: "Progress",
+        kitValue: "100",
+      })?.name,
+    ).toBe("Progress=100");
+  });
+
+  it("refuses a declaration two published names both answer to", () => {
+    // `Full screen` and `Full-screen` differ only by what the comparison drops,
+    // so the declaration does not say which was meant. Picking either is the
+    // wrong reference half the time; nothing is the honest answer.
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Date picker",
+          variants: [
+            { id: "1:2", name: "Type=Docked" },
+            { id: "1:3", name: "Type=Full screen" },
+            { id: "1:4", name: "Type=Full-screen" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:2", {
+        key: "type",
+        raw: "full",
+        kitAxis: "Type",
+        kitValue: "Fullscreen",
+      }),
+    ).toBeUndefined();
+  });
+});

@@ -126,6 +126,16 @@ export type UnresolvedReason =
   /** These seeds have no counterpart at all — the actual gap. */
   | { kind: "seeds"; missing: string[] };
 
+/**
+ * The single match, or nothing.
+ *
+ * Two published names answering to one declaration is not a tie to break — the declaration does not
+ * say which was meant, and picking either is the confident wrong reference this package exists to
+ * avoid. Resolving to nothing leaves the author a report naming what the kit does publish.
+ */
+const only = (matches: string[]): string | undefined =>
+  matches.length === 1 ? matches[0] : undefined;
+
 /** `key=value`, the form the reports quote a seed in. */
 const vectorPart = (seed: VariantSeed): string => `${seed.key}=${String(seed.raw)}`;
 
@@ -376,7 +386,7 @@ export class KitIndexResolver {
     axes: Record<string, string>,
     declared: string,
   ): string | undefined {
-    return Object.keys(axes).find((axis) => sameName(axis, declared));
+    return only(Object.keys(axes).filter((axis) => sameName(axis, declared)));
   }
 
   /** The axis's own spelling of a declared kit value, if it publishes one. */
@@ -385,7 +395,7 @@ export class KitIndexResolver {
     axis: string,
     declared: string,
   ): string | undefined {
-    return this.#axisValues(set, axis).find((value) => sameName(value, declared));
+    return only(this.#axisValues(set, axis).filter((value) => sameName(value, declared)));
   }
 
   /**

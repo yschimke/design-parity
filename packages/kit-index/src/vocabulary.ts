@@ -169,17 +169,31 @@ export const normName = (s: unknown): string =>
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]/gu, "");
 
+/** Digits with punctuation between them: `1.0`, `1,5` — where stripping merges two numbers. */
+const MERGED_DIGITS = /\p{N}[^\p{L}\p{N}]+\p{N}/u;
+
 /**
  * Whether two names are the same name, for a declared one.
  *
- * Falls back to whole-string equality when either side is nothing but punctuation, since two names
- * that both normalise to the empty string are not thereby equal.
+ * Two guards, both about normalisation being able to erase a real difference rather than a
+ * cosmetic one:
+ *
+ * - **Numbers keep their shape.** Dropping the separators turns `1.0` into `10`, which is a real
+ *   value of a `Progress` axis and the wrong one — the same collision {@link norm} is deliberately
+ *   not asked to resolve for slugs. When one side merges digits that way and the other does not,
+ *   only whole-string equality will do.
+ * - **Punctuation-only names fall back to whole-string equality**, since two names that both
+ *   normalise to the empty string are not thereby equal.
  */
 export const sameName = (a: unknown, b: unknown): boolean => {
-  const left = normName(a);
-  const right = normName(b);
-  if (left && right) return left === right;
-  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  const left = String(a);
+  const right = String(b);
+  const exact = (): boolean =>
+    left.trim().toLowerCase() === right.trim().toLowerCase();
+  if (MERGED_DIGITS.test(left) !== MERGED_DIGITS.test(right)) return exact();
+  const x = normName(left);
+  const y = normName(right);
+  return x && y ? x === y : exact();
 };
 
 /** The distinct lowercase words in a name or value, for set-wise comparison. */
