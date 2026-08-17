@@ -19,6 +19,7 @@ import { parseVariantName } from "@design-parity/adapter-figma";
 import {
   matchSeedProperty,
   resolvePropertyInstance,
+  seededPropertyValue,
   type MatchedProperty,
 } from "./seeded-properties.js";
 import type {
@@ -481,7 +482,17 @@ export class KitIndexResolver {
           // Some shared matrices spell their default size explicitly in a
           // combination (`size=s, width=narrow, shape=square`). That seed is a
           // valid no-op there, but a one-axis no-op is only a duplicate of base.
-          if (noOp && !(seeds.length > 1 && seed.key === "size")) continue;
+          //
+          // A DECLARED seed qualifies whatever the code calls its knob: the
+          // author has named the axis and the value outright, which is the same
+          // "I mean this cell sits here" the `size` key stands in for — and
+          // requiring the code-side spelling would make the exception depend on
+          // the one thing a declaration exists to stop mattering.
+          const spellsDefault =
+            seed.key === "size" ||
+            seed.kitValue !== undefined ||
+            (seed.kitAxis !== undefined && sameName(axis, "Size"));
+          if (noOp && !(seeds.length > 1 && spellsDefault)) continue;
           const match = search(
             i + 1,
             noOp ? target : { ...target, [axis]: want },
@@ -720,7 +731,12 @@ export class KitIndexResolver {
         // renders at a non-default property vector. Calling that a misspelt declaration would
         // rename a known limitation as an authoring error, and (since the declared reason outranks
         // the property one) hide the report that says which property it is.
-        if (matchSeedProperty(set.properties, seed, this.#vocabulary)) continue;
+        const properties = matchSeedProperty(set.properties, seed, this.#vocabulary);
+        if (properties) {
+          const valueMiss = this.#declaredPropertyValueMiss(seed, properties);
+          if (valueMiss) misses.push(valueMiss);
+          continue;
+        }
         misses.push({
           seed: vectorPart(seed),
           declares: "axis",
@@ -747,6 +763,45 @@ export class KitIndexResolver {
       });
     }
     return misses;
+  }
+
+  /**
+   * A value declared for a component PROPERTY that the property cannot take.
+   *
+   * The name being real is not the whole check. `Show icon` with a declared
+   * `Flase` resolves to no instance, and without this it would be filed as an
+   * accepted property-shaped variant — the one classification that says
+   * "nothing to fix here" — so a typo would hide behind a known limitation.
+   *
+   * Only asked of properties that have a representable value at all. An
+   * instance swap or a slot can never be addressed by a catalog seed, declared
+   * or not, and reporting those as a bad declaration would be the same
+   * mislabelling in the other direction.
+   */
+  #declaredPropertyValueMiss(
+    seed: VariantSeed,
+    properties: MatchedProperty[],
+  ): DeclaredMiss | undefined {
+    const value = seed.kitValue;
+    if (value === undefined) return undefined;
+    const representable = properties.filter(
+      (property) => property.type === "BOOLEAN" || property.type === "TEXT",
+    );
+    if (!representable.length) return undefined;
+    const usable = representable.every(
+      (property) => seededPropertyValue(property, seed, properties) !== undefined,
+    );
+    if (usable) return undefined;
+    return {
+      seed: vectorPart(seed),
+      declares: "value",
+      named: value,
+      // A boolean switch takes two values and a text property takes any string,
+      // so what is listable here is the booleans' pair.
+      published: representable.some((property) => property.type === "BOOLEAN")
+        ? ["True", "False"]
+        : [],
+    };
   }
 
   /**

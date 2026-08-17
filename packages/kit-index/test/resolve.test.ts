@@ -660,3 +660,51 @@ describe("a standalone render with more than one declaration", () => {
     });
   });
 });
+
+describe("a declaration that lands on a component property", () => {
+  const button = ref("57994:2324");
+
+  it("still has its value checked against what the property can take", () => {
+    // The NAME being real is not the whole check. Without this the typo hides
+    // behind the property-shaped classification — the one verdict that means
+    // "nothing to fix here".
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "art", raw: "off", kitAxis: "Show icon", kitValue: "Flase" },
+      ]),
+    ).toEqual({
+      kind: "declared",
+      missing: [
+        {
+          seed: "art=off",
+          declares: "value",
+          named: "Flase",
+          published: ["True", "False"],
+        },
+      ],
+    });
+  });
+
+  it("leaves a well-formed property declaration to the property report", () => {
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "art", raw: "off", kitAxis: "Show icon", kitValue: "False" },
+      ]).kind,
+    ).not.toBe("declared");
+  });
+
+  it("accepts a declared no-op in a compound vector whatever the knob is called", () => {
+    // The base IS `Size=Small`, and this cell spells that explicitly beside the
+    // state it really moves. The exception used to key on the code word `size`,
+    // which is the one thing a declaration exists to stop mattering.
+    expect(
+      resolver.resolveVariant(button, [
+        { key: "density", raw: "compact", kitAxis: "Size", kitValue: "Small" },
+        { key: "state", raw: "disabled" },
+      ]),
+    ).toEqual({
+      nodeId: "58651:12649",
+      name: "Type=Round, Size=Small, State=Disabled",
+    });
+  });
+});
