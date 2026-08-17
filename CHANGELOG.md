@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.53](https://github.com/yschimke/design-parity/compare/v0.1.52...v0.1.53) (2026-08-17)
+
+
+### Features
+
+* **kit-index:** resolve a seed by the kit's own axis and value names ([#356](https://github.com/yschimke/design-parity/issues/356)) ([10c4894](https://github.com/yschimke/design-parity/commit/10c4894c17a7c54d984bee52ebeebe0258a2e30b))
+
+
+### Bug Fixes
+
+* **kit-index:** close three edges a declaration could still fall through ([#358](https://github.com/yschimke/design-parity/issues/358)) ([693e4b9](https://github.com/yschimke/design-parity/commit/693e4b98d0e70429c7f2b6f99c26dba38089db22))
+
 ## [0.1.52](https://github.com/yschimke/design-parity/compare/v0.1.51...v0.1.52) (2026-08-16)
 
 
