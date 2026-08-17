@@ -198,6 +198,17 @@ seed.
 Either field can be given alone: an axis alone when only the *name* differs, a
 value alone when only the spelling does.
 
+One case a declaration deliberately cannot reach: **two seeds fusing onto one
+value in a script that writes no spaces**. The fusion rule asks whether a
+published value says exactly what the two seeds say together, which it answers
+by comparing word sets — and `エラー選択済み` is a single token however many words
+a reader sees in it. Containment is the obvious substitute and is not safe:
+`選択` (selected) is a substring of `未選択` (unselected), so a check built on it
+accepts the node drawing the opposite state. Telling lexical containment from
+semantic fusion needs a segmenter this package has no business carrying, so such
+a vector stays unresolved and is reported as unresolved. Space-separated scripts
+fuse normally, whatever the alphabet.
+
 That rule is why the matching is fussier than it first looks. A boolean axis
 accepts `True` from *any* knob, so a naive matcher had `footer=true` resolving
 to `Show back=True` and `supporting=on` resolving to `Leading icon=True` — both

@@ -34,10 +34,8 @@ import {
   FALSY,
   mergeVocabulary,
   norm,
-  normName,
   sameName,
   TRUTHY,
-  UNSEPARATED_SCRIPT,
   valueCandidates,
   wordsOf,
   type Vocabulary,
@@ -329,22 +327,13 @@ export class KitIndexResolver {
     chosen: string,
     want: string,
   ): string | undefined {
-    // A script with no word separators cannot be compared by word set — `エラー選択済み` is one
-    // token however many words a reader sees in it. Containment is the available substitute: the
-    // published value must carry both spellings and be more than either alone. It is a weaker
-    // check than word-set equality (it cannot say "and nothing more"), so it is reached only for
-    // the scripts that need it, and only one published value may answer.
-    if (UNSEPARATED_SCRIPT.test(chosen) || UNSEPARATED_SCRIPT.test(want)) {
-      const have = normName(chosen);
-      const add = normName(want);
-      if (!have || !add || have === add) return undefined;
-      const fused = this.#axisValues(set, axis).filter((value) => {
-        const candidate = normName(value);
-        return candidate !== have && candidate.includes(have) && candidate.includes(add);
-      });
-      return fused.length === 1 ? fused[0] : undefined;
-    }
-
+    // A script with no word separators — `エラー選択済み` is one token however many words a reader
+    // sees in it — cannot be compared this way, and there is no safe substitute. Containment was
+    // tried and withdrawn: `選択` (selected) is a substring of `未選択` (unselected), so a fusion
+    // check built on it accepts `エラー未選択` for a selected seed and cites the node that draws
+    // the opposite state. Telling lexical containment from semantic fusion needs a segmenter this
+    // package has no business carrying, and under the governing rule a gap beats a wrong answer:
+    // such a vector stays unresolved and is reported as unresolved.
     const wanted = new Set([...wordsOf(chosen), ...wordsOf(want)]);
     if (wanted.size < 2) return undefined;
     return this.#axisValues(set, axis).find((value) => {
@@ -748,7 +737,11 @@ export class KitIndexResolver {
         continue;
       }
       for (const candidate of valueCandidates(seed.raw, this.#vocabulary)) {
-        if (norm(at) === norm(candidate)) return true;
+        // `sameName`, not `norm`: this answers "does the base already sit here", and a rule that
+        // reads `1.0` as the published `10` says yes to a seed that moves the render. It decides
+        // both the `base` reason and — since #358 — whether a no-op axis lets a property vector
+        // through, so a false yes resolves to the wrong definition's instance.
+        if (sameName(at, candidate)) return true;
       }
     }
     return false;
@@ -905,11 +898,23 @@ export class KitIndexResolver {
       }
       const value = seed.kitValue;
       if (value === undefined) continue;
+      const twins = leaves.filter((leaf) => sameName(leaf, value));
       if (sameName(own, value)) {
+        // Naming the reference AND a sibling is ambiguity, not "already drawn": resolution
+        // refused it for that reason, and the report has to say the same thing.
+        if (twins.length) {
+          misses.push({
+            seed: vectorPart(seed),
+            declares: "value",
+            named: value,
+            published: [own, ...leaves],
+          });
+          continue;
+        }
         drawn = true;
         continue;
       }
-      if (leaves.some((leaf) => sameName(leaf, value))) continue;
+      if (twins.length) continue;
       misses.push({
         seed: vectorPart(seed),
         declares: "value",
