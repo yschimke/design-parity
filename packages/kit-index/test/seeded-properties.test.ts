@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   matchProperty,
+  matchSeedProperty,
   resolvePropertyInstance,
   seededPropertyValue,
   type KitSet,
@@ -261,6 +262,65 @@ describe("seededPropertyValue", () => {
   it("gives no value for a boolean it cannot read", () => {
     expect(
       seededPropertyValue(bool, { key: "icon", raw: "somewhat" }, [bool]),
+    ).toBeUndefined();
+  });
+});
+
+describe("a seed that declares the kit's own names", () => {
+  it("sets a property to the declared value, not the code's word for it", () => {
+    // `hidden` is a word no table knows; `kitValue: "False"` is the kit's, and
+    // it is what the switch should be set to.
+    expect(
+      seededPropertyValue({ name: "Show icon", type: "BOOLEAN", default: true }, {
+        key: "content",
+        raw: "hidden",
+        kitValue: "False",
+      }, []),
+    ).toBe(false);
+  });
+
+  it("matches a declared property name exactly", () => {
+    const properties = {
+      "Show focus indicator": { type: "BOOLEAN", default: false },
+      "Show icon": { type: "BOOLEAN", default: true },
+    } as const;
+    // The knob key keeps its latitude…
+    expect(
+      matchSeedProperty(properties, { key: "focus", raw: "true" })?.map((p) => p.name),
+    ).toEqual(["Show focus indicator"]);
+    // …and the declaration does not.
+    expect(
+      matchSeedProperty(properties, { key: "x", raw: "true", kitAxis: "focus" }),
+    ).toBeUndefined();
+    expect(
+      matchSeedProperty(properties, {
+        key: "x",
+        raw: "true",
+        kitAxis: "show focus indicator",
+      })?.map((p) => p.name),
+    ).toEqual(["Show focus indicator"]);
+  });
+});
+
+describe("a declared value on a text property", () => {
+  it("goes in verbatim rather than through the falsy reading", () => {
+    // `none` / `False` are code words for "there is no text here" when they
+    // come off a knob. Declared, they are what the kit actually renders, and
+    // substituting the empty string misses the instance carrying them.
+    const text = { name: "Label text", type: "TEXT", default: "Label" } as const;
+    expect(seededPropertyValue(text, { key: "label", raw: "none" }, [])).toBe("");
+    expect(
+      seededPropertyValue(text, { key: "label", raw: "none", kitValue: "None" }, []),
+    ).toBe("None");
+  });
+
+  it("refuses a declared property name two properties both answer to", () => {
+    const properties = {
+      "Show icon": { type: "BOOLEAN", default: true },
+      "Show-icon": { type: "BOOLEAN", default: false },
+    } as const;
+    expect(
+      matchSeedProperty(properties, { key: "x", raw: "true", kitAxis: "Show icon" }),
     ).toBeUndefined();
   });
 });

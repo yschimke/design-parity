@@ -290,3 +290,105 @@ describe("inputs it refuses or leaves alone", () => {
     expect(input.components[0]!.ref).toBe(ref("57994:2324"));
   });
 });
+
+describe("a sidecar render that names the kit's own spelling", () => {
+  // The end-to-end shape of the escape hatch: `kitAxis` / `kitValue` travel on
+  // the seed, through the sidecar, into resolution. Without them this render
+  // lands in `unresolved` — which is what the catalog got before, minus any
+  // hint that the miss was a spelling nobody could have guessed.
+  const declared = {
+    previewId: "c.CatalogKt.FilledButton_Light_VARIANT_longer",
+    name: "longer",
+    seeds: [
+      {
+        key: "action",
+        raw: "longer",
+        kitAxis: "Configuration",
+        kitValue: "Text & longer action",
+      },
+    ],
+  };
+
+  it("resolves through the sidecar", () => {
+    const { map, diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("53977:33595")),
+      variants: sidecar(ref("53977:33595"), [declared]),
+      resolver,
+    });
+    expect(diagnostics.resolved).toBe(1);
+    expect(map.components[0]!.ref).toEqual([
+      { ref: ref("53977:33595") },
+      { ref: ref("53977:33576"), state: "longer" },
+    ]);
+    expect(validateDesignMap(map).valid).toBe(true);
+  });
+
+  it("reports a declaration the set cannot honour as its own kind of miss", () => {
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("53977:33595")),
+      variants: sidecar(ref("53977:33595"), [
+        { ...declared, seeds: [{ ...declared.seeds[0]!, kitAxis: "Confguration" }] },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.resolved).toBe(0);
+    expect(diagnostics.unresolved[0]!.reason).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Confguration" }],
+    });
+  });
+});
+
+describe("a declaration error outranks the property fallback", () => {
+  it("reports the typo rather than classifying the render as property-shaped", () => {
+    // The render seeds a real `Show icon` property AND misspells a kit axis. It
+    // fails because of the typo, so reporting only "the kit models this as a
+    // property" buries the one message whose fix is a line of catalog source.
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        {
+          previewId: "c.CatalogKt.FilledButton_Light_VARIANT_no-icon-l",
+          name: "no-icon-l",
+          seeds: [
+            { key: "icon", raw: "false" },
+            { key: "size", raw: "l", kitAxis: "Sise" },
+          ],
+        },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.propertyVariants).toEqual([]);
+    expect(diagnostics.unresolved[0]!.reason).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Sise" }],
+    });
+  });
+});
+
+describe("a declaration naming a component property", () => {
+  it("stays property-shaped rather than being called a misspelt axis", () => {
+    // `Show icon` is a real Button property, so it is absent from the variant AXES — and a
+    // property-shaped variant is unpaired for its own reason (no definition renders at a
+    // non-default property vector). Reporting it as a bad declaration would rename a known
+    // limitation as an authoring error, and `--strict` would start failing catalogs that were
+    // only ever unpaired.
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        {
+          previewId: "c.CatalogKt.FilledButton_Light_VARIANT_no-icon",
+          name: "no-icon",
+          seeds: [{ key: "art", raw: "off", kitAxis: "Show icon", kitValue: "False" }],
+        },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.unresolved).toEqual([]);
+    expect(diagnostics.propertyVariants[0]).toMatchObject({
+      variant: "no-icon",
+      setName: "Button",
+      properties: [{ name: "Show icon", type: "BOOLEAN" }],
+    });
+  });
+});

@@ -36,6 +36,7 @@
  */
 
 export type {
+  DeclaredMiss,
   DefaultedContent,
   KitIndexResolverOptions,
   SeedProperty,
@@ -65,6 +66,7 @@ export type { DumpInventoryOptions, PageWalk } from "./inventory.js";
 
 export {
   matchProperty,
+  matchSeedProperty,
   resolvePropertyInstance,
   seededPropertyValue,
 } from "./seeded-properties.js";

@@ -209,9 +209,17 @@ export function resolveDesignMapVariants(
       const vector = vectorOf(render.seeds);
 
       if (!hit) {
-        const property = render.seeds
-          .map((seed) => resolver.propertyForSeed(declaration.reference, seed))
-          .find(Boolean);
+        // Ask WHY before reaching for the property fallback. A render mixing a
+        // real property seed with a misspelt declaration fails because of the
+        // declaration, and classifying it as merely property-shaped buries the
+        // one message whose fix is a line of catalog source.
+        const reason = resolver.explainUnresolved(declaration.reference, render.seeds);
+        const property =
+          reason.kind === "declared"
+            ? undefined
+            : render.seeds
+                .map((seed) => resolver.propertyForSeed(declaration.reference, seed))
+                .find(Boolean);
         if (property) {
           propertyVariants.push({
             code: entry.code,
@@ -232,7 +240,7 @@ export function resolveDesignMapVariants(
             componentId: declaration.componentId,
             variant: render.name,
             vector,
-            reason: resolver.explainUnresolved(declaration.reference, render.seeds),
+            reason,
           });
         }
         continue;

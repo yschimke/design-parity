@@ -360,3 +360,496 @@ describe("saying why a vector resolved to nothing", () => {
     expect(reason).toMatchObject({ missing: ["elevation=3"] });
   });
 });
+
+describe("a declared kit axis or value", () => {
+  // The escape hatch for what the alias tables cannot reach. Before it, a
+  // catalog whose kit spells a value `Type=Full-screen (range)` had to seed
+  // that string in Kotlin source — a kit spelling made load-bearing in code,
+  // which rots the moment the kit renames a variant value.
+
+  const snackbar = ref("53977:33595"); // Text only, Two lines, close=True
+
+  it("reaches a value no alias table spells", () => {
+    const seed = { key: "action", raw: "longer" };
+    // On its own the knob says nothing the kit recognises: `longer` is not a
+    // published value of any axis, so this is the silent drop the declaration
+    // exists to remove.
+    expect(resolver.resolveVariant(snackbar, seed)).toBeUndefined();
+    expect(
+      resolver.resolveVariant(snackbar, {
+        ...seed,
+        kitAxis: "Configuration",
+        kitValue: "Text & longer action",
+      }),
+    ).toEqual({
+      nodeId: "53977:33576",
+      name: "Configuration=Text & longer action, # of lines=Two lines, Show close affordance=True",
+    });
+  });
+
+  it("reaches an axis the vocabulary never proposes for the knob", () => {
+    const seed = { key: "dismiss", raw: "false" };
+    expect(resolver.resolveVariant(snackbar, seed)).toBeUndefined();
+    expect(
+      resolver.resolveVariant(snackbar, {
+        ...seed,
+        kitAxis: "Show close affordance",
+      }),
+    ).toEqual({
+      nodeId: "53977:34285",
+      name: "Configuration=Text only, # of lines=Two lines, Show close affordance=False",
+    });
+  });
+
+  it("matches the kit's spelling without demanding its punctuation", () => {
+    // `# of lines` is the kit's own axis name. Declaring it should not turn
+    // into a typing exercise, so the match normalises both sides — and can
+    // still only ever land on an axis the set really publishes.
+    expect(
+      resolver.resolveVariant(snackbar, {
+        key: "rows",
+        raw: "1",
+        kitAxis: "of lines",
+        kitValue: "One line",
+      }),
+    ).toEqual({
+      nodeId: "53977:34288",
+      name: "Configuration=Text only, # of lines=One line, Show close affordance=True",
+    });
+  });
+
+  it("is authoritative, not a hint: a wrong axis resolves to nothing", () => {
+    // The seed resolves perfectly well on its own. Falling back to that when
+    // the declaration misses would make a typo indistinguishable from a
+    // correct declaration — and quietly answer a question nobody asked.
+    const button = ref("57994:2324");
+    expect(resolver.resolveVariant(button, { key: "size", raw: "l" })).toEqual({
+      nodeId: "57994:2320",
+      name: "Type=Round, Size=Large, State=Enabled",
+    });
+    expect(
+      resolver.resolveVariant(button, { key: "size", raw: "l", kitAxis: "Sise" }),
+    ).toBeUndefined();
+    expect(
+      resolver.resolveVariant(button, {
+        key: "size",
+        raw: "l",
+        kitAxis: "Size",
+        kitValue: "Enormous",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("names a declaration the set cannot honour", () => {
+    const button = ref("57994:2324");
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "size", raw: "l", kitAxis: "Sise" },
+      ]),
+    ).toEqual({
+      kind: "declared",
+      missing: [
+        {
+          seed: "size=l",
+          declares: "axis",
+          named: "Sise",
+          published: ["Type", "Size", "State"],
+        },
+      ],
+    });
+
+    const reason = resolver.explainUnresolved(button, [
+      { key: "size", raw: "l", kitAxis: "Size", kitValue: "Enormous" },
+    ]);
+    expect(reason.kind).toBe("declared");
+    expect(reason).toMatchObject({
+      missing: [{ seed: "size=l", declares: "value", named: "Enormous" }],
+    });
+    // The values the axis does publish are the whole point: the reason is a
+    // correction, not another "resolved to nothing".
+    expect(
+      (reason as { missing: { published: string[] }[] }).missing[0]?.published,
+    ).toContain("Large");
+  });
+
+  it("reaches a knob the kit models as a property rather than an axis", () => {
+    // Which of the two a kit uses is the kit's business. A declaration names
+    // the kit's word; the property path honours it the same way the axis
+    // search does.
+    expect(
+      resolver.propertyForSeed(ref("57994:2324"), {
+        key: "art",
+        raw: "false",
+        kitAxis: "Show icon",
+      }),
+    ).toMatchObject({
+      setName: "Button",
+      properties: [{ name: "Show icon", type: "BOOLEAN" }],
+    });
+  });
+});
+
+describe("a declaration cannot buy what the kit does not draw", () => {
+  // Every case here is one where taking the declaration on trust would produce
+  // a confident reference to the wrong node — the failure the whole package is
+  // built to avoid, and one an authoritative declaration could reintroduce.
+
+  it("checks a declared fusion against the value the earlier seed chose", () => {
+    // The base is `Type=Selected`; the second seed declares the kit's
+    // `Error unselected`. Letting the declaration overwrite the axis outright
+    // would resolve to the UNSELECTED node and diff selected code against it.
+    const checkbox = ref("51859:5629");
+    expect(
+      resolver.resolveVariant(checkbox, [
+        { key: "state", raw: "selected" },
+        { key: "status", raw: "error", kitValue: "Error unselected" },
+      ]),
+    ).toBeUndefined();
+    // The fusion the kit really publishes for those two still resolves.
+    expect(
+      resolver.resolveVariant(checkbox, [
+        { key: "state", raw: "unchecked" },
+        { key: "status", raw: "error", kitValue: "Error unselected" },
+      ])?.name,
+    ).toBe("Type=Error unselected, State=Enabled");
+  });
+
+  it("matches a declared property name exactly, not by word", () => {
+    // `matchProperty` accepts `focus` for `Show focus indicator`, which is the
+    // right latitude for a knob key and the wrong latitude for a declaration:
+    // the author is asserting the kit's own name.
+    const button = ref("57994:2324");
+    expect(
+      resolver.propertyForSeed(button, { key: "focus", raw: "true" }),
+    ).toMatchObject({ properties: [{ name: "Show focus indicator" }] });
+    expect(
+      resolver.propertyForSeed(button, { key: "x", raw: "true", kitAxis: "focus" }),
+    ).toBeUndefined();
+  });
+
+  it("names the sibling outright for a folder-modelled family", () => {
+    // `inset` reaches `Inset` by the near-miss search; a declaration is how a
+    // catalog says it meant the OTHER one, and it is matched exactly.
+    const divider = ref("51816:5868"); // Horizontal/Inset
+    expect(
+      resolver.resolveVariant(divider, {
+        key: "inset",
+        raw: "inset",
+        kitValue: "Middle-inset",
+      }),
+    ).toEqual({ nodeId: "51816:5870", name: "Horizontal/Middle-inset" });
+    // A folder has no axes, so an axis declaration names nothing that could be
+    // honoured — refused rather than quietly ignored.
+    expect(
+      resolver.resolveVariant(divider, {
+        key: "inset",
+        raw: "subhead",
+        kitAxis: "Configuration",
+      }),
+    ).toBeUndefined();
+    expect(
+      resolver.explainUnresolved(divider, [
+        { key: "inset", raw: "subhead", kitAxis: "Configuration" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Configuration", published: [] }],
+    });
+  });
+
+  it("does not let a non-Latin axis name match whatever was indexed first", () => {
+    // The ASCII normalisation used for slugs erases `サイズ` and `状態` alike, so
+    // an equality test on it would match the first axis in the set and cite the
+    // wrong node with complete confidence.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "ボタン",
+          variants: [
+            { id: "1:2", name: "サイズ=小, 状態=通常" },
+            { id: "1:3", name: "サイズ=大, 状態=通常" },
+            { id: "1:4", name: "サイズ=小, 状態=無効" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", {
+        key: "state",
+        raw: "disabled",
+        kitAxis: "状態",
+        kitValue: "無効",
+      }),
+    ).toEqual({ nodeId: "1:4", name: "サイズ=小, 状態=無効" });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", {
+        key: "size",
+        raw: "l",
+        kitAxis: "状態",
+        kitValue: "大",
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("what a declaration's reason has to get right", () => {
+  it("reads a declared value naming the reference itself as the base case", () => {
+    // `#componentSiblings` excludes the node being walked from, so validating
+    // against the siblings alone would tell an author to fix a declaration that
+    // names the reference exactly — the standalone form of "already drawn".
+    const divider = ref("51816:5868"); // Horizontal/Inset
+    expect(
+      resolver.explainUnresolved(divider, [
+        { key: "inset", raw: "inset", kitValue: "Inset" },
+      ]),
+    ).toEqual({ kind: "base", variant: "Horizontal/Inset" });
+    // …and a sibling the folder really lacks still reports what it does have.
+    expect(
+      resolver.explainUnresolved(divider, [
+        { key: "inset", raw: "inset", kitValue: "Outset" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "value", named: "Outset" }],
+    });
+  });
+
+  it("does not call two non-Latin values the same value", () => {
+    // Both erase to nothing under the slug normalisation, so a `base` verdict
+    // would report a missing node as one the reference already draws.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "ボタン",
+          variants: [
+            { id: "1:2", name: "サイズ=小, 状態=通常" },
+            { id: "1:3", name: "サイズ=大, 状態=無効" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    const seeds = [{ key: "state", raw: "disabled", kitAxis: "状態", kitValue: "無効" }];
+    expect(localised.resolveVariant("figma:LocalKit/1:2", seeds)).toBeUndefined();
+    expect(localised.explainUnresolved("figma:LocalKit/1:2", seeds).kind).not.toBe(
+      "base",
+    );
+  });
+});
+
+describe("a standalone render with more than one declaration", () => {
+  it("finishes validating before calling the reference already-drawn", () => {
+    // The first seed names the reference itself; the second is misspelt. Returning `base` on the
+    // first hides the only thing there is to fix — and every multi-seed standalone vector
+    // resolves to nothing anyway, so "already drawn" would be the wrong answer twice over.
+    expect(
+      resolver.explainUnresolved(ref("51816:5868"), [
+        { key: "inset", raw: "inset", kitValue: "Inset" },
+        { key: "subhead", raw: "true", kitAxis: "Configuration" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Configuration" }],
+    });
+  });
+});
+
+describe("a declaration that lands on a component property", () => {
+  const button = ref("57994:2324");
+
+  it("still has its value checked against what the property can take", () => {
+    // The NAME being real is not the whole check. Without this the typo hides
+    // behind the property-shaped classification — the one verdict that means
+    // "nothing to fix here".
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "art", raw: "off", kitAxis: "Show icon", kitValue: "Flase" },
+      ]),
+    ).toEqual({
+      kind: "declared",
+      missing: [
+        {
+          seed: "art=off",
+          declares: "value",
+          named: "Flase",
+          published: ["True", "False"],
+        },
+      ],
+    });
+  });
+
+  it("leaves a well-formed property declaration to the property report", () => {
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "art", raw: "off", kitAxis: "Show icon", kitValue: "False" },
+      ]).kind,
+    ).not.toBe("declared");
+  });
+
+  it("accepts a declared no-op in a compound vector whatever the knob is called", () => {
+    // The base IS `Size=Small`, and this cell spells that explicitly beside the
+    // state it really moves. The exception used to key on the code word `size`,
+    // which is the one thing a declaration exists to stop mattering.
+    expect(
+      resolver.resolveVariant(button, [
+        { key: "density", raw: "compact", kitAxis: "Size", kitValue: "Small" },
+        { key: "state", raw: "disabled" },
+      ]),
+    ).toEqual({
+      nodeId: "58651:12649",
+      name: "Type=Round, Size=Small, State=Disabled",
+    });
+  });
+});
+
+describe("a value-only declaration on a property-shaped knob", () => {
+  const button = ref("57994:2324");
+
+  it("is judged by the property, not by a variant axis that does not exist", () => {
+    // `focus` names no axis of the Button set, so validating against axes alone
+    // called a perfectly good declaration a miss — and, since that reason
+    // outranks the property one, took the property report down with it.
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "focus", raw: "on", kitValue: "True" },
+      ]).kind,
+    ).not.toBe("declared");
+    // A value the property genuinely cannot take is still reported.
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "focus", raw: "on", kitValue: "Ture" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "value", named: "Ture" }],
+    });
+  });
+});
+
+describe("what a declared name may not quietly match", () => {
+  it("keeps a decimal apart from the whole number it would flatten to", () => {
+    // Dropping separators turns `1.0` into `10` — a real value of the Carousel
+    // fixture's neighbours and, on a `Progress` axis, exactly the confident
+    // wrong node the slug matcher is already careful to avoid.
+    const numeric = new KitIndexResolver({
+      fileKey: "NumKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Progress indicator",
+          variants: [
+            { id: "1:2", name: "Progress=0" },
+            { id: "1:3", name: "Progress=10" },
+            { id: "1:4", name: "Progress=100" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      numeric.resolveVariant("figma:NumKit/1:2", {
+        key: "progress",
+        raw: "1.0",
+        kitAxis: "Progress",
+        kitValue: "1.0",
+      }),
+    ).toBeUndefined();
+    expect(
+      numeric.resolveVariant("figma:NumKit/1:2", {
+        key: "progress",
+        raw: "1.0",
+        kitAxis: "Progress",
+        kitValue: "100",
+      })?.name,
+    ).toBe("Progress=100");
+  });
+
+  it("refuses a declaration two published names both answer to", () => {
+    // `Full screen` and `Full-screen` differ only by what the comparison drops,
+    // so the declaration does not say which was meant. Picking either is the
+    // wrong reference half the time; nothing is the honest answer.
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Date picker",
+          variants: [
+            { id: "1:2", name: "Type=Docked" },
+            { id: "1:3", name: "Type=Full screen" },
+            { id: "1:4", name: "Type=Full-screen" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:2", {
+        key: "type",
+        raw: "full",
+        kitAxis: "Type",
+        kitValue: "Fullscreen",
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("a declaration in a kit whose own names collide or are localised", () => {
+  it("refuses a sibling declaration two folder leaves both answer to", () => {
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {},
+      standalone: {
+        "1:1": { name: "Horizontal/Full-width" },
+        "1:2": { name: "Horizontal/Middle inset" },
+        "1:3": { name: "Horizontal/Middle-inset" },
+      },
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "inset",
+        raw: "middle",
+        kitValue: "Middleinset",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("fuses two declared seeds onto a localised compound value", () => {
+    // `#fuseAxisValue` compares WORD SETS, and the tokenizer used to split on
+    // ASCII only — so every non-Latin value came back as no words at all and
+    // the compound was unreachable however precisely it was declared.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "チェックボックス",
+          variants: [
+            { id: "1:2", name: "種類=未選択" },
+            { id: "1:3", name: "種類=選択済み" },
+            { id: "1:4", name: "種類=エラー 選択済み" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", [
+        { key: "state", raw: "checked", kitAxis: "種類", kitValue: "選択済み" },
+        { key: "status", raw: "error", kitAxis: "種類", kitValue: "エラー 選択済み" },
+      ]),
+    ).toEqual({ nodeId: "1:4", name: "種類=エラー 選択済み" });
+  });
+});

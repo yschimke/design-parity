@@ -154,12 +154,61 @@ export const norm = (s: unknown): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
-/** The distinct lowercase words in a name or value, for set-wise comparison. */
+/**
+ * The comparison form for a name somebody **declared**, as opposed to one being guessed at.
+ *
+ * {@link norm} exists to compare a code slug against a kit spelling, and strips everything outside
+ * `[a-z0-9]`. That is fine for a slug and wrong for a declaration: a kit filing its axes as `サイズ`
+ * and `状態` normalises both to the empty string, so an equality test matches whichever axis
+ * happened to be indexed first — a confident reference to the wrong node, which is precisely what
+ * declaring the kit's own name exists to prevent. This keeps letters and digits in any script and
+ * drops only the separators and punctuation two spellings of one name can reasonably differ by.
+ */
+export const normName = (s: unknown): string =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+
+/** Digits with punctuation between them: `1.0`, `1,5` — where stripping merges two numbers. */
+const MERGED_DIGITS = /\p{N}[^\p{L}\p{N}]+\p{N}/u;
+
+/**
+ * Whether two names are the same name, for a declared one.
+ *
+ * Two guards, both about normalisation being able to erase a real difference rather than a
+ * cosmetic one:
+ *
+ * - **Numbers keep their shape.** Dropping the separators turns `1.0` into `10`, which is a real
+ *   value of a `Progress` axis and the wrong one — the same collision {@link norm} is deliberately
+ *   not asked to resolve for slugs. When one side merges digits that way and the other does not,
+ *   only whole-string equality will do.
+ * - **Punctuation-only names fall back to whole-string equality**, since two names that both
+ *   normalise to the empty string are not thereby equal.
+ */
+export const sameName = (a: unknown, b: unknown): boolean => {
+  const left = String(a);
+  const right = String(b);
+  const exact = (): boolean =>
+    left.trim().toLowerCase() === right.trim().toLowerCase();
+  if (MERGED_DIGITS.test(left) !== MERGED_DIGITS.test(right)) return exact();
+  const x = normName(left);
+  const y = normName(right);
+  return x && y ? x === y : exact();
+};
+
+/**
+ * The distinct lowercase words in a name or value, for set-wise comparison.
+ *
+ * Split on anything that is not a letter or a digit **in any script**. An ASCII-only split drops
+ * every non-Latin word rather than separating them, which left the fused-axis search unable to see
+ * a localised kit's values at all — and that search is the one a declaration relies on when two
+ * seeds share an axis.
+ */
 export const wordsOf = (s: unknown): Set<string> =>
   new Set(
     String(s)
       .toLowerCase()
-      .split(/[^a-z0-9]+/)
+      .split(/[^\p{L}\p{N}]+/u)
       .filter(Boolean),
   );
 
