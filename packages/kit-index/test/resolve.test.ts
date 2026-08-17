@@ -804,27 +804,6 @@ describe("what a declared name may not quietly match", () => {
 });
 
 describe("a declaration in a kit whose own names collide or are localised", () => {
-  it("refuses a sibling declaration two folder leaves both answer to", () => {
-    const twins = new KitIndexResolver({
-      fileKey: "TwinKit",
-      generatedBy: "test",
-      sets: {},
-      standalone: {
-        "1:1": { name: "Horizontal/Full-width" },
-        "1:2": { name: "Horizontal/Middle inset" },
-        "1:3": { name: "Horizontal/Middle-inset" },
-      },
-      specimens: {},
-    });
-    expect(
-      twins.resolveVariant("figma:TwinKit/1:1", {
-        key: "inset",
-        raw: "middle",
-        kitValue: "Middleinset",
-      }),
-    ).toBeUndefined();
-  });
-
   it("fuses two declared seeds onto a localised compound value", () => {
     // `#fuseAxisValue` compares WORD SETS, and the tokenizer used to split on
     // ASCII only — so every non-Latin value came back as no words at all and
@@ -851,5 +830,182 @@ describe("a declaration in a kit whose own names collide or are localised", () =
         { key: "status", raw: "error", kitAxis: "種類", kitValue: "エラー 選択済み" },
       ]),
     ).toEqual({ nodeId: "1:4", name: "種類=エラー 選択済み" });
+  });
+
+  it("refuses a sibling declaration two folder leaves both answer to", () => {
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {},
+      standalone: {
+        "1:1": { name: "Horizontal/Full-width" },
+        "1:2": { name: "Horizontal/Middle inset" },
+        "1:3": { name: "Horizontal/Middle-inset" },
+      },
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "inset",
+        raw: "middle",
+        kitValue: "Middleinset",
+      }),
+    ).toBeUndefined();
+  });
+
+});
+
+describe("the edges a declaration reaches after the first pass", () => {
+  it("does not answer a standalone declaration with a punctuation twin", () => {
+    // From `Middle-inset`, declaring `Middle-inset` names the reference itself.
+    // The siblings list excludes it, so a spaced twin was the sole match and
+    // got emitted — a confident reference to a component nobody named.
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {},
+      standalone: {
+        "1:1": { name: "Horizontal/Middle-inset" },
+        "1:2": { name: "Horizontal/Middle inset" },
+        "1:3": { name: "Horizontal/Full-width" },
+      },
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "inset",
+        raw: "middle",
+        kitValue: "Middle-inset",
+      }),
+    ).toBeUndefined();
+    // A sibling only it answers to still resolves.
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "width",
+        raw: "full",
+        kitValue: "Full-width",
+      }),
+    ).toEqual({ nodeId: "1:3", name: "Horizontal/Full-width" });
+  });
+
+  it("keeps a no-op axis seed from sinking a property-shaped vector", () => {
+    // `Size=Small` against a Small base moves nothing; the property is what
+    // differs. Reading the no-op as a failed axis resolution threw away the
+    // whole vector before the property could be looked up.
+    const withInstance = new KitIndexResolver({
+      fileKey: "PropKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Button",
+          variants: [
+            { id: "1:2", name: "Size=Small" },
+            { id: "1:3", name: "Size=Large" },
+          ],
+          properties: { "Show icon": { type: "BOOLEAN", default: true } },
+          instances: [
+            { id: "1:9", componentId: "1:2", properties: { "Show icon": false } },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      withInstance.resolveVariant("figma:PropKit/1:2", [
+        { key: "size", raw: "s", kitAxis: "Size", kitValue: "Small" },
+        { key: "icon", raw: "false" },
+      ]),
+    ).toMatchObject({ nodeId: "1:9" });
+  });
+
+
+});
+
+describe("what the no-op and standalone paths must not wave through", () => {
+  it("does not read a decimal as the whole number the base already sits at", () => {
+    // `norm` collapses `1.0` to `10` on purpose for slug matching. Used to
+    // decide "the base is already here", that says yes to a seed that moves the
+    // render — and since a no-op axis now lets a property vector through, the
+    // yes is what selects an instance of the wrong definition.
+    const numeric = new KitIndexResolver({
+      fileKey: "NumKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Progress indicator",
+          variants: [{ id: "1:2", name: "Progress=10" }],
+          properties: { "Show label": { type: "BOOLEAN", default: true } },
+          instances: [
+            { id: "1:9", componentId: "1:2", properties: { "Show label": false } },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      numeric.resolveVariant("figma:NumKit/1:2", [
+        { key: "progress", raw: "1.0" },
+        { key: "label", raw: "false" },
+      ]),
+    ).toBeUndefined();
+    // The genuine no-op still lets the property through.
+    expect(
+      numeric.resolveVariant("figma:NumKit/1:2", [
+        { key: "progress", raw: "10" },
+        { key: "label", raw: "false" },
+      ]),
+    ).toMatchObject({ nodeId: "1:9" });
+  });
+
+  it("calls a self-and-twin standalone match ambiguous, not already drawn", () => {
+    // Resolution refuses it because two components answer to the declaration;
+    // saying "the reference already draws this" would send the author away with
+    // nothing to fix and no idea why the render went unpaired.
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {},
+      standalone: {
+        "1:1": { name: "Horizontal/Middle-inset" },
+        "1:2": { name: "Horizontal/Middle inset" },
+      },
+      specimens: {},
+    });
+    const seeds = [{ key: "inset", raw: "middle", kitValue: "Middle-inset" }];
+    expect(twins.resolveVariant("figma:TwinKit/1:1", seeds)).toBeUndefined();
+    expect(twins.explainUnresolved("figma:TwinKit/1:1", seeds)).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "value", named: "Middle-inset" }],
+    });
+  });
+
+  it("leaves an unseparated-script fusion unresolved rather than guessing", () => {
+    // The deliberate gap. `選択` (selected) is a substring of `未選択`
+    // (unselected), so a containment rule accepts the node that draws the
+    // opposite state. Under the governing rule that is worse than no answer, so
+    // the compound stays unreachable until something can segment the script.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "チェックボックス",
+          variants: [
+            { id: "1:2", name: "種類=選択" },
+            { id: "1:3", name: "種類=エラー未選択" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", [
+        { key: "state", raw: "checked", kitAxis: "種類", kitValue: "選択" },
+        { key: "status", raw: "error", kitAxis: "種類", kitValue: "エラー未選択" },
+      ]),
+    ).toBeUndefined();
   });
 });
