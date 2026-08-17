@@ -643,3 +643,20 @@ describe("what a declaration's reason has to get right", () => {
     );
   });
 });
+
+describe("a standalone render with more than one declaration", () => {
+  it("finishes validating before calling the reference already-drawn", () => {
+    // The first seed names the reference itself; the second is misspelt. Returning `base` on the
+    // first hides the only thing there is to fix — and every multi-seed standalone vector
+    // resolves to nothing anyway, so "already drawn" would be the wrong answer twice over.
+    expect(
+      resolver.explainUnresolved(ref("51816:5868"), [
+        { key: "inset", raw: "inset", kitValue: "Inset" },
+        { key: "subhead", raw: "true", kitAxis: "Configuration" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Configuration" }],
+    });
+  });
+});

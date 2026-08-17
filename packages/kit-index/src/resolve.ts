@@ -715,6 +715,12 @@ export class KitIndexResolver {
         ? this.#declaredAxis(base.axes, seed.kitAxis)
         : undefined;
       if (seed.kitAxis && !axis) {
+        // A kit is free to model the declared name as a component PROPERTY instead of an axis, and
+        // a property-shaped variant is unpaired for a different reason entirely — no definition
+        // renders at a non-default property vector. Calling that a misspelt declaration would
+        // rename a known limitation as an authoring error, and (since the declared reason outranks
+        // the property one) hide the report that says which property it is.
+        if (matchSeedProperty(set.properties, seed, this.#vocabulary)) continue;
         misses.push({
           seed: vectorPart(seed),
           declares: "axis",
@@ -768,6 +774,10 @@ export class KitIndexResolver {
     const own = this.#leafOf(self);
 
     const misses: DeclaredMiss[] = [];
+    // Every seed is inspected before a verdict: a render whose first declaration names the
+    // reference itself and whose second is misspelt is not "already drawn", and returning on the
+    // first would hide the one thing there is to fix.
+    let drawn = false;
     for (const seed of seeds) {
       if (seed.kitAxis !== undefined) {
         misses.push({
@@ -780,7 +790,10 @@ export class KitIndexResolver {
       }
       const value = seed.kitValue;
       if (value === undefined) continue;
-      if (sameName(own, value)) return { kind: "base", variant: self.name };
+      if (sameName(own, value)) {
+        drawn = true;
+        continue;
+      }
       if (leaves.some((leaf) => sameName(leaf, value))) continue;
       misses.push({
         seed: vectorPart(seed),
@@ -789,7 +802,8 @@ export class KitIndexResolver {
         published: [own, ...leaves],
       });
     }
-    return misses.length ? { kind: "declared", missing: misses } : undefined;
+    if (misses.length) return { kind: "declared", missing: misses };
+    return drawn ? { kind: "base", variant: self.name } : undefined;
   }
 
   /**

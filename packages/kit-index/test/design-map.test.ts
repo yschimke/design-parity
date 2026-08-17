@@ -365,3 +365,30 @@ describe("a declaration error outranks the property fallback", () => {
     });
   });
 });
+
+describe("a declaration naming a component property", () => {
+  it("stays property-shaped rather than being called a misspelt axis", () => {
+    // `Show icon` is a real Button property, so it is absent from the variant AXES — and a
+    // property-shaped variant is unpaired for its own reason (no definition renders at a
+    // non-default property vector). Reporting it as a bad declaration would rename a known
+    // limitation as an authoring error, and `--strict` would start failing catalogs that were
+    // only ever unpaired.
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        {
+          previewId: "c.CatalogKt.FilledButton_Light_VARIANT_no-icon",
+          name: "no-icon",
+          seeds: [{ key: "art", raw: "off", kitAxis: "Show icon", kitValue: "False" }],
+        },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.unresolved).toEqual([]);
+    expect(diagnostics.propertyVariants[0]).toMatchObject({
+      variant: "no-icon",
+      setName: "Button",
+      properties: [{ name: "Show icon", type: "BOOLEAN" }],
+    });
+  });
+});
