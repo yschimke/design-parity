@@ -360,3 +360,131 @@ describe("saying why a vector resolved to nothing", () => {
     expect(reason).toMatchObject({ missing: ["elevation=3"] });
   });
 });
+
+describe("a declared kit axis or value", () => {
+  // The escape hatch for what the alias tables cannot reach. Before it, a
+  // catalog whose kit spells a value `Type=Full-screen (range)` had to seed
+  // that string in Kotlin source — a kit spelling made load-bearing in code,
+  // which rots the moment the kit renames a variant value.
+
+  const snackbar = ref("53977:33595"); // Text only, Two lines, close=True
+
+  it("reaches a value no alias table spells", () => {
+    const seed = { key: "action", raw: "longer" };
+    // On its own the knob says nothing the kit recognises: `longer` is not a
+    // published value of any axis, so this is the silent drop the declaration
+    // exists to remove.
+    expect(resolver.resolveVariant(snackbar, seed)).toBeUndefined();
+    expect(
+      resolver.resolveVariant(snackbar, {
+        ...seed,
+        kitAxis: "Configuration",
+        kitValue: "Text & longer action",
+      }),
+    ).toEqual({
+      nodeId: "53977:33576",
+      name: "Configuration=Text & longer action, # of lines=Two lines, Show close affordance=True",
+    });
+  });
+
+  it("reaches an axis the vocabulary never proposes for the knob", () => {
+    const seed = { key: "dismiss", raw: "false" };
+    expect(resolver.resolveVariant(snackbar, seed)).toBeUndefined();
+    expect(
+      resolver.resolveVariant(snackbar, {
+        ...seed,
+        kitAxis: "Show close affordance",
+      }),
+    ).toEqual({
+      nodeId: "53977:34285",
+      name: "Configuration=Text only, # of lines=Two lines, Show close affordance=False",
+    });
+  });
+
+  it("matches the kit's spelling without demanding its punctuation", () => {
+    // `# of lines` is the kit's own axis name. Declaring it should not turn
+    // into a typing exercise, so the match normalises both sides — and can
+    // still only ever land on an axis the set really publishes.
+    expect(
+      resolver.resolveVariant(snackbar, {
+        key: "rows",
+        raw: "1",
+        kitAxis: "of lines",
+        kitValue: "One line",
+      }),
+    ).toEqual({
+      nodeId: "53977:34288",
+      name: "Configuration=Text only, # of lines=One line, Show close affordance=True",
+    });
+  });
+
+  it("is authoritative, not a hint: a wrong axis resolves to nothing", () => {
+    // The seed resolves perfectly well on its own. Falling back to that when
+    // the declaration misses would make a typo indistinguishable from a
+    // correct declaration — and quietly answer a question nobody asked.
+    const button = ref("57994:2324");
+    expect(resolver.resolveVariant(button, { key: "size", raw: "l" })).toEqual({
+      nodeId: "57994:2320",
+      name: "Type=Round, Size=Large, State=Enabled",
+    });
+    expect(
+      resolver.resolveVariant(button, { key: "size", raw: "l", kitAxis: "Sise" }),
+    ).toBeUndefined();
+    expect(
+      resolver.resolveVariant(button, {
+        key: "size",
+        raw: "l",
+        kitAxis: "Size",
+        kitValue: "Enormous",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("names a declaration the set cannot honour", () => {
+    const button = ref("57994:2324");
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "size", raw: "l", kitAxis: "Sise" },
+      ]),
+    ).toEqual({
+      kind: "declared",
+      missing: [
+        {
+          seed: "size=l",
+          declares: "axis",
+          named: "Sise",
+          published: ["Type", "Size", "State"],
+        },
+      ],
+    });
+
+    const reason = resolver.explainUnresolved(button, [
+      { key: "size", raw: "l", kitAxis: "Size", kitValue: "Enormous" },
+    ]);
+    expect(reason.kind).toBe("declared");
+    expect(reason).toMatchObject({
+      missing: [{ seed: "size=l", declares: "value", named: "Enormous" }],
+    });
+    // The values the axis does publish are the whole point: the reason is a
+    // correction, not another "resolved to nothing".
+    expect(
+      (reason as { missing: { published: string[] }[] }).missing[0]?.published,
+    ).toContain("Large");
+  });
+
+  it("reaches a knob the kit models as a property rather than an axis", () => {
+    // Which of the two a kit uses is the kit's business. A declaration names
+    // the kit's word; the property path honours it the same way the axis
+    // search does.
+    expect(
+      resolver.propertyForSeed(ref("57994:2324"), {
+        key: "art",
+        raw: "false",
+        kitAxis: "Show icon",
+      }),
+    ).toMatchObject({
+      setName: "Button",
+      properties: [{ name: "Show icon", type: "BOOLEAN" }],
+    });
+  });
+});

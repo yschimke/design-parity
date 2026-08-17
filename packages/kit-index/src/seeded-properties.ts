@@ -216,7 +216,13 @@ export function resolvePropertyInstance(
 
   let claimed = false;
   for (const seed of seedList) {
-    const matches = matchProperty(set.properties, seed.key, vocabulary);
+    // `kitAxis` names the kit's own word for the knob when it has one; a kit is
+    // free to model that word as a property rather than as a variant axis.
+    const matches = matchProperty(
+      set.properties,
+      seed.kitAxis ?? seed.key,
+      vocabulary,
+    );
     if (!matches) continue;
     const values = matches.map((property) =>
       seededPropertyValue(property, seed, matches),

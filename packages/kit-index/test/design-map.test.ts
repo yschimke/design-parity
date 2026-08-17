@@ -290,3 +290,51 @@ describe("inputs it refuses or leaves alone", () => {
     expect(input.components[0]!.ref).toBe(ref("57994:2324"));
   });
 });
+
+describe("a sidecar render that names the kit's own spelling", () => {
+  // The end-to-end shape of the escape hatch: `kitAxis` / `kitValue` travel on
+  // the seed, through the sidecar, into resolution. Without them this render
+  // lands in `unresolved` — which is what the catalog got before, minus any
+  // hint that the miss was a spelling nobody could have guessed.
+  const declared = {
+    previewId: "c.CatalogKt.FilledButton_Light_VARIANT_longer",
+    name: "longer",
+    seeds: [
+      {
+        key: "action",
+        raw: "longer",
+        kitAxis: "Configuration",
+        kitValue: "Text & longer action",
+      },
+    ],
+  };
+
+  it("resolves through the sidecar", () => {
+    const { map, diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("53977:33595")),
+      variants: sidecar(ref("53977:33595"), [declared]),
+      resolver,
+    });
+    expect(diagnostics.resolved).toBe(1);
+    expect(map.components[0]!.ref).toEqual([
+      { ref: ref("53977:33595") },
+      { ref: ref("53977:33576"), state: "longer" },
+    ]);
+    expect(validateDesignMap(map).valid).toBe(true);
+  });
+
+  it("reports a declaration the set cannot honour as its own kind of miss", () => {
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("53977:33595")),
+      variants: sidecar(ref("53977:33595"), [
+        { ...declared, seeds: [{ ...declared.seeds[0]!, kitAxis: "Confguration" }] },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.resolved).toBe(0);
+    expect(diagnostics.unresolved[0]!.reason).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Confguration" }],
+    });
+  });
+});

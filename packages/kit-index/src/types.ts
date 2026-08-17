@@ -209,10 +209,29 @@ export interface KitInventory {
  * `raw` is the value as authored (`l`, `icon+label`, `2`). Neither is in the
  * kit's vocabulary — translating between the two is the whole job of this
  * package, and it is a translation checked against the kit rather than a guess.
+ *
+ * [kitAxis] and [kitValue] are the escape hatch for the cases the translation
+ * cannot reach: the author names the kit's own spelling directly, so the code
+ * keeps its own. Without them a catalog whose kit spells a value
+ * `Type=Full-screen (range)` has to seed `type=full-screen (range)` in Kotlin
+ * source — a kit spelling, parentheses and all, made load-bearing in code it
+ * has no business being in, and one that rots the next time the kit renames a
+ * variant value.
+ *
+ * A declaration is **authoritative, not a hint**. It replaces the alias tables
+ * for that seed rather than being tried alongside them, and it is still checked
+ * against what the set publishes: a declared axis or value the kit does not
+ * have resolves to nothing, and says which name was not found. Anything else
+ * would make a typo silently fall back to guessing — the failure this exists to
+ * remove.
  */
 export interface VariantSeed {
   key: string;
   raw: string | number | boolean;
+  /** The kit's own name for the axis this knob turns (`Type`, `Show avatar`). */
+  kitAxis?: string;
+  /** The kit's own spelling of this knob's value (`Full-screen (range)`). */
+  kitValue?: string;
 }
 
 /** A kit node a seed resolved to, and the name that node goes by. */

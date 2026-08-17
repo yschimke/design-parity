@@ -36,6 +36,7 @@
  */
 
 export type {
+  DeclaredMiss,
   DefaultedContent,
   KitIndexResolverOptions,
   SeedProperty,

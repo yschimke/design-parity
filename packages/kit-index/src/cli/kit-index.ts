@@ -93,6 +93,15 @@ const log = (message: string): void => {
  */
 function explain(reason: UnresolvedReason): string {
   switch (reason.kind) {
+    case "declared":
+      return reason.missing
+        .map(
+          (miss) =>
+            `${miss.seed} declares a kit ${miss.declares} the set does not publish ` +
+            `(\`${miss.named}\`; it has ` +
+            `${miss.published.map((p) => `\`${p}\``).join(", ") || "none"})`,
+        )
+        .join("; ");
     case "base":
       return `the reference already draws this (\`${reason.variant}\`)`;
     case "combination":

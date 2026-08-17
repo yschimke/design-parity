@@ -134,6 +134,7 @@ every miss and actionable for almost none. `resolve` classifies each one
 
 | Reason | What it means | What to do |
 | --- | --- | --- |
+| `… declares a kit axis/value the set does not publish` | A `kitAxis` / `kitValue` names something this set does not have | Fix the declaration — the reason lists what the set publishes |
 | `the reference already draws this` | The base variant carries every seeded value — the render duplicates the reference | Nothing. Not a gap. |
 | `each of … exists, but no node carries them together` | Both values are real; the kit's matrix skips their intersection | Nothing here — the kit would have to draw the cell |
 | `no counterpart for …` | These seeds have no counterpart at all | The actual lead: map the value, or accept the gap |
@@ -143,6 +144,44 @@ The third column is the point. On a real catalog this turned
 resolves perfectly well on its own — into `no counterpart for status=error`,
 and stopped two `size=small` renders being read as missing kit nodes when the
 reference *is* the small variant.
+
+### When the table cannot reach it: naming the kit's own spelling
+
+Some values no translation reaches. The Material 3 kit spells one date-picker
+variant `Type=Full-screen (range)`; a catalog seeding `type=range` resolves to
+nothing, and — before the reason table above — did so silently, dropping the
+node from the comparison. The workaround was worse than the problem: seed
+`type=full-screen (range)` in Kotlin, and a kit spelling, parentheses and all,
+becomes load-bearing in catalog source that will rot the next time the kit
+renames a value.
+
+A seed may therefore carry the kit's own names beside its own:
+
+```ts
+resolver.resolveVariant("figma:AbCdEf/53977:33595", {
+  key: "action",
+  raw: "longer",              // what the Compose knob is called
+  kitAxis: "Configuration",   // what the kit calls the axis
+  kitValue: "Text & longer action", // …and the value
+});
+// → { nodeId: "53977:33576", name: "Configuration=Text & longer action, …" }
+```
+
+Three properties worth knowing:
+
+- **Authoritative, not a hint.** A declaration *replaces* the alias tables for
+  that seed. `size=l` resolves fine on its own; `size=l` declaring `kitAxis:
+  "Sise"` resolves to **nothing**. Falling back would make a typo
+  indistinguishable from a correct declaration.
+- **Still checked against the kit.** A declared axis or value must be one the
+  set really publishes, so the governing rule holds: nobody can declare their
+  way to a node the kit does not draw. What they get instead is the `declared`
+  reason above, naming the spelling that missed and what the set does publish.
+- **Matched without punctuation or case.** `of lines` finds the kit's
+  `# of lines`; declaring an axis should not be a typing exercise.
+
+Either field can be given alone: an axis alone when only the *name* differs, a
+value alone when only the spelling does.
 
 That rule is why the matching is fussier than it first looks. A boolean axis
 accepts `True` from *any* knob, so a naive matcher had `footer=true` resolving
