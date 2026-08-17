@@ -640,14 +640,19 @@ export class KitIndexResolver {
     // other answer below would be a true statement about a vector nobody meant.
     // Left unreported it is the worst of both worlds — the author took the
     // trouble to name the kit's own spelling and got silence for it.
-    const declared = this.#declaredMisses(ref, seeds);
-    if (declared.length) return { kind: "declared", missing: declared };
+    const base = this.#baseVariant(ref);
+    if (!base) {
+      const standalone = this.#standaloneReason(ref, seeds);
+      if (standalone) return standalone;
+    } else {
+      const declared = this.#declaredMisses(base, seeds);
+      if (declared.length) return { kind: "declared", missing: declared };
+    }
 
     // A seed whose value the base variant already carries is not a gap at all:
     // the reference IS that variant, and the render duplicates it. `Size=Small`
     // on a catalog whose base preview is the small one reads as a missing node
     // otherwise, and there is nothing to go looking for.
-    const base = this.#baseVariant(ref);
     if (base) {
       const covered = seeds.filter((seed) => this.#seedMatchesBase(base, seed));
       if (covered.length === seeds.length) {
@@ -677,10 +682,15 @@ export class KitIndexResolver {
     for (const axis of this.#axesFor(seed, base.axes)) {
       const at = base.axes[axis];
       if (at === undefined) continue;
-      const candidates = seed.kitValue
-        ? [seed.kitValue]
-        : valueCandidates(seed.raw, this.#vocabulary);
-      for (const candidate of candidates) {
+      // A declared value is compared the way it was looked up. Comparing it
+      // with the slug normalisation would call `状態=通常` and `状態=無効` the
+      // same value — both erase to nothing — and report a missing node as one
+      // the reference already draws.
+      if (seed.kitValue !== undefined) {
+        if (sameName(at, seed.kitValue)) return true;
+        continue;
+      }
+      for (const candidate of valueCandidates(seed.raw, this.#vocabulary)) {
         if (norm(at) === norm(candidate)) return true;
       }
     }
@@ -695,10 +705,9 @@ export class KitIndexResolver {
    * about the kit at large — an axis that is real on the buttons and absent on
    * the tabs is exactly the mistake worth catching.
    */
-  #declaredMisses(ref: string, seeds: VariantSeed[]): DeclaredMiss[] {
-    const base = this.#baseVariant(ref);
-    const set = base ? this.#sets.get(base.setId) : undefined;
-    if (!base || !set) return this.#standaloneDeclaredMisses(ref, seeds);
+  #declaredMisses(base: IndexedVariant, seeds: VariantSeed[]): DeclaredMiss[] {
+    const set = this.#sets.get(base.setId);
+    if (!set) return [];
 
     const misses: DeclaredMiss[] = [];
     for (const seed of seeds) {
@@ -741,12 +750,22 @@ export class KitIndexResolver {
    * there could ever honour, and a value, which must name one of the siblings.
    * Both are reported against the sibling leaves, since that is the whole
    * vocabulary such a family has.
+   *
+   * The referenced component counts among them. `#componentSiblings` excludes
+   * it — it is the node being walked *from* — but a declaration naming it is
+   * the standalone form of the `base` case, not a mistake: the reference
+   * already draws exactly what the render asked for.
    */
-  #standaloneDeclaredMisses(ref: string, seeds: VariantSeed[]): DeclaredMiss[] {
+  #standaloneReason(
+    ref: string,
+    seeds: VariantSeed[],
+  ): UnresolvedReason | undefined {
     const nodeId = this.#nodeIdOf(ref);
+    const self = nodeId ? this.#standaloneById.get(nodeId) : undefined;
     const siblings = nodeId ? this.#componentSiblings(nodeId) : undefined;
-    if (!siblings) return [];
+    if (!self || !siblings) return undefined;
     const leaves = siblings.map((peer) => this.#leafOf(peer));
+    const own = this.#leafOf(self);
 
     const misses: DeclaredMiss[] = [];
     for (const seed of seeds) {
@@ -761,15 +780,16 @@ export class KitIndexResolver {
       }
       const value = seed.kitValue;
       if (value === undefined) continue;
+      if (sameName(own, value)) return { kind: "base", variant: self.name };
       if (leaves.some((leaf) => sameName(leaf, value))) continue;
       misses.push({
         seed: vectorPart(seed),
         declares: "value",
         named: value,
-        published: leaves,
+        published: [own, ...leaves],
       });
     }
-    return misses;
+    return misses.length ? { kind: "declared", missing: misses } : undefined;
   }
 
   /**

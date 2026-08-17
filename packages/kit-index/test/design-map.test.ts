@@ -338,3 +338,30 @@ describe("a sidecar render that names the kit's own spelling", () => {
     });
   });
 });
+
+describe("a declaration error outranks the property fallback", () => {
+  it("reports the typo rather than classifying the render as property-shaped", () => {
+    // The render seeds a real `Show icon` property AND misspells a kit axis. It
+    // fails because of the typo, so reporting only "the kit models this as a
+    // property" buries the one message whose fix is a line of catalog source.
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        {
+          previewId: "c.CatalogKt.FilledButton_Light_VARIANT_no-icon-l",
+          name: "no-icon-l",
+          seeds: [
+            { key: "icon", raw: "false" },
+            { key: "size", raw: "l", kitAxis: "Sise" },
+          ],
+        },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.propertyVariants).toEqual([]);
+    expect(diagnostics.unresolved[0]!.reason).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Sise" }],
+    });
+  });
+});

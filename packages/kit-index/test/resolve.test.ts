@@ -595,3 +595,51 @@ describe("a declaration cannot buy what the kit does not draw", () => {
     ).toBeUndefined();
   });
 });
+
+describe("what a declaration's reason has to get right", () => {
+  it("reads a declared value naming the reference itself as the base case", () => {
+    // `#componentSiblings` excludes the node being walked from, so validating
+    // against the siblings alone would tell an author to fix a declaration that
+    // names the reference exactly — the standalone form of "already drawn".
+    const divider = ref("51816:5868"); // Horizontal/Inset
+    expect(
+      resolver.explainUnresolved(divider, [
+        { key: "inset", raw: "inset", kitValue: "Inset" },
+      ]),
+    ).toEqual({ kind: "base", variant: "Horizontal/Inset" });
+    // …and a sibling the folder really lacks still reports what it does have.
+    expect(
+      resolver.explainUnresolved(divider, [
+        { key: "inset", raw: "inset", kitValue: "Outset" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "value", named: "Outset" }],
+    });
+  });
+
+  it("does not call two non-Latin values the same value", () => {
+    // Both erase to nothing under the slug normalisation, so a `base` verdict
+    // would report a missing node as one the reference already draws.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "ボタン",
+          variants: [
+            { id: "1:2", name: "サイズ=小, 状態=通常" },
+            { id: "1:3", name: "サイズ=大, 状態=無効" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    const seeds = [{ key: "state", raw: "disabled", kitAxis: "状態", kitValue: "無効" }];
+    expect(localised.resolveVariant("figma:LocalKit/1:2", seeds)).toBeUndefined();
+    expect(localised.explainUnresolved("figma:LocalKit/1:2", seeds).kind).not.toBe(
+      "base",
+    );
+  });
+});
