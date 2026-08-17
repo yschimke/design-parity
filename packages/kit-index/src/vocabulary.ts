@@ -197,6 +197,17 @@ export const sameName = (a: unknown, b: unknown): boolean => {
 };
 
 /**
+ * Scripts written without spaces between words.
+ *
+ * A word-set comparison is meaningless for these: `エラー選択済み` is one token however many words a
+ * reader sees in it, so a rule built on splitting cannot tell a compound value from a simple one.
+ * Naming the scripts explicitly keeps the weaker comparison they need from ever reaching a
+ * space-separated one, where it would be a wildcard.
+ */
+export const UNSEPARATED_SCRIPT =
+  /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}\p{sc=Thai}\p{sc=Lao}\p{sc=Khmer}\p{sc=Myanmar}]/u;
+
+/**
  * The distinct lowercase words in a name or value, for set-wise comparison.
  *
  * Split on anything that is not a letter or a digit **in any script**. An ASCII-only split drops

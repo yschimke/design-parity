@@ -853,3 +853,108 @@ describe("a declaration in a kit whose own names collide or are localised", () =
     ).toEqual({ nodeId: "1:4", name: "種類=エラー 選択済み" });
   });
 });
+
+describe("the edges a declaration reaches after the first pass", () => {
+  it("does not answer a standalone declaration with a punctuation twin", () => {
+    // From `Middle-inset`, declaring `Middle-inset` names the reference itself.
+    // The siblings list excludes it, so a spaced twin was the sole match and
+    // got emitted — a confident reference to a component nobody named.
+    const twins = new KitIndexResolver({
+      fileKey: "TwinKit",
+      generatedBy: "test",
+      sets: {},
+      standalone: {
+        "1:1": { name: "Horizontal/Middle-inset" },
+        "1:2": { name: "Horizontal/Middle inset" },
+        "1:3": { name: "Horizontal/Full-width" },
+      },
+      specimens: {},
+    });
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "inset",
+        raw: "middle",
+        kitValue: "Middle-inset",
+      }),
+    ).toBeUndefined();
+    // A sibling only it answers to still resolves.
+    expect(
+      twins.resolveVariant("figma:TwinKit/1:1", {
+        key: "width",
+        raw: "full",
+        kitValue: "Full-width",
+      }),
+    ).toEqual({ nodeId: "1:3", name: "Horizontal/Full-width" });
+  });
+
+  it("keeps a no-op axis seed from sinking a property-shaped vector", () => {
+    // `Size=Small` against a Small base moves nothing; the property is what
+    // differs. Reading the no-op as a failed axis resolution threw away the
+    // whole vector before the property could be looked up.
+    const withInstance = new KitIndexResolver({
+      fileKey: "PropKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "Button",
+          variants: [
+            { id: "1:2", name: "Size=Small" },
+            { id: "1:3", name: "Size=Large" },
+          ],
+          properties: { "Show icon": { type: "BOOLEAN", default: true } },
+          instances: [
+            { id: "1:9", componentId: "1:2", properties: { "Show icon": false } },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      withInstance.resolveVariant("figma:PropKit/1:2", [
+        { key: "size", raw: "s", kitAxis: "Size", kitValue: "Small" },
+        { key: "icon", raw: "false" },
+      ]),
+    ).toMatchObject({ nodeId: "1:9" });
+  });
+
+  it("fuses declared values in a script that writes no spaces", () => {
+    // `エラー選択済み` is one token however many words it says, so the word-set
+    // rule could never match it. Containment is the substitute, and it is
+    // reached only for scripts that need it.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "チェックボックス",
+          variants: [
+            { id: "1:2", name: "種類=未選択" },
+            { id: "1:3", name: "種類=選択済み" },
+            { id: "1:4", name: "種類=エラー選択済み" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", [
+        { key: "state", raw: "checked", kitAxis: "種類", kitValue: "選択済み" },
+        { key: "status", raw: "error", kitAxis: "種類", kitValue: "エラー選択済み" },
+      ]),
+    ).toEqual({ nodeId: "1:4", name: "種類=エラー選択済み" });
+  });
+
+  it("still refuses a Latin fusion that would discard the first seed", () => {
+    // The containment rule must not reach a space-separated script: there,
+    // `errorunselected` contains `selected`, and accepting that would resolve a
+    // selected checkbox to the unselected node.
+    expect(
+      resolver.resolveVariant(ref("51859:5629"), [
+        { key: "state", raw: "selected" },
+        { key: "status", raw: "error", kitValue: "Error unselected" },
+      ]),
+    ).toBeUndefined();
+  });
+});

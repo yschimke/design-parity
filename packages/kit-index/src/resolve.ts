@@ -34,8 +34,10 @@ import {
   FALSY,
   mergeVocabulary,
   norm,
+  normName,
   sameName,
   TRUTHY,
+  UNSEPARATED_SCRIPT,
   valueCandidates,
   wordsOf,
   type Vocabulary,
@@ -268,17 +270,6 @@ export class KitIndexResolver {
     peers: IndexedStandalone[],
     seed: VariantSeed,
   ): IndexedStandalone | undefined {
-    // A declared value names the sibling outright, so it is matched exactly and
-    // nothing else is tried: the near-miss search below is what a declaration
-    // exists to replace, and `Inset` losing to `Middle-inset` is exactly the
-    // wrong answer somebody would declare their way out of.
-    if (seed.kitValue !== undefined) {
-      const declared = seed.kitValue;
-      const named = peers.filter((peer) => sameName(this.#leafOf(peer), declared));
-      // Same rule as a declared axis or value: two siblings answering to one declaration means the
-      // declaration did not say which, and emitting either is wrong half the time.
-      return named.length === 1 ? named[0] : undefined;
-    }
     const want = [String(seed.raw), seed.key, `${seed.key}-${seed.raw}`].map(
       norm,
     );
@@ -338,6 +329,22 @@ export class KitIndexResolver {
     chosen: string,
     want: string,
   ): string | undefined {
+    // A script with no word separators cannot be compared by word set — `エラー選択済み` is one
+    // token however many words a reader sees in it. Containment is the available substitute: the
+    // published value must carry both spellings and be more than either alone. It is a weaker
+    // check than word-set equality (it cannot say "and nothing more"), so it is reached only for
+    // the scripts that need it, and only one published value may answer.
+    if (UNSEPARATED_SCRIPT.test(chosen) || UNSEPARATED_SCRIPT.test(want)) {
+      const have = normName(chosen);
+      const add = normName(want);
+      if (!have || !add || have === add) return undefined;
+      const fused = this.#axisValues(set, axis).filter((value) => {
+        const candidate = normName(value);
+        return candidate !== have && candidate.includes(have) && candidate.includes(add);
+      });
+      return fused.length === 1 ? fused[0] : undefined;
+    }
+
     const wanted = new Set([...wordsOf(chosen), ...wordsOf(want)]);
     if (wanted.size < 2) return undefined;
     return this.#axisValues(set, axis).find((value) => {
@@ -561,6 +568,25 @@ export class KitIndexResolver {
     // declaration that quietly falls back to the guess it was written to
     // replace is worse than one that resolves to nothing and says so.
     if (seed.kitAxis !== undefined) return undefined;
+
+    // A declared value names the sibling outright, so it is matched exactly and nothing else is
+    // tried: the near-miss search is what a declaration exists to replace, and `Inset` losing to
+    // `Middle-inset` is the wrong answer somebody would declare their way out of.
+    //
+    // The REFERENCE itself is a candidate, even though it is not among its own siblings. Leave it
+    // out and a declaration naming it can be answered by a sibling that differs only by the
+    // punctuation the comparison ignores — a confident reference to a component the author did not
+    // name, which is the worst outcome available here.
+    if (seed.kitValue !== undefined) {
+      const declared = seed.kitValue;
+      const self = this.#standaloneById.get(nodeId);
+      const family = self ? [self, ...siblings] : siblings;
+      const named = family.filter((peer) => sameName(this.#leafOf(peer), declared));
+      const hit = named.length === 1 ? named[0] : undefined;
+      // Naming the reference is "already drawn", not a move — there is no second node to compare.
+      return hit && hit.id !== nodeId ? { nodeId: hit.id, name: hit.name } : undefined;
+    }
+
     const hit = this.#matchSibling(siblings, seed);
     return hit ? { nodeId: hit.id, name: hit.name } : undefined;
   }
@@ -592,7 +618,14 @@ export class KitIndexResolver {
     const axisHit = axisSeeds.length
       ? this.#resolveSetVariant(base, axisSeeds)
       : undefined;
-    if (axisSeeds.length && !axisHit) return undefined;
+    // An axis portion that only restates values the base already carries moves nothing — it is a
+    // cell spelling where it sits before naming the property that actually differs, which is what
+    // a shared matrix does (`size=s, icon=false` against the Small base). Read as a failure, the
+    // whole vector resolved to nothing even with an exact configured instance in the kit.
+    const axisIsNoOp =
+      axisSeeds.length > 0 &&
+      axisSeeds.every((seed) => this.#seedMatchesBase(base, seed));
+    if (axisSeeds.length && !axisHit && !axisIsNoOp) return undefined;
     if (!propertySeeds.length) return axisHit;
 
     // Properties hang off a variant DEFINITION, but `#resolveSetVariant` may
