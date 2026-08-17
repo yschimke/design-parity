@@ -154,6 +154,34 @@ export const norm = (s: unknown): string =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
+/**
+ * The comparison form for a name somebody **declared**, as opposed to one being guessed at.
+ *
+ * {@link norm} exists to compare a code slug against a kit spelling, and strips everything outside
+ * `[a-z0-9]`. That is fine for a slug and wrong for a declaration: a kit filing its axes as `サイズ`
+ * and `状態` normalises both to the empty string, so an equality test matches whichever axis
+ * happened to be indexed first — a confident reference to the wrong node, which is precisely what
+ * declaring the kit's own name exists to prevent. This keeps letters and digits in any script and
+ * drops only the separators and punctuation two spellings of one name can reasonably differ by.
+ */
+export const normName = (s: unknown): string =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+
+/**
+ * Whether two names are the same name, for a declared one.
+ *
+ * Falls back to whole-string equality when either side is nothing but punctuation, since two names
+ * that both normalise to the empty string are not thereby equal.
+ */
+export const sameName = (a: unknown, b: unknown): boolean => {
+  const left = normName(a);
+  const right = normName(b);
+  if (left && right) return left === right;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+};
+
 /** The distinct lowercase words in a name or value, for set-wise comparison. */
 export const wordsOf = (s: unknown): Set<string> =>
   new Set(

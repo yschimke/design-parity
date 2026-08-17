@@ -17,7 +17,7 @@
 import { parseVariantName } from "@design-parity/adapter-figma";
 
 import {
-  matchProperty,
+  matchSeedProperty,
   resolvePropertyInstance,
   type MatchedProperty,
 } from "./seeded-properties.js";
@@ -33,6 +33,7 @@ import {
   FALSY,
   mergeVocabulary,
   norm,
+  sameName,
   TRUTHY,
   valueCandidates,
   wordsOf,
@@ -247,10 +248,23 @@ export class KitIndexResolver {
     );
   }
 
+  /** The leaf name of a `Folder/Leaf` standalone component. */
+  #leafOf(component: IndexedStandalone): string {
+    return component.name.slice(component.name.lastIndexOf("/") + 1);
+  }
+
   #matchSibling(
     peers: IndexedStandalone[],
     seed: VariantSeed,
   ): IndexedStandalone | undefined {
+    // A declared value names the sibling outright, so it is matched exactly and
+    // nothing else is tried: the near-miss search below is what a declaration
+    // exists to replace, and `Inset` losing to `Middle-inset` is exactly the
+    // wrong answer somebody would declare their way out of.
+    if (seed.kitValue !== undefined) {
+      const declared = seed.kitValue;
+      return peers.find((peer) => sameName(this.#leafOf(peer), declared));
+    }
     const want = [String(seed.raw), seed.key, `${seed.key}-${seed.raw}`].map(
       norm,
     );
@@ -361,8 +375,7 @@ export class KitIndexResolver {
     axes: Record<string, string>,
     declared: string,
   ): string | undefined {
-    const target = norm(declared);
-    return Object.keys(axes).find((axis) => norm(axis) === target);
+    return Object.keys(axes).find((axis) => sameName(axis, declared));
   }
 
   /** The axis's own spelling of a declared kit value, if it publishes one. */
@@ -371,8 +384,7 @@ export class KitIndexResolver {
     axis: string,
     declared: string,
   ): string | undefined {
-    const target = norm(declared);
-    return this.#axisValues(set, axis).find((value) => norm(value) === target);
+    return this.#axisValues(set, axis).find((value) => sameName(value, declared));
   }
 
   /**
@@ -437,14 +449,23 @@ export class KitIndexResolver {
           // may model both seeds as one value of it.
           const chosen = target[axis];
           if (chosen === undefined) continue;
-          // A declared value on a taken axis IS the fusion — the author has
-          // named the single published value that carries both seeds, which is
-          // the answer #fuseAxisValue searches for.
+          // A declared value on a taken axis is a claim that the kit fuses both
+          // seeds into it — so it goes through the same check any fusion does.
+          // Taking it on trust would let the second seed's declaration overwrite
+          // the first seed's value outright: a checkbox at `Type=Selected` whose
+          // error seed declares `Error unselected` would resolve to the
+          // unselected node and diff selected code against it.
           const wants = declared
             ? [declared]
             : valueCandidates(seed.raw, this.#vocabulary);
           for (const want of wants) {
-            const fused = declared ?? this.#fuseAxisValue(set, axis, chosen, want);
+            const fusedWith = this.#fuseAxisValue(set, axis, chosen, want);
+            const fused =
+              declared === undefined
+                ? fusedWith
+                : fusedWith === declared
+                  ? declared
+                  : undefined;
             if (!fused || eq(base.axes[axis], fused)) continue;
             const match = search(i + 1, { ...target, [axis]: fused }, usedAxes);
             if (match) return match;
@@ -511,6 +532,11 @@ export class KitIndexResolver {
     const siblings = this.#componentSiblings(nodeId);
     const seed = seeds[0];
     if (!siblings || !seed) return undefined;
+    // A folder-modelled family publishes no axes at all, so a `kitAxis` here
+    // names nothing that could be honoured. Refused rather than ignored: a
+    // declaration that quietly falls back to the guess it was written to
+    // replace is worse than one that resolves to nothing and says so.
+    if (seed.kitAxis !== undefined) return undefined;
     const hit = this.#matchSibling(siblings, seed);
     return hit ? { nodeId: hit.id, name: hit.name } : undefined;
   }
@@ -534,8 +560,8 @@ export class KitIndexResolver {
         !this.#resolveSetVariant(base, [seed]) &&
         // A declared kit name reaches a property as readily as an axis: which
         // of the two a kit models a knob as is the kit's business, not the
-        // declaration's.
-        matchProperty(set.properties, seed.kitAxis ?? seed.key, this.#vocabulary),
+        // declaration's. Matched exactly when declared — see matchSeedProperty.
+        matchSeedProperty(set.properties, seed, this.#vocabulary),
     );
     const axisSeeds = seeds.filter((seed) => !propertySeeds.includes(seed));
 
@@ -580,14 +606,12 @@ export class KitIndexResolver {
   propertyForSeed(ref: string, seed: VariantSeed): SeedProperty | undefined {
     const set = this.#setForRef(ref);
     if (!set) return undefined;
-    const properties = matchProperty(
-      set.properties,
-      seed.kitAxis ?? seed.key,
-      this.#vocabulary,
-    );
+    const properties = matchSeedProperty(set.properties, seed, this.#vocabulary);
     if (!properties) return undefined;
 
-    const raw = String(seed.raw).toLowerCase();
+    // The declared value is the one the kit knows this cell by, so it decides
+    // whether the property's default already covers the variant.
+    const raw = String(seed.kitValue ?? seed.raw).toLowerCase();
     const seeded = TRUTHY.has(raw) ? true : FALSY.has(raw) ? false : undefined;
     return {
       setName: set.name,
@@ -674,7 +698,7 @@ export class KitIndexResolver {
   #declaredMisses(ref: string, seeds: VariantSeed[]): DeclaredMiss[] {
     const base = this.#baseVariant(ref);
     const set = base ? this.#sets.get(base.setId) : undefined;
-    if (!base || !set) return [];
+    if (!base || !set) return this.#standaloneDeclaredMisses(ref, seeds);
 
     const misses: DeclaredMiss[] = [];
     for (const seed of seeds) {
@@ -705,6 +729,44 @@ export class KitIndexResolver {
         published: [
           ...new Set(candidates.flatMap((a) => this.#axisValues(set, a))),
         ],
+      });
+    }
+    return misses;
+  }
+
+  /**
+   * The same check for a component the kit models as folder siblings.
+   *
+   * Two things can be declared at a family with no axes: an axis, which nothing
+   * there could ever honour, and a value, which must name one of the siblings.
+   * Both are reported against the sibling leaves, since that is the whole
+   * vocabulary such a family has.
+   */
+  #standaloneDeclaredMisses(ref: string, seeds: VariantSeed[]): DeclaredMiss[] {
+    const nodeId = this.#nodeIdOf(ref);
+    const siblings = nodeId ? this.#componentSiblings(nodeId) : undefined;
+    if (!siblings) return [];
+    const leaves = siblings.map((peer) => this.#leafOf(peer));
+
+    const misses: DeclaredMiss[] = [];
+    for (const seed of seeds) {
+      if (seed.kitAxis !== undefined) {
+        misses.push({
+          seed: vectorPart(seed),
+          declares: "axis",
+          named: seed.kitAxis,
+          published: [],
+        });
+        continue;
+      }
+      const value = seed.kitValue;
+      if (value === undefined) continue;
+      if (leaves.some((leaf) => sameName(leaf, value))) continue;
+      misses.push({
+        seed: vectorPart(seed),
+        declares: "value",
+        named: value,
+        published: leaves,
       });
     }
     return misses;

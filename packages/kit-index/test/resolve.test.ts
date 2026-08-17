@@ -488,3 +488,110 @@ describe("a declared kit axis or value", () => {
     });
   });
 });
+
+describe("a declaration cannot buy what the kit does not draw", () => {
+  // Every case here is one where taking the declaration on trust would produce
+  // a confident reference to the wrong node — the failure the whole package is
+  // built to avoid, and one an authoritative declaration could reintroduce.
+
+  it("checks a declared fusion against the value the earlier seed chose", () => {
+    // The base is `Type=Selected`; the second seed declares the kit's
+    // `Error unselected`. Letting the declaration overwrite the axis outright
+    // would resolve to the UNSELECTED node and diff selected code against it.
+    const checkbox = ref("51859:5629");
+    expect(
+      resolver.resolveVariant(checkbox, [
+        { key: "state", raw: "selected" },
+        { key: "status", raw: "error", kitValue: "Error unselected" },
+      ]),
+    ).toBeUndefined();
+    // The fusion the kit really publishes for those two still resolves.
+    expect(
+      resolver.resolveVariant(checkbox, [
+        { key: "state", raw: "unchecked" },
+        { key: "status", raw: "error", kitValue: "Error unselected" },
+      ])?.name,
+    ).toBe("Type=Error unselected, State=Enabled");
+  });
+
+  it("matches a declared property name exactly, not by word", () => {
+    // `matchProperty` accepts `focus` for `Show focus indicator`, which is the
+    // right latitude for a knob key and the wrong latitude for a declaration:
+    // the author is asserting the kit's own name.
+    const button = ref("57994:2324");
+    expect(
+      resolver.propertyForSeed(button, { key: "focus", raw: "true" }),
+    ).toMatchObject({ properties: [{ name: "Show focus indicator" }] });
+    expect(
+      resolver.propertyForSeed(button, { key: "x", raw: "true", kitAxis: "focus" }),
+    ).toBeUndefined();
+  });
+
+  it("names the sibling outright for a folder-modelled family", () => {
+    // `inset` reaches `Inset` by the near-miss search; a declaration is how a
+    // catalog says it meant the OTHER one, and it is matched exactly.
+    const divider = ref("51816:5868"); // Horizontal/Inset
+    expect(
+      resolver.resolveVariant(divider, {
+        key: "inset",
+        raw: "inset",
+        kitValue: "Middle-inset",
+      }),
+    ).toEqual({ nodeId: "51816:5870", name: "Horizontal/Middle-inset" });
+    // A folder has no axes, so an axis declaration names nothing that could be
+    // honoured — refused rather than quietly ignored.
+    expect(
+      resolver.resolveVariant(divider, {
+        key: "inset",
+        raw: "subhead",
+        kitAxis: "Configuration",
+      }),
+    ).toBeUndefined();
+    expect(
+      resolver.explainUnresolved(divider, [
+        { key: "inset", raw: "subhead", kitAxis: "Configuration" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "axis", named: "Configuration", published: [] }],
+    });
+  });
+
+  it("does not let a non-Latin axis name match whatever was indexed first", () => {
+    // The ASCII normalisation used for slugs erases `サイズ` and `状態` alike, so
+    // an equality test on it would match the first axis in the set and cite the
+    // wrong node with complete confidence.
+    const localised = new KitIndexResolver({
+      fileKey: "LocalKit",
+      generatedBy: "test",
+      sets: {
+        "1:1": {
+          name: "ボタン",
+          variants: [
+            { id: "1:2", name: "サイズ=小, 状態=通常" },
+            { id: "1:3", name: "サイズ=大, 状態=通常" },
+            { id: "1:4", name: "サイズ=小, 状態=無効" },
+          ],
+        },
+      },
+      standalone: {},
+      specimens: {},
+    });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", {
+        key: "state",
+        raw: "disabled",
+        kitAxis: "状態",
+        kitValue: "無効",
+      }),
+    ).toEqual({ nodeId: "1:4", name: "サイズ=小, 状態=無効" });
+    expect(
+      localised.resolveVariant("figma:LocalKit/1:2", {
+        key: "size",
+        raw: "l",
+        kitAxis: "状態",
+        kitValue: "大",
+      }),
+    ).toBeUndefined();
+  });
+});

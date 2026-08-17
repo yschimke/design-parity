@@ -177,8 +177,23 @@ Three properties worth knowing:
   set really publishes, so the governing rule holds: nobody can declare their
   way to a node the kit does not draw. What they get instead is the `declared`
   reason above, naming the spelling that missed and what the set does publish.
-- **Matched without punctuation or case.** `of lines` finds the kit's
-  `# of lines`; declaring an axis should not be a typing exercise.
+- **Matched without punctuation or case, in any script.** `of lines` finds the
+  kit's `# of lines`; declaring an axis should not be a typing exercise. Only
+  separators and punctuation are ignored — a kit filing its axes as `サイズ` and
+  `状態` keeps them distinct, where the slug normalisation used elsewhere would
+  erase both to nothing and match whichever was indexed first.
+
+The same exactness applies wherever a declaration lands. A declared name reaches
+a **component property** as readily as an axis — which of the two a kit uses is
+its own business — but it must be the property's real name, so `kitAxis: "focus"`
+no longer passes for `Show focus indicator` the way the knob key `focus` does. On
+a family the kit models as **folder siblings** rather than a set, a declared
+value names the sibling outright (`Middle-inset`, not the `Inset` the near-miss
+search would find), and a declared *axis* is refused: there are no axes there to
+name. And a declaration on an axis another seed already claimed is checked
+through the same fusion rule as any other — `Type=Selected` plus a declared
+`Error unselected` resolves to nothing rather than silently discarding the first
+seed.
 
 Either field can be given alone: an axis alone when only the *name* differs, a
 value alone when only the spelling does.

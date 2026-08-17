@@ -33,6 +33,7 @@ import {
   DEFAULT_VOCABULARY,
   FALSY,
   norm,
+  sameName,
   singular,
   TRUTHY,
   type Vocabulary,
@@ -109,6 +110,27 @@ export function matchProperty(
 }
 
 /**
+ * The properties a seed names — through its declaration when it carries one, through the alias
+ * tables otherwise.
+ *
+ * A declared name is matched **exactly** (up to case and punctuation), unlike a knob key, whose
+ * whole difficulty is that it is not the kit's word. {@link matchProperty}'s partial-word search
+ * would accept `kitAxis: "focus"` for `Show focus indicator`, which is the sort of near-miss a
+ * declaration exists to rule out: the author is asserting the kit's own name, so a name the set
+ * does not publish must find nothing rather than something adjacent.
+ */
+export function matchSeedProperty(
+  properties: Record<string, KitProperty> | undefined,
+  seed: VariantSeed,
+  vocabulary: Vocabulary = DEFAULT_VOCABULARY,
+): MatchedProperty[] | undefined {
+  if (!seed.kitAxis) return matchProperty(properties, seed.key, vocabulary);
+  const declared = seed.kitAxis;
+  const hit = Object.entries(properties ?? {}).find(([name]) => sameName(name, declared));
+  return hit ? [{ name: hit[0], type: hit[1].type, default: hit[1].default }] : undefined;
+}
+
+/**
  * Translate one catalog seed into the value of a kit component property, or
  * `undefined` when the seed has no lossless representation as one.
  *
@@ -125,7 +147,10 @@ export function seededPropertyValue(
   seed: VariantSeed,
   peers: MatchedProperty[],
 ): KitPropertyValue | undefined {
-  const raw = String(seed.raw);
+  // A declared kit value is what the kit calls this cell, so it is what the property should be set
+  // to: `raw: "hidden"` with `kitValue: "False"` means the switch is off, and translating `hidden`
+  // instead would leave the seed unresolved for want of a word no table knows.
+  const raw = String(seed.kitValue ?? seed.raw);
   const lower = raw.toLowerCase();
 
   if (property.type === "BOOLEAN") {
@@ -218,11 +243,7 @@ export function resolvePropertyInstance(
   for (const seed of seedList) {
     // `kitAxis` names the kit's own word for the knob when it has one; a kit is
     // free to model that word as a property rather than as a variant axis.
-    const matches = matchProperty(
-      set.properties,
-      seed.kitAxis ?? seed.key,
-      vocabulary,
-    );
+    const matches = matchSeedProperty(set.properties, seed, vocabulary);
     if (!matches) continue;
     const values = matches.map((property) =>
       seededPropertyValue(property, seed, matches),
