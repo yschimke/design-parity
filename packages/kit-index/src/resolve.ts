@@ -753,6 +753,20 @@ export class KitIndexResolver {
       // own key names.
       const candidates = axis ? [axis] : this.#axesFor(seed, base.axes);
       if (candidates.some((a) => this.#declaredValue(set, a, value))) continue;
+
+      // No axis carries it — but the knob may be one the kit models as a
+      // component property, which has no published value list to check against
+      // and is judged by what the property can represent instead. Skipping this
+      // reported a perfectly good `Show focus indicator=True` as a bad
+      // declaration, and (since the declared reason outranks the property one)
+      // took a property-shaped variant out of its own report on the way.
+      const properties = matchSeedProperty(set.properties, seed, this.#vocabulary);
+      if (properties) {
+        const valueMiss = this.#declaredPropertyValueMiss(seed, properties);
+        if (valueMiss) misses.push(valueMiss);
+        continue;
+      }
+
       misses.push({
         seed: vectorPart(seed),
         declares: "value",

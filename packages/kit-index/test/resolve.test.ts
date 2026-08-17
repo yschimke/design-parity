@@ -708,3 +708,27 @@ describe("a declaration that lands on a component property", () => {
     });
   });
 });
+
+describe("a value-only declaration on a property-shaped knob", () => {
+  const button = ref("57994:2324");
+
+  it("is judged by the property, not by a variant axis that does not exist", () => {
+    // `focus` names no axis of the Button set, so validating against axes alone
+    // called a perfectly good declaration a miss — and, since that reason
+    // outranks the property one, took the property report down with it.
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "focus", raw: "on", kitValue: "True" },
+      ]).kind,
+    ).not.toBe("declared");
+    // A value the property genuinely cannot take is still reported.
+    expect(
+      resolver.explainUnresolved(button, [
+        { key: "focus", raw: "on", kitValue: "Ture" },
+      ]),
+    ).toMatchObject({
+      kind: "declared",
+      missing: [{ declares: "value", named: "Ture" }],
+    });
+  });
+});
