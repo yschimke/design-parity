@@ -131,10 +131,12 @@ export function collectRadiusBoxes(
  * `TextToggleButton { Text("A") }`, which declares no padding anywhere, measures
  * the distance from the button edge to the text box and reports it against the
  * kit's declared `padding: 1` as a 7dp divergence that does not exist (issue
- * #367). Any container whose measured edge is *set* by a text child is dropped
- * — all four edges have to agree for an inset to be reported at all, so one
- * glyph-set edge calibrates the whole number. [textInsets] `"measure"` restores
- * the historical behaviour for a project that wants it.
+ * #367). A container is dropped when any one of its four extremes rests on
+ * nothing but text — all four edges have to agree for an inset to be reported at
+ * all, so one glyph-set edge calibrates the whole number. An extreme a box also
+ * reaches is kept: there the glyph merely agrees with a layout the parent chose.
+ * [textInsets] `"measure"` restores the historical behaviour for a project that
+ * wants it.
  *
  * [boundsDensity] converts render pixels to dp — see {@link collectRadiusBoxes}.
  */
@@ -197,8 +199,7 @@ export function collectDerivedInsets(
       const eps = Math.min(UNIFORM_EPSILON, minInset);
       const inset = round2(first);
       const glyphEdged =
-        textInsets === "skip" &&
-        kids.some((k) => isTextNode(k) && touchesEdge(k.bounds!, left, top, right, bottom));
+        textInsets === "skip" && edgesSetOnlyByText(kids, left, top, right, bottom);
       const measured =
         !glyphEdged &&
         edges.every((v) => v > 0) &&
@@ -256,17 +257,33 @@ function isTextNode(node: SemanticNode): boolean {
   return leaf && Object.keys(node.tokens?.typography ?? {}).length > 0;
 }
 
-/** Whether this box is the one that set any of the union's four extremes. */
-function touchesEdge(
-  b: Bounds,
+/**
+ * Does any of the union's four extremes rest **only** on glyphs?
+ *
+ * Per-extreme and exclusive, because sharing an edge with a box is what makes a
+ * measurement trustworthy: an icon inset 12dp with a label whose top happens to
+ * line up with it still has all four edges established by the icon, and the 12
+ * is a real inset. Only an extreme that *nothing but* text reaches is font
+ * metrics. Coincidence cuts the safe way here — where a box agrees with the
+ * glyph, the number it gives is the same number.
+ */
+function edgesSetOnlyByText(
+  kids: SemanticNode[],
   left: number,
   top: number,
   right: number,
   bottom: number,
 ): boolean {
-  return (
-    b.x === left || b.y === top || b.x + b.width === right || b.y + b.height === bottom
-  );
+  const at: Array<(b: Bounds) => boolean> = [
+    (b) => b.x === left,
+    (b) => b.y === top,
+    (b) => b.x + b.width === right,
+    (b) => b.y + b.height === bottom,
+  ];
+  return at.some((reaches) => {
+    const touching = kids.filter((k) => reaches(k.bounds!));
+    return touching.length > 0 && touching.every(isTextNode);
+  });
 }
 
 /** Two decimal places — enough for a dp measured back from pixels. */

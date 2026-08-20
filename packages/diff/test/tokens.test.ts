@@ -460,6 +460,34 @@ describe("diffTokens", () => {
       expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
     });
 
+    it("keeps an inset a box establishes even where a glyph shares the edge", () => {
+      // The icon establishes all four extremes on its own; the label's top
+      // happens to line up with it. Suppressing on "some text touches an
+      // extreme" would throw away a real 12dp inset over a coincidence — where
+      // a box agrees with the glyph, the number it gives is the same number.
+      const shared: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          { role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+          { role: "text", bounds: { x: 12, y: 12, width: 40, height: 20 } },
+        ],
+      };
+      expect(collectDerivedInsets(shared).map((i) => i.inset)).toEqual([12]);
+
+      // ...but an extreme NOTHING but text reaches is still dropped: push the
+      // label a dp past the icon's left and that edge is font metrics.
+      const glyphLeads: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          { role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+          { role: "text", bounds: { x: 11, y: 12, width: 40, height: 20 } },
+        ],
+      };
+      expect(collectDerivedInsets(glyphLeads)).toEqual([]);
+    });
+
     it("still measures when a box sets the edges and text sits inside them", () => {
       // The rule is about which child SET the measurement, not whether any text
       // is present — an icon+label row insetting its icon to the container edge
