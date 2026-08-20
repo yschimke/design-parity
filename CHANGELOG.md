@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.55](https://github.com/yschimke/design-parity/compare/v0.1.54...v0.1.55) (2026-08-20)
+
+
+### Bug Fixes
+
+* **action:** append the board to its branch instead of force-pushing an orphan ([#361](https://github.com/yschimke/design-parity/issues/361)) ([210b3c4](https://github.com/yschimke/design-parity/commit/210b3c4a5cc949ca469896823e383550009d9da8))
+* **ci:** probe the pinned CLI for `publish` before relying on it ([#363](https://github.com/yschimke/design-parity/issues/363)) ([268bf97](https://github.com/yschimke/design-parity/commit/268bf9713187d8f9240ac816d6c0d10d22973eed))
+* **diff:** answer a padding spec with the inset the render draws ([#364](https://github.com/yschimke/design-parity/issues/364)) ([e4e6b28](https://github.com/yschimke/design-parity/commit/e4e6b28c537de6258e1ace15bf02eaa120404ede))
+
 ## [0.1.54](https://github.com/yschimke/design-parity/compare/v0.1.53...v0.1.54) (2026-08-20)
 
 
