@@ -99,6 +99,104 @@ export function collectRadiusBoxes(
   return out;
 }
 
+/**
+ * The uniform insets the candidate's own geometry *achieves*, in dp — the
+ * padding it draws, as opposed to the padding it declares.
+ *
+ * A reference frame states its inset as an auto-layout `padding`; a candidate
+ * often achieves the same picture without one. Wear's `IconButton` is the case
+ * that forced this: the kit's cell is a 52x52 frame declaring `padding: 12`
+ * around a 26x26 icon, and Compose draws the identical 52dp button by
+ * *centring* a 26dp icon with no padding modifier at all. So the candidate
+ * reported `padding: 0`, the spec said 12, and every icon button in
+ * wear-m3-catalog failed on a difference the render does not contain — while
+ * the pixels differed by ~1%.
+ *
+ * Measuring the drawn inset is what makes the check compare like with like, and
+ * it is the same move {@link measuredSpacing} already makes on the Figma side
+ * for a frame that declares nothing. It also *keeps* the signal rather than
+ * waiving it: a candidate whose icon is the wrong size still misses the spec'd
+ * inset, and now says so in the number the designer wrote down.
+ *
+ * Only a **uniform** inset is reported (all four edges equal within a rounding
+ * epsilon). An asymmetric one is a different shape from the scalar `padding`
+ * the reference bag carries, and pairing them would compare two things that
+ * merely share a name. A zero or negative inset is dropped for the reason
+ * `measuredSpacing` drops it: a child that fills or overflows its parent is not
+ * evidence of padding.
+ *
+ * [boundsDensity] converts render pixels to dp — see {@link collectRadiusBoxes}.
+ */
+export function collectDerivedInsets(
+  root: SemanticNode,
+  boundsDensity?: number,
+): DerivedInset[] {
+  const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
+  const out: DerivedInset[] = [];
+  const seen = new Set<string>();
+  const visit = (node: SemanticNode): void => {
+    const box = node.bounds;
+    const kids = (node.children ?? []).filter((c) => c.bounds);
+    if (box && kids.length > 0) {
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      for (const k of kids) {
+        const b = k.bounds!;
+        left = Math.min(left, b.x);
+        top = Math.min(top, b.y);
+        right = Math.max(right, b.x + b.width);
+        bottom = Math.max(bottom, b.y + b.height);
+      }
+      const edges = [
+        left - box.x,
+        top - box.y,
+        box.x + box.width - right,
+        box.y + box.height - bottom,
+      ].map((v) => v / scale);
+      const first = edges[0]!;
+      const uniform = edges.every((v) => Math.abs(v - first) <= UNIFORM_EPSILON);
+      if (uniform && first > 0) {
+        const inset = round2(first);
+        const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
+        const where = node.label ?? node.testTag ?? node.role;
+        const key = `${inset}|${declaresSpacing}|${where ?? ""}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          out.push({ inset, declaresSpacing, ...(where ? { where } : {}) });
+        }
+      }
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
+/** One container's measured inset, kept with enough of its node to be quotable. */
+export interface DerivedInset {
+  /** The uniform inset its children sit at, in dp. */
+  inset: number;
+  /**
+   * Whether the node declares spacing of its own — i.e. it is a container that
+   * has an opinion about padding, and reported (often `0`) rather than being
+   * silent. Preferred when choosing which measurement answers a spec, so a
+   * nested decorative box does not speak for the component.
+   */
+  declaresSpacing: boolean;
+  /** Label / testTag / role, so a finding can say what it measured. */
+  where?: string;
+}
+
+/** Sub-dp slack when deciding whether four measured edges are the same inset. */
+const UNIFORM_EPSILON = 0.5;
+
+/** Two decimal places — enough for a dp measured back from pixels. */
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
 function mergeInto(target: DesignTokens, src?: DesignTokens): void {
   if (!src) return;
   if (src.spacing)
@@ -194,17 +292,25 @@ export function aliasInverse(group?: Record<string, string>): Map<string, string
   return inv;
 }
 
-/** Rewrite a token group's keys from design names to code names via the alias. */
+/**
+ * Rewrite a token group's keys from design names to code names via the alias,
+ * recording the design name each code key came from. The original name is not
+ * decoration: it is what says whether a token is an *inset*, and the code
+ * vocabulary is free not to say so (`space/inset` → `gutter`).
+ */
 function remapKeys<T>(
   group: Record<string, T> | undefined,
-  alias?: Record<string, string>,
+  alias: Record<string, string> | undefined,
+  designNames?: Map<string, string>,
 ): Record<string, T> | undefined {
   if (!group) return group;
   const inv = aliasInverse(alias);
   if (inv.size === 0) return group;
   const out: Record<string, T> = {};
   for (const [name, value] of Object.entries(group)) {
-    out[inv.get(aliasKey(name)) ?? name] = value;
+    const code = inv.get(aliasKey(name)) ?? name;
+    out[code] = value;
+    if (code !== name) designNames?.set(code, name);
   }
   return out;
 }
@@ -214,9 +320,13 @@ function remapKeys<T>(
  * so the key-by-key comparison below lines design tokens up with their code
  * counterparts (issue #78). Groups without an alias pass through untouched.
  */
-function applyAlias(spec: DesignTokens, alias: TokenAliasMap): DesignTokens {
+function applyAlias(
+  spec: DesignTokens,
+  alias: TokenAliasMap,
+  designNames: Map<string, string>,
+): DesignTokens {
   return {
-    spacing: remapKeys(spec.spacing, alias.spacing),
+    spacing: remapKeys(spec.spacing, alias.spacing, designNames),
     radius: remapKeys(spec.radius, alias.radius),
     colors: remapKeys(spec.colors, alias.colors),
     typography: remapKeys(spec.typography, alias.typography),
@@ -238,17 +348,43 @@ export function diffTokens(
   config: DiffConfig,
   alias?: TokenAliasMap,
   radiusBoxes?: Map<number, Bounds[]>,
+  derivedInsets?: DerivedInset[],
 ): Finding[] {
   const findings: Finding[] = [];
   if (!specInput) return findings;
-  const spec = alias ? applyAlias(specInput, alias) : specInput;
+  const designNames = new Map<string, string>();
+  const spec = alias ? applyAlias(specInput, alias, designNames) : specInput;
+
+  const spacingSpecs = Object.entries(spec.spacing ?? {});
+  const spacingFinding = ([name, want]: [string, number]): void =>
+    numericFinding(
+      "spacing",
+      name,
+      want,
+      candidate.spacing,
+      config.spacingTolerance,
+      findings,
+      undefined,
+      derivedInsets,
+      designNames.get(name),
+    );
 
   if (unverifiableGroup(spec.spacing, candidate.spacing)) {
-    findings.push(groupUnverified("spacing", Object.keys(spec.spacing!).length));
+    // A candidate that resolved no spacing at all normally can't be judged. But
+    // an inset spec CAN be, when the render's own geometry answers it — that is
+    // the "declares nothing" case this check exists for, and routing it through
+    // the group shortcut made the fallback unreachable in exactly the case it
+    // was written for. Only the specs geometry cannot speak to fall back to the
+    // group-level advisory.
+    const measurable = derivedInsets && derivedInsets.length > 0;
+    const insets = measurable
+      ? spacingSpecs.filter(([name]) => isInsetToken("spacing", name, designNames.get(name)))
+      : [];
+    insets.forEach(spacingFinding);
+    const rest = spacingSpecs.length - insets.length;
+    if (rest > 0) findings.push(groupUnverified("spacing", rest));
   } else {
-    for (const [name, want] of Object.entries(spec.spacing ?? {})) {
-      numericFinding("spacing", name, want, candidate.spacing, config.spacingTolerance, findings);
-    }
+    spacingSpecs.forEach(spacingFinding);
   }
   if (unverifiableGroup(spec.radius, candidate.radius)) {
     findings.push(groupUnverified("radius", Object.keys(spec.radius!).length));
@@ -348,6 +484,8 @@ function numericFinding(
   tolerance: number,
   findings: Finding[],
   radiusBoxes?: Map<number, Bounds[]>,
+  derivedInsets?: DerivedInset[],
+  designName?: string,
 ): void {
   // Prefer an exact name match; otherwise fall back to a value match. The
   // candidate carries resolved spacing/radius values under generic keys, not the
@@ -355,6 +493,41 @@ function numericFinding(
   // by any candidate value within tolerance before it's reported missing — the
   // numeric analogue of the colour role-match (issue #74).
   const got = candidate?.[name] ?? numericValueMatch(want, tolerance, candidate);
+
+  // A padding spec the candidate does not *declare* may still be one it *draws*:
+  // a reference frame states its inset as auto-layout padding, while the code
+  // achieves the same picture by centring its content with no padding modifier
+  // (Wear's `IconButton` — see {@link collectDerivedInsets}). Measure what the
+  // render actually insets before accusing it, and only for an inset spec: a
+  // measured inset is not evidence about a `gap`.
+  if ((got === undefined || (got === 0 && want !== 0)) && isInsetToken(group, name, designName)) {
+    const drawn = nearestInset(want, derivedInsets);
+    if (drawn) {
+      const delta = round2(Math.abs(drawn.inset - want));
+      if (delta <= tolerance) {
+        findings.push(satisfiedByGeometry(group, name, want, drawn));
+        return;
+      }
+      // The render insets the WRONG amount. Report that, not the declared `0`:
+      // "0 vs spec 12" names a modifier the code was never going to have, while
+      // "14 vs spec 12" is the miss a designer can act on.
+      findings.push({
+        kind: "token",
+        severity: "error",
+        message: `${group}.${name}: renders ${drawn.inset} vs spec ${want} (Δ${delta})`,
+        detail: {
+          token: `${group}.${name}`,
+          expected: want,
+          actual: drawn.inset,
+          delta,
+          via: "measured-geometry",
+          ...(drawn.where ? { measuredOn: drawn.where } : {}),
+        },
+      });
+      return;
+    }
+  }
+
   if (got === undefined) {
     findings.push(missing(group, name, String(want)));
     return;
@@ -377,6 +550,78 @@ function numericFinding(
       detail: { token: `${group}.${name}`, expected: want, actual: got, delta },
     });
   }
+}
+
+/**
+ * Does this spec token describe an **inset** — the space a container holds
+ * around its content? Only those can be answered by a measured inset; a `gap`
+ * is the space *between* siblings, and satisfying one with the other would be
+ * two different measurements sharing a vocabulary.
+ */
+function isInsetToken(group: "spacing" | "radius", ...names: Array<string | undefined>): boolean {
+  // Checked against every name the token has worn. `applyAlias` rewrites a
+  // design key to its code counterpart before the comparison, and the code
+  // vocabulary need not contain the word — `space/inset` aliased to `gutter`
+  // is still an inset, and classifying on the rewritten name alone would
+  // silently switch the geometry check off for exactly the projects that
+  // configured an alias.
+  return group === "spacing" && names.some((n) => n !== undefined && /padding|inset/i.test(n));
+}
+
+/**
+ * The measurement that best answers a spec of `want`.
+ *
+ * A container that declares spacing of its own wins over one that is merely
+ * shaped like it: the component reporting `padding: 0` is making a claim about
+ * its padding, while a nested centred box is incidental geometry. Without that
+ * preference any descendant whose inset happened to land near the spec could
+ * speak for the component and demote a real error. Within each tier, nearest
+ * to the spec wins.
+ */
+function nearestInset(want: number, insets: DerivedInset[] | undefined): DerivedInset | undefined {
+  if (!insets || insets.length === 0) return undefined;
+  const tiers = [insets.filter((i) => i.declaresSpacing), insets];
+  for (const tier of tiers) {
+    let best: DerivedInset | undefined;
+    let bestDelta = Infinity;
+    for (const candidate of tier) {
+      const delta = Math.abs(candidate.inset - want);
+      if (delta < bestDelta) {
+        best = candidate;
+        bestDelta = delta;
+      }
+    }
+    if (best) return best;
+  }
+  return undefined;
+}
+
+/**
+ * The candidate draws the spec'd inset without declaring it. Non-blocking, and
+ * *reported* rather than silent: "no padding modifier, but the content sits
+ * where the spec puts it" is a real answer to the compliance question, and a
+ * reader who sees only a pass cannot tell that the code expresses it
+ * differently from the design.
+ */
+function satisfiedByGeometry(
+  group: string,
+  name: string,
+  want: number,
+  drawn: DerivedInset,
+): Finding {
+  const on = drawn.where ? ` on \`${drawn.where}\`` : "";
+  return {
+    kind: "token",
+    severity: "info",
+    message: `${group}.${name}: not declared, but the render insets ${drawn.inset}${on} (spec ${want})`,
+    detail: {
+      token: `${group}.${name}`,
+      expected: want,
+      actual: drawn.inset,
+      via: "measured-geometry",
+      ...(drawn.where ? { measuredOn: drawn.where } : {}),
+    },
+  };
 }
 
 /**
