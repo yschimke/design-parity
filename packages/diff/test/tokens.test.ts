@@ -228,8 +228,8 @@ describe("diffTokens", () => {
     it("measures the drawn inset in dp, not render pixels", () => {
       // 52px of margin either side of a 52px icon in a 104px box is 26px — but
       // the spec is in dp, so the answer must be 13.
-      expect(collectDerivedInsets(iconButton(52), 2)).toEqual([13]);
-      expect(collectDerivedInsets(iconButton(52))).toEqual([26]);
+      expect(collectDerivedInsets(iconButton(52), 2).map((i) => i.inset)).toEqual([13]);
+      expect(collectDerivedInsets(iconButton(52)).map((i) => i.inset)).toEqual([26]);
     });
 
     it("satisfies the spec without a declared padding, and says how", () => {
@@ -248,10 +248,11 @@ describe("diffTokens", () => {
       });
     });
 
-    it("still fails when the render insets the wrong amount", () => {
+    it("reports the miss in the measured number, not the declared zero", () => {
       // The same button drawing a 24dp icon instead of the kit's 26dp insets 14,
-      // not 13 — past the 1dp allowance. Measuring the geometry is what turns a
-      // meaningless "0 vs 12" into the real miss.
+      // not 13 — past the 1dp allowance. The error must quote THAT: "0 vs spec
+      // 12" names a modifier the code was never going to have, and asserting
+      // only that some error exists would pass against the unfixed code too.
       const findings = diffTokens(
         { spacing: { padding: 12 } },
         { spacing: { padding: 0 } },
@@ -261,7 +262,88 @@ describe("diffTokens", () => {
         collectDerivedInsets(iconButton(48), 2),
       );
       expect(findings).toHaveLength(1);
-      expect(findings[0]).toMatchObject({ severity: "error" });
+      expect(findings[0]).toMatchObject({
+        severity: "error",
+        message: "spacing.padding: renders 14 vs spec 12 (Δ2)",
+        detail: { expected: 12, actual: 14, delta: 2, via: "measured-geometry" },
+      });
+    });
+
+    it("lets the container that declares padding speak, not a nested box", () => {
+      // The component reports `padding: 0` — a claim about its own padding. A
+      // decorative child that happens to inset near the spec is incidental
+      // geometry, and letting it answer would demote a real error to an info.
+      const nested: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 200, height: 200 },
+        tokens: { spacing: { padding: 0 } },
+        children: [
+          {
+            role: "box",
+            bounds: { x: 40, y: 40, width: 120, height: 120 },
+            children: [{ role: "image", bounds: { x: 52, y: 52, width: 96, height: 96 } }],
+          },
+        ],
+      };
+      const insets = collectDerivedInsets(nested);
+      // Both are measured: the button insets 40, the inner box insets 12.
+      expect(insets.map((i) => i.inset).sort((a, b) => a - b)).toEqual([12, 40]);
+      const findings = diffTokens(
+        { spacing: { padding: 12 } },
+        { spacing: { padding: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        insets,
+      );
+      // The declaring container's 40 answers, and it misses — the inner 12 is
+      // an exact match on paper but says nothing about the component.
+      expect(findings[0]).toMatchObject({
+        severity: "error",
+        detail: { actual: 40, expected: 12 },
+      });
+    });
+
+    it("answers an inset spec even when the candidate resolved no spacing at all", () => {
+      // `unverifiableGroup` short-circuits a candidate with an empty spacing
+      // group — which is the *true* "declares nothing" case, and the one the
+      // geometry check is for. It must not be unreachable there.
+      const findings = diffTokens(
+        { spacing: { padding: 12 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(iconButton(52), 2),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", actual: 13 },
+      });
+    });
+
+    it("still says 'not evaluated' when there is no geometry to measure", () => {
+      const findings = diffTokens({ spacing: { padding: 12 } }, {}, defaultDiffConfig);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    it("keeps inset meaning through a token alias that renames it", () => {
+      // `space/inset` aliased to code `gutter`: `applyAlias` rewrites the key
+      // before the inset predicate sees it, so classifying on the code name
+      // alone would switch the geometry check off for precisely the projects
+      // that configured an alias.
+      const findings = diffTokens(
+        { spacing: { "space/inset": 12 } },
+        { spacing: { gutter: 0 } },
+        defaultDiffConfig,
+        { spacing: { gutter: "space/inset" } },
+        undefined,
+        collectDerivedInsets(iconButton(52), 2),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { via: "measured-geometry" } });
     });
 
     it("does not let a measured inset answer a gap spec", () => {
@@ -274,10 +356,10 @@ describe("diffTokens", () => {
         defaultDiffConfig,
         undefined,
         undefined,
-        [13],
+        [{ inset: 13, declaresSpacing: true }],
       );
       expect(findings).toHaveLength(1);
-      expect(findings[0]).toMatchObject({ severity: "error" });
+      expect(findings[0]).toMatchObject({ severity: "error", detail: { actual: 0 } });
     });
 
     it("reports only a uniform inset — an off-centre child is a different shape", () => {
