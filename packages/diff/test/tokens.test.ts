@@ -428,6 +428,41 @@ describe("diffTokens", () => {
       expect(collectDerivedInsets(offCentre)).toEqual([]);
     });
 
+    it("requires every edge to be a positive inset, not just the first", () => {
+      // `[0.5, 0, 0.5, 0]` averaged to "a 0.5dp inset" under a 0.5dp uniformity
+      // allowance — reporting padding on a child flush against top and bottom.
+      // At a strict tolerance that satisfied `padding: 0.5` outright.
+      const sideOnly: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.5, y: 0, width: 99, height: 100 } }],
+      };
+      expect(collectDerivedInsets(sideOnly, 1, 0)).toEqual([]);
+      expect(collectDerivedInsets(sideOnly, 1, 1)).toEqual([]);
+    });
+
+    it("tightens the uniformity allowance with the floor", () => {
+      // The 0.5dp slack that absorbs px→dp rounding at whole-dp resolution is
+      // bigger than the values themselves once fractional insets are admitted,
+      // so it cannot stay constant: at a strict floor these edges disagree.
+      const uneven: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 1, y: 1.4, width: 98, height: 97.2 } }],
+      };
+      expect(collectDerivedInsets(uneven, 1, 0)).toEqual([]);
+      expect(collectDerivedInsets(uneven, 1, 1).map((i) => i.inset)).toEqual([1]);
+    });
+
+    it("rejects an inset that survives the floor but rounds away", () => {
+      // In (0, 0.005) the raw edges are positive and clear a zero floor, but the
+      // reported value rounds to 0 — readmitting through the report exactly what
+      // the positive-edge rule rejects at the measurement.
+      const sliver: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.002, y: 0.002, width: 99.996, height: 99.996 } }],
+      };
+      expect(collectDerivedInsets(sliver, 1, 0)).toEqual([]);
+    });
+
     it("never admits a zero inset, even with the floor turned all the way down", () => {
       // A strict `spacingTolerance: 0` drives the floor to 0, and an inclusive
       // test would let a child that exactly fills its parent count as an inset

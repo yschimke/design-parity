@@ -156,26 +156,37 @@ export function collectDerivedInsets(
         box.x + box.width - right,
         box.y + box.height - bottom,
       ].map((v) => v / scale);
-      const first = edges[0]!;
-      const uniform = edges.every((v) => Math.abs(v - first) <= UNIFORM_EPSILON);
-      // Below [minInset] a measured sliver is not a padding: a child sitting
-      // flush comes back a fraction of a dp off the px→dp conversion, and
-      // quoting "renders 0.5" reads as a measurement — wear-m3-catalog's
-      // `DateWheels` reported exactly that against a spec of 14. (`Math.round`
-      // would not do here: it rounds 0.5 up, the very value in question.)
+      // Four conditions, stated together because each of the first three was
+      // found the hard way, one review round apart, and they only make sense as
+      // one invariant: **a measured inset is four positive edges that agree to
+      // within the precision of the comparison asking, and that survive being
+      // reported.**
       //
-      // The caller sets the floor from its own tolerance, because that is what
-      // decides whether a sub-dp difference is meaningful *to this comparison*.
-      // A project running the documented strict `spacingTolerance: 0` is asking
-      // for sub-dp precision and genuinely may spec `padding: 0.5`; a blanket
-      // 1dp floor would throw its evidence away and fail it on the declared 0.
-      // `> 0` independently of the floor: with a strict tolerance [minInset] is
-      // itself 0, and an inclusive test would admit a child that exactly fills
-      // its parent as an inset of zero — which this function's own contract
-      // says is not evidence of padding, and which would turn an unverified
-      // advisory into a blocking `renders 0 vs spec 14`.
-      if (uniform && first > 0 && first >= minInset) {
-        const inset = round2(first);
+      //  1. every edge positive — a child flush against one side has no padding
+      //     there, whatever the other three do. `[0.5, 0, 0.5, 0]` is not a
+      //     0.5dp inset.
+      //  2. they agree within `eps`, which tightens with the caller's floor: the
+      //     0.5dp allowance that absorbs px→dp rounding at whole-dp resolution
+      //     is *larger than the values themselves* once fractional insets are
+      //     admitted, so it cannot stay a constant.
+      //  3. at or above [minInset]. Below it a sliver is not a padding — a flush
+      //     child measures a fraction of a dp off the conversion, and quoting
+      //     "renders 0.5" reads as a measurement. The caller sets this from its
+      //     own tolerance, since that is what decides whether a sub-dp value is
+      //     meaningful *to this comparison*: a project on the documented strict
+      //     `spacingTolerance: 0` may genuinely spec `padding: 0.5`.
+      //  4. still positive after rounding, or a value in (0, 0.005) is reported
+      //     as `0` — readmitting through the report what (1) rejected at the
+      //     measurement.
+      const first = edges[0]!;
+      const eps = Math.min(UNIFORM_EPSILON, minInset);
+      const inset = round2(first);
+      const measured =
+        edges.every((v) => v > 0) &&
+        edges.every((v) => Math.abs(v - first) <= eps) &&
+        first >= minInset &&
+        inset > 0;
+      if (measured) {
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;
         const key = `${inset}|${declaresSpacing}|${where ?? ""}`;
