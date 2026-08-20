@@ -194,6 +194,23 @@ export interface SemanticTree {
    * draws over without touching the specs those boxes describe.
    */
   density?: number;
+  /**
+   * Source pixels per density-independent pixel for this tree's `bounds` — the
+   * scale factor that turns a box into `dp`.
+   *
+   * The sibling of {@link density}, for the other half of the tree. The two are
+   * genuinely independent: compose/semantics reports `boundsInRoot` in the
+   * render's own pixels while resolving `tokens` to `dp`, so a candidate carries
+   * `density: undefined` (its tokens are already dp) *and* a `boundsDensity` of
+   * 2 or 2.625 at the same time. Anything that measures a token against a box —
+   * the radius clamp test in `@design-parity/diff` — has to divide the boxes
+   * through first, or it compares a dp length against a pixel one and invents a
+   * discrepancy the render doesn't have.
+   *
+   * Absent means "not stated": treat `bounds` and `tokens` as already sharing a
+   * space rather than guessing a factor.
+   */
+  boundsDensity?: number;
 }
 
 /**

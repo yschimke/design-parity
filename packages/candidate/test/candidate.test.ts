@@ -236,6 +236,40 @@ describe("normalizeSemantics", () => {
     expect(normalizeSemantics({})).toBeUndefined();
   });
 
+  describe("boundsDensity", () => {
+    // `bounds` are the render's pixels, `tokens` are dp, and only something that
+    // states the factor lets a consumer measure one against the other. Best
+    // source first, and never a guess.
+    const root = { boundsInRoot: "0,0,1078,2399" };
+
+    it("takes the producer's own density when the payload states one", () => {
+      expect(normalizeSemantics({ root, density: 2.625 }, undefined, {})?.boundsDensity).toBe(2.625);
+    });
+
+    it("falls back to the dpi a @Preview device spec pins", () => {
+      // compose/semantics carried no `density` before its schema v14, and a
+      // consumer still has to compare those captures; a pinned device says the
+      // same thing one step removed.
+      const params = { device: "spec:width=204dp,height=204dp,dpi=320,isRound=true" };
+      expect(normalizeSemantics({ root }, undefined, params)?.boundsDensity).toBe(2);
+    });
+
+    it("falls back to the frame a widthDp preview rendered to", () => {
+      expect(normalizeSemantics({ root }, undefined, { widthDp: 539 })?.boundsDensity).toBe(2);
+    });
+
+    it("states nothing when the preview pins nothing", () => {
+      // The Wear catalog's stickers are exactly this: `@Preview(showBackground =
+      // false)`, no device, no widthDp, so there is nothing to derive from.
+      // Leaving it absent makes the consumer treat bounds and tokens as one
+      // space — which is what it did before — rather than inventing a factor.
+      expect(normalizeSemantics({ root }, undefined, {})?.boundsDensity).toBeUndefined();
+      expect(
+        normalizeSemantics({ root }, undefined, { device: "id:wearos_small_round" })?.boundsDensity,
+      ).toBeUndefined();
+    });
+  });
+
   it("carries testTag as a name, without letting it stand in for the label", () => {
     // A third of a published catalog's annotations had no title at all. The test
     // tag names them — but folding it into `label` would make a node with no

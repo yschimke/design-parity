@@ -190,8 +190,9 @@ export async function diff(
     config,
     options.tokenAlias,
     // The box each radius bounds, per node — the root's frame is not what a
-    // descendant's corner is clamped against.
-    collectRadiusBoxes(candidate.semantics.root),
+    // descendant's corner is clamped against — put back in the dp the radius
+    // token is already in, since the boxes arrive in the render's pixels.
+    collectRadiusBoxes(candidate.semantics.root, candidate.semantics.boundsDensity),
   );
   const designSystem = diffDesignSystem(
     reference.themeTokens,
