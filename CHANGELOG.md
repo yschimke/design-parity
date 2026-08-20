@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.56](https://github.com/yschimke/design-parity/compare/v0.1.55...v0.1.56) (2026-08-20)
+
+
+### Features
+
+* **diff:** let an unreportable token be unverified, not a failure ([#370](https://github.com/yschimke/design-parity/issues/370)) ([e6a3327](https://github.com/yschimke/design-parity/commit/e6a33274a983c94e0957a7f2427542a70b920e40))
+
+
+### Bug Fixes
+
+* **diff:** let geometry answer a padding spec, not overrule one ([#365](https://github.com/yschimke/design-parity/issues/365)) ([6338d46](https://github.com/yschimke/design-parity/commit/6338d4654ec72d16c49d676ffca971711b42044f))
+* **diff:** take the measured-inset floor from the tolerance, not a constant ([#369](https://github.com/yschimke/design-parity/issues/369)) ([61debac](https://github.com/yschimke/design-parity/commit/61debac7ac79a507260c7c72838d76143fcbc463))
+
 ## [0.1.55](https://github.com/yschimke/design-parity/compare/v0.1.54...v0.1.55) (2026-08-20)
 
 
