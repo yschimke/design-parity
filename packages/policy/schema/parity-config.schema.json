@@ -20,6 +20,25 @@
     "cmpCapable": {
       "type": "boolean",
       "description": "Whether the repo is Compose Multiplatform capable (Principle 6). Recorded by setup/bootstrap from its deterministic CMP scan so the unattended Action can promote CMP to Android-only repos without re-deriving it per run (Principle 1). false ⇒ Android-only (the PR comment carries a non-blocking 'could run faster on CMP' suggestion); true ⇒ already CMP; omitted ⇒ setup hasn't recorded it. Advisory only — never a gate."
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Token-comparison policy: what this platform can be held to, as opposed to how close it has to be. Tolerances stay committed engine defaults (Principle 1) and are deliberately not settable here.",
+      "properties": {
+        "missingNumerics": {
+          "type": "string",
+          "enum": ["advisory", "strict"],
+          "default": "advisory",
+          "description": "What a numeric spec token the candidate resolves NO value for is worth. 'advisory' (default) reports it as a non-blocking note, on the same 'we can't verify, so we don't accuse' reasoning already applied when a candidate resolves a whole token group of nothing; 'strict' restores the hard error that forces a Fail. A value the candidate does report is compared strictly either way. Wear is the worked example: a component inset by touchTargetAwareSize plus a sized child declares no padding modifier, and adding one to clear the check would misrepresent how the library composes (issue #368)."
+        },
+        "textDerivedInsets": {
+          "type": "string",
+          "enum": ["skip", "measure"],
+          "default": "skip",
+          "description": "Whether an inset MEASURED off a text child counts as padding. The derived-inset check reads the gap between a container and its children — a sound proxy for padding when the child is a box, and font metrics when it is a glyph. 'skip' (default) drops such a measurement rather than quoting it against a declared padding; 'measure' reports it like any other (issue #367)."
+        }
+      }
     }
   }
 }

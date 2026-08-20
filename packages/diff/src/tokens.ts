@@ -125,12 +125,26 @@ export function collectRadiusBoxes(
  * `measuredSpacing` drops it: a child that fills or overflows its parent is not
  * evidence of padding.
  *
+ * Nor is a **glyph**. The measurement is a proxy for padding because a child's
+ * box is placed where its parent's inset puts it — true of an icon, and not of
+ * text, whose box is as wide as the string and as tall as its line height. So
+ * `TextToggleButton { Text("A") }`, which declares no padding anywhere, measures
+ * the distance from the button edge to the text box and reports it against the
+ * kit's declared `padding: 1` as a 7dp divergence that does not exist (issue
+ * #367). A container is dropped when any one of its four extremes rests on
+ * nothing but text — all four edges have to agree for an inset to be reported at
+ * all, so one glyph-set edge calibrates the whole number. An extreme a box also
+ * reaches is kept: there the glyph merely agrees with a layout the parent chose.
+ * [textInsets] `"measure"` restores the historical behaviour for a project that
+ * wants it.
+ *
  * [boundsDensity] converts render pixels to dp — see {@link collectRadiusBoxes}.
  */
 export function collectDerivedInsets(
   root: SemanticNode,
   boundsDensity?: number,
   minInset = 1,
+  textInsets: "skip" | "measure" = "skip",
 ): DerivedInset[] {
   const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out: DerivedInset[] = [];
@@ -184,7 +198,10 @@ export function collectDerivedInsets(
       const first = edges[0]!;
       const eps = Math.min(UNIFORM_EPSILON, minInset);
       const inset = round2(first);
+      const glyphEdged =
+        textInsets === "skip" && edgesSetOnlyByText(kids, left, top, right, bottom);
       const measured =
+        !glyphEdged &&
         edges.every((v) => v > 0) &&
         edges.every((v) => Math.abs(v - first) <= eps) &&
         first > minInset &&
@@ -222,6 +239,52 @@ export interface DerivedInset {
 
 /** Sub-dp slack when deciding whether four measured edges are the same inset. */
 const UNIFORM_EPSILON = 0.5;
+
+/**
+ * Is this node a run of **text** — a box whose size is font metrics rather than
+ * a layout the parent chose?
+ *
+ * The role is the direct answer where a source emits one (`compose/semantics`
+ * does, and `@design-parity/checks` reads exactly this key). A leaf that
+ * resolves typography is the same thing under a source that doesn't role it:
+ * something drew glyphs there. A *container* that resolves typography is not —
+ * a themed row passing type down to its children still has a layout box of its
+ * own.
+ */
+function isTextNode(node: SemanticNode): boolean {
+  if (node.role === "text") return true;
+  const leaf = (node.children ?? []).length === 0;
+  return leaf && Object.keys(node.tokens?.typography ?? {}).length > 0;
+}
+
+/**
+ * Does any of the union's four extremes rest **only** on glyphs?
+ *
+ * Per-extreme and exclusive, because sharing an edge with a box is what makes a
+ * measurement trustworthy: an icon inset 12dp with a label whose top happens to
+ * line up with it still has all four edges established by the icon, and the 12
+ * is a real inset. Only an extreme that *nothing but* text reaches is font
+ * metrics. Coincidence cuts the safe way here — where a box agrees with the
+ * glyph, the number it gives is the same number.
+ */
+function edgesSetOnlyByText(
+  kids: SemanticNode[],
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): boolean {
+  const at: Array<(b: Bounds) => boolean> = [
+    (b) => b.x === left,
+    (b) => b.y === top,
+    (b) => b.x + b.width === right,
+    (b) => b.y + b.height === bottom,
+  ];
+  return at.some((reaches) => {
+    const touching = kids.filter((k) => reaches(k.bounds!));
+    return touching.length > 0 && touching.every(isTextNode);
+  });
+}
 
 /** Two decimal places — enough for a dp measured back from pixels. */
 function round2(v: number): number {
@@ -394,6 +457,7 @@ export function diffTokens(
       want,
       candidate.spacing,
       config.spacingTolerance,
+      config.missingNumerics,
       findings,
       undefined,
       derivedInsets,
@@ -427,6 +491,7 @@ export function diffTokens(
         want,
         candidate.radius,
         config.radiusTolerance,
+        config.missingNumerics,
         findings,
         radiusBoxes,
       );
@@ -513,6 +578,7 @@ function numericFinding(
   want: number,
   candidate: Record<string, number> | undefined,
   tolerance: number,
+  missingNumerics: "advisory" | "strict",
   findings: Finding[],
   radiusBoxes?: Map<number, Bounds[]>,
   derivedInsets?: DerivedInset[],
@@ -571,7 +637,11 @@ function numericFinding(
   }
 
   if (got === undefined) {
-    findings.push(missing(group, name, String(want)));
+    findings.push(
+      missingNumerics === "strict"
+        ? missing(group, name, String(want))
+        : unreported(group, name, String(want)),
+    );
     return;
   }
   // A radius at or past half the shorter side draws a stadium: the corner is
@@ -796,10 +866,32 @@ function missing(group: string, name: string, want: string): Finding {
 }
 
 /**
+ * A numeric spec token the candidate resolved **no** value for — neither under
+ * the token's own name, nor by value, nor (for an inset) from the geometry.
+ *
+ * The numeric counterpart of {@link advisory}, and the per-token counterpart of
+ * {@link groupUnverified}: "the candidate has no value here" is not evidence
+ * that its value is wrong, and it is the same state a candidate that resolved
+ * the whole group of nothing is already forgiven for. Reported rather than
+ * silent — a reader still learns the spec went unchecked — and non-blocking, so
+ * one unreportable token no longer decides the verdict (issue #368). A project
+ * that wants the old hard error sets `missingNumerics: "strict"`.
+ */
+function unreported(group: string, name: string, want: string): Finding {
+  return {
+    kind: "token",
+    severity: "info",
+    message: `${group}.${name}: candidate resolved no value; unverified (spec ${want})`,
+    detail: { token: `${group}.${name}`, expected: want, actual: null, unverified: true },
+  };
+}
+
+/**
  * A spec token that maps to no Material role and didn't value-match: we can't
  * line it up with anything the candidate resolved, so we can't verify it.
  * Non-blocking `info` (never escalates the verdict) — reported, not a false
- * `missing` error (issue #102). Numerics stay strict and never come here.
+ * `missing` error (issue #102). Numerics have no role vocabulary to be
+ * unmappable in, so they take the same treatment through {@link unreported}.
  */
 function advisory(group: string, name: string, want: string): Finding {
   return {

@@ -33,6 +33,7 @@ export type {
   ResolvedDirection,
   MaturityRung,
   ParityConfig,
+  ParityTokenPolicy,
   CanvasTarget,
   CanvasWriteResult,
   CanvasWriter,

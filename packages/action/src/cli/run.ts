@@ -208,7 +208,7 @@ export async function main(): Promise<number> {
         `${new Set(args.components).size} component(s)\n`,
     );
   }
-  const { designMap, direction, cmpCapable, warnings } = await resolveRunConfig(
+  const { designMap, direction, cmpCapable, diffConfig, warnings } = await resolveRunConfig(
     args.repoRoot,
   );
 
@@ -277,6 +277,7 @@ export async function main(): Promise<number> {
     correspondences: resolved.correspondences,
     candidate: provider ?? (() => undefined),
     direction,
+    ...(diffConfig ? { diffConfig } : {}),
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(spec.byCode.size > 0 ? { referenceTokens: spec.byCode } : {}),
     ...(args.outDir ? { outDir: args.outDir } : {}),

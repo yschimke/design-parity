@@ -404,6 +404,157 @@ describe("diffTokens", () => {
       expect(collectDerivedInsets(flush)).toEqual([]);
     });
 
+    // wear-m3-catalog's `TextToggle`: `TextToggleButton` sized by
+    // `touchTargetAwareSize` with a bare `Text` inside and no padding modifier
+    // anywhere. The gap between the button edge and the text box is the string's
+    // advance and line height, not an inset the code chose.
+    const textButton = (): SemanticNode => ({
+      role: "button",
+      bounds: { x: 0, y: 0, width: 100, height: 100 },
+      children: [
+        {
+          role: "text",
+          label: "A",
+          bounds: { x: 20, y: 20, width: 60, height: 60 },
+          tokens: { typography: { label: { fontSize: 14 } } },
+        },
+      ],
+    });
+
+    it("does not measure an inset off a text child (#367)", () => {
+      // Guard the guard: the geometry IS uniform and well clear of the floor, so
+      // the fixture exercises the case — `measure` proves the only thing
+      // stopping it is the glyph rule.
+      expect(collectDerivedInsets(textButton(), 1, 1, "measure").map((i) => i.inset)).toEqual(
+        [20],
+      );
+      expect(collectDerivedInsets(textButton())).toEqual([]);
+    });
+
+    it("falls back to 'not evaluated' rather than quoting a glyph as padding (#367)", () => {
+      // The picker shape: the candidate declares no padding at all, and before
+      // the glyph rule the text geometry answered for it — `renders 20 vs spec
+      // 14 (Δ6)`, a confident-looking number about the font.
+      const measured = diffTokens(
+        { spacing: { padding: 14 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(textButton(), 1, 1, "measure"),
+      );
+      expect(measured[0]).toMatchObject({
+        severity: "error",
+        message: "spacing.padding: renders 20 vs spec 14 (Δ6)",
+      });
+
+      const findings = diffTokens(
+        { spacing: { padding: 14 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(textButton()),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    it("keeps an inset a box establishes even where a glyph shares the edge", () => {
+      // The icon establishes all four extremes on its own; the label's top
+      // happens to line up with it. Suppressing on "some text touches an
+      // extreme" would throw away a real 12dp inset over a coincidence — where
+      // a box agrees with the glyph, the number it gives is the same number.
+      const shared: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          { role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+          { role: "text", bounds: { x: 12, y: 12, width: 40, height: 20 } },
+        ],
+      };
+      expect(collectDerivedInsets(shared).map((i) => i.inset)).toEqual([12]);
+
+      // ...but an extreme NOTHING but text reaches is still dropped: push the
+      // label a dp past the icon's left and that edge is font metrics.
+      const glyphLeads: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          { role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+          { role: "text", bounds: { x: 11, y: 12, width: 40, height: 20 } },
+        ],
+      };
+      expect(collectDerivedInsets(glyphLeads)).toEqual([]);
+    });
+
+    it("still measures when a box sets the edges and text sits inside them", () => {
+      // The rule is about which child SET the measurement, not whether any text
+      // is present — an icon+label row insetting its icon to the container edge
+      // is still evidence of padding, and dropping it would give back #364's win.
+      const row: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        tokens: { spacing: { padding: 0 } },
+        children: [
+          { role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+          { role: "text", bounds: { x: 30, y: 40, width: 40, height: 20 } },
+        ],
+      };
+      expect(collectDerivedInsets(row).map((i) => i.inset)).toEqual([12]);
+    });
+
+    it("does not let a themed container count as a glyph", () => {
+      // A row that resolves typography for its children still has a layout box
+      // of its own; only a leaf that draws glyphs is font-shaped.
+      const themed: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [
+          {
+            bounds: { x: 16, y: 16, width: 68, height: 68 },
+            tokens: { typography: { body: { fontSize: 14 } } },
+            children: [{ role: "image", bounds: { x: 20, y: 20, width: 60, height: 60 } }],
+          },
+        ],
+      };
+      expect(collectDerivedInsets(themed).map((i) => i.inset)).toContain(16);
+    });
+
+    it("does not let the glyph rule silence a numeric the candidate CAN report", () => {
+      // `textDerivedInsets` decides what geometry may answer, never what a
+      // declared value says: a candidate that reports `padding: 8` against a
+      // spec of 1 is still a hard error.
+      const findings = diffTokens(
+        { spacing: { padding: 1 } },
+        { spacing: { padding: 8 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(textButton()),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "error",
+        message: "spacing.padding: 8 vs spec 1 (Δ7)",
+      });
+    });
+
+    it("does not let the advisory swallow an inset the geometry DOES answer", () => {
+      // #368 softens the token the candidate cannot report; it must not reach
+      // the case where the render measures a wrong inset, which is #364's whole
+      // point — that error still blocks.
+      const iconMiss = diffTokens(
+        { spacing: { padding: 12 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(iconButton(48), 2),
+      );
+      expect(iconMiss).toHaveLength(1);
+      expect(iconMiss[0]).toMatchObject({ severity: "error", detail: { actual: 14 } });
+    });
+
     it("does not let a measured inset answer a gap spec", () => {
       // A gap is the space BETWEEN siblings; an inset is the space around them.
       // Satisfying one with the other compares two different measurements that
@@ -567,7 +718,7 @@ describe("diffTokens", () => {
     expect(drift[0]).toMatchObject({ kind: "token", severity: "warn" });
   });
 
-  it("flags an absent token: numeric is a hard error, unmappable colour is advisory (#102)", () => {
+  it("flags an absent token as advisory — numeric and unmappable colour alike (#102, #368)", () => {
     // The candidate resolved *some* radius and colour (so both groups are
     // verifiable), just not the ones the spec names.
     const findings = diffTokens(
@@ -575,13 +726,31 @@ describe("diffTokens", () => {
       { spacing: { padding: 16 }, radius: { other: 20 }, colors: { fg: "#000000" } },
       defaultDiffConfig,
     );
-    // radius.corner (numeric) stays strict → error; colors.label maps to no
-    // Material role and didn't value-match → non-blocking advisory.
+    // Neither is evidence the candidate is wrong: `radius.corner` has no value
+    // to compare, and `colors.label` maps to no Material role and didn't
+    // value-match. Both are non-blocking notes.
     expect(findings).toHaveLength(2);
     const radius = findings.find((f) => f.detail?.token === "radius.corner");
     const label = findings.find((f) => f.detail?.token === "colors.label");
-    expect(radius).toMatchObject({ severity: "error" });
+    expect(radius).toMatchObject({ severity: "info", detail: { unverified: true } });
     expect(label).toMatchObject({ severity: "info", detail: { unmapped: true } });
+  });
+
+  it("restores the hard error for an absent numeric under `missingNumerics: strict`", () => {
+    const findings = diffTokens(
+      spec,
+      { spacing: { padding: 16 }, radius: { other: 20 }, colors: { fg: "#000000" } },
+      { ...defaultDiffConfig, missingNumerics: "strict" },
+    );
+    const radius = findings.find((f) => f.detail?.token === "radius.corner");
+    expect(radius).toMatchObject({
+      severity: "error",
+      message: "radius.corner missing from candidate (spec 8)",
+    });
+    // The colour advisory is untouched by the numeric knob.
+    expect(findings.find((f) => f.detail?.token === "colors.label")).toMatchObject({
+      severity: "info",
+    });
   });
 
   it("matches a colour that differs only by a full-alpha suffix (issue #74)", () => {
@@ -646,7 +815,12 @@ describe("diffTokens", () => {
     ).toEqual([]);
   });
 
-  it("reports a numeric token missing when no candidate value is within tolerance (#1897)", () => {
+  it("reports a numeric token unverified when no candidate value is within tolerance (#1897)", () => {
+    // The value match is what stands between "the candidate names this token
+    // differently" and "the candidate has no such value"; 4 against a spec of 16
+    // is outside the tolerance, so nothing lines up. That is unverifiable, not
+    // wrong (#368) — but it must still be *reported*, or a spec token silently
+    // goes unchecked.
     const padSpec: DesignTokens = { spacing: { screenPadding: 16 } };
     const findings = diffTokens(
       padSpec,
@@ -655,8 +829,9 @@ describe("diffTokens", () => {
     );
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({
-      severity: "error",
-      detail: { token: "spacing.screenPadding", actual: null },
+      severity: "info",
+      message: "spacing.screenPadding: candidate resolved no value; unverified (spec 16)",
+      detail: { token: "spacing.screenPadding", actual: null, unverified: true },
     });
   });
 

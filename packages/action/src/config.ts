@@ -1,7 +1,7 @@
 /**
  * Resolve the committed configuration a parity run reads from a repo: the
  * `design-map.json` correspondence manifest and the `.design-parity.json` parity
- * direction. Everything here is committed and read deterministically — no model,
+ * direction, CMP flag, and token-comparison policy. Everything here is committed and read deterministically — no model,
  * no network (Principle 1).
  */
 import { join } from "node:path";
@@ -11,6 +11,7 @@ import {
   type DesignMap,
   type ResolvedDirection,
 } from "@design-parity/core";
+import type { DiffConfig } from "@design-parity/diff";
 import {
   loadParityConfigOrDefault,
   PARITY_CONFIG_FILENAME,
@@ -26,6 +27,14 @@ export interface RunConfig {
    * {@link ParityConfig.cmpCapable}.
    */
   cmpCapable?: boolean;
+  /**
+   * Diff overrides the committed `.design-parity.json` asks for — today the
+   * `tokens` comparison policy (issues #367 / #368). Absent when the repo says
+   * nothing, so the engine's committed defaults stand (Principle 1); the field
+   * names are shared with {@link DiffConfig} so this stays a copy, not a
+   * translation that can drift.
+   */
+  diffConfig?: Partial<DiffConfig>;
   warnings: string[];
 }
 
@@ -67,5 +76,14 @@ export async function resolveRunConfig(repoRoot: string): Promise<RunConfig> {
   // Carry the committed CMP flag through verbatim (only when setup recorded it).
   if (typeof config.cmpCapable === "boolean")
     runConfig.cmpCapable = config.cmpCapable;
+  const diffConfig: Partial<DiffConfig> = {
+    ...(config.tokens?.missingNumerics
+      ? { missingNumerics: config.tokens.missingNumerics }
+      : {}),
+    ...(config.tokens?.textDerivedInsets
+      ? { textDerivedInsets: config.tokens.textDerivedInsets }
+      : {}),
+  };
+  if (Object.keys(diffConfig).length > 0) runConfig.diffConfig = diffConfig;
   return runConfig;
 }

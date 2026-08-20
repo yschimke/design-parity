@@ -206,6 +206,7 @@ export async function diff(
       candidate.semantics.root,
       candidate.semantics.boundsDensity,
       Math.min(1, config.spacingTolerance),
+      config.textDerivedInsets,
     ),
   );
   const designSystem = diffDesignSystem(
