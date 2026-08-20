@@ -893,22 +893,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           BRANCH: ${{ inputs.artifact-branch }}
+          DP_VERSION: ${{ inputs.design-parity-version }}
+          DP_REF: ${{ inputs.design-parity-ref }}
         run: |
           set -euo pipefail
-          art="$(mktemp -d)"
-          cp -a out/. "$art/"
-          printf '%s\n' "$GITHUB_SHA" > "$art/SOURCE_COMMIT"
-          cd "$art"
-          git init -q
-          git checkout -q -b "$BRANCH"
-          git add -A
-          git \
-            -c user.name='github-actions[bot]' \
-            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -q -m "design-parity artifacts for ${GITHUB_SHA}"
-          git push -f \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "$BRANCH"
+          printf '%s\n' "$GITHUB_SHA" > out/SOURCE_COMMIT
+          if [ -n "${DP_REF:-}" ]; then
+            dp=(node "${GITHUB_WORKSPACE}/.design-parity-src/packages/cli/bin/design-parity.mjs")
+          else
+            dp=(npx -y "design-parity@${DP_VERSION}")
+          fi
+          # `publish` re-parents the staged tree on the branch tip and retries a
+          # push another run won. This step used to inline `git init` + `push
+          # -f`, which replaced the branch with a fresh single-commit orphan
+          # every time — while the board's own README links a per-component
+          # History (`commits/<branch>/<component>/report.html`), so it
+          # advertised a trend it destroyed on each run. Baseline mode already
+          # published the right way; this is the sharded path joining it, so
+          # there is one publisher rather than two that disagree.
+          "${dp[@]}" publish --dir out --branch "$BRANCH"
 
       # The run's verdict, applied last — after the reports that explain it are
       # on the branch. This is the step that fails a blocking run.

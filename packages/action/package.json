@@ -14,7 +14,8 @@
     "./reverse": "./dist/cli/reverse.js",
     "./schema/verdict.schema.json": "./schema/verdict.schema.json",
     "./cache": "./dist/cli/cache-cli.js",
-    "./import": "./dist/cli/import-cli.js"
+    "./import": "./dist/cli/import-cli.js",
+    "./publish": "./dist/cli/publish-cli.js"
   },
   "files": [
     "dist",
