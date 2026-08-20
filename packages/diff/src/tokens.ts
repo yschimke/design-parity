@@ -169,12 +169,15 @@ export function collectDerivedInsets(
       //     0.5dp allowance that absorbs px→dp rounding at whole-dp resolution
       //     is *larger than the values themselves* once fractional insets are
       //     admitted, so it cannot stay a constant.
-      //  3. at or above [minInset]. Below it a sliver is not a padding — a flush
-      //     child measures a fraction of a dp off the conversion, and quoting
-      //     "renders 0.5" reads as a measurement. The caller sets this from its
-      //     own tolerance, since that is what decides whether a sub-dp value is
-      //     meaningful *to this comparison*: a project on the documented strict
-      //     `spacingTolerance: 0` may genuinely spec `padding: 0.5`.
+      //  3. strictly above [minInset]. At or below it a sliver is not a padding
+      //     — a flush child measures a fraction of a dp off the conversion, and
+      //     quoting "renders 0.5" reads as a measurement. The caller sets this
+      //     from its own tolerance, since that is what decides whether a sub-dp
+      //     value is meaningful *to this comparison*: a project on the
+      //     documented strict `spacingTolerance: 0` may genuinely spec
+      //     `padding: 0.5`. Strictly, because a value *equal* to the floor is
+      //     within that same tolerance of zero and so indistinguishable from no
+      //     padding at all — at a floor of 0 this is just (1) again.
       //  4. still positive after rounding, or a value in (0, 0.005) is reported
       //     as `0` — readmitting through the report what (1) rejected at the
       //     measurement.
@@ -184,7 +187,7 @@ export function collectDerivedInsets(
       const measured =
         edges.every((v) => v > 0) &&
         edges.every((v) => Math.abs(v - first) <= eps) &&
-        first >= minInset &&
+        first > minInset &&
         inset > 0;
       if (measured) {
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;

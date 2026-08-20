@@ -444,12 +444,14 @@ describe("diffTokens", () => {
       // The 0.5dp slack that absorbs px→dp rounding at whole-dp resolution is
       // bigger than the values themselves once fractional insets are admitted,
       // so it cannot stay constant: at a strict floor these edges disagree.
+      // Edges sit clear of the floor on both runs, so this isolates the
+      // uniformity allowance — the floor boundary has its own test below.
       const uneven: SemanticNode = {
         bounds: { x: 0, y: 0, width: 100, height: 100 },
-        children: [{ bounds: { x: 1, y: 1.4, width: 98, height: 97.2 } }],
+        children: [{ bounds: { x: 1.2, y: 1.6, width: 97.6, height: 96.8 } }],
       };
       expect(collectDerivedInsets(uneven, 1, 0)).toEqual([]);
-      expect(collectDerivedInsets(uneven, 1, 1).map((i) => i.inset)).toEqual([1]);
+      expect(collectDerivedInsets(uneven, 1, 1).map((i) => i.inset)).toEqual([1.2]);
     });
 
     it("rejects an inset that survives the floor but rounds away", () => {
@@ -482,6 +484,33 @@ describe("diffTokens", () => {
         undefined,
         undefined,
         collectDerivedInsets(fills, 1, 0),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    it("rejects an inset that only reaches the floor, without clearing it", () => {
+      // A project on `spacingTolerance: 0.5` drives the floor to 0.5, and an
+      // inclusive test lets a 0.5dp conversion sliver through — a value this
+      // comparison cannot tell apart from zero, since |0.5 - 0| is inside its
+      // own tolerance. One such measurement makes the spacing group look
+      // measurable, so a 14dp spec goes from an unverified advisory to a
+      // blocking `renders 0.5 vs spec 14` — the sliver the floor exists to drop.
+      const sliver: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.5, y: 0.5, width: 99, height: 99 } }],
+      };
+      expect(collectDerivedInsets(sliver, 1, 0.5)).toEqual([]);
+      // Still measured when the comparison is fine enough to mean it.
+      expect(collectDerivedInsets(sliver, 1, 0).map((i) => i.inset)).toEqual([0.5]);
+
+      const findings = diffTokens(
+        { spacing: { padding: 14 } },
+        {},
+        { ...defaultDiffConfig, spacingTolerance: 0.5 },
+        undefined,
+        undefined,
+        collectDerivedInsets(sliver, 1, 0.5),
       );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
