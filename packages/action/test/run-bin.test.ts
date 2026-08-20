@@ -16,13 +16,19 @@ const bin = fileURLToPath(
 );
 
 /** Spawn the real bin, tolerating the non-zero exit a usage message carries. */
-async function runBin(args: string[]): Promise<{ code: number; stdout: string }> {
+async function runBin(
+  args: string[],
+): Promise<{ code: number; stdout: string; stderr: string }> {
   try {
-    const { stdout } = await exec(process.execPath, [bin, ...args]);
-    return { code: 0, stdout };
+    const { stdout, stderr } = await exec(process.execPath, [bin, ...args]);
+    return { code: 0, stdout, stderr };
   } catch (err) {
-    const e = err as { code?: number; stdout?: string };
-    return { code: typeof e.code === "number" ? e.code : 1, stdout: e.stdout ?? "" };
+    const e = err as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof e.code === "number" ? e.code : 1,
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? "",
+    };
   }
 }
 
@@ -59,5 +65,30 @@ describe("design-parity bin launcher", () => {
   it("advertises the reference cache on the run usage line", async () => {
     const { stdout } = await runBin(["run"]);
     expect(stdout).toContain("--reference-cache <dir>");
+  });
+
+  it("dispatches `publish` to its own main", async () => {
+    const { code, stderr } = await runBin(["publish"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("--dir and --branch are required");
+  });
+
+  // The launcher used to send an unrecognised subcommand to the `else` branch —
+  // a parity RUN. `design-parity publish …` against a CLI predating `publish`
+  // therefore printed "Parity pass" and exited 0 while publishing nothing: a
+  // green step that silently stopped updating the board. Version skew between a
+  // workflow pinned `@main` and a `latest` CLI makes that a live scenario every
+  // time a subcommand is added, so it fails loudly and names the version.
+  it("refuses an unknown subcommand instead of running a parity comparison", async () => {
+    const { code, stdout, stderr } = await runBin(["publish-typo", "--dir", "out"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("unknown subcommand 'publish-typo'");
+    expect(stderr).toContain("older than the workflow");
+    expect(stdout).not.toContain("Parity pass");
+  });
+
+  it("still treats a leading flag as a parity run, not a subcommand", async () => {
+    const { stdout } = await runBin(["--components", ""]);
+    expect(stdout).toContain("design-parity run --components");
   });
 });
