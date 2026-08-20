@@ -169,7 +169,12 @@ export function collectDerivedInsets(
       // A project running the documented strict `spacingTolerance: 0` is asking
       // for sub-dp precision and genuinely may spec `padding: 0.5`; a blanket
       // 1dp floor would throw its evidence away and fail it on the declared 0.
-      if (uniform && first >= minInset) {
+      // `> 0` independently of the floor: with a strict tolerance [minInset] is
+      // itself 0, and an inclusive test would admit a child that exactly fills
+      // its parent as an inset of zero — which this function's own contract
+      // says is not evidence of padding, and which would turn an unverified
+      // advisory into a blocking `renders 0 vs spec 14`.
+      if (uniform && first > 0 && first >= minInset) {
         const inset = round2(first);
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;

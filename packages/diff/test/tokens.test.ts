@@ -428,6 +428,30 @@ describe("diffTokens", () => {
       expect(collectDerivedInsets(offCentre)).toEqual([]);
     });
 
+    it("never admits a zero inset, even with the floor turned all the way down", () => {
+      // A strict `spacingTolerance: 0` drives the floor to 0, and an inclusive
+      // test would let a child that exactly fills its parent count as an inset
+      // of zero — flipping an unverified advisory into a blocking
+      // `renders 0 vs spec 14`. A filling child is not evidence of padding at
+      // any tolerance.
+      const fills: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0, y: 0, width: 100, height: 100 } }],
+      };
+      expect(collectDerivedInsets(fills, 1, 0)).toEqual([]);
+
+      const findings = diffTokens(
+        { spacing: { padding: 14 } },
+        {},
+        { ...defaultDiffConfig, spacingTolerance: 0 },
+        undefined,
+        undefined,
+        collectDerivedInsets(fills, 1, 0),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
     it("drops a child that fills or overflows its parent", () => {
       const fills: SemanticNode = {
         bounds: { x: 0, y: 0, width: 100, height: 100 },
