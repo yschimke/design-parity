@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.54](https://github.com/yschimke/design-parity/compare/v0.1.53...v0.1.54) (2026-08-20)
+
+
+### Bug Fixes
+
+* **diff:** judge a corner's clamp in the unit the radius is in ([#359](https://github.com/yschimke/design-parity/issues/359)) ([344bf9c](https://github.com/yschimke/design-parity/commit/344bf9c86177c20e7081c7c191713a41fca0a65b))
+
 ## [0.1.53](https://github.com/yschimke/design-parity/compare/v0.1.52...v0.1.53) (2026-08-17)
 
 
