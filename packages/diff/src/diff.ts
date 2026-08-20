@@ -36,7 +36,12 @@ import {
 } from "./pairing.js";
 import { diffSemantics } from "./semantic.js";
 import { renderSummary } from "./summary.js";
-import { collectRadiusBoxes, collectTokens, diffTokens } from "./tokens.js";
+import {
+  collectDerivedInsets,
+  collectRadiusBoxes,
+  collectTokens,
+  diffTokens,
+} from "./tokens.js";
 import {
   diffImagePair,
   imageKey,
@@ -193,6 +198,9 @@ export async function diff(
     // descendant's corner is clamped against — put back in the dp the radius
     // token is already in, since the boxes arrive in the render's pixels.
     collectRadiusBoxes(candidate.semantics.root, candidate.semantics.boundsDensity),
+    // The insets the render actually draws, for a padding spec the code meets
+    // by centring rather than by a padding modifier.
+    collectDerivedInsets(candidate.semantics.root, candidate.semantics.boundsDensity),
   );
   const designSystem = diffDesignSystem(
     reference.themeTokens,

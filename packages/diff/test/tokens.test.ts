@@ -3,7 +3,12 @@ import { describe, it, expect } from "vitest";
 import type { DesignTokens, SemanticNode } from "@design-parity/core";
 
 import { defaultDiffConfig } from "../src/config.js";
-import { collectRadiusBoxes, collectTokens, diffTokens } from "../src/tokens.js";
+import {
+  collectDerivedInsets,
+  collectRadiusBoxes,
+  collectTokens,
+  diffTokens,
+} from "../src/tokens.js";
 
 describe("collectTokens", () => {
   it("flattens a tree, merging distinctly-keyed tokens from every node", () => {
@@ -194,6 +199,106 @@ describe("diffTokens", () => {
         boxesOf(16, { width: 32, height: 20 }),
       );
       expect(findings).toHaveLength(1);
+    });
+  });
+
+  describe("an inset the render draws but does not declare", () => {
+    // Wear's `IconButton`, measured off the kit: cell 34732:103015 is a 52x52
+    // frame declaring `padding: 12` around a 26x26 icon at (13,13). Compose
+    // draws the same button by CENTRING the icon — no padding modifier — so the
+    // candidate reports `padding: 0`. Captured at dpi 320, its bounds arrive as
+    // px: a 104x104 button around a 52x52 icon.
+    const iconButton = (iconPx: number): SemanticNode => ({
+      role: "button",
+      bounds: { x: 0, y: 0, width: 104, height: 104 },
+      tokens: { spacing: { padding: 0 } },
+      children: [
+        {
+          role: "image",
+          bounds: {
+            x: (104 - iconPx) / 2,
+            y: (104 - iconPx) / 2,
+            width: iconPx,
+            height: iconPx,
+          },
+        },
+      ],
+    });
+
+    it("measures the drawn inset in dp, not render pixels", () => {
+      // 52px of margin either side of a 52px icon in a 104px box is 26px — but
+      // the spec is in dp, so the answer must be 13.
+      expect(collectDerivedInsets(iconButton(52), 2)).toEqual([13]);
+      expect(collectDerivedInsets(iconButton(52))).toEqual([26]);
+    });
+
+    it("satisfies the spec without a declared padding, and says how", () => {
+      const findings = diffTokens(
+        { spacing: { padding: 12 } },
+        { spacing: { padding: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(iconButton(52), 2),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", expected: 12, actual: 13 },
+      });
+    });
+
+    it("still fails when the render insets the wrong amount", () => {
+      // The same button drawing a 24dp icon instead of the kit's 26dp insets 14,
+      // not 13 — past the 1dp allowance. Measuring the geometry is what turns a
+      // meaningless "0 vs 12" into the real miss.
+      const findings = diffTokens(
+        { spacing: { padding: 12 } },
+        { spacing: { padding: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(iconButton(48), 2),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "error" });
+    });
+
+    it("does not let a measured inset answer a gap spec", () => {
+      // A gap is the space BETWEEN siblings; an inset is the space around them.
+      // Satisfying one with the other compares two different measurements that
+      // merely share a vocabulary.
+      const findings = diffTokens(
+        { spacing: { gap: 12 } },
+        { spacing: { gap: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [13],
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "error" });
+    });
+
+    it("reports only a uniform inset — an off-centre child is a different shape", () => {
+      const offCentre: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 10, y: 30, width: 80, height: 40 } }],
+      };
+      expect(collectDerivedInsets(offCentre)).toEqual([]);
+    });
+
+    it("drops a child that fills or overflows its parent", () => {
+      const fills: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0, y: 0, width: 100, height: 100 } }],
+      };
+      const overflows: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: -5, y: -5, width: 110, height: 110 } }],
+      };
+      expect(collectDerivedInsets(fills)).toEqual([]);
+      expect(collectDerivedInsets(overflows)).toEqual([]);
     });
   });
 
