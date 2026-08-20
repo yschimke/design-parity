@@ -346,6 +346,35 @@ describe("diffTokens", () => {
       expect(findings[0]).toMatchObject({ severity: "info", detail: { via: "measured-geometry" } });
     });
 
+    it("does not overrule a declared value that already satisfies the spec", () => {
+      // wear-m3-catalog's `TextToggle` went warn → fail on this: it declares
+      // `padding: 0` against a spec of 1, which is inside the 1dp tolerance and
+      // was passing, and the geometry pass overrode that pass with a measured 8.
+      // Geometry is a second opinion for a token the declared value cannot
+      // answer, never a way to overrule one that already did.
+      const findings = diffTokens(
+        { spacing: { padding: 1 } },
+        { spacing: { padding: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [{ inset: 8, declaresSpacing: true }],
+      );
+      expect(findings).toEqual([]);
+    });
+
+    it("drops an inset that rounds to nothing rather than quoting it", () => {
+      // A child sitting flush measures a sub-dp sliver off the px→dp conversion.
+      // `measuredSpacing` rounds for this reason; quoting "renders 0.5" reads as
+      // a measurement when it is an artifact — wear-m3-catalog's `DateWheels`
+      // reported exactly that against a spec of 14.
+      const flush: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.5, y: 0.5, width: 99, height: 99 } }],
+      };
+      expect(collectDerivedInsets(flush)).toEqual([]);
+    });
+
     it("does not let a measured inset answer a gap spec", () => {
       // A gap is the space BETWEEN siblings; an inset is the space around them.
       // Satisfying one with the other compares two different measurements that
