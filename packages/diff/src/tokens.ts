@@ -130,6 +130,7 @@ export function collectRadiusBoxes(
 export function collectDerivedInsets(
   root: SemanticNode,
   boundsDensity?: number,
+  minInset = 1,
 ): DerivedInset[] {
   const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out: DerivedInset[] = [];
@@ -155,15 +156,40 @@ export function collectDerivedInsets(
         box.x + box.width - right,
         box.y + box.height - bottom,
       ].map((v) => v / scale);
+      // Four conditions, stated together because each of the first three was
+      // found the hard way, one review round apart, and they only make sense as
+      // one invariant: **a measured inset is four positive edges that agree to
+      // within the precision of the comparison asking, and that survive being
+      // reported.**
+      //
+      //  1. every edge positive — a child flush against one side has no padding
+      //     there, whatever the other three do. `[0.5, 0, 0.5, 0]` is not a
+      //     0.5dp inset.
+      //  2. they agree within `eps`, which tightens with the caller's floor: the
+      //     0.5dp allowance that absorbs px→dp rounding at whole-dp resolution
+      //     is *larger than the values themselves* once fractional insets are
+      //     admitted, so it cannot stay a constant.
+      //  3. strictly above [minInset]. At or below it a sliver is not a padding
+      //     — a flush child measures a fraction of a dp off the conversion, and
+      //     quoting "renders 0.5" reads as a measurement. The caller sets this
+      //     from its own tolerance, since that is what decides whether a sub-dp
+      //     value is meaningful *to this comparison*: a project on the
+      //     documented strict `spacingTolerance: 0` may genuinely spec
+      //     `padding: 0.5`. Strictly, because a value *equal* to the floor is
+      //     within that same tolerance of zero and so indistinguishable from no
+      //     padding at all — at a floor of 0 this is just (1) again.
+      //  4. still positive after rounding, or a value in (0, 0.005) is reported
+      //     as `0` — readmitting through the report what (1) rejected at the
+      //     measurement.
       const first = edges[0]!;
-      const uniform = edges.every((v) => Math.abs(v - first) <= UNIFORM_EPSILON);
-      // A whole dp, not merely positive. Sub-dp is below the unit a spec is
-      // written in: a child sitting flush measures a sliver off the px→dp
-      // conversion, and quoting "renders 0.5" reads as a measurement when it is
-      // an artifact — wear-m3-catalog's `DateWheels` reported exactly that
-      // against a spec of 14. (`Math.round` would not do: it rounds 0.5 up.)
-      if (uniform && first >= 1) {
-        const inset = round2(first);
+      const eps = Math.min(UNIFORM_EPSILON, minInset);
+      const inset = round2(first);
+      const measured =
+        edges.every((v) => v > 0) &&
+        edges.every((v) => Math.abs(v - first) <= eps) &&
+        first > minInset &&
+        inset > 0;
+      if (measured) {
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;
         const key = `${inset}|${declaresSpacing}|${where ?? ""}`;

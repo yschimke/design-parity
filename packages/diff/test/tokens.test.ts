@@ -363,6 +363,35 @@ describe("diffTokens", () => {
       expect(findings).toEqual([]);
     });
 
+    it("keeps a fractional inset for a project that tightened its tolerance", () => {
+      // A 1px inset at density 2 is a real 0.5dp one, and a project running the
+      // documented strict `spacingTolerance: 0` may genuinely spec `padding:
+      // 0.5`. A blanket 1dp floor threw that evidence away and failed it on the
+      // declared 0 — so the floor follows the tolerance.
+      const flushish: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        tokens: { spacing: { padding: 0 } },
+        children: [{ bounds: { x: 1, y: 1, width: 98, height: 98 } }],
+      };
+      expect(collectDerivedInsets(flushish, 2, 1)).toEqual([]);
+      expect(collectDerivedInsets(flushish, 2, 0).map((i) => i.inset)).toEqual([0.5]);
+
+      const strict = { ...defaultDiffConfig, spacingTolerance: 0 };
+      const findings = diffTokens(
+        { spacing: { padding: 0.5 } },
+        { spacing: { padding: 0 } },
+        strict,
+        undefined,
+        undefined,
+        collectDerivedInsets(flushish, 2, Math.min(1, strict.spacingTolerance)),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", actual: 0.5 },
+      });
+    });
+
     it("drops an inset that rounds to nothing rather than quoting it", () => {
       // A child sitting flush measures a sub-dp sliver off the px→dp conversion.
       // `measuredSpacing` rounds for this reason; quoting "renders 0.5" reads as
@@ -397,6 +426,94 @@ describe("diffTokens", () => {
         children: [{ bounds: { x: 10, y: 30, width: 80, height: 40 } }],
       };
       expect(collectDerivedInsets(offCentre)).toEqual([]);
+    });
+
+    it("requires every edge to be a positive inset, not just the first", () => {
+      // `[0.5, 0, 0.5, 0]` averaged to "a 0.5dp inset" under a 0.5dp uniformity
+      // allowance — reporting padding on a child flush against top and bottom.
+      // At a strict tolerance that satisfied `padding: 0.5` outright.
+      const sideOnly: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.5, y: 0, width: 99, height: 100 } }],
+      };
+      expect(collectDerivedInsets(sideOnly, 1, 0)).toEqual([]);
+      expect(collectDerivedInsets(sideOnly, 1, 1)).toEqual([]);
+    });
+
+    it("tightens the uniformity allowance with the floor", () => {
+      // The 0.5dp slack that absorbs px→dp rounding at whole-dp resolution is
+      // bigger than the values themselves once fractional insets are admitted,
+      // so it cannot stay constant: at a strict floor these edges disagree.
+      // Edges sit clear of the floor on both runs, so this isolates the
+      // uniformity allowance — the floor boundary has its own test below.
+      const uneven: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 1.2, y: 1.6, width: 97.6, height: 96.8 } }],
+      };
+      expect(collectDerivedInsets(uneven, 1, 0)).toEqual([]);
+      expect(collectDerivedInsets(uneven, 1, 1).map((i) => i.inset)).toEqual([1.2]);
+    });
+
+    it("rejects an inset that survives the floor but rounds away", () => {
+      // In (0, 0.005) the raw edges are positive and clear a zero floor, but the
+      // reported value rounds to 0 — readmitting through the report exactly what
+      // the positive-edge rule rejects at the measurement.
+      const sliver: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.002, y: 0.002, width: 99.996, height: 99.996 } }],
+      };
+      expect(collectDerivedInsets(sliver, 1, 0)).toEqual([]);
+    });
+
+    it("never admits a zero inset, even with the floor turned all the way down", () => {
+      // A strict `spacingTolerance: 0` drives the floor to 0, and an inclusive
+      // test would let a child that exactly fills its parent count as an inset
+      // of zero — flipping an unverified advisory into a blocking
+      // `renders 0 vs spec 14`. A filling child is not evidence of padding at
+      // any tolerance.
+      const fills: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0, y: 0, width: 100, height: 100 } }],
+      };
+      expect(collectDerivedInsets(fills, 1, 0)).toEqual([]);
+
+      const findings = diffTokens(
+        { spacing: { padding: 14 } },
+        {},
+        { ...defaultDiffConfig, spacingTolerance: 0 },
+        undefined,
+        undefined,
+        collectDerivedInsets(fills, 1, 0),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    it("rejects an inset that only reaches the floor, without clearing it", () => {
+      // A project on `spacingTolerance: 0.5` drives the floor to 0.5, and an
+      // inclusive test lets a 0.5dp conversion sliver through — a value this
+      // comparison cannot tell apart from zero, since |0.5 - 0| is inside its
+      // own tolerance. One such measurement makes the spacing group look
+      // measurable, so a 14dp spec goes from an unverified advisory to a
+      // blocking `renders 0.5 vs spec 14` — the sliver the floor exists to drop.
+      const sliver: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ bounds: { x: 0.5, y: 0.5, width: 99, height: 99 } }],
+      };
+      expect(collectDerivedInsets(sliver, 1, 0.5)).toEqual([]);
+      // Still measured when the comparison is fine enough to mean it.
+      expect(collectDerivedInsets(sliver, 1, 0).map((i) => i.inset)).toEqual([0.5]);
+
+      const findings = diffTokens(
+        { spacing: { padding: 14 } },
+        {},
+        { ...defaultDiffConfig, spacingTolerance: 0.5 },
+        undefined,
+        undefined,
+        collectDerivedInsets(sliver, 1, 0.5),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
     });
 
     it("drops a child that fills or overflows its parent", () => {
