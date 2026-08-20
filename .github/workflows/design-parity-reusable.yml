@@ -911,7 +911,69 @@ jobs:
           # advertised a trend it destroyed on each run. Baseline mode already
           # published the right way; this is the sharded path joining it, so
           # there is one publisher rather than two that disagree.
-          "${dp[@]}" publish --dir out --branch "$BRANCH"
+          #
+          # But this workflow is versioned by its `uses:` ref while the CLI is
+          # versioned by `design-parity-version` — they move independently, and
+          # that input is pinnable, so "the CLI predates `publish`" is not just
+          # the window before the next release: a consumer can sit there
+          # indefinitely. A launcher predating `publish` does NOT reject the
+          # unknown subcommand; it runs a parity comparison and exits **0**
+          # (verified against 0.1.54), which would leave the board silently
+          # stale behind a green step. So probe, and fall back rather than
+          # assume. Same shape as the `merge` step's shard.json degradation.
+          #
+          # The probe is a deliberately incomplete invocation: side-effect free,
+          # and only a CLI carrying `publish` names the missing flags. Captured
+          # rather than piped because the new CLI exits 2 here and `pipefail`
+          # would read that as "no publish".
+          probe="$("${dp[@]}" publish 2>&1 || true)"
+          case "$probe" in
+            *"--dir and --branch are required"*) has_publish=true ;;
+            *) has_publish=false ;;
+          esac
+
+          if [ "$has_publish" = true ]; then
+            "${dp[@]}" publish --dir out --branch "$BRANCH"
+            exit 0
+          fi
+
+          echo "::warning::design-parity@${DP_VERSION} has no 'publish' subcommand; appending in-workflow instead. Upgrade design-parity-version to move onto the shared publisher (it retries a push race up to five times; this fallback retries once)."
+
+          # Fallback for a pinned-older CLI. Delete it once the supported floor
+          # carries `publish`. Deliberately the same *shape* as `publishBaseline`
+          # — append on the tip, never force — so a consumer on either path gets
+          # a branch that is a history rather than a snapshot.
+          repo="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          publish_append() {
+            art="$1"
+            if git clone -q --depth 1 --branch "$BRANCH" "$repo" "$art" 2>/dev/null; then
+              # Replace the tree wholesale, keeping `.git`: a component dropped
+              # from the board must disappear, not linger from the last run.
+              find "$art" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            else
+              # First run on a repo, or the branch was pruned. Not an error:
+              # there is nothing to append to, so start the history.
+              mkdir -p "$art"
+              git -C "$art" init -q
+              git -C "$art" checkout -q -b "$BRANCH"
+            fi
+            cp -a out/. "$art/"
+            git -C "$art" add -A
+            git -C "$art" \
+              -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m "design-parity artifacts for ${GITHUB_SHA}"
+            git -C "$art" push "$repo" "$BRANCH"
+          }
+
+          # A plain push is what keeps the history: it is *rejected* rather than
+          # discarding a board another run published while this one rendered.
+          # Replay once onto the new tip — the work is already in `out/`, so the
+          # retry re-commits, it does not re-render.
+          if ! publish_append "$(mktemp -d)/board"; then
+            echo "::notice::Push rejected — ${BRANCH} moved while this run was in flight. Replaying onto the new tip."
+            publish_append "$(mktemp -d)/board"
+          fi
 
       # The run's verdict, applied last — after the reports that explain it are
       # on the branch. This is the step that fails a blocking run.
