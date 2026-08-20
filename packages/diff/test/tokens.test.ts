@@ -363,6 +363,35 @@ describe("diffTokens", () => {
       expect(findings).toEqual([]);
     });
 
+    it("keeps a fractional inset for a project that tightened its tolerance", () => {
+      // A 1px inset at density 2 is a real 0.5dp one, and a project running the
+      // documented strict `spacingTolerance: 0` may genuinely spec `padding:
+      // 0.5`. A blanket 1dp floor threw that evidence away and failed it on the
+      // declared 0 — so the floor follows the tolerance.
+      const flushish: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        tokens: { spacing: { padding: 0 } },
+        children: [{ bounds: { x: 1, y: 1, width: 98, height: 98 } }],
+      };
+      expect(collectDerivedInsets(flushish, 2, 1)).toEqual([]);
+      expect(collectDerivedInsets(flushish, 2, 0).map((i) => i.inset)).toEqual([0.5]);
+
+      const strict = { ...defaultDiffConfig, spacingTolerance: 0 };
+      const findings = diffTokens(
+        { spacing: { padding: 0.5 } },
+        { spacing: { padding: 0 } },
+        strict,
+        undefined,
+        undefined,
+        collectDerivedInsets(flushish, 2, Math.min(1, strict.spacingTolerance)),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", actual: 0.5 },
+      });
+    });
+
     it("drops an inset that rounds to nothing rather than quoting it", () => {
       // A child sitting flush measures a sub-dp sliver off the px→dp conversion.
       // `measuredSpacing` rounds for this reason; quoting "renders 0.5" reads as

@@ -199,8 +199,14 @@ export async function diff(
     // token is already in, since the boxes arrive in the render's pixels.
     collectRadiusBoxes(candidate.semantics.root, candidate.semantics.boundsDensity),
     // The insets the render actually draws, for a padding spec the code meets
-    // by centring rather than by a padding modifier.
-    collectDerivedInsets(candidate.semantics.root, candidate.semantics.boundsDensity),
+    // by centring rather than by a padding modifier. The floor is never coarser
+    // than a dp and never finer than what this comparison can tell apart, so a
+    // project that tightened its tolerance keeps its fractional insets.
+    collectDerivedInsets(
+      candidate.semantics.root,
+      candidate.semantics.boundsDensity,
+      Math.min(1, config.spacingTolerance),
+    ),
   );
   const designSystem = diffDesignSystem(
     reference.themeTokens,

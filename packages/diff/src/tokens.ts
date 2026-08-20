@@ -130,6 +130,7 @@ export function collectRadiusBoxes(
 export function collectDerivedInsets(
   root: SemanticNode,
   boundsDensity?: number,
+  minInset = 1,
 ): DerivedInset[] {
   const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out: DerivedInset[] = [];
@@ -157,12 +158,18 @@ export function collectDerivedInsets(
       ].map((v) => v / scale);
       const first = edges[0]!;
       const uniform = edges.every((v) => Math.abs(v - first) <= UNIFORM_EPSILON);
-      // A whole dp, not merely positive. Sub-dp is below the unit a spec is
-      // written in: a child sitting flush measures a sliver off the px→dp
-      // conversion, and quoting "renders 0.5" reads as a measurement when it is
-      // an artifact — wear-m3-catalog's `DateWheels` reported exactly that
-      // against a spec of 14. (`Math.round` would not do: it rounds 0.5 up.)
-      if (uniform && first >= 1) {
+      // Below [minInset] a measured sliver is not a padding: a child sitting
+      // flush comes back a fraction of a dp off the px→dp conversion, and
+      // quoting "renders 0.5" reads as a measurement — wear-m3-catalog's
+      // `DateWheels` reported exactly that against a spec of 14. (`Math.round`
+      // would not do here: it rounds 0.5 up, the very value in question.)
+      //
+      // The caller sets the floor from its own tolerance, because that is what
+      // decides whether a sub-dp difference is meaningful *to this comparison*.
+      // A project running the documented strict `spacingTolerance: 0` is asking
+      // for sub-dp precision and genuinely may spec `padding: 0.5`; a blanket
+      // 1dp floor would throw its evidence away and fail it on the declared 0.
+      if (uniform && first >= minInset) {
         const inset = round2(first);
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;
