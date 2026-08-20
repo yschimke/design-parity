@@ -80,6 +80,33 @@ describe("parity-config schema", () => {
   it("rejects a non-boolean cmpCapable", () => {
     expect(validateParityConfig({ cmpCapable: "yes" }).valid).toBe(false);
   });
+
+  it("accepts the token-comparison policy (#367 / #368)", () => {
+    expect(
+      validateParityConfig({
+        direction: "design-led",
+        tokens: { missingNumerics: "strict", textDerivedInsets: "measure" },
+      }).valid,
+    ).toBe(true);
+    // Each knob is independently optional.
+    expect(validateParityConfig({ tokens: {} }).valid).toBe(true);
+    expect(validateParityConfig({ tokens: { missingNumerics: "advisory" } }).valid).toBe(
+      true,
+    );
+    expect(validateParityConfig({ tokens: { textDerivedInsets: "skip" } }).valid).toBe(
+      true,
+    );
+  });
+
+  it("rejects an unknown token knob or value", () => {
+    expect(validateParityConfig({ tokens: { spacingTolerance: 2 } }).valid).toBe(false);
+    expect(validateParityConfig({ tokens: { missingNumerics: "lenient" } }).valid).toBe(
+      false,
+    );
+    expect(validateParityConfig({ tokens: { textDerivedInsets: true } }).valid).toBe(
+      false,
+    );
+  });
 });
 
 describe("loadParityConfig", () => {
@@ -100,6 +127,26 @@ describe("loadParityConfig", () => {
 
     const none = await write("nocmp.json", '{ "direction": "code-led" }');
     expect("cmpCapable" in (await loadParityConfig(none))).toBe(false);
+  });
+
+  it("round-trips the token policy, omitting knobs the repo didn't set", async () => {
+    // An omitted knob must stay omitted rather than being filled in here: the
+    // engine's committed default is the single place that decides it, so a
+    // config that says nothing about insets cannot pin today's answer.
+    const path = await write(
+      "tokens.json",
+      '{ "direction": "design-led", "tokens": { "missingNumerics": "strict" } }',
+    );
+    const config = await loadParityConfig(path);
+    expect(config.tokens).toEqual({ missingNumerics: "strict" });
+
+    const none = await write("notokens.json", '{ "direction": "design-led" }');
+    expect("tokens" in (await loadParityConfig(none))).toBe(false);
+
+    // `"tokens": {}` says nothing, so it is dropped rather than carried as an
+    // empty override.
+    const empty = await write("emptytokens.json", '{ "tokens": {} }');
+    expect("tokens" in (await loadParityConfig(empty))).toBe(false);
   });
 
   it("throws a readable error for a missing file", async () => {

@@ -67,6 +67,39 @@ export interface DiffConfig {
    * like {@link visualDimTolerancePx}; a real spacer error (≥ a few dp) clears it.
    */
   layoutTolerance: number;
+  /**
+   * What a numeric spec token the candidate reports **no value at all** for is
+   * worth. `"advisory"` (the default) reports it as a non-blocking `info`;
+   * `"strict"` restores the historical hard `missing` error.
+   *
+   * "The candidate has no value for this token" and "the candidate has a value
+   * and it is wrong" are different states, and only the second is evidence of
+   * divergence — the reasoning {@link unverifiableGroup} already applies when a
+   * candidate resolves a whole group of nothing (issue #368). A candidate that
+   * resolves *some* spacing but cannot report `padding` is in the same state as
+   * one that resolved no spacing, and used to be the only case where a single
+   * unreportable token decided the verdict. Wear is the worked example: a
+   * component sized by `touchTargetAwareSize` plus a sized child declares no
+   * padding modifier, and adding one to clear the check would misrepresent how
+   * the library composes.
+   *
+   * A value the candidate *does* report stays strict at either setting: that is
+   * the comparison worth running.
+   */
+  missingNumerics: "advisory" | "strict";
+  /**
+   * Whether a derived inset whose measurement is set by a **text** child counts
+   * as padding. `"skip"` (the default) drops it; `"measure"` restores the
+   * historical behaviour of reporting it like any other.
+   *
+   * {@link collectDerivedInsets} measures the gap between a container and the
+   * union of its children — a sound proxy for padding when the child is a box,
+   * which is the icon-button case it was written for. When the child is text the
+   * gap is a function of the font, the string, and its line height, so quoting
+   * it against a declared auto-layout padding compares two unrelated quantities
+   * (issue #367).
+   */
+  textDerivedInsets: "skip" | "measure";
 }
 
 /**
@@ -89,6 +122,8 @@ export const defaultDiffConfig: DiffConfig = {
   visualAlphaLossWarnRatio: 0.01,
   visualDimTolerancePx: 8,
   layoutTolerance: 4,
+  missingNumerics: "advisory",
+  textDerivedInsets: "skip",
 };
 
 /** Merge a partial override over the committed defaults. */

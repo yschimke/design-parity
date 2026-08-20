@@ -265,9 +265,33 @@ When all tiers miss, severity depends on whether we could map the token at all
 (issue #102): a colour/typography token that maps to a Material role the
 candidate genuinely lacks is a real gap → hard `error`; one that maps to **no**
 role (`brand/blue-600`, `label`) is unverifiable, not proof the candidate is
-wrong → a non-blocking `info` advisory (`detail.unmapped`). Numeric
-spacing/radius have no role taxonomy and stay strict — a missing numeric is
-always an `error`.
+wrong → a non-blocking `info` advisory (`detail.unmapped`).
+
+Numeric spacing/radius take the same treatment for the *absent* case (issue
+#368). A numeric has no role taxonomy to be unmappable in, so once the exact
+name, the value match, and — for an inset — the measured geometry have all
+missed, there is simply no candidate value to compare: `info` with
+`detail.unverified`, the per-token counterpart of the group-level
+"candidate resolved no <group> tokens" note. **A value the candidate *does*
+report stays strict** — that comparison is the one worth running, and a
+mismatch is still a hard `error`. Wear is the case that forced it: a component
+inset by `touchTargetAwareSize` plus a sized child declares no padding modifier
+at all, and adding one purely to clear the check would make the code a less
+faithful reproduction of the library. A repo that wants the old behaviour sets
+`tokens.missingNumerics: "strict"` in `.design-parity.json`.
+
+An **inset** spec gets one more attempt before that: `collectDerivedInsets`
+measures the gap between a container's bounds and the union of its children's,
+so a candidate that draws the spec'd inset by centring rather than by a padding
+modifier is compared like with like (issue #364). That proxy holds when the
+child is a box and breaks when it is **text** — a glyph run's box is as wide as
+the string and as tall as its line height, so the "inset" measured around it is
+font metrics, and quoting it against a declared auto-layout padding invents a
+divergence (issue #367). Any container whose measured edge is *set* by a text
+child is therefore dropped rather than reported; all four edges must agree for
+an inset to be reported at all, so one glyph-set edge calibrates the whole
+number. `tokens.textDerivedInsets: "measure"` restores the unfiltered
+behaviour.
 
 The #74 fallback is the tell that the **naming** is the weak link: when the
 code's theme can't name a value, the colour lands under a generic role key

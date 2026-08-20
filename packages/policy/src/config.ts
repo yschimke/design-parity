@@ -1,17 +1,22 @@
 /**
  * `.design-parity.json` schema, loader, and validator.
  *
- * The parity config is the committed, per-repo policy file. Its only field
- * today is {@link ParityConfig.direction}; setup (issue #11) materializes a
- * concrete `design-led`/`code-led` value, and `auto` is the pre-setup default.
- * Read deterministically — never decided at run time (docs/PRINCIPLES.md,
- * Principle 1).
+ * The parity config is the committed, per-repo policy file. Its lead field is
+ * {@link ParityConfig.direction}; setup (issue #11) materializes a concrete
+ * `design-led`/`code-led` value, and `auto` is the pre-setup default. It also
+ * carries {@link ParityConfig.cmpCapable} and the
+ * {@link ParityConfig.tokens} comparison policy. Read deterministically — never
+ * decided at run time (docs/PRINCIPLES.md, Principle 1).
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import AjvModule, { type ValidateFunction } from "ajv";
 
-import type { ParityConfig, ParityDirection } from "@design-parity/core";
+import type {
+  ParityConfig,
+  ParityDirection,
+  ParityTokenPolicy,
+} from "@design-parity/core";
 import schema from "../schema/parity-config.schema.json" with { type: "json" };
 
 // ajv ships CJS; under NodeNext the constructable class can land on `.default`.
@@ -60,14 +65,28 @@ export function validateParityConfig(value: unknown): ValidationResult {
   return { valid: false, errors };
 }
 
+/** What {@link parse} hands {@link normalize} — the schema-validated shape. */
+interface ParsedConfig {
+  direction?: ParityDirection;
+  cmpCapable?: boolean;
+  tokens?: ParityTokenPolicy;
+}
+
 /** Fill omitted fields so callers always get a complete {@link ParityConfig}. */
-function normalize(
-  parsed: { direction?: ParityDirection; cmpCapable?: boolean },
-): ParityConfig {
+function normalize(parsed: ParsedConfig): ParityConfig {
   const config: ParityConfig = { direction: parsed.direction ?? DEFAULT_DIRECTION };
   // Preserve the CMP capability flag verbatim when present; omitted stays
   // omitted (the Action only promotes when it's explicitly false, Principle 6).
   if (typeof parsed.cmpCapable === "boolean") config.cmpCapable = parsed.cmpCapable;
+  // Token policy likewise: an omitted knob stays omitted rather than being
+  // filled with today's default here, so the engine's committed default is the
+  // single place that decides it and a repo's file never pins a value it didn't
+  // ask for. `{}` is dropped for the same reason — it says nothing.
+  const tokens: ParityTokenPolicy = {};
+  if (parsed.tokens?.missingNumerics) tokens.missingNumerics = parsed.tokens.missingNumerics;
+  if (parsed.tokens?.textDerivedInsets)
+    tokens.textDerivedInsets = parsed.tokens.textDerivedInsets;
+  if (Object.keys(tokens).length > 0) config.tokens = tokens;
   return config;
 }
 
@@ -124,5 +143,5 @@ function parse(path: string, raw: string): ParityConfig {
       `parity-config: '${path}' failed schema validation:\n  ${result.errors.join("\n  ")}`,
     );
   }
-  return normalize(parsed as { direction?: ParityDirection; cmpCapable?: boolean });
+  return normalize(parsed as ParsedConfig);
 }

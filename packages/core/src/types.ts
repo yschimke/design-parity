@@ -580,5 +580,34 @@ export interface ParityConfig {
    * Advisory only — never a gate.
    */
   cmpCapable?: boolean;
+  /**
+   * Per-repo token-comparison policy (issues #367 / #368). Omitted fields — and
+   * an omitted `tokens` — take the engine's committed defaults, so a repo that
+   * says nothing gets the same verdict it always did for that setting.
+   *
+   * These are deliberately the only two diff knobs the config file exposes.
+   * Tolerances stay committed defaults (docs/PRINCIPLES.md, Principle 1); what a
+   * *platform* can report about itself is not a tolerance, and a design-led repo
+   * previously had no way to say it at all short of flipping to `code-led`,
+   * which also unlocks Code-to-Canvas write-back and so is not a safe knob to
+   * reach for.
+   */
+  tokens?: ParityTokenPolicy;
+}
+
+/** The `tokens` section of `.design-parity.json`. See {@link ParityConfig.tokens}. */
+export interface ParityTokenPolicy {
+  /**
+   * What a numeric spec token the candidate reports **no value** for is worth.
+   * `"advisory"` (the default) reports it as a non-blocking note; `"strict"`
+   * restores the hard `missing` error that forces a Fail.
+   */
+  missingNumerics?: "advisory" | "strict";
+  /**
+   * Whether an inset measured off a **text** child counts as padding. `"skip"`
+   * (the default) drops it — the gap is font metrics, not a declared inset;
+   * `"measure"` reports it like any other derived inset.
+   */
+  textDerivedInsets?: "skip" | "measure";
 }
 
