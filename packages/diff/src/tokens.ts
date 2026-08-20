@@ -157,7 +157,12 @@ export function collectDerivedInsets(
       ].map((v) => v / scale);
       const first = edges[0]!;
       const uniform = edges.every((v) => Math.abs(v - first) <= UNIFORM_EPSILON);
-      if (uniform && first > 0) {
+      // A whole dp, not merely positive. Sub-dp is below the unit a spec is
+      // written in: a child sitting flush measures a sliver off the px→dp
+      // conversion, and quoting "renders 0.5" reads as a measurement when it is
+      // an artifact — wear-m3-catalog's `DateWheels` reported exactly that
+      // against a spec of 14. (`Math.round` would not do: it rounds 0.5 up.)
+      if (uniform && first >= 1) {
         const inset = round2(first);
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;
@@ -500,7 +505,18 @@ function numericFinding(
   // (Wear's `IconButton` — see {@link collectDerivedInsets}). Measure what the
   // render actually insets before accusing it, and only for an inset spec: a
   // measured inset is not evidence about a `gap`.
-  if ((got === undefined || (got === 0 && want !== 0)) && isInsetToken(group, name, designName)) {
+  // ...but only when the declared value actually MISSES. A candidate reporting
+  // `0` against a spec of `1` is already inside the tolerance, and overriding
+  // that pass with a measured 8 turned a satisfied token into a failure —
+  // wear-m3-catalog's `TextToggle` went warn → fail on exactly that. Geometry is
+  // a second opinion for a token the declared value cannot answer, never a way
+  // to overrule one that already did.
+  const declaredMisses = got === undefined || Math.abs(got - want) > tolerance;
+  if (
+    declaredMisses &&
+    (got === undefined || got === 0) &&
+    isInsetToken(group, name, designName)
+  ) {
     const drawn = nearestInset(want, derivedInsets);
     if (drawn) {
       const delta = round2(Math.abs(drawn.inset - want));
