@@ -49,7 +49,8 @@ export function collectTokens(root: SemanticNode): DesignTokens {
 }
 
 /**
- * The candidate boxes each radius value was declared on.
+ * The candidate boxes each radius value was declared on, in the radius's own
+ * unit.
  *
  * {@link collectTokens} flattens the tree, so by the time a radius reaches the
  * comparison it has lost the node it belonged to — and a corner can only be
@@ -58,15 +59,38 @@ export function collectTokens(root: SemanticNode): DesignTokens {
  * pipeline: a switch track is 32x20 inside a 137x84 sticker frame, and 16 is
  * nowhere near half of 84, so nothing ever normalised.
  *
+ * [boundsDensity] is source pixels per dp for `bounds` — `SemanticTree`'s field
+ * of the same name. A tree's `bounds` and its `tokens` need
+ * not share a unit: compose/semantics reports boxes in render pixels while
+ * resolving radius/padding to dp, so a 52dp button with a 26dp corner arrives as
+ * a 104x104 box carrying `corner: 26`. Comparing those directly asks whether 26
+ * clears half of 104 — it doesn't — so a fully-clamped corner read as un-clamped
+ * and every icon button in a 2x capture reported a Δ against the kit's sentinel.
+ * Dividing the boxes through puts both back in dp. Absent (or 1) leaves bounds
+ * as they are, which is right for a tree that already reports dp.
+ *
  * Keyed by value rather than by node, which is how a spec radius is paired with
  * a candidate one in the first place — see {@link numericValueMatch}.
  */
-export function collectRadiusBoxes(root: SemanticNode): Map<number, Bounds[]> {
+export function collectRadiusBoxes(
+  root: SemanticNode,
+  boundsDensity?: number,
+): Map<number, Bounds[]> {
+  const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out = new Map<number, Bounds[]>();
   const visit = (node: SemanticNode): void => {
     if (node.bounds) {
+      const box =
+        scale === 1
+          ? node.bounds
+          : {
+              x: node.bounds.x / scale,
+              y: node.bounds.y / scale,
+              width: node.bounds.width / scale,
+              height: node.bounds.height / scale,
+            };
       for (const value of Object.values(node.tokens?.radius ?? {})) {
-        out.set(value, [...(out.get(value) ?? []), node.bounds]);
+        out.set(value, [...(out.get(value) ?? []), box]);
       }
     }
     for (const child of node.children ?? []) visit(child);

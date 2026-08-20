@@ -396,7 +396,7 @@ export function previewToCandidate(
       } catch (cause) {
         throw new InvalidBundleError(`${semPath} is not valid JSON`, cause);
       }
-      const tree = normalizeSemantics(raw, themeForPreview(params, entry.id));
+      const tree = normalizeSemantics(raw, themeForPreview(params, entry.id), params);
       if (tree) {
         semantics ??= tree;
         if (tree.theme === "light") lightSemantics ??= tree;

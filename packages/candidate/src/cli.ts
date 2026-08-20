@@ -291,7 +291,43 @@ export interface RawSemanticsNode {
 /** The hierarchy/semantics data product for one preview. */
 export interface RawSemantics {
   theme?: string;
+  /**
+   * Render pixels per dp for this payload's `boundsInRoot`, when the producer
+   * states it. compose/semantics resolves `tokens` to dp but leaves bounds in
+   * the render's own pixels, and only the producer knows the factor between
+   * them — see {@link boundsDensityOf} for what we fall back to while a producer
+   * predates the field.
+   */
+  density?: number;
   root?: RawSemanticsNode;
+}
+
+/** `dp` per inch on the baseline (mdpi) screen — Android's `DisplayMetrics`. */
+const BASELINE_DPI = 160;
+
+/**
+ * Render pixels per dp for a payload's bounds, best source first.
+ *
+ * The producer's own `density` is authoritative. Absent it — every
+ * compose-preview release before the field existed — a `@Preview(device =
+ * "spec:…dpi=320…")` states the same thing one step removed, and a `widthDp`
+ * preview states it against the frame it actually rendered to. All three are
+ * *stated*, never guessed: a preview that pins none of them returns `undefined`,
+ * and the caller treats bounds and tokens as already sharing a space rather than
+ * inventing a factor.
+ */
+export function boundsDensityOf(
+  raw: RawSemantics | undefined,
+  params: PreviewParams | undefined,
+  root: SemanticNode | undefined,
+): number | undefined {
+  if (typeof raw?.density === "number" && raw.density > 0) return raw.density;
+  const dpi = Number(/(?:^|,)\s*dpi\s*=\s*(\d+(?:\.\d+)?)/.exec(params?.device ?? "")?.[1]);
+  if (Number.isFinite(dpi) && dpi > 0) return dpi / BASELINE_DPI;
+  const widthDp = params?.widthDp;
+  const widthPx = root?.bounds?.width;
+  if (widthDp && widthDp > 0 && widthPx && widthPx > 0) return widthPx / widthDp;
+  return undefined;
 }
 
 function normalizeBounds(
@@ -479,11 +515,16 @@ function normalizeNode(n: RawSemanticsNode): SemanticNode {
 export function normalizeSemantics(
   raw: RawSemantics | undefined,
   fallbackTheme?: Theme,
+  params?: PreviewParams,
 ): SemanticTree | undefined {
   if (!raw?.root) return undefined;
   const theme = normalizeTheme(raw.theme) ?? fallbackTheme;
   const tree: SemanticTree = { root: normalizeNode(raw.root) };
   if (theme) tree.theme = theme;
+  // Bounds come off the wire in render pixels while tokens are already dp;
+  // naming the factor is what lets a consumer measure one against the other.
+  const boundsDensity = boundsDensityOf(raw, params, tree.root);
+  if (boundsDensity !== undefined && boundsDensity !== 1) tree.boundsDensity = boundsDensity;
   return tree;
 }
 
@@ -720,6 +761,6 @@ export class SpawnComposePreviewCli implements ComposePreviewCli {
     } catch {
       return undefined;
     }
-    return normalizeSemantics(parsed, themeForPreview(entry.params, entry.id));
+    return normalizeSemantics(parsed, themeForPreview(entry.params, entry.id), entry.params);
   }
 }

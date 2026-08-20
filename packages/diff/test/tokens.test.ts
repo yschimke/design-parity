@@ -156,6 +156,35 @@ describe("diffTokens", () => {
       expect(findings).toHaveLength(1);
     });
 
+    it("normalises a dp radius against px bounds when the tree names its density", () => {
+      // The real pipeline's two units disagree: compose/semantics emits `bounds`
+      // in render pixels and `tokens` in dp (the producer applies density to one
+      // and not the other). A Wear icon button is 52dp with a 26dp corner,
+      // captured at dpi 320 — so its box arrives as 104x104 while the corner is
+      // still 26, and the clamp test read 26 >= 52 as "not a pill". That is what
+      // put `radius.corner: 26 vs spec 200 (Δ174)` on every icon button in
+      // wear-m3-catalog while the renders differed by ~1% of pixels.
+      const px: SemanticNode = {
+        role: "frame",
+        bounds: { x: 0, y: 0, width: 104, height: 104 },
+        children: [
+          {
+            role: "button",
+            bounds: { x: 0, y: 0, width: 104, height: 104 },
+            tokens: { radius: { corner: 26 } },
+          },
+        ],
+      };
+      const findings = diffTokens(
+        { radius: { corner: 200 } },
+        { radius: { corner: 26 } },
+        defaultDiffConfig,
+        undefined,
+        collectRadiusBoxes(px, 2),
+      );
+      expect(findings).toEqual([]);
+    });
+
     it("leaves spacing alone — only a corner can be clamped", () => {
       const findings = diffTokens(
         { spacing: { padding: 100 } },
