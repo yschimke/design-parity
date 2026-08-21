@@ -934,23 +934,34 @@ describe("diffTokens", () => {
       expect(referenceInsets(grouped)).toEqual([12]);
     });
 
-    it("nests a child its parent's rounding pushed it outside of", () => {
-      // `layoutFromNode` rounds every box independently, so a child genuinely
-      // inside its parent can come back overhanging it by a pixel. Read
-      // strictly, that child is promoted to the grandparent, joins ITS union,
-      // and the 12 the grandparent actually insets is lost to an 11.
-      const rounded: SemanticTree = {
+    it("will not read two peer layers a pixel apart as parent and child", () => {
+      // Two same-sized layers offset by one — the shape a flat capture is full
+      // of. Forgiving a pixel of enclosure made the first absorb the second, and
+      // the root then reported a clean uniform 10 where its real union is a
+      // ragged [9, 10, 10, 10]. An invented inset can acquit a candidate that
+      // deserved a finding, so enclosure is read strictly; the cost is a
+      // corroboration missed, which is the safe direction to miss in.
+      const peers: SemanticTree = {
         root: {
-          bounds: { x: 0, y: 0, width: 400, height: 400 },
+          bounds: { x: 0, y: 0, width: 120, height: 120 },
           children: [
-            { label: "Card", role: "frame", bounds: { x: 12, y: 12, width: 176, height: 176 } },
-            // 11..189 against the card's 12..188 — one pixel proud on each side.
-            { label: "Content", role: "frame", bounds: { x: 11, y: 20, width: 178, height: 150 } },
-            { label: "Frame", role: "frame", bounds: { x: 0, y: 0, width: 200, height: 200 } },
+            {
+              label: "Layer A",
+              role: "frame",
+              bounds: { x: 10, y: 10, width: 100, height: 100 },
+            },
+            {
+              label: "Layer B",
+              role: "frame",
+              bounds: { x: 9, y: 10, width: 100, height: 100 },
+            },
           ],
         },
       };
-      expect(referenceInsets(rounded)).toContain(12);
+      // Guard the guard: the two really are peers — same size, neither inside
+      // the other — and the root's real union really is non-uniform.
+      expect(peers.root.children![0]!.bounds!.width).toBe(peers.root.children![1]!.bounds!.width);
+      expect(referenceInsets(peers)).toEqual([]);
     });
 
     it("does not measure the reference unless a glyph-set extreme asks", () => {

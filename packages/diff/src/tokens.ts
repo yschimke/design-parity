@@ -490,24 +490,30 @@ function boundedDescendants(root: SemanticNode): SemanticNode[] {
 }
 
 /**
- * Sub-pixel slack when reading enclosure off two boxes.
+ * Does [outer] wholly enclose [inner]?
  *
- * `layoutFromNode` rounds every node's position and size to whole pixels
- * *independently*, so a child genuinely inside its parent can come back
- * overhanging it by one: a parent ending at 11.4 and a child at 11.6 round to 11
- * and 12. Read strictly, that child lands at the wrong level and the parent's
- * inset is never recovered — corroboration would then fail silently on any board
- * whose geometry is fractional or transformed, which is most of them.
+ * **Strictly**, with no rounding slack, and that is a considered choice rather
+ * than an oversight. `layoutFromNode` rounds every box independently, so a child
+ * genuinely inside its parent can come back overhanging it by a pixel and be
+ * read as a peer — an earlier revision forgave a pixel on each edge for exactly
+ * that. But a flat capture is full of same-sized layers a pixel apart, and slack
+ * makes each of those pairs a parent and a child: two 100x100 peers at `(10,10)`
+ * and `(9,10)` under a 120x120 root leave one absorbing the other, and the root
+ * reports a clean uniform 10 where its real union is a ragged `[9,10,10,10]`.
+ *
+ * Both failures cost a corroboration, but only one of them *invents* a number,
+ * and an invented inset here can acquit a candidate that deserved a finding.
+ * Missing a real one is the safe direction; the slack was speculative — no
+ * capture ever demonstrated the rounding case — and the fabrication is
+ * demonstrated. If a real board ever shows the rounding failure, it comes back
+ * with that board as its fixture.
  */
-const ENCLOSURE_SLACK = 1;
-
-/** Does [outer] enclose [inner], allowing for independently-rounded boxes? */
 function encloses(outer: Bounds, inner: Bounds): boolean {
   return (
-    outer.x <= inner.x + ENCLOSURE_SLACK &&
-    outer.y <= inner.y + ENCLOSURE_SLACK &&
-    outer.x + outer.width >= inner.x + inner.width - ENCLOSURE_SLACK &&
-    outer.y + outer.height >= inner.y + inner.height - ENCLOSURE_SLACK
+    outer.x <= inner.x &&
+    outer.y <= inner.y &&
+    outer.x + outer.width >= inner.x + inner.width &&
+    outer.y + outer.height >= inner.y + inner.height
   );
 }
 
