@@ -293,6 +293,19 @@ an inset to be reported at all, so one glyph-set edge calibrates the whole
 number. `tokens.textDerivedInsets: "measure"` restores the unfiltered
 behaviour.
 
+That rule, stated only over the candidate's own tree, is wider than the fault it
+names: a container whose single child is its label is the same shape whether the
+gap around the glyph is font metrics or the padding the parent chose, so it
+discarded true insets with false ones and failed a card drawing exactly what the
+kit specs (issue #371). The reference settles it. `referenceInsets` measures the
+**reference's** geometry with the same rule — rebuilding containment from the
+boxes, since the Figma capture is a flat list — and a glyph-set candidate edge is
+readmitted when the reference independently measures the same inset within
+`spacingTolerance`. Only a reference inset its own *boxes* establish counts; two
+fonts agreeing is not a layout. Corroboration is one-directional by design: it
+can readmit a measurement that agrees with the reference, never produce one that
+disagrees, so a glyph-set edge can acquit but never convict.
+
 The #74 fallback is the tell that the **naming** is the weak link: when the
 code's theme can't name a value, the colour lands under a generic role key
 (`fg`/`bg`) instead of `onSurface`, and a name-keyed comparison misses it. The
