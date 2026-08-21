@@ -182,7 +182,11 @@ export function collectDerivedInsets(
   let measuredReference: number[] | undefined;
   const corroborates = (inset: number): boolean => {
     if (!corroborate?.layout) return false;
-    measuredReference ??= referenceInsets(corroborate.layout, minInset);
+    measuredReference ??= referenceInsets(
+      corroborate.layout,
+      minInset,
+      corroborate.boundsDensity,
+    );
     return measuredReference.some((v) => Math.abs(v - inset) <= corroborate.tolerance);
   };
   const visit = (node: SemanticNode): void => {
@@ -359,6 +363,13 @@ export interface Corroboration {
   layout: SemanticTree | undefined;
   /** The comparison's own spacing tolerance: what counts as the same inset. */
   tolerance: number;
+  /**
+   * Source pixels per dp for [layout]'s boxes, when the caller can derive one the
+   * tree does not state — see {@link referenceInsets}. Takes precedence over
+   * {@link SemanticTree.boundsDensity}: it is the more informed answer, since it
+   * is measured against the very render being compared.
+   */
+  boundsDensity?: number;
 }
 
 /**
@@ -383,10 +394,19 @@ export interface Corroboration {
  * flattened one; where the two disagree the cost is bounded, since a
  * corroborating inset can only ever readmit a measurement, never create a
  * finding.
+ *
+ * [boundsDensity] is source pixels per dp for the reference's boxes. A capture
+ * rarely states one — `layoutFromNode` stamps it only for a caller that passed a
+ * density, and nothing on the `ReferenceAdapter` contract carries the design
+ * map's — so the caller derives it from the two render frames instead, exactly
+ * as `diffLayout` already does. Without it a 3× board's 36px gutter reads as
+ * 36dp and corroborates nothing, which is the whole rule silently off for every
+ * scaled board.
  */
 export function referenceInsets(
   layout: SemanticTree | undefined,
   minInset = 1,
+  boundsDensity?: number,
 ): number[] {
   if (!layout) return [];
   // A tree that already states who contains whom is taken at its word. Enclosure
@@ -401,7 +421,12 @@ export function referenceInsets(
     : { ...captured, children: nestByContainment(captured.children ?? []) };
   return [
     ...new Set(
-      collectDerivedInsets(root, layout.boundsDensity, minInset, "skip").map((i) => i.inset),
+      collectDerivedInsets(
+        root,
+        boundsDensity ?? layout.boundsDensity,
+        minInset,
+        "skip",
+      ).map((i) => i.inset),
     ),
   ];
 }
@@ -785,45 +810,43 @@ function numericFinding(
     (got === undefined || got === 0) &&
     isInsetToken(group, name, designName)
   ) {
-    const drawn = nearestInset(want, derivedInsets);
-    if (drawn) {
+    // A corroborated measurement may acquit but never convict (see
+    // {@link DerivedInset.corroborated}), and stepping one aside is not the same
+    // as picking the runner-up: `nearestInset` answers from the declaring
+    // containers alone when there are any, so dropping one can fall through to a
+    // whole other tier whose value may *satisfy* the spec. Ask again from
+    // scratch without it, so a readmitted measurement is transparent to this
+    // decision except that it may also answer it.
+    let pool = derivedInsets;
+    for (;;) {
+      const drawn = nearestInset(want, pool);
+      if (!drawn) break;
       const delta = round2(Math.abs(drawn.inset - want));
       if (delta <= tolerance) {
         findings.push(satisfiedByGeometry(group, name, want, drawn));
         return;
       }
+      if (drawn.corroborated) {
+        pool = pool!.filter((i) => !i.corroborated);
+        continue;
+      }
       // The render insets the WRONG amount. Report that, not the declared `0`:
       // "0 vs spec 12" names a modifier the code was never going to have, while
       // "14 vs spec 12" is the miss a designer can act on.
-      //
-      // Unless the measurement is only there by corroboration, which can acquit
-      // but never convict (see {@link DerivedInset.corroborated}). The nearest
-      // inset missing by more than the tolerance means every inset does, so
-      // there is nothing left to say: drop back to what the declared value —
-      // absent, or a `0` — was already going to report.
-      const accusing = drawn.corroborated
-        ? nearestInset(
-            want,
-            derivedInsets?.filter((i) => !i.corroborated),
-          )
-        : drawn;
-      if (accusing) {
-        const missBy = round2(Math.abs(accusing.inset - want));
-        findings.push({
-          kind: "token",
-          severity: "error",
-          message: `${group}.${name}: renders ${accusing.inset} vs spec ${want} (Δ${missBy})`,
-          detail: {
-            token: `${group}.${name}`,
-            expected: want,
-            actual: accusing.inset,
-            delta: missBy,
-            via: "measured-geometry",
-            ...(accusing.where ? { measuredOn: accusing.where } : {}),
-          },
-        });
-        return;
-      }
+      findings.push({
+        kind: "token",
+        severity: "error",
+        message: `${group}.${name}: renders ${drawn.inset} vs spec ${want} (Δ${delta})`,
+        detail: {
+          token: `${group}.${name}`,
+          expected: want,
+          actual: drawn.inset,
+          delta,
+          via: "measured-geometry",
+          ...(drawn.where ? { measuredOn: drawn.where } : {}),
+        },
+      });
+      return;
     }
   }
 

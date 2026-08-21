@@ -751,6 +751,34 @@ describe("diffTokens", () => {
       expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
     });
 
+    it("re-decides from scratch when the corroborated inset steps aside", () => {
+      // `nearestInset` is TIERED: it answers from the declaring containers alone
+      // when there are any. So dropping a corroborated declaring container does
+      // not just pick the next-nearest — it can fall through to a whole other
+      // tier, whose value may SATISFY the spec. Reporting the fallback without
+      // re-testing it emitted `renders 16 vs spec 16 (Δ0)`, a blocking error
+      // whose own delta says there is nothing wrong.
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [
+          { inset: 40, declaresSpacing: true, corroborated: true, where: "card" },
+          { inset: 16, declaresSpacing: false, where: "inner" },
+        ],
+      );
+      expect(findings.some((f) => f.severity === "error")).toBe(false);
+      // Exactly what the same insets say with the corroborated one absent: a
+      // readmitted measurement is transparent, except that it may also acquit.
+      expect(findings).toEqual(
+        diffTokens({ spacing: { padding: 16 } }, {}, defaultDiffConfig, undefined, undefined, [
+          { inset: 16, declaresSpacing: false, where: "inner" },
+        ]),
+      );
+    });
+
     it("still convicts on a missed inset the candidate's own BOXES establish", () => {
       // Guard the guard: the clause above must not have switched off #364's
       // point. An inset no glyph decided is evidence either way, and one that

@@ -244,3 +244,58 @@ describe("diff engine corroborates a glyph-set inset against the reference (#371
     );
   });
 });
+
+describe("diff engine reads a scaled reference capture in dp", () => {
+  // The same card, captured on a 3× board: every box is three times the dp it
+  // represents, and nothing in the tree says so — `layoutFromNode` stamps a
+  // density only for a caller that passed one, and no `ReferenceAdapter` carries
+  // the design map's. Read literally, the kit's 36px gutter is a 36dp one and
+  // corroborates nothing.
+  const reference: DesignReference = {
+    componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
+    source: "figma",
+    linkMethod: "manifest",
+    referenceImages: [],
+    tokens: { spacing: { padding: 12 } },
+    layout: {
+      root: {
+        bounds: { x: 0, y: 0, width: 576, height: 312 },
+        children: [
+          { label: "Section", role: "frame", bounds: { x: 36, y: 36, width: 504, height: 54 } },
+          { label: "Section", role: "frame", bounds: { x: 36, y: 108, width: 504, height: 168 } },
+        ],
+      },
+    },
+  };
+  const candidate: CandidateRender = {
+    componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
+    images: [],
+    semantics: {
+      root: {
+        role: "card",
+        bounds: { x: 0, y: 0, width: 192, height: 104 },
+        tokens: { spacing: { padding: 0 } },
+        children: [
+          {
+            role: "text",
+            label: "Card content",
+            bounds: { x: 12, y: 12, width: 168, height: 80 },
+            tokens: { typography: { body: { fontSize: 14 } } },
+          },
+        ],
+      },
+    },
+  };
+
+  it("derives the board's scale from the two frames and still corroborates", async () => {
+    // Guard the guard: the capture must really be silent about its scale, or the
+    // derivation is not what is being tested.
+    expect(reference.layout!.boundsDensity).toBeUndefined();
+
+    const { verdict } = await diff(reference, candidate, { repoRoot });
+    const padding = verdict.findings.filter(
+      (f) => f.kind === "token" && f.message.startsWith("spacing.padding"),
+    );
+    expect(padding.some((f) => f.severity === "error")).toBe(false);
+  });
+});

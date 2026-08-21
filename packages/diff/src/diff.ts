@@ -15,6 +15,7 @@ import type {
   DesignReference,
   Finding,
   Image,
+  SemanticTree,
   TokenAliasMap,
   Verdict,
   VerdictStatus,
@@ -27,7 +28,7 @@ import {
 } from "./checks.js";
 import { resolveConfig, type DiffConfig } from "./config.js";
 import { diffDesignSystem } from "./design-system.js";
-import { diffLayout } from "./layout.js";
+import { diffLayout, frameWidth } from "./layout.js";
 import {
   depictionFinding,
   propertyConflicts,
@@ -160,6 +161,28 @@ function pairImages(
   return { pairs, unmatched, unpairable };
 }
 
+/**
+ * Source pixels per dp for a reference capture's boxes, stated or derived.
+ *
+ * Stated wins. Otherwise the two trees frame the same component, so the ratio of
+ * their render frames is the factor between their spaces — the derivation
+ * {@link diffLayout} already relies on — and multiplying by the candidate's own
+ * `boundsDensity` lands the reference in dp rather than merely in the
+ * candidate's pixels. Absent either frame, nothing is claimed: a wrong factor
+ * silently rescales the reference and is worse than leaving the boxes alone.
+ */
+function referenceBoundsDensity(
+  layout: SemanticTree | undefined,
+  semantics: SemanticTree,
+): { boundsDensity?: number } {
+  if (layout?.boundsDensity) return { boundsDensity: layout.boundsDensity };
+  const ref = frameWidth(layout);
+  const cand = frameWidth(semantics);
+  if (ref === undefined || cand === undefined) return {};
+  const scale = (ref / cand) * (semantics.boundsDensity ?? 1);
+  return scale > 0 && Number.isFinite(scale) ? { boundsDensity: scale } : {};
+}
+
 function statusFor(findings: Finding[]): VerdictStatus {
   if (findings.some((f) => f.severity === "error")) return "fail";
   if (findings.some((f) => f.severity === "warn")) return "warn";
@@ -212,7 +235,17 @@ export async function diff(
       // (issue #371). Measured lazily from this tree and only for a glyph-set
       // extreme; corroboration can only readmit a measurement, so a reference
       // that captured no geometry simply leaves the rule as it was.
-      { layout: reference.layout, tolerance: config.spacingTolerance },
+      {
+        layout: reference.layout,
+        tolerance: config.spacingTolerance,
+        // A capture almost never states the scale of its own boxes: nothing on
+        // the `ReferenceAdapter` contract carries the design map's density, so
+        // `layoutFromNode` has none to stamp. Derive it the way `diffLayout`
+        // already does — the two render frames hold the same component, so
+        // their width ratio IS the factor between the spaces — or a 3× board's
+        // 36px gutter reads as 36dp and corroborates nothing.
+        ...referenceBoundsDensity(reference.layout, candidate.semantics),
+      },
     ),
   );
   const designSystem = diffDesignSystem(

@@ -303,7 +303,11 @@ boxes, since the Figma capture is a flat list — and a glyph-set candidate edge
 readmitted when the reference independently measures the same inset within
 `spacingTolerance`. Only a reference inset its own *boxes* establish counts; two
 fonts agreeing is not a layout, and a reference that states its own hierarchy is
-taken at its word rather than re-parented by enclosure.
+taken at its word rather than re-parented by enclosure. A capture rarely states
+the scale of its own boxes — nothing on the `ReferenceAdapter` contract carries
+the design map's `density` — so the factor is derived from the two render frames
+the way `diffLayout` already derives it; without that a 3× board's 36px gutter
+reads as 36dp and the rule is silently off.
 
 Corroboration is one-directional by design: a glyph-set edge can **acquit but
 never convict**. The corroborating value is one the reference draws somewhere,
