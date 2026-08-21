@@ -293,6 +293,16 @@ export interface AdapterContext {
   repoRoot: string;
   /** Process environment (PATs, OAuth tokens) — adapters read what they need. */
   env: Record<string, string | undefined>;
+  /**
+   * Source pixels per dp for the component being resolved — {@link
+   * Correspondence.density}, handed to the adapter that has to act on it.
+   *
+   * The one field here that is **per component** rather than per run: the caller
+   * rebuilds the context for each correspondence that states one. An adapter is
+   * free to ignore it, and one whose source already reports dp (a rendered
+   * candidate, a browser capture) should.
+   */
+  density?: number;
 }
 
 /** One variant axis, moved: `{ axis: "Size", value: "Medium" }`. */
@@ -414,6 +424,16 @@ export interface Correspondence {
   linkMethod: LinkMethod;
   /** `convention` links are always `"low"`; explicit links are `"high"`. */
   confidence: "high" | "low";
+  /**
+   * Source pixels per dp of the reference artwork, carried from the design map
+   * entry that declared this link (see `DesignMapEntry.density`).
+   *
+   * Per **entry**, not per run: one map can bind a 1× component sheet and a 3×
+   * screen board, so this rides with the correspondence rather than with the
+   * run's {@link AdapterContext}. Absent when the author did not state one,
+   * which is the common case and means "already in the code's units".
+   */
+  density?: number;
 }
 
 // ---------------------------------------------------------------------------

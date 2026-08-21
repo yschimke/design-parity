@@ -508,3 +508,62 @@ describe("preferring the reference variant the candidate claims", () => {
     expect(calls.resolved).toEqual(["figma:AbCdEf123456/1:42"]);
   });
 });
+
+describe("board density reaches the adapter (#375)", () => {
+  /** Records the context every resolve was handed. */
+  const recording = (ref: DesignReference) => {
+    const seen: (number | undefined)[] = [];
+    const adapter: ReferenceAdapter = {
+      source: "figma",
+      resolve: async (_code, _ref, ctx) => {
+        seen.push(ctx.density);
+        return ref;
+      },
+    };
+    return { adapter, seen };
+  };
+
+  it("hands the correspondence's density to resolve", async () => {
+    // The last hop before an adapter can act on it. `density` is the one
+    // per-component field on the context, so it has to be rebuilt per
+    // correspondence rather than shared with the run.
+    const { reference, candidate } = await load();
+    const { adapter, seen } = recording(reference);
+    await orchestrate({
+      repoRoot,
+      registry: reg(adapter),
+      correspondences: [{ ...corr, density: 3 }],
+      candidate: () => candidate,
+    });
+    expect(seen).toEqual([3]);
+  });
+
+  it("leaves it unset for a correspondence that states none", async () => {
+    const { reference, candidate } = await load();
+    const { adapter, seen } = recording(reference);
+    await orchestrate({
+      repoRoot,
+      registry: reg(adapter),
+      correspondences: [corr],
+      candidate: () => candidate,
+    });
+    expect(seen).toEqual([undefined]);
+  });
+
+  it("does not let one component's density leak into another's", async () => {
+    // A single map can bind a 1× component sheet beside a 3× screen board, so
+    // sharing one context across the run would scale the wrong one.
+    const { reference, candidate } = await load();
+    const { adapter, seen } = recording(reference);
+    await orchestrate({
+      repoRoot,
+      registry: reg(adapter),
+      correspondences: [
+        { ...corr, density: 3 },
+        { ...corr, code: "ui/Other.kt#Other" },
+      ],
+      candidate: () => candidate,
+    });
+    expect(seen).toEqual([3, undefined]);
+  });
+});

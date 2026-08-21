@@ -102,6 +102,15 @@ export interface DesignMapEntry {
    *
    * Omit when unknown. A wrong factor silently rescales every spec on the
    * reference side, which is worse than an honestly stated `px`.
+   *
+   * Reaches the adapter as {@link Correspondence.density} →
+   * {@link AdapterContext.density}. The Figma normalizer divides every length it
+   * captures off the artwork — padding, corner radius, type size, line height,
+   * letter spacing — into the code's units, and stamps the factor onto the
+   * layout's {@link SemanticTree.density} / `boundsDensity` so a consumer
+   * measuring those boxes knows what they are. The design-system table read from
+   * Figma **Variables** is deliberately left alone: a Variable is a number the
+   * designer declared, not a length measured off the board.
    */
   density?: number;
 }
