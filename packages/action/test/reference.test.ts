@@ -83,3 +83,66 @@ describe("resolveReference", () => {
     expect(merged.componentId).toBe("ui/Device.kt#DeviceScreen");
   });
 });
+
+describe("a multi-ref merge keeps the primary's structure", () => {
+  // This merge lists the fields it carries one by one, which is what made the
+  // loss silent: `layout` and `themeTokens` were simply never named, so every
+  // multi-ref entry resolved to a reference with no captured geometry and no
+  // system table — 45 of wear-m3-catalog's 49 components, including the
+  // `SwipeToRevealCard` of #371. Nothing downstream errors on that; it all just
+  // turns itself off.
+  const withStructure = (uri: string): DesignReference => ({
+    ...ref(uri),
+    layout: {
+      boundsDensity: 3,
+      root: {
+        bounds: { x: 0, y: 0, width: 576, height: 312 },
+        children: [{ label: "Section", bounds: { x: 36, y: 36, width: 504, height: 54 } }],
+      },
+    },
+    themeTokens: { colors: { primary: "#645AFF" } },
+  });
+
+  it("carries the captured layout and the design-system table", async () => {
+    const adapter = fakeAdapter({
+      "figma:K/1:1": withStructure("figma:K/1:1"),
+      "figma:K/1:2": withStructure("figma:K/1:2"),
+    });
+    const corr: Correspondence = {
+      code: "ui/Device.kt#DeviceScreen",
+      source: "figma",
+      ref: "figma:K/1:1",
+      refs: [{ ref: "figma:K/1:1", theme: "light" }, { ref: "figma:K/1:2", theme: "dark" }],
+      linkMethod: "manifest",
+      confidence: "high",
+    };
+
+    const merged = await resolveReference(adapter, corr, ctx);
+
+    // Guard the guard: this only tests the merge while the fixture really is
+    // multi-ref and really did merge both nodes' images.
+    expect(corr.refs).toHaveLength(2);
+    expect(merged.referenceImages).toHaveLength(2);
+
+    expect(merged.layout?.root.children).toHaveLength(1);
+    // The density stamp has to survive too, or a scaled board's boxes are read
+    // as dp downstream and the corroboration silently stops matching.
+    expect(merged.layout?.boundsDensity).toBe(3);
+    expect(merged.themeTokens?.colors).toMatchObject({ primary: "#645AFF" });
+  });
+
+  it("stays absent when the primary captured neither", async () => {
+    const adapter = fakeAdapter({ "figma:K/1:1": ref("figma:K/1:1") });
+    const corr: Correspondence = {
+      code: "ui/Device.kt#DeviceScreen",
+      source: "figma",
+      ref: "figma:K/1:1",
+      refs: [{ ref: "figma:K/1:1" }],
+      linkMethod: "manifest",
+      confidence: "high",
+    };
+    const merged = await resolveReference(adapter, corr, ctx);
+    expect("layout" in merged).toBe(false);
+    expect("themeTokens" in merged).toBe(false);
+  });
+});

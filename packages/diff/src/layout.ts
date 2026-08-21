@@ -100,6 +100,16 @@ export function diffLayout(
   const cands = scale === 1 ? candsRaw : candsRaw.map((c) => scaleElement(c, scale));
   const used = new Set<number>();
   const tol = config.layoutTolerance;
+  // Both sides now share the REFERENCE's space, which is not necessarily dp: a
+  // capture states `boundsDensity` when its boxes are a scaled board's pixels
+  // (see {@link SemanticTree.boundsDensity}). `layoutTolerance` is in dp and the
+  // deltas are reported as dp, so a 3× board would compare a real 2dp offset as
+  // a 6 against a 4dp allowance, and quote an 8dp one as 24. Divide the deltas
+  // through and both the threshold and the number a reader acts on are dp again.
+  // Absent means the boxes already are dp, so this is a no-op for every capture
+  // that does not say otherwise.
+  const perDp =
+    reference?.boundsDensity && reference.boundsDensity > 0 ? reference.boundsDensity : 1;
 
   for (const r of refs) {
     const rc = centerOf(r.bounds);
@@ -118,10 +128,20 @@ export function diffLayout(
     if (best < 0) continue;
     used.add(best);
     const c = cands[best]!;
-    const dx = Math.round(r.bounds.x - c.bounds.x);
-    const dy = Math.round(r.bounds.y - c.bounds.y);
-    const dw = Math.round(r.bounds.width - c.bounds.width);
-    const dh = Math.round(r.bounds.height - c.bounds.height);
+    // Unrounded for the threshold, rounded only for the number a reader sees.
+    // Rounding first swallows real drift just over the line: at density 3 a 13px
+    // difference is 4.33dp, and `Math.round(13 / 3)` is 4, which does not exceed
+    // a 4dp tolerance. The whole-pixel bounds made that harmless while the
+    // divisor was 1; dividing through is what puts fractions in play.
+    const dp = (px: number): number => px / perDp;
+    const dxExact = dp(r.bounds.x - c.bounds.x);
+    const dyExact = dp(r.bounds.y - c.bounds.y);
+    const dwExact = dp(r.bounds.width - c.bounds.width);
+    const dhExact = dp(r.bounds.height - c.bounds.height);
+    const dx = Math.round(dxExact);
+    const dy = Math.round(dyExact);
+    const dw = Math.round(dwExact);
+    const dh = Math.round(dhExact);
     // A text node's width — and the horizontal shift a width change induces — is
     // content-/fill-dependent, not a layout property: the reference measures the
     // tight glyph box while the candidate may report a fill-width row (or a
@@ -134,8 +154,13 @@ export function diffLayout(
     // so only the content-width axis is relaxed.)
     const isText = r.role === undefined;
     const worst = isText
-      ? Math.max(Math.abs(dy), Math.abs(dh))
-      : Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dw), Math.abs(dh));
+      ? Math.max(Math.abs(dyExact), Math.abs(dhExact))
+      : Math.max(
+          Math.abs(dxExact),
+          Math.abs(dyExact),
+          Math.abs(dwExact),
+          Math.abs(dhExact),
+        );
     if (worst > tol) {
       findings.push({
         kind: "layout",
