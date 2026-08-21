@@ -267,3 +267,35 @@ describe("convention fallback", () => {
     expect(result.unresolved).toEqual(["ui/Unknown.kt#Widget"]);
   });
 });
+
+describe("board density reaches the correspondence (#375)", () => {
+  // The map is the only thing that knows a board's scale, and the entry is
+  // where it is declared — so this is the first of the hops it has to survive.
+  const entry = (density?: number): DesignMap => ({
+    components: [
+      {
+        code: "ui/Card.kt#Card",
+        source: "figma",
+        ref: "figma:KEY/1:1",
+        ...(density === undefined ? {} : { density }),
+      },
+    ],
+  });
+
+  it("carries a stated density from the map entry", () => {
+    const { correspondence } = resolveComponent("ui/Card.kt#Card", {
+      designMap: entry(3),
+    });
+    expect(correspondence).toMatchObject({ linkMethod: "manifest", density: 3 });
+  });
+
+  it("leaves it absent when the author stated none", () => {
+    // Absent means "already in the code's units", NOT "1x, probably" — so the
+    // key must not be present at all for a consumer to spread over.
+    const { correspondence } = resolveComponent("ui/Card.kt#Card", {
+      designMap: entry(),
+    });
+    expect(correspondence).toBeDefined();
+    expect("density" in correspondence!).toBe(false);
+  });
+});

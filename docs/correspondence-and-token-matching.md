@@ -305,15 +305,25 @@ readmitted when the reference independently measures the same inset within
 fonts agreeing is not a layout, and a reference that states its own hierarchy is
 taken at its word rather than re-parented by enclosure.
 
-The reference's boxes are read in the unit it states. A capture rarely states one
-— nothing on the `ReferenceAdapter` contract carries the design map's `density`,
-so `layoutFromNode` has none to stamp — and an absent `boundsDensity` means what
-its contract says it means: bounds already in dp. A 3× board therefore
-corroborates nothing until its density is threaded through, which is a known gap
-rather than a licence to infer one. The frame-width ratio cannot tell a 2×
-capture from a reference deliberately drawn at twice the candidate's logical
-width, and halving a true 12 into a 6 is exactly the confident wrong number this
-predicate exists to stop.
+The reference's boxes are read in the unit it states, and a scaled board can now
+say so. `DesignMapEntry.density` — source pixels per dp, which only the author
+knows — rides the correspondence to the adapter (`Correspondence.density` →
+`AdapterContext.density`), where the Figma normalizer divides every captured
+length into the code's units and stamps the factor onto the layout it builds. A
+3× board's 48 becomes a 16, and its boxes carry `boundsDensity: 3` so this
+measurement reads them as dp.
+
+An entry that states nothing is unchanged in every respect: an absent
+`boundsDensity` means what its contract says it means, bounds already in dp. That
+is deliberately not a guess at 1×, and the factor is never inferred — the
+frame-width ratio cannot tell a 2× capture from a reference drawn at twice the
+candidate's logical width, and halving a true 12 into a 6 is exactly the
+confident wrong number this predicate exists to stop.
+
+What is **not** divided through is the design-system table read from Figma
+Variables. A published style's properties are measured off the board and carry
+its pixels; a Variable is a number the designer declared, and nothing says it was
+authored at the board's scale.
 
 Corroboration is one-directional by design: a glyph-set edge can **acquit but
 never convict**. The corroborating value is one the reference draws somewhere,

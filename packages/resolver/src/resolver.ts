@@ -142,6 +142,11 @@ export function resolveComponent(
         ...(multi ? { refs: variants } : {}),
         linkMethod: "manifest",
         confidence: "high",
+        // The board's scale, if the author stated one. Only the map knows it —
+        // a design tool reports its own pixels and nothing in the file says
+        // what they are pixels *of* — so an entry that omits it means "already
+        // in the code's units", not "1x, probably".
+        ...(entry.density !== undefined ? { density: entry.density } : {}),
       };
     });
     return { correspondence: correspondences[0], correspondences, warnings: [] };

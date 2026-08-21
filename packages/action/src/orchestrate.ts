@@ -382,7 +382,13 @@ export async function orchestrate(
         continue;
       }
 
-      let reference = await resolveReference(adapter, corr, ctx);
+      // The reference side is resolved in THIS correspondence's units. Density
+      // is the one per-component thing on the context, so it is rebuilt here
+      // and used for every reference lookup this component makes — the first
+      // resolve and the variant re-target below, which must agree or the
+      // re-targeted node arrives scaled differently from the one it replaces.
+      const refCtx = corr.density === undefined ? ctx : { ...ctx, density: corr.density };
+      let reference = await resolveReference(adapter, corr, refCtx);
       result.reference = reference;
 
       const candidate = await options.candidate(corr.code, ctx);
@@ -403,7 +409,7 @@ export async function orchestrate(
         reference,
         candidate,
         corr.code,
-        ctx,
+        refCtx,
       );
       if (better) {
         reference = better;

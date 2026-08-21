@@ -242,3 +242,50 @@ describe("FigmaAdapter with a committed reference cache", () => {
     expect(seen[0]).not.toContain("1%3A42");
   });
 });
+
+describe("the adapter acts on the context's density (#375)", () => {
+  // The cached node states a 16 padding and an 8 corner in the board's own
+  // pixels. At 2× those are an 8dp inset and a 4dp corner in the code's units,
+  // and comparing the raw numbers against a render that already resolved dp is
+  // the twofold divergence `DesignMapEntry.density` exists to prevent.
+  it("converts a cached capture into the code's units", async () => {
+    const cache = await ReferenceCache.open(await seedCache());
+    const adapter = createFigmaAdapter({
+      cache,
+      cacheOnly: true,
+      fetch: forbiddenFetch,
+    });
+
+    const reference = await adapter.resolve("ui/Button.kt#Primary", REF, {
+      ...ctx,
+      density: 2,
+    });
+
+    expect(reference.tokens?.spacing).toMatchObject({ padding: 8 });
+    expect(reference.tokens?.radius).toMatchObject({ corner: 4 });
+
+    // No layout to stamp: `layoutFromNode` needs at least one labelled, bounded
+    // DESCENDANT, and this cached node is childless. Worth pinning, because it
+    // is the same shape as the open question on #371 — a reference whose
+    // captured node has no children carries no geometry at all, and every
+    // geometry-dependent check downstream is then silently inert. The
+    // stamping itself is covered in `normalize.test.ts`, over a node with one.
+    expect(reference.layout).toBeUndefined();
+  });
+
+  it("leaves the capture as-is when the context states no density", async () => {
+    // Guard the guard: the assertions above only mean something while the
+    // unscaled resolve really does report the board's own numbers.
+    const cache = await ReferenceCache.open(await seedCache());
+    const adapter = createFigmaAdapter({
+      cache,
+      cacheOnly: true,
+      fetch: forbiddenFetch,
+    });
+
+    const reference = await adapter.resolve("ui/Button.kt#Primary", REF, ctx);
+
+    expect(reference.tokens?.spacing).toMatchObject({ padding: 16 });
+    expect(reference.tokens?.radius).toMatchObject({ corner: 8 });
+  });
+});

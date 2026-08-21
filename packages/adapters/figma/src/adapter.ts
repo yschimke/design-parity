@@ -501,6 +501,10 @@ export class FigmaAdapter implements ReferenceAdapter {
       ...(entry.styles ? { styles: entry.styles } : {}),
       ...(properties.length > 0 ? { properties } : {}),
       referenceImages,
+      // The board's scale, as the design map declared it for this component.
+      // Figma reports its own pixels; only the map knows what they are pixels
+      // of, and this is the one hop that can tell the normalizer.
+      ...(ctx.density !== undefined ? { density: ctx.density } : {}),
     });
   }
 

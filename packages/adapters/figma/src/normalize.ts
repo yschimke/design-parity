@@ -140,25 +140,59 @@ function numericFromVariables(variables: VariablesResponse): {
   return out;
 }
 
-function typographyFrom(text: FigmaNodeDoc | undefined): TypographyToken | undefined {
+/**
+ * A captured length in the **code's** units.
+ *
+ * Figma reports a board's own pixels and nothing in the file says what they are
+ * pixels of, so a 3x board states a 16dp gutter as 48 and 14sp type as 42. The
+ * author is the only one who knows the factor; when they have declared it
+ * (`DesignMapEntry.density`, reaching here as {@link NormalizeInput.density}),
+ * dividing through is what makes a spec comparable to a render that already
+ * resolved dp — the whole point of the field (issues #277 / #279).
+ *
+ * Undefined density leaves the number exactly as captured. That is not a guess
+ * at 1x: it is the documented reading of an unstated scale, and it is why this
+ * change is inert for every project that has not opted in.
+ *
+ * Rounded to two places, because a divided-through capture is a measurement,
+ * not a spec: `48 / 2.625` is `18.285714…` and quoting that is false precision.
+ */
+function inCodeUnits(value: number, density: number | undefined): number {
+  if (density === undefined || !Number.isFinite(density) || density <= 0) return value;
+  return Math.round((value / density) * 100) / 100;
+}
+
+function typographyFrom(
+  text: FigmaNodeDoc | undefined,
+  density?: number,
+): TypographyToken | undefined {
   const s = text?.style;
   if (!s) return undefined;
   const token: TypographyToken = {};
   if (s.fontFamily !== undefined) token.fontFamily = s.fontFamily;
-  if (s.fontSize !== undefined) token.fontSize = s.fontSize;
+  if (s.fontSize !== undefined) token.fontSize = inCodeUnits(s.fontSize, density);
   if (s.fontWeight !== undefined) token.fontWeight = s.fontWeight;
-  if (s.lineHeightPx !== undefined) token.lineHeight = Math.round(s.lineHeightPx);
-  if (s.letterSpacing !== undefined) token.letterSpacing = s.letterSpacing;
+  if (s.lineHeightPx !== undefined) {
+    // Rounded whole when unscaled, as it always was; a divided-through capture
+    // keeps `inCodeUnits`' two places rather than snapping 47.5px/2.625 to 18.
+    token.lineHeight =
+      density === undefined
+        ? Math.round(s.lineHeightPx)
+        : inCodeUnits(s.lineHeightPx, density);
+  }
+  if (s.letterSpacing !== undefined) token.letterSpacing = inCodeUnits(s.letterSpacing, density);
   return Object.keys(token).length ? token : undefined;
 }
 
-function tokensFrom(node: FigmaNodeDoc): DesignTokens | undefined {
+function tokensFrom(node: FigmaNodeDoc, density?: number): DesignTokens | undefined {
   const tokens: DesignTokens = {};
 
   const padding = node.paddingLeft ?? node.paddingTop ?? node.paddingRight ?? node.paddingBottom;
-  if (padding !== undefined) tokens.spacing = { padding };
+  if (padding !== undefined) tokens.spacing = { padding: inCodeUnits(padding, density) };
 
-  if (node.cornerRadius !== undefined) tokens.radius = { corner: node.cornerRadius };
+  if (node.cornerRadius !== undefined) {
+    tokens.radius = { corner: inCodeUnits(node.cornerRadius, density) };
+  }
 
   // Per-node colours: the frame's own fill and its first text colour. The
   // design-system palette (Variables) lives in `themeTokens`, not here.
@@ -170,7 +204,7 @@ function tokensFrom(node: FigmaNodeDoc): DesignTokens | undefined {
   if (label) colors.label = label;
   if (Object.keys(colors).length) tokens.colors = colors;
 
-  const typography = typographyFrom(text);
+  const typography = typographyFrom(text, density);
   if (typography) tokens.typography = { label: typography };
 
   return Object.keys(tokens).length ? tokens : undefined;
@@ -187,6 +221,7 @@ function tokensFrom(node: FigmaNodeDoc): DesignTokens | undefined {
 function typographyFromStyles(
   node: FigmaNodeDoc,
   styles: Record<string, FigmaStyleMeta> | undefined,
+  density?: number,
 ): Record<string, TypographyToken> {
   const out: Record<string, TypographyToken> = {};
   if (!styles) return out;
@@ -194,7 +229,7 @@ function typographyFromStyles(
     const styleId = n.styles?.text;
     const meta = styleId ? styles[styleId] : undefined;
     if (meta?.styleType === "TEXT") {
-      const token = typographyFrom(n);
+      const token = typographyFrom(n, density);
       const key = tokenPath(meta.name);
       if (token && key && !(key in out)) out[key] = token; // first occurrence wins
     }
@@ -213,16 +248,23 @@ function themeTokensFrom(
   node: FigmaNodeDoc,
   variables: VariablesResponse,
   styles: Record<string, FigmaStyleMeta> | undefined,
+  density?: number,
 ): DesignTokens | undefined {
   const out: DesignTokens = {};
   const colors = colorsFromVariables(variables);
   if (Object.keys(colors).length) out.colors = colors;
 
+  // Variables are deliberately NOT divided through. A published style's
+  // properties are read off the board and carry its pixels; a Variable is a
+  // number the designer declared, and nothing says it was authored at the
+  // board's scale rather than in the system's own units. Scaling it would be
+  // the guess this field exists to avoid — so a scaled board's system table
+  // stays as the file states it, and only what was measured is converted.
   const numeric = numericFromVariables(variables);
   if (numeric.spacing) out.spacing = numeric.spacing;
   if (numeric.radius) out.radius = numeric.radius;
 
-  const typography = typographyFromStyles(node, styles);
+  const typography = typographyFromStyles(node, styles, density);
   if (Object.keys(typography).length) out.typography = typography;
 
   return Object.keys(out).length ? out : undefined;
@@ -239,12 +281,27 @@ export interface NormalizeInput {
   /** The component properties the render used — what the reference depicts. */
   properties?: ReferenceProperty[];
   referenceImages: Image[];
+  /**
+   * Source pixels per dp of this board, from the design map entry — see
+   * {@link AdapterContext.density}.
+   *
+   * Converts every length captured off the artwork into the code's units, and
+   * stamps the factor onto the layout so a consumer measuring those boxes knows
+   * what they are. Absent means the capture is already in the code's units,
+   * which is the documented reading of an unstated scale.
+   */
+  density?: number;
 }
 
 /** Build a `DesignReference` with `linkMethod: "code-connect"`. */
 export function normalizeReference(input: NormalizeInput): DesignReference {
-  const tokens = tokensFrom(input.node);
-  const themeTokens = themeTokensFrom(input.node, input.variables, input.styles);
+  const tokens = tokensFrom(input.node, input.density);
+  const themeTokens = themeTokensFrom(
+    input.node,
+    input.variables,
+    input.styles,
+    input.density,
+  );
   const ref: DesignReference = {
     componentId: input.componentId,
     source: "figma",
@@ -257,7 +314,10 @@ export function normalizeReference(input: NormalizeInput): DesignReference {
   if (input.properties?.length) ref.properties = input.properties;
   // Same `styles` map the type ramp is read from, so a node's annotation names
   // the published style it wears rather than the anonymous `text`.
-  const layout = layoutFromNode(input.node, { styles: input.styles });
+  const layout = layoutFromNode(input.node, {
+    styles: input.styles,
+    ...(input.density !== undefined ? { density: input.density } : {}),
+  });
   if (layout) ref.layout = layout;
   return ref;
 }
