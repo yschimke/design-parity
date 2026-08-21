@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.58](https://github.com/yschimke/design-parity/compare/v0.1.57...v0.1.58) (2026-08-21)
+
+
+### Features
+
+* **figma:** carry the design map's board density to the capture ([#376](https://github.com/yschimke/design-parity/issues/376)) ([d82da14](https://github.com/yschimke/design-parity/commit/d82da1474caac15400fe3102225d721d73c61c01))
+
+
+### Bug Fixes
+
+* stop a multi-ref merge from dropping the reference's geometry ([#378](https://github.com/yschimke/design-parity/issues/378)) ([2b63767](https://github.com/yschimke/design-parity/commit/2b63767c8a30b70fac3f0cb26fe88caff2ced864))
+
 ## [0.1.57](https://github.com/yschimke/design-parity/compare/v0.1.56...v0.1.57) (2026-08-21)
 
 
