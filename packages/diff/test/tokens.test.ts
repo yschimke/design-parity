@@ -642,7 +642,7 @@ describe("diffTokens", () => {
       expect(collectDerivedInsets(cardWithLabel())).toEqual([]);
       expect(
         collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
-          insets: referenceInsets(kitCard()),
+          layout: kitCard(),
           tolerance: defaultDiffConfig.spacingTolerance,
         }).map((i) => i.inset),
       ).toEqual([12]);
@@ -652,10 +652,10 @@ describe("diffTokens", () => {
       // Same call, same reference values, opposite answer — the half of the pair
       // that stops a future tightening trading one bug for the other. 20 is not
       // 12, and `textButton()`'s own kit (above) measures nothing at all.
-      for (const insets of [referenceInsets(kitCard()), referenceInsets(kitTextToggle())]) {
+      for (const layout of [kitCard(), kitTextToggle()]) {
         expect(
           collectDerivedInsets(textButton(), 1, 1, "skip", {
-            insets,
+            layout,
             tolerance: defaultDiffConfig.spacingTolerance,
           }),
         ).toEqual([]);
@@ -686,7 +686,7 @@ describe("diffTokens", () => {
         undefined,
         undefined,
         collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
-          insets: referenceInsets(kitCard()),
+          layout: kitCard(),
           tolerance: defaultDiffConfig.spacingTolerance,
         }),
       );
@@ -705,12 +705,299 @@ describe("diffTokens", () => {
         undefined,
         undefined,
         collectDerivedInsets(textButton(), 1, 1, "skip", {
-          insets: referenceInsets(kitCard()),
+          layout: kitCard(),
           tolerance: defaultDiffConfig.spacingTolerance,
         }),
       );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    /** A kit that insets 12 somewhere, on a node this spec knows nothing about. */
+    const unrelatedKit = (): SemanticTree => ({
+      root: {
+        bounds: { x: 0, y: 0, width: 300, height: 300 },
+        children: [
+          { label: "Panel", role: "frame", bounds: { x: 0, y: 0, width: 100, height: 100 } },
+          { label: "Fill", role: "rectangle", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+        ],
+      },
+    });
+
+    it("lets a corroborated inset satisfy a spec but never contradict one", () => {
+      // The corroborating value is whatever the reference draws SOMEWHERE, not
+      // necessarily on the node the spec describes. A candidate that declares no
+      // padding and measures a 12dp glyph gap against a `padding: 16` spec must
+      // not newly fail on `renders 12 vs spec 16` because something unrelated in
+      // the kit insets 12 — that finding was `unverified` before corroboration
+      // existed and has to stay that way.
+      const drawn = collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
+        layout: unrelatedKit(),
+        tolerance: defaultDiffConfig.spacingTolerance,
+      });
+      expect(drawn).toEqual([
+        { inset: 12, declaresSpacing: true, corroborated: true, where: "card" },
+      ]);
+
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        drawn,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    it("re-decides from scratch when the corroborated inset steps aside", () => {
+      // `nearestInset` is TIERED: it answers from the declaring containers alone
+      // when there are any. So dropping a corroborated declaring container does
+      // not just pick the next-nearest — it can fall through to a whole other
+      // tier, whose value may SATISFY the spec. Reporting the fallback without
+      // re-testing it emitted `renders 16 vs spec 16 (Δ0)`, a blocking error
+      // whose own delta says there is nothing wrong.
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [
+          { inset: 40, declaresSpacing: true, corroborated: true, where: "card" },
+          { inset: 16, declaresSpacing: false, where: "inner" },
+        ],
+      );
+      expect(findings.some((f) => f.severity === "error")).toBe(false);
+      // Exactly what the same insets say with the corroborated one absent: a
+      // readmitted measurement is transparent, except that it may also acquit.
+      expect(findings).toEqual(
+        diffTokens({ spacing: { padding: 16 } }, {}, defaultDiffConfig, undefined, undefined, [
+          { inset: 16, declaresSpacing: false, where: "inner" },
+        ]),
+      );
+    });
+
+    it("steps aside one corroborated inset, not all of them", () => {
+      // Another readmitted measurement may still answer the spec — that IS the
+      // invariant. Dropping the whole class to get past the declaring
+      // container's miss took the acquitting 16 down with the 40 and fell
+      // through to the declared value, which on a design-led run blocks.
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [
+          { inset: 40, declaresSpacing: true, corroborated: true, where: "card" },
+          { inset: 16, declaresSpacing: false, corroborated: true, where: "inner" },
+        ],
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", actual: 16 },
+      });
+    });
+
+    it("still convicts on a missed inset the candidate's own BOXES establish", () => {
+      // Guard the guard: the clause above must not have switched off #364's
+      // point. An inset no glyph decided is evidence either way, and one that
+      // misses is still the error a designer can act on.
+      const boxed: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } }],
+      };
+      const drawn = collectDerivedInsets(boxed);
+      expect(drawn[0]!.corroborated).toBeUndefined();
+
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        drawn,
+      );
+      expect(findings[0]).toMatchObject({
+        severity: "error",
+        message: "spacing.padding: renders 12 vs spec 16 (Δ4)",
+      });
+    });
+
+    it("takes a reference's own nesting over what the rectangles imply", () => {
+      // A backdrop encloses the control drawn on top of it without being its
+      // parent. Rebuilding ancestry from enclosure alone would file the control
+      // under the backdrop's own child and measure a 14 the artwork never
+      // establishes — which, being a corroborating value, could then suppress a
+      // real mismatch. A tree that states its hierarchy is taken at its word.
+      const composed: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 300, height: 300 },
+          children: [
+            {
+              label: "Backdrop",
+              role: "frame",
+              bounds: { x: 0, y: 0, width: 200, height: 200 },
+              children: [
+                {
+                  label: "Grain",
+                  role: "rectangle",
+                  bounds: { x: 10, y: 10, width: 180, height: 180 },
+                },
+              ],
+            },
+            { label: "Control", role: "frame", bounds: { x: 24, y: 24, width: 152, height: 152 } },
+          ],
+        },
+      };
+      // Guard the guard: this fixture only tests anything while it IS nested.
+      expect(composed.root.children![0]!.children).toHaveLength(1);
+      expect(referenceInsets(composed)).toEqual([10]);
+    });
+
+    it("measures THROUGH an unbounded group between two boxes", () => {
+      // `Card → Group(no bounds) → Body`. The tree states this containment, so
+      // it is not rebuilt — but the measurement only ever looked at directly
+      // bounded children, so the group sat between the card and its content and
+      // the 12 went unmeasured. An unbounded node is a pass-through, not a
+      // boundary.
+      const throughGroup: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 400, height: 400 },
+          children: [
+            {
+              label: "Card",
+              role: "frame",
+              bounds: { x: 0, y: 0, width: 100, height: 100 },
+              children: [
+                {
+                  label: "Group",
+                  children: [
+                    {
+                      label: "Body",
+                      role: "frame",
+                      bounds: { x: 12, y: 12, width: 76, height: 76 },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+      // Guard the guard: the group must be unbounded and BETWEEN the two boxes.
+      const card = throughGroup.root.children![0]!;
+      expect(card.bounds).toBeDefined();
+      expect(card.children![0]!.bounds).toBeUndefined();
+      expect(card.children![0]!.children![0]!.bounds).toBeDefined();
+
+      expect(referenceInsets(throughGroup)).toEqual([12]);
+    });
+
+    it("keeps boxes that sit under an UNBOUNDED group", () => {
+      // A grouping node with no box of its own is not a container this can
+      // measure, but the boxes beneath it are still geometry. Reading the group
+      // as a leaf calls a nested tree flat and then drops its whole subtree at
+      // the rebuild, so a capture whose real content hangs off one corroborates
+      // nothing at all.
+      const grouped: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 400, height: 400 },
+          children: [
+            {
+              label: "Layers",
+              children: [
+                {
+                  label: "Card",
+                  role: "frame",
+                  bounds: { x: 0, y: 0, width: 100, height: 100 },
+                  children: [
+                    {
+                      label: "Body",
+                      role: "frame",
+                      bounds: { x: 12, y: 12, width: 76, height: 76 },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+      // Guard the guard: the group must really be unbounded, and the geometry
+      // must really be below it.
+      expect(grouped.root.children![0]!.bounds).toBeUndefined();
+      expect(referenceInsets(grouped)).toEqual([12]);
+    });
+
+    it("will not read two peer layers a pixel apart as parent and child", () => {
+      // Two same-sized layers offset by one — the shape a flat capture is full
+      // of. Forgiving a pixel of enclosure made the first absorb the second, and
+      // the root then reported a clean uniform 10 where its real union is a
+      // ragged [9, 10, 10, 10]. An invented inset can acquit a candidate that
+      // deserved a finding, so enclosure is read strictly; the cost is a
+      // corroboration missed, which is the safe direction to miss in.
+      const peers: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 120, height: 120 },
+          children: [
+            {
+              label: "Layer A",
+              role: "frame",
+              bounds: { x: 10, y: 10, width: 100, height: 100 },
+            },
+            {
+              label: "Layer B",
+              role: "frame",
+              bounds: { x: 9, y: 10, width: 100, height: 100 },
+            },
+          ],
+        },
+      };
+      // Guard the guard: the two really are peers — same size, neither inside
+      // the other — and the root's real union really is non-uniform.
+      expect(peers.root.children![0]!.bounds!.width).toBe(peers.root.children![1]!.bounds!.width);
+      expect(referenceInsets(peers)).toEqual([]);
+    });
+
+    it("does not measure the reference unless a glyph-set extreme asks", () => {
+      // Rebuilding containment over a screen capture's descendants is a sort
+      // plus an enclosure scan, and most diffs never consult the result: no
+      // padding spec, no text-edged container, or no captured geometry at all.
+      // A container whose boxes establish their own inset must not pay for it.
+      let reads = 0;
+      const counted = {
+        get root() {
+          reads++;
+          return kitCard().root;
+        },
+      } as unknown as SemanticTree;
+      const corroborate = { layout: counted, tolerance: defaultDiffConfig.spacingTolerance };
+
+      const boxed: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } }],
+      };
+      expect(collectDerivedInsets(boxed, 1, 1, "skip", corroborate).map((i) => i.inset)).toEqual([
+        12,
+      ]);
+      expect(reads).toBe(0);
+
+      // ...and once it is asked, it is measured once for the whole tree.
+      const twoGlyphs: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 400, height: 400 },
+        children: [
+          cardWithLabel(),
+          { ...cardWithLabel(), bounds: { x: 0, y: 200, width: 192, height: 104 } },
+        ],
+      };
+      collectDerivedInsets(twoGlyphs, 1, 1, "skip", corroborate);
+      expect(reads).toBe(1);
     });
 
     it("does not let the glyph rule silence a numeric the candidate CAN report", () => {

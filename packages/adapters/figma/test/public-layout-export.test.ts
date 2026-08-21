@@ -135,6 +135,16 @@ describe("captured spec tokens", () => {
     // A nonsense factor is worse than none: it would silently divide every spec.
     expect(layoutFromNode(node as never, { density: 0 })?.density).toBeUndefined();
   });
+
+  it("states the same factor for the BOUNDS, which are board pixels too", () => {
+    // `absoluteBoundingBox` is in the board's own pixels, so a 3× capture hands
+    // over a 36px gutter for a 12dp one. Anything measuring these boxes against
+    // the code side's dp — the inset corroboration in `@design-parity/diff` —
+    // has to be told the factor or it compares two units.
+    expect(layoutFromNode(node as never, { density: 3 })?.boundsDensity).toBe(3);
+    expect(layoutFromNode(node as never)?.boundsDensity).toBeUndefined();
+    expect(layoutFromNode(node as never, { density: 0 })?.boundsDensity).toBeUndefined();
+  });
 });
 
 /**

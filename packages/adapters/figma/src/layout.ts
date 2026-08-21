@@ -243,6 +243,13 @@ export interface LayoutOptions {
    * it when the board's scale relative to the code is known (a 3× board is `3`),
    * so a consumer can quote the captured specs in the same unit as the render's.
    * Omit rather than guess: a wrong factor is worse than a stated `px`.
+   *
+   * It stamps {@link SemanticTree.boundsDensity} too, and not as a shorthand:
+   * the boxes below are `absoluteBoundingBox` values, so they are in the board's
+   * pixels — the very thing this factor converts — and a consumer measuring one
+   * against the other side's dp needs to be told so. Left unstated, a 3× board's
+   * 36px gutter reads as 36dp, and the inset corroboration in
+   * `@design-parity/diff` quietly stops matching a candidate's 12.
    */
   density?: number;
 }
@@ -301,6 +308,8 @@ export function layoutFromNode(
       ...(root?.spacingSource ? { spacingSource: root.spacingSource } : {}),
       bounds: { x: 0, y: 0, width: Math.round(frame.width), height: Math.round(frame.height) },
     },
-    ...(density !== undefined && Number.isFinite(density) && density > 0 ? { density } : {}),
+    ...(density !== undefined && Number.isFinite(density) && density > 0
+      ? { density, boundsDensity: density }
+      : {}),
   };
 }

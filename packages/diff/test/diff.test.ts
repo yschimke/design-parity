@@ -244,3 +244,68 @@ describe("diff engine corroborates a glyph-set inset against the reference (#371
     );
   });
 });
+
+describe("diff engine reads a scaled reference capture in the unit it states", () => {
+  // The same card captured on a 3× board: every box is three times the dp it
+  // represents.
+  const scaled = (boundsDensity?: number): DesignReference => ({
+    componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
+    source: "figma",
+    linkMethod: "manifest",
+    referenceImages: [],
+    tokens: { spacing: { padding: 12 } },
+    layout: {
+      ...(boundsDensity === undefined ? {} : { boundsDensity }),
+      root: {
+        bounds: { x: 0, y: 0, width: 576, height: 312 },
+        children: [
+          { label: "Section", role: "frame", bounds: { x: 36, y: 36, width: 504, height: 54 } },
+          { label: "Section", role: "frame", bounds: { x: 36, y: 108, width: 504, height: 168 } },
+        ],
+      },
+    },
+  });
+  const candidate: CandidateRender = {
+    componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
+    images: [],
+    semantics: {
+      root: {
+        role: "card",
+        bounds: { x: 0, y: 0, width: 192, height: 104 },
+        tokens: { spacing: { padding: 0 } },
+        children: [
+          {
+            role: "text",
+            label: "Card content",
+            bounds: { x: 12, y: 12, width: 168, height: 80 },
+            tokens: { typography: { body: { fontSize: 14 } } },
+          },
+        ],
+      },
+    },
+  };
+  const padding = (findings: { kind: string; message: string; severity: string }[]) =>
+    findings.filter((f) => f.kind === "token" && f.message.startsWith("spacing.padding"));
+
+  it("corroborates through a stated density", async () => {
+    const { verdict } = await diff(scaled(3), candidate, { repoRoot });
+    expect(padding(verdict.findings).some((f) => f.severity === "error")).toBe(false);
+  });
+
+  it("takes an unstated one at face value rather than inferring it", async () => {
+    // The documented reading of an absent `boundsDensity`: bounds and tokens
+    // already share a space. So the kit's 36 is a 36, it corroborates nothing,
+    // and the glyph-set 12 stays dropped. That is a real gap for a board whose
+    // density never reached the adapter — and the alternative is worse. The
+    // frame-width ratio cannot tell a 2× capture from a reference deliberately
+    // drawn at twice the candidate's logical width, and halving a true 12 into a
+    // 6 is the confident wrong number this predicate exists to stop.
+    const { verdict } = await diff(scaled(), candidate, { repoRoot });
+    expect(padding(verdict.findings)).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        message: "spacing.padding: 0 vs spec 12 (Δ12)",
+      }),
+    );
+  });
+});

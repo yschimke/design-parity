@@ -155,12 +155,16 @@ export function collectRadiusBoxes(
  * of a layout; one glyph is evidence of a font.
  *
  * The asymmetry is deliberate and is the invariant to preserve: a glyph-set
- * extreme can **acquit**, never convict. Corroboration only ever readmits a
- * measurement that agrees with the reference within [corroborate]'s tolerance,
- * so the worst it can do is let a container whose font metrics coincide with the
- * spec pass unremarked. The alternative it replaces is a *false red* that blocks
- * a `design-led` catalog's `main`, and #370 already settled which way that
- * choice goes: what cannot be verified is not accused.
+ * extreme can **acquit**, never convict. Agreeing with the reference is not the
+ * same as agreeing with the spec — the corroborating value is one the reference
+ * draws *somewhere*, not necessarily on the node this spec describes — so the
+ * readmitted measurement is flagged {@link DerivedInset.corroborated} and the
+ * comparison refuses to quote a Δ off it. Enforced there rather than promised
+ * here, because a measurement readmitted by an unrelated agreement and then
+ * allowed to accuse is a *new* false red, and this rule exists to remove one.
+ * The worst corroboration can now do is let a container whose font metrics
+ * coincide with the spec pass unremarked, which is the side #370 already settled
+ * on: what cannot be verified is not accused.
  *
  * [boundsDensity] converts render pixels to dp — see {@link collectRadiusBoxes}.
  */
@@ -174,6 +178,17 @@ export function collectDerivedInsets(
   const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out: DerivedInset[] = [];
   const seen = new Set<string>();
+  // Measured once, on the first glyph-set extreme that asks, and only then.
+  let measuredReference: number[] | undefined;
+  const corroborates = (inset: number): boolean => {
+    if (!corroborate?.layout) return false;
+    measuredReference ??= referenceInsets(
+      corroborate.layout,
+      minInset,
+      corroborate.boundsDensity,
+    );
+    return measuredReference.some((v) => Math.abs(v - inset) <= corroborate.tolerance);
+  };
   const visit = (node: SemanticNode): void => {
     const box = node.bounds;
     const kids = (node.children ?? []).filter((c) => c.bounds);
@@ -223,12 +238,11 @@ export function collectDerivedInsets(
       const first = edges[0]!;
       const eps = Math.min(UNIFORM_EPSILON, minInset);
       const inset = round2(first);
-      const glyphEdged =
-        textInsets === "skip" &&
-        edgesSetOnlyByText(kids, left, top, right, bottom) &&
-        !corroborates(corroborate, first);
+      const textEdged =
+        textInsets === "skip" && edgesSetOnlyByText(kids, left, top, right, bottom);
+      const corroborated = textEdged && corroborates(first);
       const measured =
-        !glyphEdged &&
+        (!textEdged || corroborated) &&
         edges.every((v) => v > 0) &&
         edges.every((v) => Math.abs(v - first) <= eps) &&
         first > minInset &&
@@ -236,10 +250,15 @@ export function collectDerivedInsets(
       if (measured) {
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;
-        const key = `${inset}|${declaresSpacing}|${where ?? ""}`;
+        const key = `${inset}|${declaresSpacing}|${corroborated}|${where ?? ""}`;
         if (!seen.has(key)) {
           seen.add(key);
-          out.push({ inset, declaresSpacing, ...(where ? { where } : {}) });
+          out.push({
+            inset,
+            declaresSpacing,
+            ...(corroborated ? { corroborated: true } : {}),
+            ...(where ? { where } : {}),
+          });
         }
       }
     }
@@ -260,6 +279,21 @@ export interface DerivedInset {
    * nested decorative box does not speak for the component.
    */
   declaresSpacing: boolean;
+  /**
+   * Whether this inset survived **only** because the reference measures it too —
+   * every one of its extremes rests on a glyph, and it was readmitted by
+   * {@link Corroboration}.
+   *
+   * Load-bearing at the point of comparison, not merely descriptive: such a
+   * measurement may *satisfy* a spec and must never contradict one. The
+   * corroborating value is whatever the reference draws somewhere, not
+   * necessarily on the node this spec describes, so letting it report a Δ would
+   * turn an unrelated agreement into an accusation — a candidate that declares
+   * no padding, measures a 12dp glyph gap, and meets a `padding: 16` spec would
+   * newly fail on `renders 12 vs spec 16` because something else in the kit
+   * happens to inset 12. It was `unverified` before and stays that way.
+   */
+  corroborated?: boolean;
   /** Label / testTag / role, so a finding can say what it measured. */
   where?: string;
 }
@@ -319,20 +353,23 @@ function edgesSetOnlyByText(
  */
 export interface Corroboration {
   /**
-   * Uniform insets the reference's own boxes establish, in dp. Produced by
-   * {@link referenceInsets}, which runs the same measurement over the reference's
-   * geometry with text extremes skipped — so every value here is one the
-   * reference draws *without* a glyph deciding it.
+   * The reference's captured geometry. Measured on demand by
+   * {@link referenceInsets} — the tree rather than the values, because rebuilding
+   * containment over a screen capture's descendants is not free and only a
+   * glyph-set extreme ever asks for it. A diff with no padding spec, or one
+   * whose candidate has no text-edged container, never pays for it at all, and a
+   * reference that captured no geometry costs nothing either way.
    */
-  insets: number[];
+  layout: SemanticTree | undefined;
   /** The comparison's own spacing tolerance: what counts as the same inset. */
   tolerance: number;
-}
-
-/** Does the reference independently measure this inset? */
-function corroborates(corroborate: Corroboration | undefined, inset: number): boolean {
-  if (!corroborate) return false;
-  return corroborate.insets.some((v) => Math.abs(v - inset) <= corroborate.tolerance);
+  /**
+   * Source pixels per dp for [layout]'s boxes, when the caller can derive one the
+   * tree does not state — see {@link referenceInsets}. Takes precedence over
+   * {@link SemanticTree.boundsDensity}: it is the more informed answer, since it
+   * is measured against the very render being compared.
+   */
+  boundsDensity?: number;
 }
 
 /**
@@ -357,33 +394,120 @@ function corroborates(corroborate: Corroboration | undefined, inset: number): bo
  * flattened one; where the two disagree the cost is bounded, since a
  * corroborating inset can only ever readmit a measurement, never create a
  * finding.
+ *
+ * [boundsDensity] is source pixels per dp for the reference's boxes. A capture
+ * rarely states one — `layoutFromNode` stamps it only for a caller that passed a
+ * density, and nothing on the `ReferenceAdapter` contract carries the design
+ * map's — so the caller derives it from the two render frames instead, exactly
+ * as `diffLayout` already does. Without it a 3× board's 36px gutter reads as
+ * 36dp and corroborates nothing, which is the whole rule silently off for every
+ * scaled board.
  */
 export function referenceInsets(
   layout: SemanticTree | undefined,
   minInset = 1,
+  boundsDensity?: number,
 ): number[] {
   if (!layout) return [];
-  const flat: SemanticNode[] = [];
-  const gather = (node: SemanticNode): void => {
-    if (node.bounds) {
-      const { children: _drop, ...rest } = node;
-      flat.push(rest);
-    }
-    for (const child of node.children ?? []) gather(child);
-  };
-  for (const child of layout.root.children ?? []) gather(child);
-  const root: SemanticNode = {
-    ...layout.root,
-    children: nestByContainment(flat),
-  };
+  // A tree that already states who contains whom is taken at its word. Enclosure
+  // is a fair reading of a flattened list and a bad one of a composed layout: a
+  // full-bleed background encloses every control on top of it without being
+  // their parent, and re-parenting them under it would measure an inset the
+  // artwork never establishes. Only a capture with no nesting left to lose is
+  // rebuilt.
+  const captured = layout.root;
+  const root = carriesNesting(captured)
+    ? { ...captured, children: (captured.children ?? []).flatMap(spliceUnbounded) }
+    : { ...captured, children: nestByContainment(boundedDescendants(captured)) };
   return [
     ...new Set(
-      collectDerivedInsets(root, layout.boundsDensity, minInset, "skip").map((i) => i.inset),
+      collectDerivedInsets(
+        root,
+        boundsDensity ?? layout.boundsDensity,
+        minInset,
+        "skip",
+      ).map((i) => i.inset),
     ),
   ];
 }
 
-/** Does [outer] wholly enclose [inner]? */
+/**
+ * Does any bounded node in this tree hold another bounded node beneath it?
+ *
+ * Both halves see through **unbounded** nodes rather than stopping at them. A
+ * grouping node with no box of its own is not a container this measurement can
+ * use, but the boxes under it are still the tree's own statement about what
+ * contains what — reading a group as a leaf calls a nested tree flat, and then
+ * drops every one of its descendants at the rebuild.
+ */
+function carriesNesting(node: SemanticNode): boolean {
+  return (node.children ?? []).some((child) =>
+    child.bounds ? holdsBounded(child) : carriesNesting(child),
+  );
+}
+
+/**
+ * A node's bounded stand-ins: itself if it has a box, else whatever bounded
+ * nodes it holds, each hoisted to where it sat.
+ *
+ * An unbounded node is a **pass-through, not a boundary**. The measurement pairs
+ * a container with its directly bounded children, so a group with no box of its
+ * own sitting between a card and its content hides the one from the other and
+ * the inset goes unmeasured — the tree states that containment perfectly well,
+ * and only the shape of the walk could not see it. Splicing such a node out
+ * keeps every relationship the capture stated and removes only the rung that
+ * carries no geometry.
+ */
+function spliceUnbounded(node: SemanticNode): SemanticNode[] {
+  const kids = (node.children ?? []).flatMap(spliceUnbounded);
+  return node.bounds ? [{ ...node, children: kids }] : kids;
+}
+
+/** Is there a bounded node anywhere below this one? */
+function holdsBounded(node: SemanticNode): boolean {
+  return (node.children ?? []).some((child) => child.bounds || holdsBounded(child));
+}
+
+/**
+ * Every bounded node below this one, its own subtree dropped — the input the
+ * rebuild works from. Recursive for the same reason {@link carriesNesting} is:
+ * an unbounded group is not itself measurable, and taking only the root's direct
+ * children would discard the geometry underneath it.
+ */
+function boundedDescendants(root: SemanticNode): SemanticNode[] {
+  const out: SemanticNode[] = [];
+  const walk = (node: SemanticNode): void => {
+    for (const child of node.children ?? []) {
+      if (child.bounds) {
+        const { children: _subtree, ...box } = child;
+        out.push(box);
+      }
+      walk(child);
+    }
+  };
+  walk(root);
+  return out;
+}
+
+/**
+ * Does [outer] wholly enclose [inner]?
+ *
+ * **Strictly**, with no rounding slack, and that is a considered choice rather
+ * than an oversight. `layoutFromNode` rounds every box independently, so a child
+ * genuinely inside its parent can come back overhanging it by a pixel and be
+ * read as a peer — an earlier revision forgave a pixel on each edge for exactly
+ * that. But a flat capture is full of same-sized layers a pixel apart, and slack
+ * makes each of those pairs a parent and a child: two 100x100 peers at `(10,10)`
+ * and `(9,10)` under a 120x120 root leave one absorbing the other, and the root
+ * reports a clean uniform 10 where its real union is a ragged `[9,10,10,10]`.
+ *
+ * Both failures cost a corroboration, but only one of them *invents* a number,
+ * and an invented inset here can acquit a candidate that deserved a finding.
+ * Missing a real one is the safe direction; the slack was speculative — no
+ * capture ever demonstrated the rounding case — and the fabrication is
+ * demonstrated. If a real board ever shows the rounding failure, it comes back
+ * with that board as its fixture.
+ */
 function encloses(outer: Bounds, inner: Bounds): boolean {
   return (
     outer.x <= inner.x &&
@@ -743,12 +867,29 @@ function numericFinding(
     (got === undefined || got === 0) &&
     isInsetToken(group, name, designName)
   ) {
-    const drawn = nearestInset(want, derivedInsets);
-    if (drawn) {
+    // A corroborated measurement may acquit but never convict (see
+    // {@link DerivedInset.corroborated}), and stepping one aside is not the same
+    // as picking the runner-up: `nearestInset` answers from the declaring
+    // containers alone when there are any, so dropping one can fall through to a
+    // whole other tier whose value may *satisfy* the spec. Ask again from
+    // scratch without it, so a readmitted measurement is transparent to this
+    // decision except that it may also answer it.
+    let pool = derivedInsets;
+    for (;;) {
+      const drawn = nearestInset(want, pool);
+      if (!drawn) break;
       const delta = round2(Math.abs(drawn.inset - want));
       if (delta <= tolerance) {
         findings.push(satisfiedByGeometry(group, name, want, drawn));
         return;
+      }
+      if (drawn.corroborated) {
+        // This one only, not the class. Another readmitted measurement may still
+        // answer the spec, which is the invariant rather than an exception to
+        // it: dropping every corroborated inset to get past a declaring
+        // container's miss takes the acquitting one down with it.
+        pool = pool!.filter((i) => i !== drawn);
+        continue;
       }
       // The render insets the WRONG amount. Report that, not the declared `0`:
       // "0 vs spec 12" names a modifier the code was never going to have, while

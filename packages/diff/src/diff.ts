@@ -41,7 +41,6 @@ import {
   collectRadiusBoxes,
   collectTokens,
   diffTokens,
-  referenceInsets,
 } from "./tokens.js";
 import {
   diffImagePair,
@@ -210,12 +209,19 @@ export async function diff(
       config.textDerivedInsets,
       // What the reference draws for itself, so an inset whose extremes are all
       // glyphs is not discarded when the kit's own boxes measure the same number
-      // (issue #371). Corroboration can only readmit a measurement, so a
-      // reference that captured no geometry simply leaves the rule as it was.
-      {
-        insets: referenceInsets(reference.layout, Math.min(1, config.spacingTolerance)),
-        tolerance: config.spacingTolerance,
-      },
+      // (issue #371). Measured lazily from this tree and only for a glyph-set
+      // extreme; corroboration can only readmit a measurement, so a reference
+      // that captured no geometry simply leaves the rule as it was.
+      // A capture that does not state `boundsDensity` is read as already being
+      // in dp, per that field's contract, so a scaled board whose density never
+      // reached the adapter corroborates nothing. That is a gap, not a licence
+      // to infer one: the frame-width ratio `diffLayout` normalises positions by
+      // cannot tell a 2× capture from a reference deliberately drawn at twice
+      // the candidate's logical width, and rescaling the second reads its true
+      // 12 as a 6. "Omit rather than guess" is the rule on both sides of this
+      // factor, and a silently halved reference is exactly the wrong number
+      // arriving with confidence that this whole predicate exists to stop.
+      { layout: reference.layout, tolerance: config.spacingTolerance },
     ),
   );
   const designSystem = diffDesignSystem(
