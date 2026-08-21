@@ -18,6 +18,7 @@ import {
   type Finding,
   type Bounds,
   type SemanticNode,
+  type SemanticTree,
   type TokenAliasMap,
   type TypographyToken,
   materialColorRole,
@@ -138,6 +139,29 @@ export function collectRadiusBoxes(
  * [textInsets] `"measure"` restores the historical behaviour for a project that
  * wants it.
  *
+ * A glyph-set extreme is *also* kept when [corroborate] carries the same number
+ * — the insets the **reference's own geometry** establishes, measured by this
+ * same function from its boxes (issue #371). Sharing an edge with a sibling box
+ * is not the only way a measurement can be corroborated, and demanding it made
+ * the rule discard true insets along with false ones: `SwipeToRevealCard` is a
+ * card whose only child is its label, so every extreme is glyph-set, and the
+ * 12dp it draws is nonetheless the padding the parent chose — it went warn →
+ * fail on nothing but a CLI upgrade. The kit says which is which. Its card
+ * frame's own children sit at a uniform 12 established by *frames*, so the
+ * candidate's glyph agrees with a layout the reference independently draws;
+ * `TextToggleButton`'s kit frame measures no uniform inset at all, so there is
+ * nothing for its 8 to agree with and it stays dropped. Two measurements taken
+ * on opposite sides by the same rule, one of them box-established, is evidence
+ * of a layout; one glyph is evidence of a font.
+ *
+ * The asymmetry is deliberate and is the invariant to preserve: a glyph-set
+ * extreme can **acquit**, never convict. Corroboration only ever readmits a
+ * measurement that agrees with the reference within [corroborate]'s tolerance,
+ * so the worst it can do is let a container whose font metrics coincide with the
+ * spec pass unremarked. The alternative it replaces is a *false red* that blocks
+ * a `design-led` catalog's `main`, and #370 already settled which way that
+ * choice goes: what cannot be verified is not accused.
+ *
  * [boundsDensity] converts render pixels to dp — see {@link collectRadiusBoxes}.
  */
 export function collectDerivedInsets(
@@ -145,6 +169,7 @@ export function collectDerivedInsets(
   boundsDensity?: number,
   minInset = 1,
   textInsets: "skip" | "measure" = "skip",
+  corroborate?: Corroboration,
 ): DerivedInset[] {
   const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out: DerivedInset[] = [];
@@ -199,7 +224,9 @@ export function collectDerivedInsets(
       const eps = Math.min(UNIFORM_EPSILON, minInset);
       const inset = round2(first);
       const glyphEdged =
-        textInsets === "skip" && edgesSetOnlyByText(kids, left, top, right, bottom);
+        textInsets === "skip" &&
+        edgesSetOnlyByText(kids, left, top, right, bottom) &&
+        !corroborates(corroborate, first);
       const measured =
         !glyphEdged &&
         edges.every((v) => v > 0) &&
@@ -284,6 +311,113 @@ function edgesSetOnlyByText(
     const touching = kids.filter((k) => reaches(k.bounds!));
     return touching.length > 0 && touching.every(isTextNode);
   });
+}
+
+/**
+ * What the **reference** measures for itself, offered to a glyph-set candidate
+ * edge as corroboration — see {@link collectDerivedInsets}.
+ */
+export interface Corroboration {
+  /**
+   * Uniform insets the reference's own boxes establish, in dp. Produced by
+   * {@link referenceInsets}, which runs the same measurement over the reference's
+   * geometry with text extremes skipped — so every value here is one the
+   * reference draws *without* a glyph deciding it.
+   */
+  insets: number[];
+  /** The comparison's own spacing tolerance: what counts as the same inset. */
+  tolerance: number;
+}
+
+/** Does the reference independently measure this inset? */
+function corroborates(corroborate: Corroboration | undefined, inset: number): boolean {
+  if (!corroborate) return false;
+  return corroborate.insets.some((v) => Math.abs(v - inset) <= corroborate.tolerance);
+}
+
+/**
+ * The insets the reference's own geometry establishes, for corroborating a
+ * candidate measurement a glyph would otherwise disqualify.
+ *
+ * Deliberately *measured* rather than read off the reference's declared spacing
+ * tokens. Those are where the spec being compared against came from, so agreeing
+ * with them is agreeing with the question: any glyph-set number that happened to
+ * match the spec would readmit itself, and a spec the reference's artwork does
+ * not actually draw would readmit it too. The geometry is a separate fact that
+ * can — and for `TextToggleButton`'s kit frame does — disagree.
+ *
+ * **Containment is rebuilt from the boxes**, because the tree it arrives in need
+ * not carry it: the Figma adapter's `layoutFromNode` pushes every
+ * descendant into one flat list under the capture frame (its consumer, the
+ * structural layout diff, matches elements by label and never asks who contains
+ * whom), so measuring a container against its children means recovering that
+ * from the geometry — which is sound here, since all bounds share the root's
+ * space, and is all this measurement ever needed. Nesting a box under the
+ * smallest box that encloses it reproduces an already-nested tree and repairs a
+ * flattened one; where the two disagree the cost is bounded, since a
+ * corroborating inset can only ever readmit a measurement, never create a
+ * finding.
+ */
+export function referenceInsets(
+  layout: SemanticTree | undefined,
+  minInset = 1,
+): number[] {
+  if (!layout) return [];
+  const flat: SemanticNode[] = [];
+  const gather = (node: SemanticNode): void => {
+    if (node.bounds) {
+      const { children: _drop, ...rest } = node;
+      flat.push(rest);
+    }
+    for (const child of node.children ?? []) gather(child);
+  };
+  for (const child of layout.root.children ?? []) gather(child);
+  const root: SemanticNode = {
+    ...layout.root,
+    children: nestByContainment(flat),
+  };
+  return [
+    ...new Set(
+      collectDerivedInsets(root, layout.boundsDensity, minInset, "skip").map((i) => i.inset),
+    ),
+  ];
+}
+
+/** Does [outer] wholly enclose [inner]? */
+function encloses(outer: Bounds, inner: Bounds): boolean {
+  return (
+    outer.x <= inner.x &&
+    outer.y <= inner.y &&
+    outer.x + outer.width >= inner.x + inner.width &&
+    outer.y + outer.height >= inner.y + inner.height
+  );
+}
+
+/**
+ * Rebuild a containment tree from bounded nodes that may have lost theirs.
+ *
+ * Largest box first, so the nearest enclosing ancestor is simply the *last*
+ * already-placed box that still encloses this one. Two identical boxes nest in
+ * arrival order, which is arbitrary and harmless — the inset between them is
+ * zero, and a zero inset is dropped.
+ */
+function nestByContainment(nodes: SemanticNode[]): SemanticNode[] {
+  const built = nodes
+    .filter((n) => n.bounds)
+    .map((n) => ({ ...n, children: [] as SemanticNode[] }))
+    .sort((a, b) => b.bounds!.width * b.bounds!.height - a.bounds!.width * a.bounds!.height);
+  const roots: SemanticNode[] = [];
+  built.forEach((node, i) => {
+    for (let j = i - 1; j >= 0; j--) {
+      const outer = built[j]!;
+      if (encloses(outer.bounds!, node.bounds!)) {
+        outer.children.push(node);
+        return;
+      }
+    }
+    roots.push(node);
+  });
+  return roots;
 }
 
 /** Two decimal places — enough for a dp measured back from pixels. */

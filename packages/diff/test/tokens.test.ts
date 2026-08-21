@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import type { DesignTokens, SemanticNode } from "@design-parity/core";
+import type { DesignTokens, SemanticNode, SemanticTree } from "@design-parity/core";
 
 import { defaultDiffConfig } from "../src/config.js";
 import {
@@ -8,6 +8,7 @@ import {
   collectRadiusBoxes,
   collectTokens,
   diffTokens,
+  referenceInsets,
 } from "../src/tokens.js";
 
 describe("collectTokens", () => {
@@ -518,6 +519,198 @@ describe("diffTokens", () => {
         ],
       };
       expect(collectDerivedInsets(themed).map((i) => i.inset)).toContain(16);
+    });
+
+    // ---- #371: a glyph-set edge may be corroborated by the reference ----------
+    //
+    // The pair below is deliberately a pair, and neither half means anything
+    // without the other: #367's fixture must stay dropped and #371's must be
+    // measured, from geometry that is the SAME SHAPE — one container, one text
+    // child, a uniform inset on all four edges. Any rule that reads only the
+    // candidate's tree has to give both the same answer, which is why the third
+    // boundary bug in this predicate could not be fixed by moving a threshold.
+    // What separates them is on the other side.
+
+    /**
+     * The kit's `SwipeToReveal/Card` (`56392:155753`), as the Figma adapter
+     * delivers it: **flat** — every descendant a direct child of the capture
+     * frame, root-relative. The card's own inset is not in this tree; it is in
+     * the boxes, and recovering it is `referenceInsets`' job.
+     */
+    const kitCard = (): SemanticTree => ({
+      root: {
+        bounds: { x: 0, y: 0, width: 192, height: 192 },
+        children: [
+          { label: "Card", role: "instance", bounds: { x: -80, y: 44, width: 192, height: 104 } },
+          {
+            label: "CardButton",
+            role: "instance",
+            bounds: { x: 116, y: 54, width: 64, height: 84 },
+          },
+          { label: "Section", role: "frame", bounds: { x: -68, y: 56, width: 168, height: 18 } },
+          {
+            label: "Avatar-Icon",
+            role: "instance",
+            bounds: { x: -68, y: 56, width: 18, height: 18 },
+          },
+          { label: "Slot Label", role: "frame", bounds: { x: -46, y: 57, width: 111, height: 16 } },
+          { label: "App label", bounds: { x: -46, y: 57, width: 111, height: 16 } },
+          { label: "Slot Time", role: "frame", bounds: { x: 57, y: 57, width: 31, height: 16 } },
+          { label: "Timestamp", bounds: { x: 57, y: 57, width: 31, height: 16 } },
+          { label: "Section", role: "frame", bounds: { x: -68, y: 80, width: 168, height: 56 } },
+          { label: "Slot Title", role: "frame", bounds: { x: -68, y: 80, width: 168, height: 18 } },
+          { label: "Title", bounds: { x: -68, y: 80, width: 168, height: 18 } },
+          { label: "Slot Body", role: "frame", bounds: { x: -68, y: 100, width: 168, height: 36 } },
+          { label: "Body text", bounds: { x: -68, y: 100, width: 168, height: 36 } },
+        ],
+      },
+    });
+
+    /**
+     * The kit's `TextToggleButton` (`39083:767`), same shape of capture. Its
+     * text sits 1 from the sides and 16 from the top and bottom — the frame is
+     * sized by the touch target and the string is centred in it, which is the
+     * artwork saying, on its own side, that there is no uniform inset here.
+     */
+    const kitTextToggle = (): SemanticTree => ({
+      root: {
+        bounds: { x: 0, y: 0, width: 52, height: 52 },
+        children: [
+          { label: "visual-layer", role: "frame", bounds: { x: 0, y: 1, width: 52, height: 50 } },
+          { label: "A", bounds: { x: 1, y: 17, width: 50, height: 18 } },
+        ],
+      },
+    });
+
+    /** wear-m3-catalog's `SwipeToRevealCard`: `Card(onClick = {}) { Text(…) }`. */
+    const cardWithLabel = (): SemanticNode => ({
+      role: "card",
+      bounds: { x: 0, y: 0, width: 192, height: 104 },
+      tokens: { spacing: { padding: 0 } },
+      children: [
+        {
+          role: "text",
+          label: "Card content",
+          bounds: { x: 12, y: 12, width: 168, height: 80 },
+          tokens: { typography: { body: { fontSize: 14 } } },
+        },
+      ],
+    });
+
+    it("recovers a container's inset from a FLAT reference layout (#371)", () => {
+      // Guard the guard: the fixture has to actually be flat, or this proves
+      // nothing about the tree the Figma adapter really hands over.
+      const flat = kitCard();
+      expect(flat.root.children!.every((c) => (c.children ?? []).length === 0)).toBe(true);
+
+      // Nested back by containment, the card's two Sections establish a uniform
+      // 12 with no glyph involved — the fact the candidate's label agrees with.
+      expect(referenceInsets(flat)).toEqual([12]);
+    });
+
+    it("offers nothing to corroborate where the kit itself has no uniform inset", () => {
+      // 1 at the sides, 16 top and bottom. Not an inset — the reference side
+      // saying the same thing about `TextToggleButton` the candidate side does.
+      expect(referenceInsets(kitTextToggle())).toEqual([]);
+    });
+
+    it("will not corroborate with an inset the reference's own GLYPHS set", () => {
+      // Otherwise two fonts agreeing would read as a layout. The reference is
+      // measured by the same rule it is being used to relax, so a text-set
+      // extreme is no more evidence there than here.
+      const glyphKit: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 200, height: 200 },
+          children: [
+            { label: "Frame", role: "frame", bounds: { x: 0, y: 0, width: 100, height: 100 } },
+            {
+              label: "Label",
+              bounds: { x: 12, y: 12, width: 76, height: 76 },
+              tokens: { typography: { body: { fontSize: 14 } } },
+            },
+          ],
+        },
+      };
+      expect(referenceInsets(glyphKit)).toEqual([]);
+    });
+
+    it("keeps a glyph-set inset the reference independently measures (#371)", () => {
+      // The mirror image of #367: `SwipeToRevealCard` draws exactly the 12 the
+      // kit specs, and went warn → fail on a CLI upgrade alone. Without the
+      // reference the tree is indistinguishable from `textButton()` — with it,
+      // the kit's own boxes say 12.
+      expect(collectDerivedInsets(cardWithLabel())).toEqual([]);
+      expect(
+        collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
+          insets: referenceInsets(kitCard()),
+          tolerance: defaultDiffConfig.spacingTolerance,
+        }).map((i) => i.inset),
+      ).toEqual([12]);
+    });
+
+    it("still drops #367's glyph inset against the same corroboration", () => {
+      // Same call, same reference values, opposite answer — the half of the pair
+      // that stops a future tightening trading one bug for the other. 20 is not
+      // 12, and `textButton()`'s own kit (above) measures nothing at all.
+      for (const insets of [referenceInsets(kitCard()), referenceInsets(kitTextToggle())]) {
+        expect(
+          collectDerivedInsets(textButton(), 1, 1, "skip", {
+            insets,
+            tolerance: defaultDiffConfig.spacingTolerance,
+          }),
+        ).toEqual([]);
+      }
+    });
+
+    it("clears the false red the glyph rule put on a card that renders to spec", () => {
+      // End to end, the two boards from the issue: `error 0 vs spec 12 (Δ12)` on
+      // 0.1.56, against a render that insets exactly 12.
+      const spec: DesignTokens = { spacing: { padding: 12 } };
+      const uncorroborated = diffTokens(
+        spec,
+        { spacing: { padding: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(cardWithLabel()),
+      );
+      expect(uncorroborated[0]).toMatchObject({
+        severity: "error",
+        message: "spacing.padding: 0 vs spec 12 (Δ12)",
+      });
+
+      const findings = diffTokens(
+        spec,
+        { spacing: { padding: 0 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
+          insets: referenceInsets(kitCard()),
+          tolerance: defaultDiffConfig.spacingTolerance,
+        }),
+      );
+      expect(findings.some((f) => f.severity === "error")).toBe(false);
+    });
+
+    it("lets corroboration acquit, never convict", () => {
+      // The invariant that keeps this from becoming the fourth boundary bug: a
+      // glyph-set measurement readmitted by the reference can only ever AGREE
+      // with it, so it cannot manufacture a Δ. One that disagrees is not
+      // readmitted as a wrong number — it is not readmitted at all.
+      const findings = diffTokens(
+        { spacing: { padding: 12 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        collectDerivedInsets(textButton(), 1, 1, "skip", {
+          insets: referenceInsets(kitCard()),
+          tolerance: defaultDiffConfig.spacingTolerance,
+        }),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
     });
 
     it("does not let the glyph rule silence a numeric the candidate CAN report", () => {

@@ -179,3 +179,68 @@ describe("diff engine wires the structural layout diff", () => {
     expect(verdict.findings.some((f) => f.kind === "layout")).toBe(false);
   });
 });
+
+describe("diff engine corroborates a glyph-set inset against the reference (#371)", () => {
+  // wear-m3-catalog's `SwipeToReveal/Card`, both sides, reduced to the geometry
+  // that decides it. The kit frame's own children establish a uniform 12 with
+  // boxes; the candidate draws 12 around its only child, which is its label.
+  const reference: DesignReference = {
+    componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
+    source: "figma",
+    linkMethod: "manifest",
+    referenceImages: [],
+    tokens: { spacing: { padding: 12 } },
+    // Flat, as `layoutFromNode` delivers it — the containment the measurement
+    // needs is in the boxes, not in the tree.
+    layout: {
+      root: {
+        bounds: { x: 0, y: 0, width: 192, height: 104 },
+        children: [
+          { label: "Section", role: "frame", bounds: { x: 12, y: 12, width: 168, height: 18 } },
+          { label: "Section", role: "frame", bounds: { x: 12, y: 36, width: 168, height: 56 } },
+          { label: "Title", bounds: { x: 12, y: 36, width: 168, height: 18 } },
+        ],
+      },
+    },
+  };
+  const candidate: CandidateRender = {
+    componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
+    images: [],
+    semantics: {
+      root: {
+        role: "card",
+        bounds: { x: 0, y: 0, width: 192, height: 104 },
+        tokens: { spacing: { padding: 0 } },
+        children: [
+          {
+            role: "text",
+            label: "Card content",
+            bounds: { x: 12, y: 12, width: 168, height: 80 },
+            tokens: { typography: { body: { fontSize: 14 } } },
+          },
+        ],
+      },
+    },
+  };
+
+  const padding = (findings: { kind: string; message: string }[]) =>
+    findings.filter((f) => f.kind === "token" && f.message.startsWith("spacing.padding"));
+
+  it("does not fail a card that renders exactly the inset the kit specs", async () => {
+    const { verdict } = await diff(reference, candidate, { repoRoot });
+    expect(padding(verdict.findings).some((f) => f.severity === "error")).toBe(false);
+  });
+
+  it("is the reference geometry doing the work, not the spec value", async () => {
+    // Guard the guard. Take the capture away and the glyph rule discards the
+    // same true measurement again — which is the 0.1.56 board, `0 vs spec 12`.
+    const noLayout: DesignReference = { ...reference, layout: undefined };
+    const { verdict } = await diff(noLayout, candidate, { repoRoot });
+    expect(padding(verdict.findings)).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        message: "spacing.padding: 0 vs spec 12 (Δ12)",
+      }),
+    );
+  });
+});
