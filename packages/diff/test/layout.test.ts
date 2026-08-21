@@ -179,3 +179,32 @@ describe("a scaled reference reports its deltas in dp", () => {
     expect(findings[0]).toMatchObject({ detail: { dy: 6 } });
   });
 });
+
+describe("a scaled board's threshold is not rounded away", () => {
+  // Rounding each delta before testing it against the tolerance swallows drift
+  // just over the line. At density 3 a 13px difference is 4.33dp — past the 4dp
+  // allowance — but `Math.round(13 / 3)` is 4, so it reported nothing. Whole-dp
+  // bounds made that harmless while the divisor was 1; dividing through is what
+  // puts fractions in play at all.
+  it("flags a 4.33dp drift that rounds to the tolerance", () => {
+    const reference: SemanticTree = {
+      boundsDensity: 3,
+      root: {
+        bounds: { x: 0, y: 0, width: 1233, height: 600 },
+        // Candidate's title normalises to y=48; 13px past that is 4.33dp.
+        children: [{ label: "Title", bounds: { x: 48, y: 61, width: 300, height: 72 } }],
+      },
+    };
+    const candidate: SemanticTree = {
+      root: {
+        bounds: { x: 0, y: 0, width: 411, height: 200 },
+        children: [{ label: "Title", bounds: { x: 16, y: 16, width: 100, height: 24 } }],
+      },
+    };
+
+    const findings = diffLayout(reference, candidate, defaultDiffConfig);
+    expect(findings).toHaveLength(1);
+    // Reported rounded — the reader gets 4, the threshold saw 4.33.
+    expect(findings[0]).toMatchObject({ detail: { label: "Title", dy: 4 } });
+  });
+});
