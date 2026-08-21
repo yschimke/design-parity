@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.57](https://github.com/yschimke/design-parity/compare/v0.1.56...v0.1.57) (2026-08-21)
+
+
+### Bug Fixes
+
+* **diff:** keep a corroborated inset from ever accusing ([#374](https://github.com/yschimke/design-parity/issues/374)) ([19e51d0](https://github.com/yschimke/design-parity/commit/19e51d0a12944ce7a05c9b058a851b231bf26524))
+* **diff:** let the reference corroborate a glyph-set inset ([#372](https://github.com/yschimke/design-parity/issues/372)) ([574abe4](https://github.com/yschimke/design-parity/commit/574abe45c19cdc861a14ef2984fc34aa3484a651))
+
 ## [0.1.56](https://github.com/yschimke/design-parity/compare/v0.1.55...v0.1.56) (2026-08-20)
 
 
