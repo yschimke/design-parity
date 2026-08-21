@@ -63,5 +63,15 @@ export async function resolveReference(
   // What the primary node's render depicts (#296) — same provenance as its
   // tokens, and the report and the pairing check both read it.
   if (base.properties) merged.properties = base.properties;
+  // Structure comes from the primary, and these are structure. Listing the
+  // fields one by one is what made this a *silent* loss: `layout` and
+  // `themeTokens` were simply never named here, so a multi-ref entry — 45 of
+  // wear-m3-catalog's 49 — resolved to a reference with no captured geometry
+  // and no system table at all. Everything downstream that reads them then
+  // turns itself off rather than failing: `diffLayout` returns early with no
+  // reference elements, the inset corroboration (#371) has nothing to
+  // corroborate against, and the design-system audit compares against nothing.
+  if (base.layout) merged.layout = base.layout;
+  if (base.themeTokens) merged.themeTokens = base.themeTokens;
   return merged;
 }

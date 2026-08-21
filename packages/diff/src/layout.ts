@@ -100,6 +100,16 @@ export function diffLayout(
   const cands = scale === 1 ? candsRaw : candsRaw.map((c) => scaleElement(c, scale));
   const used = new Set<number>();
   const tol = config.layoutTolerance;
+  // Both sides now share the REFERENCE's space, which is not necessarily dp: a
+  // capture states `boundsDensity` when its boxes are a scaled board's pixels
+  // (see {@link SemanticTree.boundsDensity}). `layoutTolerance` is in dp and the
+  // deltas are reported as dp, so a 3× board would compare a real 2dp offset as
+  // a 6 against a 4dp allowance, and quote an 8dp one as 24. Divide the deltas
+  // through and both the threshold and the number a reader acts on are dp again.
+  // Absent means the boxes already are dp, so this is a no-op for every capture
+  // that does not say otherwise.
+  const perDp =
+    reference?.boundsDensity && reference.boundsDensity > 0 ? reference.boundsDensity : 1;
 
   for (const r of refs) {
     const rc = centerOf(r.bounds);
@@ -118,10 +128,11 @@ export function diffLayout(
     if (best < 0) continue;
     used.add(best);
     const c = cands[best]!;
-    const dx = Math.round(r.bounds.x - c.bounds.x);
-    const dy = Math.round(r.bounds.y - c.bounds.y);
-    const dw = Math.round(r.bounds.width - c.bounds.width);
-    const dh = Math.round(r.bounds.height - c.bounds.height);
+    const dp = (px: number): number => Math.round(px / perDp);
+    const dx = dp(r.bounds.x - c.bounds.x);
+    const dy = dp(r.bounds.y - c.bounds.y);
+    const dw = dp(r.bounds.width - c.bounds.width);
+    const dh = dp(r.bounds.height - c.bounds.height);
     // A text node's width — and the horizontal shift a width change induces — is
     // content-/fill-dependent, not a layout property: the reference measures the
     // tight glyph box while the candidate may report a fill-width row (or a

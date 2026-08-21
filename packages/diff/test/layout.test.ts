@@ -133,3 +133,49 @@ describe("diffLayout", () => {
     expect(f[0]?.detail).toMatchObject({ label: "A", dw: -100, dh: -20 });
   });
 });
+
+describe("a scaled reference reports its deltas in dp", () => {
+  // A 3× capture states `boundsDensity: 3`, so its boxes are board pixels. The
+  // candidate is normalised into that space by the frame ratio — which leaves
+  // BOTH sides in board pixels, not dp. Comparing those against a dp
+  // `layoutTolerance` inflates every delta threefold: a real 2dp offset reads 6
+  // and trips the default 4dp allowance, and a real 8dp one is quoted as 24.
+  const reference = (boundsDensity?: number): SemanticTree => ({
+    ...(boundsDensity === undefined ? {} : { boundsDensity }),
+    root: {
+      bounds: { x: 0, y: 0, width: 1233, height: 600 },
+      // Title sits 6px = 2dp lower than the candidate draws it.
+      children: [{ label: "Title", bounds: { x: 48, y: 54, width: 300, height: 72 } }],
+    },
+  });
+  // Same component at 1×: the title is at 16dp, i.e. 2dp above the reference's.
+  const candidate: SemanticTree = {
+    root: {
+      bounds: { x: 0, y: 0, width: 411, height: 200 },
+      children: [{ label: "Title", bounds: { x: 16, y: 16, width: 100, height: 24 } }],
+    },
+  };
+
+  it("does not flag a 2dp offset on a 3× board", () => {
+    const findings = diffLayout(reference(3), candidate, defaultDiffConfig);
+    expect(findings).toEqual([]);
+  });
+
+  it("quotes the delta in dp, not in the board's pixels", () => {
+    // The candidate's title normalises to y=48 in the reference's space. Push
+    // the reference's a real 8dp (24px) below that and it must be quoted as 8.
+    const far = reference(3);
+    far.root.children![0]!.bounds = { x: 48, y: 72, width: 300, height: 72 };
+    const findings = diffLayout(far, candidate, defaultDiffConfig);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ detail: { label: "Title", dy: 8 } });
+  });
+
+  it("changes nothing for a capture that states no density", () => {
+    // Guard the guard: without the stamp the same geometry IS a 38dp drift, so
+    // the tests above are exercising the conversion and not a quiet no-op.
+    const findings = diffLayout(reference(), candidate, defaultDiffConfig);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ detail: { dy: 6 } });
+  });
+});
