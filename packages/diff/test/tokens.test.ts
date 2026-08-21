@@ -836,6 +836,42 @@ describe("diffTokens", () => {
       expect(referenceInsets(composed)).toEqual([10]);
     });
 
+    it("keeps boxes that sit under an UNBOUNDED group", () => {
+      // A grouping node with no box of its own is not a container this can
+      // measure, but the boxes beneath it are still geometry. Reading the group
+      // as a leaf calls a nested tree flat and then drops its whole subtree at
+      // the rebuild, so a capture whose real content hangs off one corroborates
+      // nothing at all.
+      const grouped: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 400, height: 400 },
+          children: [
+            {
+              label: "Layers",
+              children: [
+                {
+                  label: "Card",
+                  role: "frame",
+                  bounds: { x: 0, y: 0, width: 100, height: 100 },
+                  children: [
+                    {
+                      label: "Body",
+                      role: "frame",
+                      bounds: { x: 12, y: 12, width: 76, height: 76 },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+      // Guard the guard: the group must really be unbounded, and the geometry
+      // must really be below it.
+      expect(grouped.root.children![0]!.bounds).toBeUndefined();
+      expect(referenceInsets(grouped)).toEqual([12]);
+    });
+
     it("nests a child its parent's rounding pushed it outside of", () => {
       // `layoutFromNode` rounds every box independently, so a child genuinely
       // inside its parent can come back overhanging it by a pixel. Read

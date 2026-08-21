@@ -418,7 +418,7 @@ export function referenceInsets(
   const captured = layout.root;
   const root = carriesNesting(captured)
     ? captured
-    : { ...captured, children: nestByContainment(captured.children ?? []) };
+    : { ...captured, children: nestByContainment(boundedDescendants(captured)) };
   return [
     ...new Set(
       collectDerivedInsets(
@@ -431,11 +431,45 @@ export function referenceInsets(
   ];
 }
 
-/** Does any bounded node in this tree have a bounded child of its own? */
-function carriesNesting(root: SemanticNode): boolean {
-  return (root.children ?? []).some(
-    (child) => child.bounds && (child.children ?? []).some((g) => g.bounds || carriesNesting(g)),
+/**
+ * Does any bounded node in this tree hold another bounded node beneath it?
+ *
+ * Both halves see through **unbounded** nodes rather than stopping at them. A
+ * grouping node with no box of its own is not a container this measurement can
+ * use, but the boxes under it are still the tree's own statement about what
+ * contains what — reading a group as a leaf calls a nested tree flat, and then
+ * drops every one of its descendants at the rebuild.
+ */
+function carriesNesting(node: SemanticNode): boolean {
+  return (node.children ?? []).some((child) =>
+    child.bounds ? holdsBounded(child) : carriesNesting(child),
   );
+}
+
+/** Is there a bounded node anywhere below this one? */
+function holdsBounded(node: SemanticNode): boolean {
+  return (node.children ?? []).some((child) => child.bounds || holdsBounded(child));
+}
+
+/**
+ * Every bounded node below this one, its own subtree dropped — the input the
+ * rebuild works from. Recursive for the same reason {@link carriesNesting} is:
+ * an unbounded group is not itself measurable, and taking only the root's direct
+ * children would discard the geometry underneath it.
+ */
+function boundedDescendants(root: SemanticNode): SemanticNode[] {
+  const out: SemanticNode[] = [];
+  const walk = (node: SemanticNode): void => {
+    for (const child of node.children ?? []) {
+      if (child.bounds) {
+        const { children: _subtree, ...box } = child;
+        out.push(box);
+      }
+      walk(child);
+    }
+  };
+  walk(root);
+  return out;
 }
 
 /**

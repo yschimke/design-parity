@@ -15,7 +15,6 @@ import type {
   DesignReference,
   Finding,
   Image,
-  SemanticTree,
   TokenAliasMap,
   Verdict,
   VerdictStatus,
@@ -28,7 +27,7 @@ import {
 } from "./checks.js";
 import { resolveConfig, type DiffConfig } from "./config.js";
 import { diffDesignSystem } from "./design-system.js";
-import { diffLayout, frameWidth } from "./layout.js";
+import { diffLayout } from "./layout.js";
 import {
   depictionFinding,
   propertyConflicts,
@@ -161,28 +160,6 @@ function pairImages(
   return { pairs, unmatched, unpairable };
 }
 
-/**
- * Source pixels per dp for a reference capture's boxes, stated or derived.
- *
- * Stated wins. Otherwise the two trees frame the same component, so the ratio of
- * their render frames is the factor between their spaces — the derivation
- * {@link diffLayout} already relies on — and multiplying by the candidate's own
- * `boundsDensity` lands the reference in dp rather than merely in the
- * candidate's pixels. Absent either frame, nothing is claimed: a wrong factor
- * silently rescales the reference and is worse than leaving the boxes alone.
- */
-function referenceBoundsDensity(
-  layout: SemanticTree | undefined,
-  semantics: SemanticTree,
-): { boundsDensity?: number } {
-  if (layout?.boundsDensity) return { boundsDensity: layout.boundsDensity };
-  const ref = frameWidth(layout);
-  const cand = frameWidth(semantics);
-  if (ref === undefined || cand === undefined) return {};
-  const scale = (ref / cand) * (semantics.boundsDensity ?? 1);
-  return scale > 0 && Number.isFinite(scale) ? { boundsDensity: scale } : {};
-}
-
 function statusFor(findings: Finding[]): VerdictStatus {
   if (findings.some((f) => f.severity === "error")) return "fail";
   if (findings.some((f) => f.severity === "warn")) return "warn";
@@ -235,17 +212,16 @@ export async function diff(
       // (issue #371). Measured lazily from this tree and only for a glyph-set
       // extreme; corroboration can only readmit a measurement, so a reference
       // that captured no geometry simply leaves the rule as it was.
-      {
-        layout: reference.layout,
-        tolerance: config.spacingTolerance,
-        // A capture almost never states the scale of its own boxes: nothing on
-        // the `ReferenceAdapter` contract carries the design map's density, so
-        // `layoutFromNode` has none to stamp. Derive it the way `diffLayout`
-        // already does — the two render frames hold the same component, so
-        // their width ratio IS the factor between the spaces — or a 3× board's
-        // 36px gutter reads as 36dp and corroborates nothing.
-        ...referenceBoundsDensity(reference.layout, candidate.semantics),
-      },
+      // A capture that does not state `boundsDensity` is read as already being
+      // in dp, per that field's contract, so a scaled board whose density never
+      // reached the adapter corroborates nothing. That is a gap, not a licence
+      // to infer one: the frame-width ratio `diffLayout` normalises positions by
+      // cannot tell a 2× capture from a reference deliberately drawn at twice
+      // the candidate's logical width, and rescaling the second reads its true
+      // 12 as a 6. "Omit rather than guess" is the rule on both sides of this
+      // factor, and a silently halved reference is exactly the wrong number
+      // arriving with confidence that this whole predicate exists to stop.
+      { layout: reference.layout, tolerance: config.spacingTolerance },
     ),
   );
   const designSystem = diffDesignSystem(

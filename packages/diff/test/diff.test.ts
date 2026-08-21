@@ -245,19 +245,17 @@ describe("diff engine corroborates a glyph-set inset against the reference (#371
   });
 });
 
-describe("diff engine reads a scaled reference capture in dp", () => {
-  // The same card, captured on a 3× board: every box is three times the dp it
-  // represents, and nothing in the tree says so — `layoutFromNode` stamps a
-  // density only for a caller that passed one, and no `ReferenceAdapter` carries
-  // the design map's. Read literally, the kit's 36px gutter is a 36dp one and
-  // corroborates nothing.
-  const reference: DesignReference = {
+describe("diff engine reads a scaled reference capture in the unit it states", () => {
+  // The same card captured on a 3× board: every box is three times the dp it
+  // represents.
+  const scaled = (boundsDensity?: number): DesignReference => ({
     componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
     source: "figma",
     linkMethod: "manifest",
     referenceImages: [],
     tokens: { spacing: { padding: 12 } },
     layout: {
+      ...(boundsDensity === undefined ? {} : { boundsDensity }),
       root: {
         bounds: { x: 0, y: 0, width: 576, height: 312 },
         children: [
@@ -266,7 +264,7 @@ describe("diff engine reads a scaled reference capture in dp", () => {
         ],
       },
     },
-  };
+  });
   const candidate: CandidateRender = {
     componentId: "sections/SwipeToReveal.kt#SwipeToRevealCard",
     images: [],
@@ -286,16 +284,28 @@ describe("diff engine reads a scaled reference capture in dp", () => {
       },
     },
   };
+  const padding = (findings: { kind: string; message: string; severity: string }[]) =>
+    findings.filter((f) => f.kind === "token" && f.message.startsWith("spacing.padding"));
 
-  it("derives the board's scale from the two frames and still corroborates", async () => {
-    // Guard the guard: the capture must really be silent about its scale, or the
-    // derivation is not what is being tested.
-    expect(reference.layout!.boundsDensity).toBeUndefined();
+  it("corroborates through a stated density", async () => {
+    const { verdict } = await diff(scaled(3), candidate, { repoRoot });
+    expect(padding(verdict.findings).some((f) => f.severity === "error")).toBe(false);
+  });
 
-    const { verdict } = await diff(reference, candidate, { repoRoot });
-    const padding = verdict.findings.filter(
-      (f) => f.kind === "token" && f.message.startsWith("spacing.padding"),
+  it("takes an unstated one at face value rather than inferring it", async () => {
+    // The documented reading of an absent `boundsDensity`: bounds and tokens
+    // already share a space. So the kit's 36 is a 36, it corroborates nothing,
+    // and the glyph-set 12 stays dropped. That is a real gap for a board whose
+    // density never reached the adapter — and the alternative is worse. The
+    // frame-width ratio cannot tell a 2× capture from a reference deliberately
+    // drawn at twice the candidate's logical width, and halving a true 12 into a
+    // 6 is the confident wrong number this predicate exists to stop.
+    const { verdict } = await diff(scaled(), candidate, { repoRoot });
+    expect(padding(verdict.findings)).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        message: "spacing.padding: 0 vs spec 12 (Δ12)",
+      }),
     );
-    expect(padding.some((f) => f.severity === "error")).toBe(false);
   });
 });

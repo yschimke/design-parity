@@ -54,7 +54,7 @@ function centerOf(b: Bounds): { x: number; y: number } {
  * when the root carries no frame. Used to derive the candidate→reference scale;
  * a missing frame means "assume the trees already share a space".
  */
-export function frameWidth(tree: SemanticTree | undefined): number | undefined {
+function frameWidth(tree: SemanticTree | undefined): number | undefined {
   const w = tree?.root.bounds?.width;
   return w && w > 0 ? w : undefined;
 }
