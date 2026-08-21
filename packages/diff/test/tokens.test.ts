@@ -779,6 +779,29 @@ describe("diffTokens", () => {
       );
     });
 
+    it("steps aside one corroborated inset, not all of them", () => {
+      // Another readmitted measurement may still answer the spec — that IS the
+      // invariant. Dropping the whole class to get past the declaring
+      // container's miss took the acquitting 16 down with the 40 and fell
+      // through to the declared value, which on a design-led run blocks.
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [
+          { inset: 40, declaresSpacing: true, corroborated: true, where: "card" },
+          { inset: 16, declaresSpacing: false, corroborated: true, where: "inner" },
+        ],
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", actual: 16 },
+      });
+    });
+
     it("still convicts on a missed inset the candidate's own BOXES establish", () => {
       // Guard the guard: the clause above must not have switched off #364's
       // point. An inset no glyph decided is evidence either way, and one that
@@ -834,6 +857,45 @@ describe("diffTokens", () => {
       // Guard the guard: this fixture only tests anything while it IS nested.
       expect(composed.root.children![0]!.children).toHaveLength(1);
       expect(referenceInsets(composed)).toEqual([10]);
+    });
+
+    it("measures THROUGH an unbounded group between two boxes", () => {
+      // `Card → Group(no bounds) → Body`. The tree states this containment, so
+      // it is not rebuilt — but the measurement only ever looked at directly
+      // bounded children, so the group sat between the card and its content and
+      // the 12 went unmeasured. An unbounded node is a pass-through, not a
+      // boundary.
+      const throughGroup: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 400, height: 400 },
+          children: [
+            {
+              label: "Card",
+              role: "frame",
+              bounds: { x: 0, y: 0, width: 100, height: 100 },
+              children: [
+                {
+                  label: "Group",
+                  children: [
+                    {
+                      label: "Body",
+                      role: "frame",
+                      bounds: { x: 12, y: 12, width: 76, height: 76 },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+      // Guard the guard: the group must be unbounded and BETWEEN the two boxes.
+      const card = throughGroup.root.children![0]!;
+      expect(card.bounds).toBeDefined();
+      expect(card.children![0]!.bounds).toBeUndefined();
+      expect(card.children![0]!.children![0]!.bounds).toBeDefined();
+
+      expect(referenceInsets(throughGroup)).toEqual([12]);
     });
 
     it("keeps boxes that sit under an UNBOUNDED group", () => {

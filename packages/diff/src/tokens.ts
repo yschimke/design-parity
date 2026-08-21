@@ -417,7 +417,7 @@ export function referenceInsets(
   // rebuilt.
   const captured = layout.root;
   const root = carriesNesting(captured)
-    ? captured
+    ? { ...captured, children: (captured.children ?? []).flatMap(spliceUnbounded) }
     : { ...captured, children: nestByContainment(boundedDescendants(captured)) };
   return [
     ...new Set(
@@ -444,6 +444,23 @@ function carriesNesting(node: SemanticNode): boolean {
   return (node.children ?? []).some((child) =>
     child.bounds ? holdsBounded(child) : carriesNesting(child),
   );
+}
+
+/**
+ * A node's bounded stand-ins: itself if it has a box, else whatever bounded
+ * nodes it holds, each hoisted to where it sat.
+ *
+ * An unbounded node is a **pass-through, not a boundary**. The measurement pairs
+ * a container with its directly bounded children, so a group with no box of its
+ * own sitting between a card and its content hides the one from the other and
+ * the inset goes unmeasured — the tree states that containment perfectly well,
+ * and only the shape of the walk could not see it. Splicing such a node out
+ * keeps every relationship the capture stated and removes only the rung that
+ * carries no geometry.
+ */
+function spliceUnbounded(node: SemanticNode): SemanticNode[] {
+  const kids = (node.children ?? []).flatMap(spliceUnbounded);
+  return node.bounds ? [{ ...node, children: kids }] : kids;
 }
 
 /** Is there a bounded node anywhere below this one? */
@@ -861,7 +878,11 @@ function numericFinding(
         return;
       }
       if (drawn.corroborated) {
-        pool = pool!.filter((i) => !i.corroborated);
+        // This one only, not the class. Another readmitted measurement may still
+        // answer the spec, which is the invariant rather than an exception to
+        // it: dropping every corroborated inset to get past a declaring
+        // container's miss takes the acquitting one down with it.
+        pool = pool!.filter((i) => i !== drawn);
         continue;
       }
       // The render insets the WRONG amount. Report that, not the declared `0`:
