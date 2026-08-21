@@ -642,7 +642,7 @@ describe("diffTokens", () => {
       expect(collectDerivedInsets(cardWithLabel())).toEqual([]);
       expect(
         collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
-          insets: referenceInsets(kitCard()),
+          layout: kitCard(),
           tolerance: defaultDiffConfig.spacingTolerance,
         }).map((i) => i.inset),
       ).toEqual([12]);
@@ -652,10 +652,10 @@ describe("diffTokens", () => {
       // Same call, same reference values, opposite answer — the half of the pair
       // that stops a future tightening trading one bug for the other. 20 is not
       // 12, and `textButton()`'s own kit (above) measures nothing at all.
-      for (const insets of [referenceInsets(kitCard()), referenceInsets(kitTextToggle())]) {
+      for (const layout of [kitCard(), kitTextToggle()]) {
         expect(
           collectDerivedInsets(textButton(), 1, 1, "skip", {
-            insets,
+            layout,
             tolerance: defaultDiffConfig.spacingTolerance,
           }),
         ).toEqual([]);
@@ -686,7 +686,7 @@ describe("diffTokens", () => {
         undefined,
         undefined,
         collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
-          insets: referenceInsets(kitCard()),
+          layout: kitCard(),
           tolerance: defaultDiffConfig.spacingTolerance,
         }),
       );
@@ -705,12 +705,162 @@ describe("diffTokens", () => {
         undefined,
         undefined,
         collectDerivedInsets(textButton(), 1, 1, "skip", {
-          insets: referenceInsets(kitCard()),
+          layout: kitCard(),
           tolerance: defaultDiffConfig.spacingTolerance,
         }),
       );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    /** A kit that insets 12 somewhere, on a node this spec knows nothing about. */
+    const unrelatedKit = (): SemanticTree => ({
+      root: {
+        bounds: { x: 0, y: 0, width: 300, height: 300 },
+        children: [
+          { label: "Panel", role: "frame", bounds: { x: 0, y: 0, width: 100, height: 100 } },
+          { label: "Fill", role: "rectangle", bounds: { x: 12, y: 12, width: 76, height: 76 } },
+        ],
+      },
+    });
+
+    it("lets a corroborated inset satisfy a spec but never contradict one", () => {
+      // The corroborating value is whatever the reference draws SOMEWHERE, not
+      // necessarily on the node the spec describes. A candidate that declares no
+      // padding and measures a 12dp glyph gap against a `padding: 16` spec must
+      // not newly fail on `renders 12 vs spec 16` because something unrelated in
+      // the kit insets 12 — that finding was `unverified` before corroboration
+      // existed and has to stay that way.
+      const drawn = collectDerivedInsets(cardWithLabel(), 1, 1, "skip", {
+        layout: unrelatedKit(),
+        tolerance: defaultDiffConfig.spacingTolerance,
+      });
+      expect(drawn).toEqual([
+        { inset: 12, declaresSpacing: true, corroborated: true, where: "card" },
+      ]);
+
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        drawn,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "info", detail: { unverified: true } });
+    });
+
+    it("still convicts on a missed inset the candidate's own BOXES establish", () => {
+      // Guard the guard: the clause above must not have switched off #364's
+      // point. An inset no glyph decided is evidence either way, and one that
+      // misses is still the error a designer can act on.
+      const boxed: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } }],
+      };
+      const drawn = collectDerivedInsets(boxed);
+      expect(drawn[0]!.corroborated).toBeUndefined();
+
+      const findings = diffTokens(
+        { spacing: { padding: 16 } },
+        {},
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        drawn,
+      );
+      expect(findings[0]).toMatchObject({
+        severity: "error",
+        message: "spacing.padding: renders 12 vs spec 16 (Δ4)",
+      });
+    });
+
+    it("takes a reference's own nesting over what the rectangles imply", () => {
+      // A backdrop encloses the control drawn on top of it without being its
+      // parent. Rebuilding ancestry from enclosure alone would file the control
+      // under the backdrop's own child and measure a 14 the artwork never
+      // establishes — which, being a corroborating value, could then suppress a
+      // real mismatch. A tree that states its hierarchy is taken at its word.
+      const composed: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 300, height: 300 },
+          children: [
+            {
+              label: "Backdrop",
+              role: "frame",
+              bounds: { x: 0, y: 0, width: 200, height: 200 },
+              children: [
+                {
+                  label: "Grain",
+                  role: "rectangle",
+                  bounds: { x: 10, y: 10, width: 180, height: 180 },
+                },
+              ],
+            },
+            { label: "Control", role: "frame", bounds: { x: 24, y: 24, width: 152, height: 152 } },
+          ],
+        },
+      };
+      // Guard the guard: this fixture only tests anything while it IS nested.
+      expect(composed.root.children![0]!.children).toHaveLength(1);
+      expect(referenceInsets(composed)).toEqual([10]);
+    });
+
+    it("nests a child its parent's rounding pushed it outside of", () => {
+      // `layoutFromNode` rounds every box independently, so a child genuinely
+      // inside its parent can come back overhanging it by a pixel. Read
+      // strictly, that child is promoted to the grandparent, joins ITS union,
+      // and the 12 the grandparent actually insets is lost to an 11.
+      const rounded: SemanticTree = {
+        root: {
+          bounds: { x: 0, y: 0, width: 400, height: 400 },
+          children: [
+            { label: "Card", role: "frame", bounds: { x: 12, y: 12, width: 176, height: 176 } },
+            // 11..189 against the card's 12..188 — one pixel proud on each side.
+            { label: "Content", role: "frame", bounds: { x: 11, y: 20, width: 178, height: 150 } },
+            { label: "Frame", role: "frame", bounds: { x: 0, y: 0, width: 200, height: 200 } },
+          ],
+        },
+      };
+      expect(referenceInsets(rounded)).toContain(12);
+    });
+
+    it("does not measure the reference unless a glyph-set extreme asks", () => {
+      // Rebuilding containment over a screen capture's descendants is a sort
+      // plus an enclosure scan, and most diffs never consult the result: no
+      // padding spec, no text-edged container, or no captured geometry at all.
+      // A container whose boxes establish their own inset must not pay for it.
+      let reads = 0;
+      const counted = {
+        get root() {
+          reads++;
+          return kitCard().root;
+        },
+      } as unknown as SemanticTree;
+      const corroborate = { layout: counted, tolerance: defaultDiffConfig.spacingTolerance };
+
+      const boxed: SemanticNode = {
+        role: "button",
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        children: [{ role: "image", bounds: { x: 12, y: 12, width: 76, height: 76 } }],
+      };
+      expect(collectDerivedInsets(boxed, 1, 1, "skip", corroborate).map((i) => i.inset)).toEqual([
+        12,
+      ]);
+      expect(reads).toBe(0);
+
+      // ...and once it is asked, it is measured once for the whole tree.
+      const twoGlyphs: SemanticNode = {
+        bounds: { x: 0, y: 0, width: 400, height: 400 },
+        children: [
+          cardWithLabel(),
+          { ...cardWithLabel(), bounds: { x: 0, y: 200, width: 192, height: 104 } },
+        ],
+      };
+      collectDerivedInsets(twoGlyphs, 1, 1, "skip", corroborate);
+      expect(reads).toBe(1);
     });
 
     it("does not let the glyph rule silence a numeric the candidate CAN report", () => {

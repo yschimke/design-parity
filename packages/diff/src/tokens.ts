@@ -155,12 +155,16 @@ export function collectRadiusBoxes(
  * of a layout; one glyph is evidence of a font.
  *
  * The asymmetry is deliberate and is the invariant to preserve: a glyph-set
- * extreme can **acquit**, never convict. Corroboration only ever readmits a
- * measurement that agrees with the reference within [corroborate]'s tolerance,
- * so the worst it can do is let a container whose font metrics coincide with the
- * spec pass unremarked. The alternative it replaces is a *false red* that blocks
- * a `design-led` catalog's `main`, and #370 already settled which way that
- * choice goes: what cannot be verified is not accused.
+ * extreme can **acquit**, never convict. Agreeing with the reference is not the
+ * same as agreeing with the spec — the corroborating value is one the reference
+ * draws *somewhere*, not necessarily on the node this spec describes — so the
+ * readmitted measurement is flagged {@link DerivedInset.corroborated} and the
+ * comparison refuses to quote a Δ off it. Enforced there rather than promised
+ * here, because a measurement readmitted by an unrelated agreement and then
+ * allowed to accuse is a *new* false red, and this rule exists to remove one.
+ * The worst corroboration can now do is let a container whose font metrics
+ * coincide with the spec pass unremarked, which is the side #370 already settled
+ * on: what cannot be verified is not accused.
  *
  * [boundsDensity] converts render pixels to dp — see {@link collectRadiusBoxes}.
  */
@@ -174,6 +178,13 @@ export function collectDerivedInsets(
   const scale = boundsDensity && boundsDensity > 0 ? boundsDensity : 1;
   const out: DerivedInset[] = [];
   const seen = new Set<string>();
+  // Measured once, on the first glyph-set extreme that asks, and only then.
+  let measuredReference: number[] | undefined;
+  const corroborates = (inset: number): boolean => {
+    if (!corroborate?.layout) return false;
+    measuredReference ??= referenceInsets(corroborate.layout, minInset);
+    return measuredReference.some((v) => Math.abs(v - inset) <= corroborate.tolerance);
+  };
   const visit = (node: SemanticNode): void => {
     const box = node.bounds;
     const kids = (node.children ?? []).filter((c) => c.bounds);
@@ -223,12 +234,11 @@ export function collectDerivedInsets(
       const first = edges[0]!;
       const eps = Math.min(UNIFORM_EPSILON, minInset);
       const inset = round2(first);
-      const glyphEdged =
-        textInsets === "skip" &&
-        edgesSetOnlyByText(kids, left, top, right, bottom) &&
-        !corroborates(corroborate, first);
+      const textEdged =
+        textInsets === "skip" && edgesSetOnlyByText(kids, left, top, right, bottom);
+      const corroborated = textEdged && corroborates(first);
       const measured =
-        !glyphEdged &&
+        (!textEdged || corroborated) &&
         edges.every((v) => v > 0) &&
         edges.every((v) => Math.abs(v - first) <= eps) &&
         first > minInset &&
@@ -236,10 +246,15 @@ export function collectDerivedInsets(
       if (measured) {
         const declaresSpacing = Object.keys(node.tokens?.spacing ?? {}).length > 0;
         const where = node.label ?? node.testTag ?? node.role;
-        const key = `${inset}|${declaresSpacing}|${where ?? ""}`;
+        const key = `${inset}|${declaresSpacing}|${corroborated}|${where ?? ""}`;
         if (!seen.has(key)) {
           seen.add(key);
-          out.push({ inset, declaresSpacing, ...(where ? { where } : {}) });
+          out.push({
+            inset,
+            declaresSpacing,
+            ...(corroborated ? { corroborated: true } : {}),
+            ...(where ? { where } : {}),
+          });
         }
       }
     }
@@ -260,6 +275,21 @@ export interface DerivedInset {
    * nested decorative box does not speak for the component.
    */
   declaresSpacing: boolean;
+  /**
+   * Whether this inset survived **only** because the reference measures it too —
+   * every one of its extremes rests on a glyph, and it was readmitted by
+   * {@link Corroboration}.
+   *
+   * Load-bearing at the point of comparison, not merely descriptive: such a
+   * measurement may *satisfy* a spec and must never contradict one. The
+   * corroborating value is whatever the reference draws somewhere, not
+   * necessarily on the node this spec describes, so letting it report a Δ would
+   * turn an unrelated agreement into an accusation — a candidate that declares
+   * no padding, measures a 12dp glyph gap, and meets a `padding: 16` spec would
+   * newly fail on `renders 12 vs spec 16` because something else in the kit
+   * happens to inset 12. It was `unverified` before and stays that way.
+   */
+  corroborated?: boolean;
   /** Label / testTag / role, so a finding can say what it measured. */
   where?: string;
 }
@@ -319,20 +349,16 @@ function edgesSetOnlyByText(
  */
 export interface Corroboration {
   /**
-   * Uniform insets the reference's own boxes establish, in dp. Produced by
-   * {@link referenceInsets}, which runs the same measurement over the reference's
-   * geometry with text extremes skipped — so every value here is one the
-   * reference draws *without* a glyph deciding it.
+   * The reference's captured geometry. Measured on demand by
+   * {@link referenceInsets} — the tree rather than the values, because rebuilding
+   * containment over a screen capture's descendants is not free and only a
+   * glyph-set extreme ever asks for it. A diff with no padding spec, or one
+   * whose candidate has no text-edged container, never pays for it at all, and a
+   * reference that captured no geometry costs nothing either way.
    */
-  insets: number[];
+  layout: SemanticTree | undefined;
   /** The comparison's own spacing tolerance: what counts as the same inset. */
   tolerance: number;
-}
-
-/** Does the reference independently measure this inset? */
-function corroborates(corroborate: Corroboration | undefined, inset: number): boolean {
-  if (!corroborate) return false;
-  return corroborate.insets.some((v) => Math.abs(v - inset) <= corroborate.tolerance);
 }
 
 /**
@@ -363,19 +389,16 @@ export function referenceInsets(
   minInset = 1,
 ): number[] {
   if (!layout) return [];
-  const flat: SemanticNode[] = [];
-  const gather = (node: SemanticNode): void => {
-    if (node.bounds) {
-      const { children: _drop, ...rest } = node;
-      flat.push(rest);
-    }
-    for (const child of node.children ?? []) gather(child);
-  };
-  for (const child of layout.root.children ?? []) gather(child);
-  const root: SemanticNode = {
-    ...layout.root,
-    children: nestByContainment(flat),
-  };
+  // A tree that already states who contains whom is taken at its word. Enclosure
+  // is a fair reading of a flattened list and a bad one of a composed layout: a
+  // full-bleed background encloses every control on top of it without being
+  // their parent, and re-parenting them under it would measure an inset the
+  // artwork never establishes. Only a capture with no nesting left to lose is
+  // rebuilt.
+  const captured = layout.root;
+  const root = carriesNesting(captured)
+    ? captured
+    : { ...captured, children: nestByContainment(captured.children ?? []) };
   return [
     ...new Set(
       collectDerivedInsets(root, layout.boundsDensity, minInset, "skip").map((i) => i.inset),
@@ -383,13 +406,32 @@ export function referenceInsets(
   ];
 }
 
-/** Does [outer] wholly enclose [inner]? */
+/** Does any bounded node in this tree have a bounded child of its own? */
+function carriesNesting(root: SemanticNode): boolean {
+  return (root.children ?? []).some(
+    (child) => child.bounds && (child.children ?? []).some((g) => g.bounds || carriesNesting(g)),
+  );
+}
+
+/**
+ * Sub-pixel slack when reading enclosure off two boxes.
+ *
+ * `layoutFromNode` rounds every node's position and size to whole pixels
+ * *independently*, so a child genuinely inside its parent can come back
+ * overhanging it by one: a parent ending at 11.4 and a child at 11.6 round to 11
+ * and 12. Read strictly, that child lands at the wrong level and the parent's
+ * inset is never recovered — corroboration would then fail silently on any board
+ * whose geometry is fractional or transformed, which is most of them.
+ */
+const ENCLOSURE_SLACK = 1;
+
+/** Does [outer] enclose [inner], allowing for independently-rounded boxes? */
 function encloses(outer: Bounds, inner: Bounds): boolean {
   return (
-    outer.x <= inner.x &&
-    outer.y <= inner.y &&
-    outer.x + outer.width >= inner.x + inner.width &&
-    outer.y + outer.height >= inner.y + inner.height
+    outer.x <= inner.x + ENCLOSURE_SLACK &&
+    outer.y <= inner.y + ENCLOSURE_SLACK &&
+    outer.x + outer.width >= inner.x + inner.width - ENCLOSURE_SLACK &&
+    outer.y + outer.height >= inner.y + inner.height - ENCLOSURE_SLACK
   );
 }
 
@@ -753,20 +795,35 @@ function numericFinding(
       // The render insets the WRONG amount. Report that, not the declared `0`:
       // "0 vs spec 12" names a modifier the code was never going to have, while
       // "14 vs spec 12" is the miss a designer can act on.
-      findings.push({
-        kind: "token",
-        severity: "error",
-        message: `${group}.${name}: renders ${drawn.inset} vs spec ${want} (Δ${delta})`,
-        detail: {
-          token: `${group}.${name}`,
-          expected: want,
-          actual: drawn.inset,
-          delta,
-          via: "measured-geometry",
-          ...(drawn.where ? { measuredOn: drawn.where } : {}),
-        },
-      });
-      return;
+      //
+      // Unless the measurement is only there by corroboration, which can acquit
+      // but never convict (see {@link DerivedInset.corroborated}). The nearest
+      // inset missing by more than the tolerance means every inset does, so
+      // there is nothing left to say: drop back to what the declared value —
+      // absent, or a `0` — was already going to report.
+      const accusing = drawn.corroborated
+        ? nearestInset(
+            want,
+            derivedInsets?.filter((i) => !i.corroborated),
+          )
+        : drawn;
+      if (accusing) {
+        const missBy = round2(Math.abs(accusing.inset - want));
+        findings.push({
+          kind: "token",
+          severity: "error",
+          message: `${group}.${name}: renders ${accusing.inset} vs spec ${want} (Δ${missBy})`,
+          detail: {
+            token: `${group}.${name}`,
+            expected: want,
+            actual: accusing.inset,
+            delta: missBy,
+            via: "measured-geometry",
+            ...(accusing.where ? { measuredOn: accusing.where } : {}),
+          },
+        });
+        return;
+      }
     }
   }
 

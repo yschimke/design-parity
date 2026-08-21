@@ -302,9 +302,16 @@ kit specs (issue #371). The reference settles it. `referenceInsets` measures the
 boxes, since the Figma capture is a flat list — and a glyph-set candidate edge is
 readmitted when the reference independently measures the same inset within
 `spacingTolerance`. Only a reference inset its own *boxes* establish counts; two
-fonts agreeing is not a layout. Corroboration is one-directional by design: it
-can readmit a measurement that agrees with the reference, never produce one that
-disagrees, so a glyph-set edge can acquit but never convict.
+fonts agreeing is not a layout, and a reference that states its own hierarchy is
+taken at its word rather than re-parented by enclosure.
+
+Corroboration is one-directional by design: a glyph-set edge can **acquit but
+never convict**. The corroborating value is one the reference draws somewhere,
+not necessarily on the node the spec describes, so a readmitted measurement is
+marked as such and the comparison will not quote a Δ off it — a candidate that
+declares no padding, draws a 12dp glyph gap and meets a `padding: 16` spec stays
+`unverified` rather than newly failing because something unrelated in the kit
+insets 12.
 
 The #74 fallback is the tell that the **naming** is the weak link: when the
 code's theme can't name a value, the colour lands under a generic role key

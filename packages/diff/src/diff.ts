@@ -41,7 +41,6 @@ import {
   collectRadiusBoxes,
   collectTokens,
   diffTokens,
-  referenceInsets,
 } from "./tokens.js";
 import {
   diffImagePair,
@@ -210,12 +209,10 @@ export async function diff(
       config.textDerivedInsets,
       // What the reference draws for itself, so an inset whose extremes are all
       // glyphs is not discarded when the kit's own boxes measure the same number
-      // (issue #371). Corroboration can only readmit a measurement, so a
-      // reference that captured no geometry simply leaves the rule as it was.
-      {
-        insets: referenceInsets(reference.layout, Math.min(1, config.spacingTolerance)),
-        tolerance: config.spacingTolerance,
-      },
+      // (issue #371). Measured lazily from this tree and only for a glyph-set
+      // extreme; corroboration can only readmit a measurement, so a reference
+      // that captured no geometry simply leaves the rule as it was.
+      { layout: reference.layout, tolerance: config.spacingTolerance },
     ),
   );
   const designSystem = diffDesignSystem(
