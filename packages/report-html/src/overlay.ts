@@ -12,7 +12,8 @@
  *   DevTools padding ring. Boxes/sizes come from bounds, captured on both sides;
  *   radius/padding render when present (a hand-authored or token-rich candidate
  *   node has them; the daemon's geometry and the reference's geometry-only
- *   capture don't yet, so they degrade to box + size).
+ *   capture don't yet, so they degrade to box + size). Boxes are *drawn* in the
+ *   raster's pixels and *labelled* in dp — see {@link boxMark}.
  * - **typography** — one marker per resolved style, with adjacent uses surrounded
  *   by a shared outline. The marker keys into the reference/candidate settings
  *   table rendered beside the panels instead of repeating a wide callout over
@@ -21,11 +22,13 @@
  *   highlighted with their position/size drift read out. Driven by the verdict's
  *   `layout` findings, matched to a node by label.
  *
- * The SVG's `viewBox` is the tree's own frame (`root.bounds` — candidate device
- * pixels, reference dp), so when it's stretched over the panel image both scale
- * together and annotations stay pinned with no pixel-density maths. Label text
- * and stroke widths are sized as a fraction of the frame width so they read the
- * same whether the frame is ~1080px (candidate) or ~411dp (reference). Output is
+ * The SVG's `viewBox` is the tree's own frame (`root.bounds`, in whatever pixel
+ * space the panel image is in), so when it's stretched over that image both
+ * scale together and annotations stay pinned with no pixel-density maths on the
+ * geometry. The tree's `boundsDensity` never moves a box; it only converts the
+ * dimensions a tag prints, so a 3× board is drawn over its own raster and reads
+ * out in dp. Label text and stroke widths are sized as a fraction of the frame
+ * width so they read the same whether the frame is ~1080px or ~411dp. Output is
  * deterministic — coordinates are rounded, order follows the tree.
  */
 import type {
@@ -36,6 +39,7 @@ import type {
 
 import { escapeHtml } from "./html.js";
 import { clusterTypography, typographyGroups } from "./typography.js";
+import { statedDensity } from "./units.js";
 
 /** A bounded element pulled from a tree, with whatever spec it carries. */
 interface Placed {
@@ -111,23 +115,34 @@ function tag(x: number, y: number, text: string, u: number, fill: string, ink: s
   );
 }
 
-/** Box + radius + padding + dimension tag for one element (the box-model layer). */
-function boxMark(n: Placed, u: number): string {
+/**
+ * Box + radius + padding + dimension tag for one element (the box-model layer).
+ *
+ * `bd` is source pixels per dp for this panel's `bounds` (1 when unstated), and
+ * it is what keeps drawing and labelling apart. The boxes are pinned to the
+ * captured raster, so every coordinate here stays in its pixels — including the
+ * radius and padding *drawn* from tokens, which arrive in dp and are multiplied
+ * back up to reach the same space. Only the numbers the tag *prints* are the
+ * spec: sizes divided down to dp, radius and padding quoted as the dp they
+ * already are.
+ */
+function boxMark(n: Placed, u: number, bd: number): string {
   const { x, y, width, height } = n.bounds;
   const stroke = 0.3 * u;
-  const rx = n.radius !== undefined ? Math.min(n.radius, width / 2, height / 2) : 0;
+  const drawnRadius = n.radius === undefined ? undefined : n.radius * bd;
+  const rx = drawnRadius !== undefined ? Math.min(drawnRadius, width / 2, height / 2) : 0;
   const box = `<rect x="${r(x)}" y="${r(y)}" width="${r(width)}" height="${r(height)}" rx="${r(rx)}" fill="none" stroke="#7db4e8" stroke-width="${r(stroke)}"/>`;
   // Padding ring: shade the inset between the border box and the content box
   // (DevTools-style green), when the node declares uniform padding.
   let pad = "";
-  if (n.padding !== undefined && n.padding > 0 && width > 2 * n.padding && height > 2 * n.padding) {
-    const p = n.padding;
+  const p = n.padding === undefined ? undefined : n.padding * bd;
+  if (p !== undefined && p > 0 && width > 2 * p && height > 2 * p) {
     pad =
       `<path fill="#3ddc84" fill-opacity="0.18" fill-rule="evenodd" d="` +
       `M${r(x)},${r(y)} H${r(x + width)} V${r(y + height)} H${r(x)} Z ` +
       `M${r(x + p)},${r(y + p)} H${r(x + width - p)} V${r(y + height - p)} H${r(x + p)} Z" />`;
   }
-  const detail = [`${Math.round(width)}×${Math.round(height)}`];
+  const detail = [`${Math.round(width / bd)}×${Math.round(height / bd)}`];
   if (n.radius !== undefined) detail.push(`r${+n.radius}`);
   if (n.padding !== undefined) detail.push(`p${+n.padding}`);
   return `<g class="anno-box">${pad}${box}${tag(x, y, detail.join(" "), u, "#16283a", "#cfe6ff")}</g>`;
@@ -208,6 +223,10 @@ export function annotationSvg(
   const frame = tree.root.bounds ?? bbox(nodes);
   if (!frame || frame.width <= 0 || frame.height <= 0) return "";
   const u = frame.width / 100;
+  // Source pixels per dp for this panel's boxes. Unstated reads as "bounds and
+  // tokens already share a space", per `SemanticTree.boundsDensity` — never as
+  // a guessed factor.
+  const boundsDensity = statedDensity(tree.boundsDensity) ?? 1;
 
   // Layout deltas: match each finding to the first node with the same label and
   // highlight it (the element's own box on this panel, with the numeric drift).
@@ -240,7 +259,7 @@ export function annotationSvg(
 
   const boxes = nodes
     .filter((n) => n.label !== undefined || n.role)
-    .map((n) => boxMark(n, u))
+    .map((n) => boxMark(n, u, boundsDensity))
     .join("");
   const typeGroups = typographyGroups(tree);
   const typography = typeGroups

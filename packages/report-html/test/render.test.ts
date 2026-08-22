@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import type {
   CandidateRender,
   DesignReference,
+  SemanticTree,
   Verdict,
 } from "@design-parity/core";
 
@@ -36,6 +37,30 @@ describe("toDisplayFrame", () => {
     const t = { root: { role: "group", bounds: { x: 0, y: 0, width: 411, height: 914 } } };
     expect(toDisplayFrame(t, t)).toBe(t);
     expect(toDisplayFrame(t, { root: { role: "group" } })).toBe(t); // ref has no frame
+    expect(toDisplayFrame(t, undefined)).toBe(t); // no reference space to move into
+  });
+
+  it("hands the candidate the reference's boundsDensity — it is the reference's space now", () => {
+    // Compose states a boundsDensity (its boxes are device px) while its tokens
+    // are already dp. Once the boxes are rescaled into the reference's frame,
+    // that 2.625 describes boxes this tree no longer holds.
+    const cand = {
+      root: { role: "group", bounds: { x: 0, y: 0, width: 1078, height: 2399 } },
+      boundsDensity: 2.625,
+    };
+    const dpRef = { root: { role: "group", bounds: { x: 0, y: 0, width: 411, height: 914 } } };
+    expect(toDisplayFrame(cand, dpRef)!.boundsDensity).toBeUndefined();
+
+    // A 3× board states one, and it is what turns the rescaled boxes back to dp.
+    const scaledRef = {
+      root: { role: "group", bounds: { x: 0, y: 0, width: 1233, height: 2742 } },
+      boundsDensity: 3,
+    };
+    expect(toDisplayFrame(cand, scaledRef)!.boundsDensity).toBe(3);
+    // Including on the paths that leave the geometry alone.
+    const sameFrame = { root: { role: "group", bounds: { x: 0, y: 0, width: 1233, height: 2742 } } };
+    expect(toDisplayFrame(sameFrame, scaledRef)!.boundsDensity).toBe(3);
+    expect(toDisplayFrame(cand, { root: { role: "group" }, boundsDensity: 3 })!.boundsDensity).toBe(3);
   });
 });
 
@@ -98,6 +123,45 @@ const ONE_PX_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   "base64",
 );
+
+/**
+ * The fixture button as a design tool captures it on a `d`× board: bounds and
+ * tokens in the board's own pixels, with the factor stated rather than applied
+ * (`SemanticTree.density`). 160×48 dp, r8, p12, 14sp/20 at 1×.
+ */
+function boardLayout(d: number): SemanticTree {
+  return {
+    root: {
+      role: "group",
+      bounds: { x: 0, y: 0, width: 160 * d, height: 48 * d },
+      children: [
+        {
+          role: "button",
+          label: "Continue",
+          bounds: { x: 0, y: 0, width: 160 * d, height: 48 * d },
+          tokens: {
+            spacing: { padding: 12 * d },
+            radius: { corner: 8 * d },
+            typography: {
+              label: { fontFamily: "Roboto", fontWeight: 500, fontSize: 14 * d, lineHeight: 20 * d },
+            },
+          },
+        },
+      ],
+    },
+    density: d,
+    boundsDensity: d,
+  };
+}
+
+/** The reference half of the typography comparison row, up to the arrow. */
+function referenceType(html: string): string {
+  const start = html.indexOf('<span class="type-side">Reference</span>');
+  expect(start).toBeGreaterThan(-1);
+  const end = html.indexOf('class="type-arrow"', start);
+  expect(end).toBeGreaterThan(start);
+  return html.slice(start, end);
+}
 
 describe("renderHtmlReport on the figma button fixtures", () => {
   it("emits one self-contained HTML doc with the componentId, status, and findings", async () => {
@@ -178,6 +242,47 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     );
     // Each toggle scopes to its own variant.
     expect(html).toContain("closest('.variant')");
+  });
+
+  it("quotes a scaled reference board in dp, beside a verdict that already converted it", async () => {
+    // Issue #379: with a board density declared, the token diff reads a
+    // divided-through `reference.tokens` while the panels read the captured
+    // `layout` — which used to reach the report raw and label 42 board pixels
+    // `sp`, so the report showed a threefold divergence beside its own "match".
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({
+      reference: { ...reference, layout: boardLayout(3) },
+      candidate,
+      verdict,
+      repoRoot,
+    });
+
+    expect(referenceType(html)).toContain("14sp/20");
+    expect(html).not.toContain("42sp");
+    // Boxes are still drawn over the captured 3× raster...
+    expect(html).toContain('viewBox="0 0 480 144"');
+    // ...and read out in dp, matching what the candidate panel quotes.
+    expect(html).toContain("160×48 r8 p12");
+    expect(html).not.toContain("480×144 ");
+  });
+
+  it("leaves a board that states no density exactly as captured", async () => {
+    // The other half of the pair: without a declared factor the report quotes
+    // the source's own units rather than guessing one, so the conversion above
+    // cannot quietly become a no-op for everyone.
+    const { reference, candidate, verdict } = await loadInputs();
+    const layout = boardLayout(3);
+    delete layout.density;
+    delete layout.boundsDensity;
+    const html = renderHtmlReport({
+      reference: { ...reference, layout },
+      candidate,
+      verdict,
+      repoRoot,
+    });
+
+    expect(referenceType(html)).toContain("42sp/60");
+    expect(html).toContain("480×144 r24 p36");
   });
 
   it("highlights parameters overridden from the most-used form of a typography token", async () => {

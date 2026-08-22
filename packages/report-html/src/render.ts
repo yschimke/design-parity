@@ -31,6 +31,7 @@ import {
   type TypographyGroup,
 } from "./typography.js";
 import type { DiffImage, ReportInput } from "./types.js";
+import { inCodeUnits } from "./units.js";
 import { pairVariants, type Variant } from "./variants.js";
 
 const STATUS_LABEL = {
@@ -274,23 +275,37 @@ function scaleNode(n: SemanticNode, s: number): SemanticNode {
 }
 
 /**
- * Put the candidate tree in the reference's dp space for display. The candidate's
- * `boundsInRoot` are device pixels (e.g. a 411dp screen renders at 1078px), so its
- * box-model readouts came out ~density× the reference's dp. Apply the same uniform
- * frame-width scale the layout diff already uses ({@link diffLayout}) so both sides
- * read in dp. No-op when either side lacks a root frame (assume a shared space).
+ * Put the candidate tree in the reference's bounds space for display. The
+ * candidate's `boundsInRoot` are device pixels (e.g. a 411dp screen renders at
+ * 1078px), so its box-model readouts came out ~density× the reference's boxes.
+ * Apply the same uniform frame-width scale the layout diff already uses
+ * ({@link diffLayout}) so both panels measure in one space. No-op on the geometry
+ * when either side lacks a root frame (assume a shared space).
+ *
+ * That space is the *reference's*, so the result carries the reference's
+ * `boundsDensity` — its own no longer describes boxes it no longer holds. Both
+ * halves of that matter: an unscaled reference states none, and the candidate's
+ * 2.625 surviving the move would have the overlay divide dp boxes by a device
+ * density and print a third of the truth; a scaled board states one, and it is
+ * the factor that turns these rescaled boxes back into dp.
  */
 export function toDisplayFrame(
   cand: SemanticTree | undefined,
   ref: SemanticTree | undefined,
 ): SemanticTree | undefined {
   if (!cand) return cand;
+  if (!ref) return cand;
+  const inRefSpace = (t: SemanticTree): SemanticTree => {
+    if (t.boundsDensity === ref.boundsDensity) return t;
+    const { boundsDensity: _own, ...rest } = t;
+    return ref.boundsDensity === undefined ? rest : { ...rest, boundsDensity: ref.boundsDensity };
+  };
   const cw = cand.root.bounds?.width;
-  const rw = ref?.root.bounds?.width;
-  if (!cw || !rw) return cand;
+  const rw = ref.root.bounds?.width;
+  if (!cw || !rw) return inRefSpace(cand);
   const s = rw / cw;
-  if (Math.abs(s - 1) < 1e-6) return cand;
-  return { ...cand, root: scaleNode(cand.root, s) };
+  if (Math.abs(s - 1) < 1e-6) return inRefSpace(cand);
+  return { ...inRefSpace(cand), root: scaleNode(cand.root, s) };
 }
 
 /** Toggle bar for the per-panel annotation layers (box model, typography, layout). */
@@ -667,11 +682,14 @@ export function renderHtmlReport(input: ReportInput): string {
 
   // One semantic tree per side for the whole component (geometry is theme-
   // invariant), reused across every variant's candidate/reference panel.
-  const refTree = reference.layout;
-  // Display the candidate in the reference's dp space so box-model readouts are
-  // dp on both sides (its raw bounds are device px). The diff already does this
-  // internally; this is the matching fix for the overlay.
-  const candTree = toDisplayFrame(candidate.semantics, refTree);
+  // Tokens in code units (dp/sp) once, at the entry, so no reader downstream has
+  // to know a board's density — and a scaled reference stops quoting raw board
+  // pixels as `sp` beside a verdict that already converted them (issue #379).
+  const refTree = inCodeUnits(reference.layout);
+  // Display the candidate in the reference's bounds space so box-model readouts
+  // measure the same thing on both sides (its raw bounds are device px). The
+  // diff already does this internally; this is the matching fix for the overlay.
+  const candTree = toDisplayFrame(inCodeUnits(candidate.semantics), refTree);
   const deltas = layoutDeltas(verdict);
   const typography = compareTypography(refTree, candTree);
 

@@ -29,6 +29,46 @@ describe("annotationSvg", () => {
     expect(svg).toMatch(/rx="8"[^>]*stroke="#7db4e8"/);
   });
 
+  it("draws a scaled board's boxes in its own pixels but labels them in dp", () => {
+    // The same button captured on a 3× board: bounds are board pixels, and the
+    // tokens reached the report already divided through (see `inCodeUnits`).
+    const tree: SemanticTree = {
+      root: {
+        role: "button",
+        label: "Continue",
+        bounds: { x: 0, y: 0, width: 480, height: 144 },
+        tokens: { spacing: { padding: 12 }, radius: { corner: 8 } },
+      },
+      boundsDensity: 3,
+    };
+    const svg = annotationSvg(tree);
+    // The viewBox and the box stay pinned to the captured raster.
+    expect(svg).toContain('viewBox="0 0 480 144"');
+    expect(svg).toMatch(/<rect x="0" y="0" width="480" height="144"/);
+    // The tag reads out in dp — the same 160×48 r8 p12 the candidate quotes.
+    expect(svg).toContain("160×48 r8 p12");
+    expect(svg).not.toContain("480×144");
+    // The drawn radius and padding ring are the dp tokens multiplied back into
+    // the raster's space: r8 → rx 24, p12 → a 36px inset.
+    expect(svg).toMatch(/rx="24"[^>]*stroke="#7db4e8"/);
+    expect(svg).toContain("M36,36 H444 V108 H36 Z");
+  });
+
+  it("reads an unstated boundsDensity as a shared space, not a factor to guess", () => {
+    const tree: SemanticTree = {
+      root: {
+        role: "button",
+        label: "Continue",
+        bounds: { x: 0, y: 0, width: 480, height: 144 },
+        tokens: { spacing: { padding: 12 }, radius: { corner: 8 } },
+      },
+    };
+    const svg = annotationSvg(tree);
+    expect(svg).toContain("480×144 r8 p12");
+    expect(svg).toMatch(/rx="8"[^>]*stroke="#7db4e8"/);
+    expect(svg).toContain("M12,12 H468 V132 H12 Z");
+  });
+
   it("draws one marked typography region for adjacent uses of the same style", () => {
     const tree: SemanticTree = {
       root: {
