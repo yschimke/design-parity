@@ -345,7 +345,30 @@ jobs:
           # The tool and its surroundings. `runner` is a coarse proxy for image
           # drift: it names the label, not the image, so `force-refresh` on a
           # schedule remains the real defence.
-          parts+=(--part "tool=${DP_REF:-$DP_VERSION}")
+          #
+          # The tool goes in as the code it resolves to, not as the label it was
+          # asked for. Both spellings of that label float: `ref: main` names the
+          # same thing however far `main` has moved, and `version: latest` — the
+          # default — names the same thing across every release. Keyed by label,
+          # a genuinely new tool reads as an unchanged ingredient and the run
+          # re-applies the old verdict (#380). The ref is already checked out at
+          # .design-parity-src by the step above, so its sha is free; a version
+          # costs one registry lookup, and a pinned `0.1.57` resolves to itself,
+          # so what the lookup really buys is the floating aliases.
+          if [ -n "${DP_REF:-}" ]; then
+            tool="$(git -C "${GITHUB_WORKSPACE}/.design-parity-src" rev-parse HEAD)"
+          else
+            tool="$(npm view "design-parity@${DP_VERSION}" version --json 2>/dev/null \
+              | jq -r 'if type == "array" then last elif type == "string" then . else empty end' || true)"
+            # A registry that will not answer must not collapse every version to
+            # the same empty part. Fall back to the literal: exact for a pinned
+            # version, and no worse than before for an alias.
+            if [ -z "$tool" ]; then
+              tool="$DP_VERSION"
+              echo "::warning title=Unresolved tool version::Could not resolve 'design-parity@${DP_VERSION}' to a published version, so the cache key names the alias instead. A new release may not invalidate it."
+            fi
+          fi
+          parts+=(--part "tool=${tool}")
           parts+=(--part "renderer=${{ inputs.compose-preview-version }}")
           parts+=(--part "runner=${{ inputs.runs-on }}")
           parts+=(--part "module=${{ inputs.module }}")

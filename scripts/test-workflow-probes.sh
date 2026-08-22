@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Guard the capability probes in the reusable workflow.
+# Guard the shell in the reusable workflows that `npm test` cannot reach.
+#
+# Two invariants live here: the capability probes (sections 1-3) and the run
+# cache's tool ingredient (section 4).
+#
+# ── Capability probes ───────────────────────────────────────────────────────
 #
 # A probe asks "does the installed CLI support this flag?" by reading its usage
 # output. The usage path deliberately exits non-zero (2), which makes the
@@ -103,6 +108,110 @@ for workflow in "${workflows[@]}"; do
     bad "${name}: has no capability probe at all — did one get dropped?"
   fi
 done
+
+# ── 4. The cache key resolves the tool to code, not to a label ──────────────
+# The skip decision hashes the ingredients of a parity run, and every other one
+# is resolved to content: `path:` parts are git tree hashes, `reference-cache`
+# is a head commit, `design-map` and `policy` are file digests. The tool must be
+# too. Keyed by the label it was ASKED for, both spellings float — `ref: main`
+# names the same thing however far `main` has moved, `version: latest` names the
+# same thing across every release — so a genuinely new tool reads as an
+# unchanged input and the run re-applies a verdict that tool never produced
+# (#380). npm test cannot reach this: it is a `run:` block.
+parity="$root/.github/workflows/design-parity-reusable.yml"
+
+if grep -qE 'parts\+=\(--part "tool=\$\{DP_REF' "$parity"; then
+  bad "design-parity-reusable.yml: the tool part is the ref/version LABEL — a moved branch or a new \`latest\` hashes as an unchanged ingredient (#380)"
+else
+  ok "design-parity-reusable.yml: the tool part is not the raw ref/version label"
+fi
+
+# Run the workflow's own resolution block rather than a copy of it, so this
+# cannot pass against a shape the workflow no longer has.
+snippet=""
+if start="$(grep -n 'tool="\$(git -C' "$parity" | cut -d: -f1)" && [ -n "$start" ] \
+   && end="$(grep -n 'parts+=(--part "tool=\${tool}")' "$parity" | cut -d: -f1)" && [ -n "$end" ]; then
+  start=$((start - 1))   # the `if [ -n "${DP_REF:-}" ]` guarding the ref half
+  case "$(sed -n "${start}p" "$parity")" in
+    *'if [ -n "${DP_REF:-}" ]; then'*) snippet="$(sed -n "${start},${end}p" "$parity")" ;;
+    *) bad "design-parity-reusable.yml: the tool resolution is not shaped as \`if [ -n \"\${DP_REF:-}\" ]\` … \`parts+=(--part \"tool=\\\${tool}\")\` — this guard cannot read it" ;;
+  esac
+else
+  bad "design-parity-reusable.yml: found no tool resolution block to check — did it get dropped?"
+fi
+
+# $1 ref, $2 version, $3 sha the checkout reports, $4 what the registry answers
+# ("" = it does not). Echoes the resolved `tool=` part; the block's own stdout
+# (a warning annotation) lands in $warnings.
+warnings="$(mktemp)"
+tool_part() {
+  local bin part
+  bin="$(mktemp -d)"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q\n' "$3" > "$bin/git"
+  printf '#!/usr/bin/env bash\n[ -n %q ] || exit 1\nprintf "%%s\\n" %q\n' "$4" "$4" > "$bin/npm"
+  chmod +x "$bin/git" "$bin/npm"
+  part="$(
+    set -euo pipefail
+    PATH="$bin:$PATH"
+    GITHUB_WORKSPACE=/workspace
+    DP_REF="$1"
+    DP_VERSION="$2"
+    parts=()
+    eval "$snippet" > "$warnings"
+    printf '%s\n' "${parts[1]}"
+  )" || part="<the block failed>"
+  rm -rf "$bin"
+  printf '%s\n' "$part"
+}
+
+if [ -n "$snippet" ]; then
+  # The #380 sequence: two dispatches naming `main`, with `main` moved between
+  # them. Same label, different code — the parts must differ.
+  a="$(tool_part main '' 19e51d0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa '')"
+  b="$(tool_part main '' 2b63767bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb '')"
+  if [ "$a" != "$b" ] && [ "$a" = "tool=19e51d0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]; then
+    ok "a ref resolves to the checked-out commit, so a moved branch is a different key"
+  else
+    bad "a ref does not resolve to the checked-out commit: '${a}' vs '${b}'"
+  fi
+
+  # The default. `latest` is a different release either side of a publish.
+  a="$(tool_part '' latest '' '"0.1.57"')"
+  b="$(tool_part '' latest '' '"0.1.58"')"
+  if [ "$a" = "tool=0.1.57" ] && [ "$b" = "tool=0.1.58" ]; then
+    ok "a floating version resolves to the published version, so a release is a different key"
+  else
+    bad "a floating version does not resolve to the published version: '${a}' vs '${b}'"
+  fi
+
+  # A range answers with every match; the one that would be installed is the last.
+  a="$(tool_part '' '^0.1.0' '' '["0.1.56","0.1.57","0.1.58"]')"
+  if [ "$a" = "tool=0.1.58" ]; then
+    ok "a range resolves to the version that would be installed"
+  else
+    bad "a range does not resolve to the highest match: '${a}'"
+  fi
+
+  # An unknown version answers on stdout with a JSON error OBJECT, and exits
+  # non-zero. Serialising that into the key would be worse than not resolving
+  # at all: a multi-line part built from prose.
+  a="$(tool_part '' 99.99.99 '' '{"error":{"code":"E404","summary":"No match found for version 99.99.99"}}')"
+  if [ "$a" = "tool=99.99.99" ]; then
+    ok "a registry error object is rejected rather than hashed as the tool"
+  else
+    bad "a registry error object leaks into the key: '${a}'"
+  fi
+
+  # A registry that will not answer must not collapse every version onto one
+  # empty part — that would make the key WEAKER than the label it replaced.
+  a="$(tool_part '' 0.1.57 '' '')"
+  if [ "$a" = "tool=0.1.57" ] && grep -q '::warning' "$warnings"; then
+    ok "an unreachable registry falls back to the literal version and says so"
+  else
+    bad "an unreachable registry does not fall back to the literal version: '${a}'"
+  fi
+fi
+rm -f "$warnings"
 
 if [ "$fail" -eq 0 ]; then
   printf '\nAll workflow probe checks passed.\n'
