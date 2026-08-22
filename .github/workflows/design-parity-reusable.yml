@@ -251,6 +251,12 @@ jobs:
       skip: ${{ steps.decide.outputs.skip }}
       key: ${{ steps.decide.outputs.key }}
       blocked: ${{ steps.decide.outputs.blocked }}
+      # The commit `design-parity-ref` pointed at when the key was built. The
+      # later jobs check the tool out again, and a branch can move between them:
+      # without this a run could render with one commit and publish with another
+      # while the key names a third. Empty when no ref was asked for, and when
+      # this job did not run at all — both fall back to the ref itself.
+      tool-commit: ${{ steps.decide.outputs.tool-commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -358,8 +364,30 @@ jobs:
           if [ -n "${DP_REF:-}" ]; then
             tool="$(git -C "${GITHUB_WORKSPACE}/.design-parity-src" rev-parse HEAD)"
           else
-            tool="$(npm view "design-parity@${DP_VERSION}" version --json 2>/dev/null \
-              | jq -r 'if type == "array" then last elif type == "string" then . else empty end' || true)"
+            matches="$(npm view "design-parity@${DP_VERSION}" version --json 2>/dev/null || true)"
+            case "$(printf '%s' "$matches" | jq -r 'type' 2>/dev/null || true)" in
+              string)
+                # A dist-tag or an exact pin: one answer, and it is npm's own.
+                tool="$(printf '%s' "$matches" | jq -r '.' || true)" ;;
+              array)
+                # A range, and npm does NOT install the highest match: it prefers
+                # the `latest` dist-tag whenever that tag satisfies the range.
+                # That is what makes a deliberately rolled-back `latest` work —
+                # release.yml publishes a recovery under `backfill` rather than
+                # dragging `latest` forward, so `latest` legitimately sits below
+                # the highest published version. Taking the last match would then
+                # name a version npx never runs. The set npm just returned IS the
+                # satisfies test, so preferring the tag when it appears in that
+                # set reproduces npm's choice without reimplementing a resolver.
+                tag="$(npm view design-parity dist-tags.latest --json 2>/dev/null \
+                  | jq -r 'if type == "string" then . else empty end' || true)"
+                tool="$(printf '%s' "$matches" \
+                  | jq -r --arg tag "$tag" 'if $tag != "" and (index($tag) != null) then $tag else last end' || true)" ;;
+              *)
+                # Not an answer: an unreachable registry, or the JSON error
+                # object an unknown version replies with.
+                tool="" ;;
+            esac
             # A registry that will not answer must not collapse every version to
             # the same empty part. Fall back to the literal: exact for a pinned
             # version, and no worse than before for an alias.
@@ -369,6 +397,7 @@ jobs:
             fi
           fi
           parts+=(--part "tool=${tool}")
+          if [ -n "${DP_REF:-}" ]; then echo "tool-commit=${tool}" >> "$GITHUB_OUTPUT"; fi
           parts+=(--part "renderer=${{ inputs.compose-preview-version }}")
           parts+=(--part "runner=${{ inputs.runs-on }}")
           parts+=(--part "module=${{ inputs.module }}")
@@ -495,7 +524,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
-          ref: ${{ inputs.design-parity-ref }}
+          # The commit the cache job hashed, so this job runs the code the key
+          # names even if the branch moved since. Falls back to the ref when no
+          # cache job ran to resolve it.
+          ref: ${{ needs.cache.outputs.tool-commit || inputs.design-parity-ref }}
           path: .design-parity-src
 
       - name: Build design-parity from source
@@ -785,7 +817,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
-          ref: ${{ inputs.design-parity-ref }}
+          # The commit the cache job hashed, so this job runs the code the key
+          # names even if the branch moved since. Falls back to the ref when no
+          # cache job ran to resolve it.
+          ref: ${{ needs.cache.outputs.tool-commit || inputs.design-parity-ref }}
           path: .design-parity-src
 
       - name: Build design-parity from source

@@ -140,15 +140,27 @@ else
   bad "design-parity-reusable.yml: found no tool resolution block to check — did it get dropped?"
 fi
 
-# $1 ref, $2 version, $3 sha the checkout reports, $4 what the registry answers
-# ("" = it does not). Echoes the resolved `tool=` part; the block's own stdout
-# (a warning annotation) lands in $warnings.
+# $1 ref, $2 version, $3 sha the checkout reports, $4 what `npm view <spec>
+# version` answers, $5 what `npm view <pkg> dist-tags.latest` answers ("" = the
+# registry does not answer at all). Echoes the resolved `tool=` part; the
+# block's own stdout (a warning annotation) lands in $warnings.
 warnings="$(mktemp)"
 tool_part() {
   local bin part
   bin="$(mktemp -d)"
-  printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q\n' "$3" > "$bin/git"
-  printf '#!/usr/bin/env bash\n[ -n %q ] || exit 1\nprintf "%%s\\n" %q\n' "$4" "$4" > "$bin/npm"
+  cat > "$bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' $(printf '%q' "$3")
+EOF
+  cat > "$bin/npm" <<EOF
+#!/usr/bin/env bash
+case " \$* " in
+  *dist-tags.latest*) [ -n $(printf '%q' "${5:-}") ] || exit 1
+                      printf '%s\n' $(printf '%q' "${5:-}") ;;
+  *)                  [ -n $(printf '%q' "$4") ] || exit 1
+                      printf '%s\n' $(printf '%q' "$4") ;;
+esac
+EOF
   chmod +x "$bin/git" "$bin/npm"
   part="$(
     set -euo pipefail
@@ -167,8 +179,8 @@ tool_part() {
 if [ -n "$snippet" ]; then
   # The #380 sequence: two dispatches naming `main`, with `main` moved between
   # them. Same label, different code — the parts must differ.
-  a="$(tool_part main '' 19e51d0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa '')"
-  b="$(tool_part main '' 2b63767bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb '')"
+  a="$(tool_part main '' 19e51d0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa '' '')"
+  b="$(tool_part main '' 2b63767bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb '' '')"
   if [ "$a" != "$b" ] && [ "$a" = "tool=19e51d0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ]; then
     ok "a ref resolves to the checked-out commit, so a moved branch is a different key"
   else
@@ -176,26 +188,47 @@ if [ -n "$snippet" ]; then
   fi
 
   # The default. `latest` is a different release either side of a publish.
-  a="$(tool_part '' latest '' '"0.1.57"')"
-  b="$(tool_part '' latest '' '"0.1.58"')"
+  a="$(tool_part '' latest '' '"0.1.57"' '"0.1.57"')"
+  b="$(tool_part '' latest '' '"0.1.58"' '"0.1.58"')"
   if [ "$a" = "tool=0.1.57" ] && [ "$b" = "tool=0.1.58" ]; then
     ok "a floating version resolves to the published version, so a release is a different key"
   else
     bad "a floating version does not resolve to the published version: '${a}' vs '${b}'"
   fi
 
-  # A range answers with every match; the one that would be installed is the last.
-  a="$(tool_part '' '^0.1.0' '' '["0.1.56","0.1.57","0.1.58"]')"
+  # A range answers with every match, and npm picks from that set the way npx
+  # will: the `latest` dist-tag when it satisfies, otherwise the highest.
+  a="$(tool_part '' '^0.1.0' '' '["0.1.56","0.1.57","0.1.58"]' '"0.1.58"')"
   if [ "$a" = "tool=0.1.58" ]; then
     ok "a range resolves to the version that would be installed"
   else
-    bad "a range does not resolve to the highest match: '${a}'"
+    bad "a range does not resolve to the version that would be installed: '${a}'"
+  fi
+
+  # A `latest` rolled back below the highest published version — which
+  # release.yml deliberately allows, publishing a recovery under `backfill`
+  # rather than dragging `latest` forward. npx installs 0.1.43 here, so keying
+  # 0.1.45 would name code the run never executed.
+  a="$(tool_part '' '^0.1.0' '' '["0.1.43","0.1.44","0.1.45"]' '"0.1.43"')"
+  if [ "$a" = "tool=0.1.43" ]; then
+    ok "a rolled-back \`latest\` wins over the highest match, as npm's resolver does"
+  else
+    bad "a rolled-back \`latest\` is ignored, so the key names a version npx would not install: '${a}'"
+  fi
+
+  # …but only when it satisfies the range. A `latest` outside it is not a
+  # candidate at all, and the highest match is what npx installs.
+  a="$(tool_part '' '^0.1.0' '' '["0.1.56","0.1.57"]' '"0.2.0"')"
+  if [ "$a" = "tool=0.1.57" ]; then
+    ok "a \`latest\` outside the range falls back to the highest match"
+  else
+    bad "a \`latest\` outside the range was taken anyway: '${a}'"
   fi
 
   # An unknown version answers on stdout with a JSON error OBJECT, and exits
   # non-zero. Serialising that into the key would be worse than not resolving
   # at all: a multi-line part built from prose.
-  a="$(tool_part '' 99.99.99 '' '{"error":{"code":"E404","summary":"No match found for version 99.99.99"}}')"
+  a="$(tool_part '' 99.99.99 '' '{"error":{"code":"E404","summary":"No match found for version 99.99.99"}}' '')"
   if [ "$a" = "tool=99.99.99" ]; then
     ok "a registry error object is rejected rather than hashed as the tool"
   else
@@ -204,7 +237,7 @@ if [ -n "$snippet" ]; then
 
   # A registry that will not answer must not collapse every version onto one
   # empty part — that would make the key WEAKER than the label it replaced.
-  a="$(tool_part '' 0.1.57 '' '')"
+  a="$(tool_part '' 0.1.57 '' '' '')"
   if [ "$a" = "tool=0.1.57" ] && grep -q '::warning' "$warnings"; then
     ok "an unreachable registry falls back to the literal version and says so"
   else
@@ -212,6 +245,28 @@ if [ -n "$snippet" ]; then
   fi
 fi
 rm -f "$warnings"
+
+# ── 5. The commit the key names is the commit the later jobs run ────────────
+# The shard and publish jobs check the tool out again, in their own steps and
+# minutes apart. Left on the branch name, a ref that moves mid-run renders with
+# one commit and publishes with another while the key names a third — the same
+# "the label is not the code" failure as #380, one layer down.
+downstream="$(grep -c 'ref: ${{ needs.cache.outputs.tool-commit || inputs.design-parity-ref }}' "$parity" || true)"
+loose="$(grep -c '^ *ref: ${{ inputs.design-parity-ref }}$' "$parity" || true)"
+# One loose checkout is correct and expected: the cache job's own, which is what
+# resolves the sha in the first place.
+if [ "$downstream" -ge 2 ] && [ "$loose" -le 1 ]; then
+  ok "every design-parity checkout after the cache job is pinned to the hashed commit"
+else
+  bad "a design-parity checkout after the cache job still names the moving ref (pinned=${downstream}, loose=${loose})"
+fi
+
+if grep -q 'tool-commit: ${{ steps.decide.outputs.tool-commit }}' "$parity" \
+   && grep -q 'echo "tool-commit=${tool}" >> "$GITHUB_OUTPUT"' "$parity"; then
+  ok "the cache job publishes the hashed commit for those jobs to consume"
+else
+  bad "the cache job does not publish the hashed commit, so the pinned checkouts resolve to nothing"
+fi
 
 if [ "$fail" -eq 0 ]; then
   printf '\nAll workflow probe checks passed.\n'
