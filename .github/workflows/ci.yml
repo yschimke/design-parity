@@ -45,8 +45,9 @@ jobs:
             --index packages/kit-index/test/fixtures/m3-kit-index.json
       - name: Test
         run: npm test
-      # Shell, not TypeScript: the reusable workflow's capability probes live in
-      # `run:` blocks that `npm test` cannot reach, and a probe that fails open
-      # silently disables the feature it gates.
-      - name: Test reusable-workflow capability probes
+      # Shell, not TypeScript: the reusable workflow's capability probes and its
+      # run-cache key live in `run:` blocks that `npm test` cannot reach. Both
+      # fail silently — a probe that fails open disables the feature it gates,
+      # and a cache key that fails open skips a run that should have happened.
+      - name: Test reusable-workflow shell
         run: scripts/test-workflow-probes.sh
