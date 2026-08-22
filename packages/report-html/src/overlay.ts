@@ -266,7 +266,7 @@ export function annotationSvg(
     .map((group, index) => {
       const marker = opts?.typographyMarkers?.get(group.key) ??
         (index < 26 ? String.fromCharCode(65 + index) : String(index + 1));
-      return clusterTypography(group)
+      return clusterTypography(group, boundsDensity)
         .map((bounds) => typographyMark(bounds, marker, u))
         .join("") + group.nodes.map((node) => typographyHit(node.bounds, marker)).join("");
     })

@@ -57,10 +57,31 @@ describe("toDisplayFrame", () => {
       boundsDensity: 3,
     };
     expect(toDisplayFrame(cand, scaledRef)!.boundsDensity).toBe(3);
-    // Including on the paths that leave the geometry alone.
+    // Frames that already match are already in that space, so they adopt it too.
     const sameFrame = { root: { role: "group", bounds: { x: 0, y: 0, width: 1233, height: 2742 } } };
     expect(toDisplayFrame(sameFrame, scaledRef)!.boundsDensity).toBe(3);
-    expect(toDisplayFrame(cand, { root: { role: "group" }, boundsDensity: 3 })!.boundsDensity).toBe(3);
+  });
+
+  it("keeps the candidate's own factor when there is no frame to scale by", () => {
+    // No root width on either side means nothing moved. The overlay falls back
+    // to a bbox frame and draws the candidate's untouched device pixels, so its
+    // own 2.625 is still the factor that describes them — adopting the
+    // reference's would divide boxes by a density that never applied to them.
+    const cand = {
+      root: {
+        role: "group",
+        children: [{ role: "text", label: "x", bounds: { x: 0, y: 0, width: 263, height: 71 } }],
+      },
+      boundsDensity: 2.625,
+    };
+    const bboxRef = {
+      root: {
+        role: "group",
+        children: [{ role: "text", label: "x", bounds: { x: 0, y: 0, width: 100, height: 27 } }],
+      },
+      boundsDensity: 3,
+    };
+    expect(toDisplayFrame(cand, bboxRef)).toBe(cand);
   });
 });
 

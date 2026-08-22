@@ -52,6 +52,31 @@ describe("typography grouping", () => {
     ]);
   });
 
+  it("measures its gaps in the boxes' own space, not the tokens'", () => {
+    // The same two uses on a 3× board: boxes tripled, and the line height
+    // already normalised to dp by the report's entry. A 20dp line height must
+    // still reach 3× further to see them as adjacent.
+    const groups = typographyGroups(
+      tree("labelLarge", "Roboto", [
+        ["One", 30, 30],
+        ["Two", 300, 30],
+      ]),
+    );
+    const scaled = {
+      ...groups[0]!,
+      nodes: groups[0]!.nodes.map((n) => ({
+        ...n,
+        bounds: { x: n.bounds.x, y: n.bounds.y, width: 144, height: 60 },
+      })),
+    };
+    // Guard the guard: at 1× these boxes are far enough apart to split, so the
+    // single cluster below is the density doing the work and not the geometry.
+    expect(clusterTypography(scaled)).toHaveLength(2);
+    expect(clusterTypography(scaled, 3)).toEqual([
+      { x: 30, y: 30, width: 414, height: 60 },
+    ]);
+  });
+
   it("pairs differently named reference and candidate styles by their shared usages", () => {
     const comparison = compareTypography(
       tree("m3/label/large", "Roboto", [

@@ -211,9 +211,19 @@ function union(nodes: readonly PlacedTypography[]): Bounds {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-/** Surround nearby uses of one style with a single rectangular cluster. */
-export function clusterTypography(group: TypographyGroup): Bounds[] {
-  const lineHeight = finite(group.typography.lineHeight) ?? 16;
+/**
+ * Surround nearby uses of one style with a single rectangular cluster.
+ *
+ * The thresholds come from the style's line height — a token, so in dp once the
+ * report has normalised it — while the boxes they are measured against are the
+ * raster's pixels. `boundsDensity` is what puts the two in one space: at 3× a
+ * 20dp line height has to reach for 240 pixels of horizontal slack, not 80, or
+ * uses that cluster on an unscaled board split into separate outlines. Defaults
+ * to 1, which is the unstated case and every caller before a board declared a
+ * density.
+ */
+export function clusterTypography(group: TypographyGroup, boundsDensity = 1): Bounds[] {
+  const lineHeight = (finite(group.typography.lineHeight) ?? 16) * boundsDensity;
   const xGap = Math.max(12, lineHeight * 4);
   const yGap = Math.max(8, lineHeight * 1.25);
   const clusters: PlacedTypography[][] = [];

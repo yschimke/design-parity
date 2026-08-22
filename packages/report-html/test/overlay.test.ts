@@ -104,6 +104,26 @@ describe("annotationSvg", () => {
     expect(svg).toContain(">A</text>");
   });
 
+  it("still clusters adjacent uses when the same board is captured at 3×", () => {
+    // The tree above tripled, with the line height already normalised to dp.
+    // The cluster has to survive the move: the boxes are 3× further apart and
+    // the threshold that finds them is quoted in dp.
+    const node = (label: string, x: number) => ({
+      role: "text",
+      label,
+      bounds: { x, y: 60, width: 240, height: 60 },
+      tokens: { typography: { label: { fontFamily: "Roboto", fontSize: 14, fontWeight: 500, lineHeight: 20 } } },
+    });
+    const tree: SemanticTree = {
+      root: { role: "group", bounds: { x: 0, y: 0, width: 800, height: 180 }, children: [node("Hi", 30), node("Again", 420)] },
+      boundsDensity: 3,
+    };
+    expect(annotationSvg(tree).match(/class="anno-type"/g)).toHaveLength(1);
+    // Guard the guard: without the factor these same boxes split in two.
+    const { boundsDensity: _unstated, ...unscaled } = tree;
+    expect(annotationSvg(unscaled).match(/class="anno-type"/g)).toHaveLength(2);
+  });
+
   it("degrades to box + size when a node carries no radius/padding/type", () => {
     const tree: SemanticTree = {
       root: {

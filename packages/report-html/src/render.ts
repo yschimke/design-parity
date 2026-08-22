@@ -282,12 +282,14 @@ function scaleNode(n: SemanticNode, s: number): SemanticNode {
  * ({@link diffLayout}) so both panels measure in one space. No-op on the geometry
  * when either side lacks a root frame (assume a shared space).
  *
- * That space is the *reference's*, so the result carries the reference's
- * `boundsDensity` — its own no longer describes boxes it no longer holds. Both
- * halves of that matter: an unscaled reference states none, and the candidate's
- * 2.625 surviving the move would have the overlay divide dp boxes by a device
- * density and print a third of the truth; a scaled board states one, and it is
- * the factor that turns these rescaled boxes back into dp.
+ * That space is the *reference's*, so a tree that reaches it carries the
+ * reference's `boundsDensity` — its own no longer describes boxes it no longer
+ * holds. Both halves of that matter: an unscaled reference states none, and the
+ * candidate's 2.625 surviving the move would have the overlay divide dp boxes by
+ * a device density and print a third of the truth; a scaled board states one, and
+ * it is the factor that turns these rescaled boxes back into dp. The path that
+ * cannot scale is the exception — an untransformed tree is still in its own
+ * space, and keeps the factor that describes it.
  */
 export function toDisplayFrame(
   cand: SemanticTree | undefined,
@@ -302,7 +304,10 @@ export function toDisplayFrame(
   };
   const cw = cand.root.bounds?.width;
   const rw = ref.root.bounds?.width;
-  if (!cw || !rw) return inRefSpace(cand);
+  // Nothing to scale by, so nothing moved: the candidate keeps its own boxes
+  // *and* its own factor. Handing it the reference's here would have the overlay
+  // divide untouched device pixels by a density that never applied to them.
+  if (!cw || !rw) return cand;
   const s = rw / cw;
   if (Math.abs(s - 1) < 1e-6) return inRefSpace(cand);
   return { ...inRefSpace(cand), root: scaleNode(cand.root, s) };
