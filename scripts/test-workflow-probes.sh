@@ -246,11 +246,12 @@ if [ -n "$snippet" ]; then
 fi
 rm -f "$warnings"
 
-# ── 5. The commit the key names is the commit the later jobs run ────────────
-# The shard and publish jobs check the tool out again, in their own steps and
-# minutes apart. Left on the branch name, a ref that moves mid-run renders with
-# one commit and publishes with another while the key names a third — the same
-# "the label is not the code" failure as #380, one layer down.
+# ── 5. The tool the key names is the tool the later jobs run ────────────────
+# The plan, shard and publish jobs resolve the tool again, in their own steps
+# and minutes apart — a checkout of the ref, or an `npx` of the version spec.
+# Left on the label, a branch or a dist-tag that moves mid-run renders with one
+# tool and publishes with another while the key names a third: the same "the
+# label is not the code" failure as #380, one layer down.
 downstream="$(grep -c 'ref: ${{ needs.cache.outputs.tool-commit || inputs.design-parity-ref }}' "$parity" || true)"
 loose="$(grep -c '^ *ref: ${{ inputs.design-parity-ref }}$' "$parity" || true)"
 # One loose checkout is correct and expected: the cache job's own, which is what
@@ -261,12 +262,27 @@ else
   bad "a design-parity checkout after the cache job still names the moving ref (pinned=${downstream}, loose=${loose})"
 fi
 
-if grep -q 'tool-commit: ${{ steps.decide.outputs.tool-commit }}' "$parity" \
-   && grep -q 'echo "tool-commit=${tool}" >> "$GITHUB_OUTPUT"' "$parity"; then
-  ok "the cache job publishes the hashed commit for those jobs to consume"
+# The published-CLI half of the same thing. Every later job runs `npx
+# design-parity@$DP_VERSION` of its own, so a dist-tag that moves mid-run — a
+# release landing during a sharded run — installs a different CLI than the one
+# the key names.
+pinned="$(grep -c 'DP_VERSION: ${{ needs.cache.outputs.tool-version || inputs.design-parity-version }}' "$parity" || true)"
+floating="$(grep -c '^ *DP_VERSION: ${{ inputs.design-parity-version }}$' "$parity" || true)"
+# Again, one floating use is correct: the cache job's own, which resolves it.
+if [ "$pinned" -ge 2 ] && [ "$floating" -le 1 ]; then
+  ok "every job after the cache job runs the version it resolved"
 else
-  bad "the cache job does not publish the hashed commit, so the pinned checkouts resolve to nothing"
+  bad "a job after the cache job still runs the floating version spec (pinned=${pinned}, floating=${floating})"
 fi
+
+for out in tool-commit tool-version; do
+  if grep -q "${out}: \${{ steps.decide.outputs.${out} }}" "$parity" \
+     && grep -q "echo \"${out}=\${tool}\" >> \"\$GITHUB_OUTPUT\"" "$parity"; then
+    ok "the cache job publishes ${out} for those jobs to consume"
+  else
+    bad "the cache job does not publish ${out}, so the pinned consumers resolve to nothing"
+  fi
+done
 
 if [ "$fail" -eq 0 ]; then
   printf '\nAll workflow probe checks passed.\n'
