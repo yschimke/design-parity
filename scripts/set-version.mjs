@@ -11,9 +11,27 @@
  *   - reads every workspace package.json (the `workspaces` globs in the root),
  *   - sets each package's `version` to <version> (skipping nothing — the
  *     private root stays private but is kept in sync for tidiness),
- *   - rewrites every dependency / devDependency / peerDependency whose name is
- *     an in-repo package to `^<version>` (was `*` or a pinned `0.0.0`),
+ *   - rewrites every internal dependency / devDependency to EXACTLY <version>,
+ *     and every internal peerDependency to `^<version>`,
  *   - leaves third-party ranges untouched.
+ *
+ * Why exact and not `^`: the whole scope publishes at one version in one run,
+ * so a caret range buys nothing a consumer wants and costs the thing this repo
+ * cares most about — knowing which code ran. `npx design-parity@0.1.57` would
+ * happily resolve `@design-parity/action` to a later 0.1.x, so the launcher
+ * version a caller pinned, a lockfile recorded, or the parity workflow hashed
+ * into its cache key named the launcher and not the tree behind it. Exact
+ * ranges make the version a consumer asks for the version they get.
+ *
+ * The cost is deliberate: a partial publish (the release loop tolerates one
+ * package failing) leaves a version that will not install at all, rather than
+ * one that installs a mixed-version tree and misbehaves quietly. Loud beats
+ * silent — rerun the publish, or dispatch release.yml with the tag.
+ *
+ * A peerDependency stays `^`: a peer range exists to be satisfiable by whatever
+ * the consumer already resolved, and pinning it turns a compatible tree into a
+ * conflict. There are none in the repo today; the rule is here so adding one
+ * does not silently inherit the wrong shape.
  *
  * Run it, commit the result, tag `v<version>`; the release workflow publishes.
  */
@@ -52,16 +70,25 @@ for (const path of pkgPaths) {
   pkgs.push({ path, pkg });
 }
 
-const DEP_FIELDS = ["dependencies", "devDependencies", "peerDependencies"];
+// An internal range is exact everywhere the consumer's install resolves it, and
+// `^` only where a range is meant to be satisfied by someone else's tree. See
+// the header for why.
+const EXACT_FIELDS = ["dependencies", "devDependencies"];
+const CARET_FIELDS = ["peerDependencies"];
 
 // Second pass: set version + rewrite internal ranges.
 for (const { path, pkg } of pkgs) {
   pkg.version = version;
-  for (const field of DEP_FIELDS) {
-    const deps = pkg[field];
-    if (!deps) continue;
-    for (const name of Object.keys(deps)) {
-      if (internal.has(name)) deps[name] = `^${version}`;
+  for (const [fields, range] of [
+    [EXACT_FIELDS, version],
+    [CARET_FIELDS, `^${version}`],
+  ]) {
+    for (const field of fields) {
+      const deps = pkg[field];
+      if (!deps) continue;
+      for (const name of Object.keys(deps)) {
+        if (internal.has(name)) deps[name] = range;
+      }
     }
   }
   writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");

@@ -238,8 +238,17 @@ component at `.` with `include-component-in-tag: false` gives the one shared
 **Don't rename `release.yml`** — each package's OIDC trusted publisher is bound
 to that filename.
 
-Internal deps use concrete `^` ranges, **not** the `workspace:` protocol — npm
-(unlike pnpm/yarn) doesn't rewrite `workspace:` on publish.
+Internal deps use concrete ranges, **not** the `workspace:` protocol — npm
+(unlike pnpm/yarn) doesn't rewrite `workspace:` on publish. `set-version` writes
+them **exactly** (`0.1.58`, not `^0.1.58`) for `dependencies` and
+`devDependencies`, and `^` for `peerDependencies`. The scope publishes at one
+version in one run, so a caret buys a consumer nothing and costs the ability to
+know which code ran: `npx design-parity@0.1.57` resolving `@design-parity/*` to
+a later 0.1.x means a pinned version names the launcher, not the tree behind it
+— including in the parity workflow's cache key. The trade is that a partial
+publish yields a version that will not install rather than one that installs a
+mixed tree; rerun the publish, or dispatch `release.yml` with the tag.
+[`scripts/test-set-version.sh`](./scripts/test-set-version.sh) guards the shape.
 
 The release-please action is pinned to the same `v5.0.0` commit the sibling
 repos run, and every workflow action is pinned by commit SHA (supply-chain
