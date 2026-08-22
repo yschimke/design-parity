@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.59](https://github.com/yschimke/design-parity/compare/v0.1.58...v0.1.59) (2026-08-22)
+
+
+### Bug Fixes
+
+* **action:** resolve the run cache's tool ingredient to code ([#381](https://github.com/yschimke/design-parity/issues/381)) ([345f165](https://github.com/yschimke/design-parity/commit/345f165e2b6e3023911258cff2c5470451114906))
+* **release:** publish internal deps exactly, not behind a caret ([#384](https://github.com/yschimke/design-parity/issues/384)) ([18b55d8](https://github.com/yschimke/design-parity/commit/18b55d8a0ba71c09cefd3d7aa7183c5656c73d78))
+* **report:** quote a scaled board's tokens in dp, not raw pixels ([#382](https://github.com/yschimke/design-parity/issues/382)) ([f78ee19](https://github.com/yschimke/design-parity/commit/f78ee196cdadfd55ed635b46684b319486643997))
+
 ## [0.1.58](https://github.com/yschimke/design-parity/compare/v0.1.57...v0.1.58) (2026-08-21)
 
 
