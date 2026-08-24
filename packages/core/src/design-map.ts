@@ -113,6 +113,23 @@ export interface DesignMapEntry {
    * designer declared, not a length measured off the board.
    */
   density?: number;
+  /**
+   * Exact catalog locator scopes, keyed by the visual `state/theme/size` key.
+   * These identities cannot be inferred safely from a code handle or design
+   * ref, so a component that uses the committed known-differences document
+   * declares them beside its ordinary correspondence.
+   */
+  knownDifferences?: Record<string, KnownDifferenceScope>;
+}
+
+/** The exact non-hash portion of a compose-preview-known-differences/v1 locator. */
+export interface KnownDifferenceScope {
+  system: string;
+  component: string;
+  previewId: string;
+  referenceId: string;
+  variant: string;
+  overrides: Record<string, string>;
 }
 
 export interface DesignMap {

@@ -131,7 +131,11 @@ describe("renderCandidate", () => {
     const golden = await readJson<CandidateRender>(
       "fixtures/candidate/button-primary.candidate.json",
     );
-    expect(result).toEqual(golden);
+    expect(result.images[0]?.semantics).toEqual(result.semantics);
+    expect({
+      ...result,
+      images: result.images.map(({ semantics: _semantics, ...image }) => image),
+    }).toEqual(golden);
   });
 
   it("produces a clear, actionable error when the CLI is missing", async () => {

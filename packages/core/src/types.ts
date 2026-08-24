@@ -44,6 +44,12 @@ export interface Image {
   uri: string;
   width: number;
   height: number;
+  /**
+   * Semantics captured with this exact image variant. Candidate sources that
+   * merge separately-authored previews must retain this instead of reusing the
+   * render-wide preferred tree for every image.
+   */
+  semantics?: SemanticTree;
 }
 
 /**
@@ -630,4 +636,3 @@ export interface ParityTokenPolicy {
    */
   textDerivedInsets?: "skip" | "measure";
 }
-

@@ -11,11 +11,12 @@ import {
   type DesignMap,
   type ResolvedDirection,
 } from "@design-parity/core";
-import type { DiffConfig } from "@design-parity/diff";
+import type { DiffConfig, KnownDifferencesOptions } from "@design-parity/diff";
 import {
   loadParityConfigOrDefault,
   PARITY_CONFIG_FILENAME,
 } from "@design-parity/policy";
+import { specTokenKey } from "./specTokens.js";
 
 export interface RunConfig {
   designMap?: DesignMap;
@@ -35,6 +36,8 @@ export interface RunConfig {
    * translation that can drift.
    */
   diffConfig?: Partial<DiffConfig>;
+  /** Per-component exact scopes loaded from committed `design-map.json`. */
+  knownDifferences?: ReadonlyMap<string, KnownDifferencesOptions>;
   warnings: string[];
 }
 
@@ -85,5 +88,13 @@ export async function resolveRunConfig(repoRoot: string): Promise<RunConfig> {
       : {}),
   };
   if (Object.keys(diffConfig).length > 0) runConfig.diffConfig = diffConfig;
+  const knownDifferences = new Map<string, KnownDifferencesOptions>();
+  for (const component of designMap?.components ?? []) {
+    if (!component.knownDifferences) continue;
+    knownDifferences.set(specTokenKey(component.code, component.source), {
+      scopes: component.knownDifferences,
+    });
+  }
+  if (knownDifferences.size > 0) runConfig.knownDifferences = knownDifferences;
   return runConfig;
 }

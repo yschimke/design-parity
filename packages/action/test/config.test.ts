@@ -50,3 +50,42 @@ describe("resolveRunConfig token policy (#367 / #368)", () => {
     expect("diffConfig" in config).toBe(false);
   });
 });
+
+describe("resolveRunConfig known differences (#3808)", () => {
+  it("keys exact scopes by component and source", async () => {
+    const scope = {
+      system: "m3",
+      component: "IconButton/Tonal",
+      previewId: "preview",
+      referenceId: "reference",
+      variant: "ideal/default/light",
+      overrides: {},
+    };
+    await writeFile(join(repoRoot, "design-map.json"), JSON.stringify({
+      components: [
+        {
+          code: "ui/Icon.kt#Tonal",
+          source: "figma",
+          ref: "figma:K/1:2",
+          knownDifferences: { "default/light": scope },
+        },
+        {
+          code: "ui/Card.kt#Elevated",
+          source: "figma",
+          ref: "figma:K/1:3",
+          knownDifferences: {
+            "default/light": { ...scope, component: "Card/Elevated" },
+          },
+        },
+      ],
+    }));
+
+    const config = await resolveRunConfig(repoRoot);
+    expect(config.knownDifferences?.get("ui/Icon.kt#Tonal figma")?.scopes)
+      .toEqual({ "default/light": scope });
+    expect(config.knownDifferences?.get("ui/Card.kt#Elevated figma")?.scopes)
+      .toEqual({
+        "default/light": { ...scope, component: "Card/Elevated" },
+      });
+  });
+});

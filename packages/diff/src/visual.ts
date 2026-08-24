@@ -6,6 +6,7 @@
  * heatmap side by side so a reviewer sees what moved. Visual diff is table
  * stakes (Principle 2) — it informs, it never gates.
  */
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -29,6 +30,8 @@ interface Raster {
   width: number;
   height: number;
   data: Buffer;
+  /** SHA-256 of the source artifact bytes, before any SVG rasterisation. */
+  sourceSha256?: string;
 }
 
 /** The result of comparing one reference image against its candidate twin. */
@@ -83,7 +86,8 @@ export interface VisualResult {
 export interface VisualAcceptanceOptions {
   repoRoot: string;
   scope: AcceptanceScope;
-  tagIndex: TagIndex;
+  /** Absent when this exact image has no semantics; element gates are refused. */
+  tagIndex?: TagIndex;
   documentPath?: string;
   artifactRoot?: string;
 }
@@ -188,13 +192,14 @@ async function readRaster(
   const buf = uri.startsWith("data:")
     ? decodeDataUri(uri)
     : await readFile(resolve(repoRoot, uri));
+  const sourceSha256 = createHash("sha256").update(buf).digest("hex");
   // A committed reference may be vector SVG (crisp in the report); rasterise it
   // so pixelmatch has a bitmap. PNGs (every candidate render) decode directly.
   if (!isPng(buf)) {
-    return rasterizeSvg(buf, targetWidth);
+    return { ...rasterizeSvg(buf, targetWidth), sourceSha256 };
   }
   const png = PNG.sync.read(buf);
-  return { width: png.width, height: png.height, data: png.data };
+  return { width: png.width, height: png.height, data: png.data, sourceSha256 };
 }
 
 /** Compare one matched pair, returning its score and triptych. */
@@ -273,7 +278,10 @@ export async function diffImagePair(
   if (acceptance) {
     const evaluated = evaluateKnownDifferenceComparison({
       repoRoot: acceptance.repoRoot,
-      scope: acceptance.scope,
+      scope: {
+        ...acceptance.scope,
+        referenceSha256: ref.sourceSha256 ?? null,
+      },
       reference: { width: ref.width, height: ref.height, pixels: ref.data },
       candidate: { width: cand.width, height: cand.height, pixels: cand.data },
       tagIndex: acceptance.tagIndex,

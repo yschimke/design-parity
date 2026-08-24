@@ -173,6 +173,27 @@ describe("design-map schema", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("accepts exact per-visual known-difference scopes", () => {
+    const r = validateDesignMap({
+      components: [{
+        code: "ui/Icon.kt#Tonal",
+        source: "figma",
+        ref: "figma:K/1:2",
+        knownDifferences: {
+          "default/light": {
+            system: "m3",
+            component: "IconButton/Tonal",
+            previewId: "iconbutton-tonal__ideal__default__light",
+            referenceId: "iconbutton-tonal-ideal-light",
+            variant: "ideal/default/light",
+            overrides: {},
+          },
+        },
+      }],
+    });
+    expect(r).toEqual({ valid: true, errors: [] });
+  });
+
   it("accepts a per-reference Figma contents-only override", () => {
     const r = validateDesignMap({
       components: [

@@ -30,6 +30,33 @@ resolver ──(Correspondence[])──┐
 - **`design-parity run`** CLI — a local run; candidate renders come from
   `--candidates <file>` for now (reproducible offline).
 
+Components that consume `.design-parity/known-differences.json` declare their
+exact catalog locator per visual key on the corresponding `design-map.json`
+entry. The scope is intentionally component-local: `default/light` is common
+across a catalog and must never select another component's acceptance.
+
+```json
+{
+  "code": "ui/IconButton.kt#Tonal",
+  "source": "figma",
+  "ref": "figma:AbCd/1:42",
+  "knownDifferences": {
+    "default/light": {
+      "system": "m3",
+      "component": "IconButton/Tonal",
+      "previewId": "iconbutton-tonal__ideal__default__light",
+      "referenceId": "iconbutton-tonal-ideal-light",
+      "variant": "ideal/default/light",
+      "overrides": {}
+    }
+  }
+}
+```
+
+The current reference hash is computed from the reference bytes being diffed;
+it is never copied into config. CLI, PR-comment, and baseline modes all load
+these scopes through `resolveRunConfig()`.
+
 ## GitHub Action
 
 `action.yml` + `dist/cli/action.js` **auto-select a mode from the triggering

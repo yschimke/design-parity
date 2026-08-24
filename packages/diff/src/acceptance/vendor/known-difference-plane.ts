@@ -230,7 +230,7 @@ export function canonicalRaster(image, box, plane) {
  * there. Dropping the entry entirely would say the tag had *vanished*, which is a different verdict.
  */
 export function projectTagIndex(tagIndex, candidateBox, plane) {
-  const projected = {};
+  const projected = Object.create(null);
   for (const [tag, entry] of Object.entries(tagIndex ?? {})) {
     if (!entry || typeof entry !== "object") continue;
     const bounds = projectRenderBox(entry.bounds, candidateBox, plane);
@@ -267,4 +267,3 @@ export function projectRenderBox(box, candidateBox, plane) {
   if (x1 <= x0 || y1 <= y0) return null;
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
-

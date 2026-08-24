@@ -110,7 +110,7 @@ async function runComment(
   rest: GitHubRest,
   prNumber: number,
 ): Promise<number> {
-  const { designMap, direction, cmpCapable, diffConfig, warnings } =
+  const { designMap, direction, cmpCapable, diffConfig, knownDifferences, warnings } =
     await resolveRunConfig(repoRoot);
 
   // No committed setup at all: don't guess the design ↔ code mapping at run time
@@ -148,6 +148,7 @@ async function runComment(
     candidate: provider,
     direction,
     ...(diffConfig ? { diffConfig } : {}),
+    ...(knownDifferences ? { knownDifferences } : {}),
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(env.DESIGN_PARITY_OUT ? { outDir: env.DESIGN_PARITY_OUT } : {}),
   });
@@ -190,7 +191,8 @@ async function runBaseline(
   token: string,
   artifactBranch: string,
 ): Promise<number> {
-  const { designMap, direction, diffConfig, warnings } = await resolveRunConfig(repoRoot);
+  const { designMap, direction, diffConfig, knownDifferences, warnings } =
+    await resolveRunConfig(repoRoot);
   const components = designMap?.components.map((c) => c.code) ?? [];
   if (components.length === 0) {
     stdout.write("design-parity: no components in design-map.json — nothing to baseline\n");
@@ -212,6 +214,7 @@ async function runBaseline(
     candidate: provider,
     direction,
     ...(diffConfig ? { diffConfig } : {}),
+    ...(knownDifferences ? { knownDifferences } : {}),
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     outDir,
   });

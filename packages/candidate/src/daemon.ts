@@ -859,6 +859,7 @@ export function daemonSource(options: DaemonSourceOptions): DaemonCandidateSourc
     const semantics =
       semanticsToSemanticTree(composeSemantics, theme, composeTheme) ??
       hierarchyToSemanticTree(hierarchy, theme);
+    img.semantics = semantics;
 
     const candidate: CandidateRender = {
       componentId,
