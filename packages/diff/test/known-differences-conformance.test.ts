@@ -20,7 +20,11 @@ import { afterAll } from "vitest";
 import { unzipSync } from "fflate";
 
 import { diff } from "../src/diff.js";
-import { tagIndexFromSemantics } from "../src/acceptance/evaluate.js";
+import {
+  evaluateKnownDifferenceComparison,
+  refuseElementAcceptancesWithoutSemantics,
+  tagIndexFromSemantics,
+} from "../src/acceptance/evaluate.js";
 import { scoreComparison } from "../src/acceptance/vendor/known-difference-score.js";
 import {
   enclosingBox,
@@ -43,10 +47,21 @@ const FIXTURE_ARCHIVE = join(
   "fixtures",
   "known-differences.zip",
 );
+const FIXTURE_ARCHIVE_SHA256 =
+  "1814f88704a15996611b77f3c6fdc34fbaff3cfe50f54bddaec2e671909af66c";
+const FIXTURE_FILE_COUNT = 1360;
+const FIXTURE_CASE_COUNTS = {
+  cases: 183,
+  plane: 6,
+  resample: 9,
+  rounding: 5,
+  scoring: 6,
+  tagProjection: 6,
+};
+const fixtureArchiveBytes = new Uint8Array(readFileSync(FIXTURE_ARCHIVE));
+const fixtureEntries = unzipSync(fixtureArchiveBytes);
 const EXTRACTED = mkdtempSync(join(tmpdir(), "design-parity-conformance-"));
-for (const [relative, bytes] of Object.entries(
-  unzipSync(new Uint8Array(readFileSync(FIXTURE_ARCHIVE))),
-)) {
+for (const [relative, bytes] of Object.entries(fixtureEntries)) {
   if (relative.endsWith("/")) continue;
   const target = join(EXTRACTED, relative);
   mkdirSync(dirname(target), { recursive: true });
@@ -102,6 +117,78 @@ function comparison(dir: string, value: any): any {
 }
 
 describe("compose-preview-known-differences/v1 conformance", () => {
+  it("pins the complete canonical fixture corpus", () => {
+    expect(createHash("sha256").update(fixtureArchiveBytes).digest("hex")).toBe(
+      FIXTURE_ARCHIVE_SHA256,
+    );
+    expect(Object.keys(fixtureEntries).filter((path) => !path.endsWith("/"))).toHaveLength(
+      FIXTURE_FILE_COUNT,
+    );
+
+    const index = readJson(join(ROOT, "index.json"));
+    expect(index.schema).toBe("compose-preview-known-differences/v1");
+    expect(Object.fromEntries(
+      Object.keys(FIXTURE_CASE_COUNTS).map((key) => [key, index[key].length]),
+    )).toEqual(FIXTURE_CASE_COUNTS);
+
+    const directories: Record<string, string> = {
+      cases: "cases",
+      plane: "plane",
+      resample: "resample",
+      rounding: "rounding",
+      scoring: "scoring",
+      tagProjection: "tag-projection",
+    };
+    for (const [key, directory] of Object.entries(directories)) {
+      const indexed = index[key].map((entry: { id: string }) => entry.id).sort();
+      const extracted = readdirSync(join(ROOT, directory), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+      expect(extracted).toEqual(indexed);
+    }
+  });
+
+  it("adds a missing-semantics refusal without erasing an existing reason", () => {
+    const fixture = join(ROOT, "cases", "acceptance-is-noop");
+    const meta = readJson(join(fixture, "case.json"));
+    const comparison = meta.comparison;
+    const scope = {
+      system: comparison.system,
+      component: comparison.component,
+      previewId: comparison.previewId,
+      referenceId: comparison.referenceId,
+      variant: comparison.variant,
+      overrides: comparison.overrides,
+      referenceSha256: comparison.referenceSha256,
+    };
+    const statuses: any = {
+      "m3-iconbutton-tonal-glyph": {
+        status: "refused",
+        reasons: ["acceptance-is-noop"],
+      },
+    };
+    const failures = [
+      { id: "m3-iconbutton-tonal-glyph", reason: "acceptance-is-noop" },
+    ];
+
+    refuseElementAcceptancesWithoutSemantics(
+      readFileSync(join(fixture, "known-differences.json"), "utf8"),
+      scope,
+      statuses,
+      failures,
+    );
+
+    expect(statuses["m3-iconbutton-tonal-glyph"]).toEqual({
+      status: "refused",
+      reasons: ["acceptance-is-noop", "semantics-unavailable"],
+    });
+    expect(failures).toEqual([
+      { id: "m3-iconbutton-tonal-glyph", reason: "acceptance-is-noop" },
+      { id: "m3-iconbutton-tonal-glyph", reason: "semantics-unavailable" },
+    ]);
+  });
+
   const cases = join(ROOT, "cases");
   for (const id of readdirSync(cases).sort()) {
     it(id, () => {

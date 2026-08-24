@@ -166,13 +166,22 @@ function mergeByFunction(
   return merged;
 }
 
-/** Attach the renderer's authoritative preview id without widening core Image. */
+/**
+ * Project candidate images into the published catalog image model.
+ *
+ * Per-image semantics are candidate-only comparison input. Catalog annotations
+ * are derived from the render-wide semantics tree, so do not leak the sidecar
+ * onto an image that the catalog manifest cannot serialize.
+ */
 function catalogImages(candidate: CandidateRender): CatalogImage[] {
   const previewId = candidate.previewId ?? candidate.componentId;
-  return candidate.images.map((image) => ({
-    ...image,
-    previewId: (image as CatalogImage).previewId ?? previewId,
-  }));
+  return candidate.images.map((source) => {
+    const { semantics: _candidateSemantics, ...image } = source;
+    return {
+      ...image,
+      previewId: (source as CatalogImage).previewId ?? previewId,
+    };
+  });
 }
 
 export interface FromCandidatesOptions {

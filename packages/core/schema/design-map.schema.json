@@ -122,7 +122,7 @@
         "component": { "type": "string", "minLength": 1 },
         "previewId": { "type": "string", "minLength": 1 },
         "referenceId": { "type": "string", "minLength": 1 },
-        "variant": { "type": "string", "minLength": 1 },
+        "variant": { "type": "string" },
         "overrides": {
           "type": "object",
           "additionalProperties": { "type": "string" }

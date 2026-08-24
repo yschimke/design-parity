@@ -76,6 +76,18 @@ describe("catalogFromCandidates", () => {
     expect(filled.greenlines.some((g) => g.detail?.["role"] === "button")).toBe(true);
   });
 
+  it("keeps candidate-only per-image semantics out of catalog images", () => {
+    const rendered = candidate("com.example.CKt", "FilledButton");
+    rendered.images[0]!.semantics = {
+      root: { testTag: "candidate-only" },
+      theme: "light",
+    };
+
+    const { catalog } = catalogFromCandidates([rendered], spec);
+
+    expect(catalog.components[0]!.variants.ideal[0]).not.toHaveProperty("semantics");
+  });
+
   it("carries both kit handles and a stated absence from spec to catalog", () => {
     // The join copies field by field, so each of these reaches the published catalog only by
     // being named in `catalogFromCandidates` — the same silent-omission shape the ingest test
