@@ -22,6 +22,18 @@ export interface DiffImage {
   png: Uint8Array;
 }
 
+/** Dependency-free view of `@design-parity/diff`'s scoped acceptance result. */
+export interface AcceptanceReportView {
+  documentRejected: boolean;
+  statuses: Record<
+    string,
+    { status: string; causes?: string[]; reasons?: string[] }
+  >;
+  validationFailures: Array<{ id?: string; index?: number; reason: string }>;
+  scores: { raw: number; accepted: number; unaccepted: number };
+  suppressing: string[];
+}
+
 /** Everything {@link renderHtmlReport} needs to emit one offline page. */
 export interface ReportInput {
   reference: DesignReference;
@@ -29,6 +41,8 @@ export interface ReportInput {
   verdict: Verdict;
   /** Per-variant diff panels (e.g. the pixelmatch heatmaps). Optional. */
   diffImages?: DiffImage[];
+  /** Per-variant raw/accepted/unaccepted scores and per-acceptance statuses. */
+  acceptances?: Record<string, AcceptanceReportView>;
   /**
    * Root the reference/candidate `Image.uri`s resolve against (mirrors the
    * diff engine). Defaults to `process.cwd()`.

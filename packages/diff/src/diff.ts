@@ -50,6 +50,17 @@ import {
   sizeCompatible,
   type VisualResult,
 } from "./visual.js";
+import {
+  tagIndexFromSemantics,
+  type AcceptanceReport,
+  type AcceptanceScope,
+} from "./acceptance/index.js";
+
+export interface KnownDifferencesOptions {
+  scopes: Record<string, AcceptanceScope>;
+  documentPath?: string;
+  artifactRoot?: string;
+}
 
 export interface DiffOptions {
   /** Repo root the image `uri`s resolve against. Defaults to `process.cwd()`. */
@@ -75,6 +86,13 @@ export interface DiffOptions {
    * buffers are still returned.
    */
   outDir?: string;
+  /**
+   * Apply the repo's committed `compose-preview-known-differences/v1` document to selected image
+   * pairs. Keys use the same `state/theme/size` spelling as `visualScores`; an absent key means the
+   * pair is evaluated raw only. Scope stays explicit because system/component/preview/reference ids
+   * are catalog identities and cannot be reconstructed safely from a code handle.
+   */
+  knownDifferences?: KnownDifferencesOptions;
 }
 
 /** A rendered triptych for one image pair. */
@@ -97,6 +115,8 @@ export interface DiffResult {
   /** Markdown summary for the PR surface. */
   summary: string;
   triptychs: Triptych[];
+  /** Per-image acceptance results; raw visual findings remain in `verdict`. */
+  acceptances?: Record<string, AcceptanceReport>;
 }
 
 interface PairingResult {
@@ -268,9 +288,31 @@ export async function diff(
 
   // 5. visual diff (table stakes).
   const visuals: VisualResult[] = [];
+  const tagIndex = options.knownDifferences
+    ? tagIndexFromSemantics(candidate.semantics.root)
+    : undefined;
   for (const pair of pairs) {
+    const scope = options.knownDifferences?.scopes[imageKey(pair.reference)];
     visuals.push(
-      await diffImagePair(repoRoot, pair.reference, pair.candidate, config),
+      await diffImagePair(
+        repoRoot,
+        pair.reference,
+        pair.candidate,
+        config,
+        scope && tagIndex
+          ? {
+              repoRoot,
+              scope,
+              tagIndex,
+              ...(options.knownDifferences?.documentPath
+                ? { documentPath: options.knownDifferences.documentPath }
+                : {}),
+              ...(options.knownDifferences?.artifactRoot
+                ? { artifactRoot: options.knownDifferences.artifactRoot }
+                : {}),
+            }
+          : undefined,
+      ),
     );
   }
   const visualScores: Record<string, number> = {};
@@ -351,7 +393,37 @@ export async function diff(
 
   const triptychs = await emitTriptychs(visuals, options.outDir);
 
-  return { verdict, summary: renderSummary(verdict), triptychs };
+  const acceptances = Object.fromEntries(
+    visuals
+      .filter((visual): visual is VisualResult & { acceptance: AcceptanceReport } =>
+        visual.acceptance !== undefined,
+      )
+      .map((visual) => [visual.key, visual.acceptance]),
+  );
+  const acceptanceSummary = renderAcceptanceSummary(acceptances);
+  return {
+    verdict,
+    summary: renderSummary(verdict) + acceptanceSummary,
+    triptychs,
+    ...(Object.keys(acceptances).length > 0 ? { acceptances } : {}),
+  };
+}
+
+export function renderAcceptanceSummary(
+  reports: Record<string, AcceptanceReport>,
+): string {
+  const entries = Object.entries(reports);
+  if (entries.length === 0) return "";
+  const lines = entries.flatMap(([key, report]) => {
+    const scores = report.scores;
+    const head = `- \`${key}\`: raw ${scores.raw.toFixed(2)}%, accepted ${scores.accepted.toFixed(2)}%, unaccepted ${scores.unaccepted.toFixed(2)}%`;
+    const statuses = Object.entries(report.statuses).map(
+      ([id, status]) =>
+        `  - \`${id}\`: ${status.status}${status.causes?.length ? ` (${status.causes.join(", ")})` : ""}${status.reasons?.length ? ` (${status.reasons.join(", ")})` : ""}`,
+    );
+    return [head, ...statuses];
+  });
+  return `\n\n### Scoped known differences\n\n${lines.join("\n")}`;
 }
 
 async function emitTriptychs(

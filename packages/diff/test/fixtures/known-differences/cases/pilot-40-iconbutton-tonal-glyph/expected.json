@@ -1,0 +1,16 @@
+{
+  "pins": [
+    "statuses",
+    "validationFailures",
+    "survivingMaskIds"
+  ],
+  "statuses": {
+    "m3-iconbutton-tonal-glyph": {
+      "status": "valid"
+    }
+  },
+  "validationFailures": [],
+  "survivingMaskIds": [
+    "m3-iconbutton-tonal-glyph"
+  ]
+}

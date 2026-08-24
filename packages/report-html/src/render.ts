@@ -511,6 +511,34 @@ function scoresMarkup(verdict: Verdict): string {
           </div>`;
 }
 
+function acceptanceMarkup(input: ReportInput["acceptances"]): string {
+  const entries = Object.entries(input ?? {});
+  if (entries.length === 0) return "";
+  const rows = entries.map(([key, report]) => {
+    const statuses = Object.entries(report.statuses)
+      .map(([id, status]) => {
+        const detail = status.causes?.length
+          ? ` — ${status.causes.join(", ")}`
+          : status.reasons?.length
+            ? ` — ${status.reasons.join(", ")}`
+            : "";
+        return `<li><code>${escapeHtml(id)}</code> ${escapeHtml(status.status + detail)}</li>`;
+      })
+      .join("");
+    return `<li><code>${escapeHtml(key)}</code>
+      <span class="chip">raw ${report.scores.raw.toFixed(2)}%</span>
+      <span class="chip">accepted ${report.scores.accepted.toFixed(2)}%</span>
+      <span class="chip">unaccepted ${report.scores.unaccepted.toFixed(2)}%</span>
+      <ul>${statuses}</ul>
+    </li>`;
+  }).join("\n");
+  return `<div class="finding-section">
+    <h3>Scoped known differences</h3>
+    <p class="subtitle">Raw remains the unmodified comparison; only valid acceptances contribute to the scoring union.</p>
+    <ul class="score-list">${rows}</ul>
+  </div>`;
+}
+
 const STYLE = `:root{color-scheme:light dark}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f0f14;color:#e7e7ef}
@@ -741,6 +769,7 @@ ${variantsSection}
 <section class="findings">
 ${findingsMarkup(verdict)}
 ${scoresMarkup(verdict)}
+${acceptanceMarkup(input.acceptances)}
 </section>
 </main>
 <script>${SCRIPT}</script>

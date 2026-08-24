@@ -56,6 +56,42 @@ are ordered a11y → token → semantic → visual; `verdict.visualScores` maps 
 Everything is committed config (see [`config.ts`](./src/config.ts)); the same
 pair always yields the same verdict.
 
+## Scoped known differences
+
+Pass exact catalog scope for any visual pair that should consume
+`.design-parity/known-differences.json`:
+
+```ts
+const result = await diff(reference, candidate, {
+  repoRoot,
+  knownDifferences: {
+    scopes: {
+      "default/light": {
+        system: "m3",
+        component: "IconButton/Tonal",
+        previewId: "iconbutton-tonal__ideal__default__light",
+        referenceId: "iconbutton-tonal-ideal-light",
+        variant: "ideal/default/light",
+        overrides: {},
+        referenceSha256,
+      },
+    },
+  },
+});
+```
+
+The map key is the same `state/theme/size` key used by `visualScores`. Scope is
+explicit because these catalog identities cannot be reconstructed safely from a
+source-code handle. `result.acceptances` reports `raw`, `accepted`, and
+`unaccepted` separately plus the status of every record. The original
+`verdict.visualScores`, visual findings, and triptych are unchanged: accepting a
+difference never deletes the raw finding.
+
+Only `valid` masks enter the scoring union. Gate evaluation precedes that union,
+and both inputs are split before any resampling, so a resolved/invalidated mask
+cannot suppress neighbouring pixels and an accepted delta cannot cancel an
+opposite regression at a mask edge.
+
 ## Develop
 
 ```sh
