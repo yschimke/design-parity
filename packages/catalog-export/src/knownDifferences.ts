@@ -28,7 +28,7 @@
  * of those is an answer a *consumer* must be able to reach, and it can only reach it if the bytes
  * arrive intact. So this copies, and refuses only what a copier can legitimately refuse.
  *
- * ## Two things it does refuse
+ * ## Three things it does refuse
  *
  * - **A path outside the acceptance's own directory.** The document names its artifacts, the
  *   document is repository content, and a `../` in one of those names would make this function a
@@ -36,8 +36,20 @@
  *   before any read, and refused as a **skip with a warning** rather than a thrown error — a
  *   catalog is still publishable with a broken acceptance in it, and the consumer will report that
  *   record as `artifact-unreadable` on its own.
+ * - **A symlink, anywhere**: the document, the artifact root, or any file inside it. A link's
+ *   *target* is what a consumer reads, so following one either dangles or copies an arbitrary
+ *   readable file from the export runner into a published catalog. Every one of the three is
+ *   `lstat`ed rather than `stat`ed, because the two that are not walked as directory entries — the
+ *   document and the root — are exactly the ones a `Dirent` check never sees.
  * - **An artifact past the schema's 8 MiB ceiling**, from its length, before the bytes are read.
  *   Publishing it would produce a bundle whose consumers refuse a record the publisher accepted.
+ *
+ * ## And it clears before it writes
+ *
+ * `outDir` is reused across renders, so every path out of {@link writeKnownDifferences} — including
+ * the early ones — has to leave the bundle describing the repository's *current* state. A repo that
+ * deleted an acceptance would otherwise keep publishing the last good copy, and the bundle would go
+ * on suppressing a difference nobody accepts any more.
  *
  * ## Publishing this way means acceptances land on the next render
  *
@@ -55,7 +67,7 @@
  * acceptance means producing a mask and a crop and recording three hashes — a deliberate act whose
  * turnaround is already measured in review rounds, not minutes.
  */
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 /** Where a source repo commits them, and where they are published. */
@@ -105,17 +117,24 @@ export interface KnownDifferencesResult {
    * this must not do — a mask that quietly failed to publish is an acceptance that suppresses
    * nothing, with nothing anywhere saying so.
    */
-  skipped: Array<{ path: string; reason: "path-not-portable" | "artifact-too-large" }>;
+  skipped: Array<{
+    path: string;
+    reason: "path-not-portable" | "artifact-too-large" | "symlink";
+  }>;
 }
 
 export interface KnownDifferencesOptions {
   /**
    * Root the source repo's `.design-parity/` sits in. Default: `process.cwd()`.
    *
-   * The *source* root, not the catalog's image root — an acceptance is committed by the repository
-   * whose component the difference is in, which is where its issue and its review live.
+   * The **repository** root, and emphatically *not* `writeCatalog`'s `sourceRoot`, which is the
+   * directory a bundle's relative image URIs resolve against — the render output. An acceptance is
+   * committed by the repository whose component the difference is in, which is where its issue and
+   * its review live, and renders are routinely unpacked somewhere else entirely (a temp dir, an
+   * unzipped artifact). Wiring these two together looks harmless and publishes nothing at all,
+   * silently, because `<renders>/.design-parity/` never exists.
    */
-  sourceRoot?: string;
+  repositoryRoot?: string;
 }
 
 /**
@@ -129,13 +148,36 @@ export async function writeKnownDifferences(
   outDir: string,
   opts: KnownDifferencesOptions = {},
 ): Promise<KnownDifferencesResult> {
-  const sourceRoot = opts.sourceRoot ?? process.cwd();
-  const source = resolve(sourceRoot, SOURCE_DIRECTORY);
+  const repositoryRoot = opts.repositoryRoot ?? process.cwd();
+  const source = resolve(repositoryRoot, SOURCE_DIRECTORY);
   const documentSource = join(source, DOCUMENT_FILE);
+  const out = resolve(outDir);
+  const documentPath = join(out, PUBLISHED_DIRECTORY, DOCUMENT_FILE);
+  const destinationRoot = join(out, PUBLISHED_DIRECTORY, ARTIFACT_DIRECTORY);
   const result: KnownDifferencesResult = { artifactCount: 0, skipped: [] };
 
-  const documentStat = await stat(documentSource).catch(() => null);
-  if (!documentStat?.isFile()) return result;
+  // **Clear before writing**, and before any early return. `outDir` is routinely reused across
+  // renders, and every path out of this function has to leave the bundle describing the repository's
+  // *current* state: a repo that deleted an acceptance, or one whose document has grown past the
+  // ceiling, would otherwise keep publishing the last good copy — a bundle that goes on suppressing
+  // a difference nobody accepts any more, which is the same silent-suppression failure the whole
+  // contract exists to prevent, arriving through the publisher instead of the record.
+  //
+  // Scoped to exactly the two paths this module owns. Nothing else under `outDir` is touched.
+  await rm(documentPath, { force: true });
+  await rm(destinationRoot, { recursive: true, force: true });
+
+  // `lstat`, not `stat`. A committed symlink at `known-differences.json` would otherwise be followed
+  // and its *target's* bytes copied into the published catalog — an arbitrary readable file from the
+  // export runner, published to the world. The artifact walk refuses symlinks for exactly this
+  // reason and the document had been left out of that rule.
+  const documentStat = await lstat(documentSource).catch(() => null);
+  if (!documentStat) return result;
+  if (documentStat.isSymbolicLink()) {
+    result.skipped.push({ path: DOCUMENT_FILE, reason: "symlink" });
+    return result;
+  }
+  if (!documentStat.isFile()) return result;
   if (documentStat.size > MAX_DOCUMENT_BYTES) {
     result.skipped.push({ path: DOCUMENT_FILE, reason: "artifact-too-large" });
     return result;
@@ -145,8 +187,6 @@ export async function writeKnownDifferences(
   // reorder members, normalise numbers and drop a duplicated key — and a duplicated key is one of
   // the document-level refusals the contract spends a paragraph on, precisely because runtimes
   // disagree about which value wins.
-  const out = resolve(outDir);
-  const documentPath = join(out, PUBLISHED_DIRECTORY, DOCUMENT_FILE);
   await mkdir(dirname(documentPath), { recursive: true });
   await writeFile(documentPath, await readFile(documentSource));
   result.documentPath = documentPath;
@@ -156,8 +196,18 @@ export async function writeKnownDifferences(
   // siblings of — the consumer decides which ones matter, and a publisher that shipped only the
   // named ones would make an unnamed-but-referenced file a publish-time failure instead of a
   // consumer-time verdict.
+  //
+  // The **root** is `lstat`ed before the walk for the same reason the document is: `readdir` follows
+  // a symlinked directory, and the per-entry `Dirent` check below only ever sees what is already
+  // inside. A linked root would hand the walk someone else's tree wholesale.
   const artifactRoot = join(source, ARTIFACT_DIRECTORY);
-  const destinationRoot = join(out, PUBLISHED_DIRECTORY, ARTIFACT_DIRECTORY);
+  const rootStat = await lstat(artifactRoot).catch(() => null);
+  if (!rootStat) return result;
+  if (rootStat.isSymbolicLink()) {
+    result.skipped.push({ path: ARTIFACT_DIRECTORY, reason: "symlink" });
+    return result;
+  }
+  if (!rootStat.isDirectory()) return result;
   await copyTree(artifactRoot, destinationRoot, [], result);
   return result;
 }
@@ -185,12 +235,18 @@ async function copyTree(
       await copyTree(from, to, relative, result);
       continue;
     }
-    // Symlinks are neither followed nor copied. `readdir` reports one as neither a file nor a
-    // directory, so this falls through — which is the right answer: a link's *target* is what a
-    // consumer would read, and publishing the link would either dangle or smuggle bytes from
-    // outside the tree into a record that does not own them.
+    // Symlinks are neither followed nor copied. A `Dirent` reports link-or-not from `lstat`
+    // semantics, so a symlink is neither `isFile()` nor `isDirectory()` and falls through both
+    // branches — which is the right answer: a link's *target* is what a consumer would read, and
+    // publishing the link would either dangle or smuggle bytes from outside the tree into a record
+    // that does not own them. Reported rather than dropped, so a repo that committed one can see
+    // why its acceptance publishes nothing.
+    if (entry.isSymbolicLink()) {
+      result.skipped.push({ path: printable, reason: "symlink" });
+      continue;
+    }
     if (!entry.isFile()) continue;
-    const info = await stat(from).catch(() => null);
+    const info = await lstat(from).catch(() => null);
     if (!info) continue;
     if (info.size > MAX_ARTIFACT_BYTES) {
       result.skipped.push({ path: printable, reason: "artifact-too-large" });
@@ -202,8 +258,18 @@ async function copyTree(
   }
 }
 
-/** The published path an artifact lands at, for a caller that needs to name one. */
+/**
+ * The published path an artifact lands at, for a caller that needs to name one.
+ *
+ * Held to the **same portable grammar the copier is**, not merely to "is it absolute". A caller
+ * passing an untrusted `../../catalog.json` would otherwise get back a string that reads as being
+ * inside the artifact directory and resolves outside it the moment a URL or a filesystem normalises
+ * it — a traversal minted by the helper that exists to name safe paths.
+ */
 export function publishedArtifactPath(relative: string): string {
-  if (isAbsolute(relative)) throw new Error(`known-difference artifact path must be relative: ${relative}`);
-  return `${PUBLISHED_DIRECTORY}/${ARTIFACT_DIRECTORY}/${relative}`;
+  const segments = relative.split("/");
+  if (isAbsolute(relative) || segments.length < 1 || !segments.every(isPortableSegment)) {
+    throw new Error(`known-difference artifact path is not portable: ${relative}`);
+  }
+  return `${PUBLISHED_DIRECTORY}/${ARTIFACT_DIRECTORY}/${segments.join("/")}`;
 }

@@ -56,7 +56,10 @@ describe("writeCatalog", () => {
     await writeFile(join(src, ".design-parity", "known-differences", "glyph", "mask.png"), "mask");
 
     const result = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
-      sourceRoot: src,
+      // The repository root, NOT `sourceRoot`: that one is where relative image URIs resolve — the
+      // render output — and reusing it here type-checks, reads plausibly and publishes nothing,
+      // because `<renders>/.design-parity/` never exists.
+      knownDifferencesRoot: src,
     });
 
     expect(result.knownDifferences?.artifactCount).toBe(1);
@@ -70,7 +73,7 @@ describe("writeCatalog", () => {
 
   it("writes no parity directory for a repo that has accepted nothing", async () => {
     const result = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
-      sourceRoot: src,
+      knownDifferencesRoot: src,
     });
     expect(result.knownDifferences?.documentPath).toBeUndefined();
     await expect(readFile(join(out, "parity", "known-differences.json"), "utf8")).rejects.toThrow();

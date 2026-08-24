@@ -55,6 +55,16 @@ export interface WriteOptions extends ManifestOptions {
    * that bundle suppress nothing.
    */
   knownDifferences?: boolean;
+  /**
+   * Repository root the committed acceptances are read from. Default: `process.cwd()`.
+   *
+   * Deliberately **not** [sourceRoot]. That one is where a bundle's relative image URIs resolve —
+   * the render output, routinely a temp dir or an unzipped artifact — while acceptances are
+   * repository content committed beside `design-map.json`. Reusing `sourceRoot` here type-checks,
+   * reads perfectly plausibly, and publishes nothing at all: `<renders>/.design-parity/` never
+   * exists, so every committed acceptance would silently fail to reach the bundle.
+   */
+  knownDifferencesRoot?: string;
 }
 
 export interface WriteResult {
@@ -206,7 +216,11 @@ export async function writeCatalog(
   // acceptance that silently stops suppressing, which is the failure mode this whole contract is
   // built to avoid. A repo that commits none gets an empty result and no files.
   if (opts.knownDifferences !== false) {
-    result.knownDifferences = await writeKnownDifferences(out, { sourceRoot });
+    result.knownDifferences = await writeKnownDifferences(out, {
+      // NOT `sourceRoot` — see `knownDifferencesRoot`. Omitting it falls through to the reader's own
+      // `process.cwd()` default, which is the repository for every caller that runs from one.
+      repositoryRoot: opts.knownDifferencesRoot,
+    });
   }
 
   return result;

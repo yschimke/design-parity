@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   MAX_ARTIFACT_BYTES,
   MAX_DOCUMENT_BYTES,
+  publishedArtifactPath,
   writeKnownDifferences,
 } from "../src/knownDifferences.js";
 
@@ -35,7 +36,7 @@ const DOCUMENT = JSON.stringify({
 
 describe("writeKnownDifferences", () => {
   it("says nothing about a repo that has accepted nothing", async () => {
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.documentPath).toBeUndefined();
     expect(result.artifactCount).toBe(0);
     expect(result.skipped).toEqual([]);
@@ -47,7 +48,7 @@ describe("writeKnownDifferences", () => {
     // contract spends a paragraph on, precisely because runtimes disagree about which value wins.
     const awkward = '{"schema":"compose-preview-known-differences/v1","acceptances":[],"acceptances":[]}\n';
     await commit("known-differences.json", awkward);
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.documentPath).toBe(join(out, "parity", "known-differences.json"));
     expect(await readFile(result.documentPath!, "utf8")).toBe(awkward);
   });
@@ -57,7 +58,7 @@ describe("writeKnownDifferences", () => {
     await commit("known-differences/glyph/mask.png", "mask bytes");
     await commit("known-differences/glyph/accepted-candidate.png", "crop bytes");
     await commit("known-differences/glyph/nested/extra.png", "nested bytes");
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.artifactCount).toBe(3);
     expect(
       await readFile(join(out, "parity", "known-differences", "glyph", "mask.png"), "utf8"),
@@ -76,7 +77,7 @@ describe("writeKnownDifferences", () => {
     await commit("known-differences/glyph/mask.png", "kept");
     await commit("known-differences/glyph/CON.png", "dropped");
     await commit("known-differences/glyph/trailing.png.", "dropped");
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.artifactCount).toBe(1);
     expect(result.skipped.map((entry) => entry.reason)).toEqual([
       "path-not-portable",
@@ -92,7 +93,7 @@ describe("writeKnownDifferences", () => {
     // Publishing it would produce a bundle whose consumers refuse a record the publisher accepted.
     await commit("known-differences.json", DOCUMENT);
     await commit("known-differences/glyph/mask.png", "x".repeat(MAX_ARTIFACT_BYTES + 1));
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.artifactCount).toBe(0);
     expect(result.skipped).toEqual([{ path: "glyph/mask.png", reason: "artifact-too-large" }]);
   });
@@ -102,7 +103,7 @@ describe("writeKnownDifferences", () => {
     // consumers call legal.
     await commit("known-differences.json", DOCUMENT);
     await commit("known-differences/glyph/mask.png", "x".repeat(MAX_ARTIFACT_BYTES));
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.artifactCount).toBe(1);
     expect(result.skipped).toEqual([]);
   });
@@ -110,7 +111,7 @@ describe("writeKnownDifferences", () => {
   it("refuses a document past the ceiling and publishes nothing", async () => {
     await commit("known-differences.json", "x".repeat(MAX_DOCUMENT_BYTES + 1));
     await commit("known-differences/glyph/mask.png", "mask bytes");
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.documentPath).toBeUndefined();
     // And no artifacts either: without a document nothing names them, so a tree of masks in the
     // bundle would be bytes no consumer can reach and every consumer must fetch past.
@@ -120,22 +121,127 @@ describe("writeKnownDifferences", () => {
     ]);
   });
 
-  it("neither follows nor publishes a symlink", async () => {
+  it("neither follows nor publishes a symlinked artifact", async () => {
     // A link's *target* is what a consumer would read, so publishing the link either dangles or
     // smuggles bytes from outside the tree into a record that does not own them — and the record's
     // recorded hash would then be checked against a file it never named.
     await commit("known-differences.json", DOCUMENT);
     await writeFile(join(src, "outside.png"), "not yours");
     await mkdir(join(src, ".design-parity", "known-differences", "glyph"), { recursive: true });
-    try {
-      await symlink(
-        join(src, "outside.png"),
-        join(src, ".design-parity", "known-differences", "glyph", "mask.png"),
-      );
-    } catch {
-      return; // A filesystem without symlinks cannot express the case.
-    }
-    const result = await writeKnownDifferences(out, { sourceRoot: src });
+    const link = await tryLink(
+      join(src, "outside.png"),
+      join(src, ".design-parity", "known-differences", "glyph", "mask.png"),
+    );
+    if (!link) return;
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.artifactCount).toBe(0);
+    expect(result.skipped).toEqual([{ path: "glyph/mask.png", reason: "symlink" }]);
+  });
+
+  it("neither follows nor publishes a symlinked document", async () => {
+    // `stat` follows a link; `lstat` does not. The document is not walked as a directory entry, so
+    // the `Dirent` check that protects the artifacts never sees it — a committed link here would
+    // publish an arbitrary readable file from the export runner.
+    await writeFile(join(src, "outside.json"), '{"secret":true}');
+    await mkdir(join(src, ".design-parity"), { recursive: true });
+    const link = await tryLink(
+      join(src, "outside.json"),
+      join(src, ".design-parity", "known-differences.json"),
+    );
+    if (!link) return;
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(result.documentPath).toBeUndefined();
+    expect(result.skipped).toEqual([{ path: "known-differences.json", reason: "symlink" }]);
+  });
+
+  it("neither follows nor publishes a symlinked artifact root", async () => {
+    // `readdir` follows a linked directory, and the per-entry check only ever sees what is already
+    // inside — so a linked root hands the walk someone else's tree wholesale.
+    await commit("known-differences.json", DOCUMENT);
+    await mkdir(join(src, "elsewhere"), { recursive: true });
+    await writeFile(join(src, "elsewhere", "mask.png"), "not yours");
+    const link = await tryLink(
+      join(src, "elsewhere"),
+      join(src, ".design-parity", "known-differences"),
+    );
+    if (!link) return;
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(result.artifactCount).toBe(0);
+    expect(result.skipped).toEqual([{ path: "known-differences", reason: "symlink" }]);
+  });
+
+  it("clears a previous publish when the repo has stopped accepting", async () => {
+    // `outDir` is reused across renders. A bundle that kept the last good copy would go on
+    // suppressing a difference the repository explicitly deleted — the same silent suppression the
+    // contract exists to prevent, arriving through the publisher instead of the record.
+    await commit("known-differences.json", DOCUMENT);
+    await commit("known-differences/glyph/mask.png", "mask bytes");
+    const first = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(first.artifactCount).toBe(1);
+
+    await rm(join(src, ".design-parity"), { recursive: true, force: true });
+    const second = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(second.documentPath).toBeUndefined();
+    await expect(readFile(join(out, "parity", "known-differences.json"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(join(out, "parity", "known-differences", "glyph", "mask.png"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("clears an artifact the repo has removed", async () => {
+    await commit("known-differences.json", DOCUMENT);
+    await commit("known-differences/glyph/mask.png", "mask bytes");
+    await commit("known-differences/glyph/accepted-candidate.png", "crop bytes");
+    await writeKnownDifferences(out, { repositoryRoot: src });
+
+    await rm(join(src, ".design-parity", "known-differences", "glyph", "mask.png"));
+    const second = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(second.artifactCount).toBe(1);
+    await expect(
+      readFile(join(out, "parity", "known-differences", "glyph", "mask.png"), "utf8"),
+    ).rejects.toThrow();
   });
 });
+
+describe("publishedArtifactPath", () => {
+  it("names a path inside the artifact directory", () => {
+    expect(publishedArtifactPath("glyph/mask.png")).toBe(
+      "parity/known-differences/glyph/mask.png",
+    );
+  });
+
+  it("refuses anything the copier would refuse", () => {
+    // The helper that exists to name safe paths must not mint a traversal: `../../catalog.json`
+    // reads as being inside the artifact directory and resolves outside it the moment a URL or a
+    // filesystem normalises it.
+    for (const path of [
+      "../../catalog.json",
+      "/etc/passwd",
+      "glyph\\mask.png",
+      "glyph/CON.png",
+      "glyph/mask.png.",
+      "",
+    ]) {
+      expect(() => publishedArtifactPath(path), path).toThrow();
+    }
+  });
+});
+
+/**
+ * Create a symlink, or report that this filesystem cannot.
+ *
+ * Only `EPERM` and `ENOSYS` are swallowed — the two ways a platform says "not supported". Anything
+ * else (a wrong path, an `EEXIST` from a fixture that drifted) is rethrown, because a security test
+ * that returns early on an unexplained setup failure is green for the wrong reason and would stay
+ * green through the regression it exists to catch.
+ */
+async function tryLink(target: string, path: string): Promise<boolean> {
+  try {
+    await symlink(target, path);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EPERM" || code === "ENOSYS") return false;
+    throw error;
+  }
+}
