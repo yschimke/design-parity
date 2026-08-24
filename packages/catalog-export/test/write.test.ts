@@ -71,6 +71,32 @@ describe("writeCatalog", () => {
     ).toBe("mask");
   });
 
+  it("clears a previous publish when the copy is switched off", async () => {
+    // Skipping the copy is not the same as skipping the cleanup. A caller that carried acceptances
+    // once and then set `knownDifferences: false` on a reused output directory would otherwise
+    // publish a bundle still containing them — suppressing differences after being explicitly
+    // switched off, and only on the second render.
+    await mkdir(join(src, ".design-parity", "known-differences", "glyph"), { recursive: true });
+    await writeFile(
+      join(src, ".design-parity", "known-differences.json"),
+      '{"schema":"compose-preview-known-differences/v1","acceptances":[]}',
+    );
+    await writeFile(join(src, ".design-parity", "known-differences", "glyph", "mask.png"), "mask");
+    await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
+      knownDifferencesRoot: src,
+    });
+
+    const second = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
+      knownDifferencesRoot: src,
+      knownDifferences: false,
+    });
+    expect(second.knownDifferences).toBeUndefined();
+    await expect(readFile(join(out, "parity", "known-differences.json"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(join(out, "parity", "known-differences", "glyph", "mask.png"), "utf8"),
+    ).rejects.toThrow();
+  });
+
   it("writes no parity directory for a repo that has accepted nothing", async () => {
     const result = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
       knownDifferencesRoot: src,

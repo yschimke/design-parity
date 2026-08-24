@@ -31,6 +31,7 @@ import {
   isEmptyAnnotationManifest,
 } from "./annotations.js";
 import {
+  clearPublishedKnownDifferences,
   writeKnownDifferences,
   type KnownDifferencesResult,
 } from "./knownDifferences.js";
@@ -215,7 +216,13 @@ export async function writeCatalog(
   // Unconditional rather than opt-in: an acceptance the repo committed and the bundle omits is an
   // acceptance that silently stops suppressing, which is the failure mode this whole contract is
   // built to avoid. A repo that commits none gets an empty result and no files.
-  if (opts.knownDifferences !== false) {
+  if (opts.knownDifferences === false) {
+    // Disabled still clears. `outDir` is reused across renders, so a caller that carried
+    // acceptances once and then turned the option off would otherwise publish a bundle still
+    // containing them — acceptances that go on suppressing differences after being explicitly
+    // switched off, visible only on the second render.
+    await clearPublishedKnownDifferences(out);
+  } else {
     result.knownDifferences = await writeKnownDifferences(out, {
       // NOT `sourceRoot` — see `knownDifferencesRoot`. Omitting it falls through to the reader's own
       // `process.cwd()` default, which is the repository for every caller that runs from one.

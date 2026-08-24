@@ -37,6 +37,7 @@ export {
   MAX_DOCUMENT_BYTES as KNOWN_DIFFERENCE_MAX_DOCUMENT_BYTES,
   PUBLISHED_DIRECTORY as KNOWN_DIFFERENCE_PUBLISHED_DIRECTORY,
   SOURCE_DIRECTORY as KNOWN_DIFFERENCE_SOURCE_DIRECTORY,
+  clearPublishedKnownDifferences,
   publishedArtifactPath,
   writeKnownDifferences,
 } from "./knownDifferences.js";

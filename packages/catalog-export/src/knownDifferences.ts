@@ -164,8 +164,22 @@ export async function writeKnownDifferences(
   // contract exists to prevent, arriving through the publisher instead of the record.
   //
   // Scoped to exactly the two paths this module owns. Nothing else under `outDir` is touched.
-  await rm(documentPath, { force: true });
-  await rm(destinationRoot, { recursive: true, force: true });
+  await clearPublishedKnownDifferences(out);
+
+  // **The parent first.** Guarding the document and the artifact root is not enough while their
+  // common parent can be a link: `lstat` on a path *beneath* a symlinked `.design-parity` resolves
+  // the link on the way down and inspects the target's child, so both guards below would pass on a
+  // tree that lives entirely outside the checkout. A no-follow check has to start at the first
+  // component this module adds to the caller's root — every component above it is the caller's own
+  // choice of where to look, and every component below is either checked here or reached through a
+  // `Dirent`, which reports link-or-not without following.
+  const sourceStat = await lstat(source).catch(() => null);
+  if (!sourceStat) return result;
+  if (sourceStat.isSymbolicLink()) {
+    result.skipped.push({ path: SOURCE_DIRECTORY, reason: "symlink" });
+    return result;
+  }
+  if (!sourceStat.isDirectory()) return result;
 
   // `lstat`, not `stat`. A committed symlink at `known-differences.json` would otherwise be followed
   // and its *target's* bytes copied into the published catalog — an arbitrary readable file from the
@@ -256,6 +270,21 @@ async function copyTree(
     await writeFile(to, await readFile(from));
     result.artifactCount += 1;
   }
+}
+
+/**
+ * Remove the two published paths this module owns, and nothing else under `outDir`.
+ *
+ * Exported because {@link writeKnownDifferences} is not the only path that must leave the bundle
+ * describing the repository's current state: a caller that *disables* the copy on a reused output
+ * directory has to clear it too, or the previous publish's acceptances stay in the new bundle and go
+ * on suppressing differences the caller just said not to carry. Skipping the copy is not the same as
+ * skipping the cleanup, and the difference is only visible on the second render.
+ */
+export async function clearPublishedKnownDifferences(outDir: string): Promise<void> {
+  const out = resolve(outDir);
+  await rm(join(out, PUBLISHED_DIRECTORY, DOCUMENT_FILE), { force: true });
+  await rm(join(out, PUBLISHED_DIRECTORY, ARTIFACT_DIRECTORY), { recursive: true, force: true });
 }
 
 /**

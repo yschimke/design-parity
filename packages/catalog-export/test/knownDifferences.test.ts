@@ -170,6 +170,22 @@ describe("writeKnownDifferences", () => {
     expect(result.skipped).toEqual([{ path: "known-differences", reason: "symlink" }]);
   });
 
+  it("neither follows nor publishes a symlinked source directory", async () => {
+    // The parent is the bypass a per-child guard leaves open: `lstat` on a path *beneath* a
+    // symlinked `.design-parity` resolves the link on the way down and inspects the target's child,
+    // so the document and artifact-root checks both pass on a tree that lives entirely outside the
+    // checkout.
+    await mkdir(join(src, "elsewhere", "known-differences", "glyph"), { recursive: true });
+    await writeFile(join(src, "elsewhere", "known-differences.json"), DOCUMENT);
+    await writeFile(join(src, "elsewhere", "known-differences", "glyph", "mask.png"), "not yours");
+    const link = await tryLink(join(src, "elsewhere"), join(src, ".design-parity"));
+    if (!link) return;
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(result.documentPath).toBeUndefined();
+    expect(result.artifactCount).toBe(0);
+    expect(result.skipped).toEqual([{ path: ".design-parity", reason: "symlink" }]);
+  });
+
   it("clears a previous publish when the repo has stopped accepting", async () => {
     // `outDir` is reused across renders. A bundle that kept the last good copy would go on
     // suppressing a difference the repository explicitly deleted — the same silent suppression the
