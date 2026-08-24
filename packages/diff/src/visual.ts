@@ -15,6 +15,12 @@ import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
 import type { DiffConfig } from "./config.js";
+import {
+  evaluateKnownDifferenceComparison,
+  type AcceptanceReport,
+  type AcceptanceScope,
+  type TagIndex,
+} from "./acceptance/index.js";
 
 const GAP = 8;
 const GAP_RGBA: [number, number, number, number] = [0x1f, 0x1f, 0x24, 0xff];
@@ -70,6 +76,16 @@ export interface VisualResult {
    * exactly; the images are only different sizes".
    */
   borderPixels?: number;
+  /** Scoped acceptance evaluation; raw visual scoring remains present above. */
+  acceptance?: AcceptanceReport;
+}
+
+export interface VisualAcceptanceOptions {
+  repoRoot: string;
+  scope: AcceptanceScope;
+  tagIndex: TagIndex;
+  documentPath?: string;
+  artifactRoot?: string;
 }
 
 /** Human-readable key (raw size) — also the {@link Verdict.visualScores} key. */
@@ -187,6 +203,7 @@ export async function diffImagePair(
   reference: Image,
   candidate: Image,
   config: DiffConfig,
+  acceptance?: VisualAcceptanceOptions,
 ): Promise<VisualResult> {
   // Candidate first: a vector reference is rasterised to the candidate's width
   // (see `rasterizeSvg`), so the candidate's own size has to be known already.
@@ -253,6 +270,18 @@ export async function diffImagePair(
   const triptych = composeTriptych([ref, cand, diff]);
 
   const result: VisualResult = { key, score, diffPixels, totalPixels, triptych };
+  if (acceptance) {
+    const evaluated = evaluateKnownDifferenceComparison({
+      repoRoot: acceptance.repoRoot,
+      scope: acceptance.scope,
+      reference: { width: ref.width, height: ref.height, pixels: ref.data },
+      candidate: { width: cand.width, height: cand.height, pixels: cand.data },
+      tagIndex: acceptance.tagIndex,
+      ...(acceptance.documentPath ? { documentPath: acceptance.documentPath } : {}),
+      ...(acceptance.artifactRoot ? { artifactRoot: acceptance.artifactRoot } : {}),
+    });
+    if (evaluated) result.acceptance = evaluated;
+  }
   if (diffPng) result.diffPng = diffPng;
   if (!sameSize) {
     result.dimensionMismatch = true;

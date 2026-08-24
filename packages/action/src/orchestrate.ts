@@ -28,9 +28,12 @@ import { join, resolve } from "node:path";
 
 import {
   diff,
+  renderAcceptanceSummary,
   renderSummary,
+  type AcceptanceReport,
   type ChecksProvider,
   type DiffConfig,
+  type KnownDifferencesOptions,
   type Triptych,
 } from "@design-parity/diff";
 import { directionPolicy } from "@design-parity/policy";
@@ -75,6 +78,8 @@ export interface OrchestrateOptions {
   /** Where triptych PNGs are written (optional). */
   outDir?: string;
   diffConfig?: Partial<DiffConfig>;
+  /** Exact catalog scopes for pairs that should consume the committed acceptance document. */
+  knownDifferences?: KnownDifferencesOptions;
   /**
    * The repo's `design-map.json` `tokens` section — design-name ↔ code-name
    * token aliases, passed to the diff so token-compliance matches differing
@@ -277,6 +282,8 @@ export interface ComponentResult {
   verdict?: Verdict;
   summary?: string;
   triptychs?: Triptych[];
+  /** Scoped acceptance scores/statuses keyed like `visualScores`; raw findings stay in `verdict`. */
+  acceptances?: Record<string, AcceptanceReport>;
   /** Path to the self-contained HTML comparison page, when `outDir` was set (#50). */
   reportPath?: string;
   /** Reason for `skipped` (no candidate) or `error` (adapter/diff failure). */
@@ -438,10 +445,13 @@ export async function orchestrate(
         repoRoot: options.repoRoot,
         ...(componentOutDir ? { outDir: componentOutDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
+        ...(options.knownDifferences
+          ? { knownDifferences: options.knownDifferences }
+          : {}),
         ...(options.tokenAlias ? { tokenAlias: options.tokenAlias } : {}),
         ...(native ? { checks: nativeChecksProvider(native) } : {}),
       };
-      const { verdict, summary, triptychs } = await diff(
+      const { verdict, summary, triptychs, acceptances } = await diff(
         reference,
         candidate,
         diffOptions,
@@ -452,10 +462,11 @@ export async function orchestrate(
       const deduped = dedupeDesignSystem(verdict.findings, seenDesignSystem);
       result.verdict = verdict;
       result.summary = summary;
+      if (acceptances) result.acceptances = acceptances;
       if (deduped.length !== verdict.findings.length) {
         verdict.findings = deduped;
         verdict.status = verdictStatus(deduped);
-        result.summary = renderSummary(verdict);
+        result.summary = renderSummary(verdict) + renderAcceptanceSummary(acceptances ?? {});
       }
       result.triptychs = triptychs;
 
@@ -471,6 +482,7 @@ export async function orchestrate(
           verdict,
           repoRoot: options.repoRoot,
           ...(diffImages.length > 0 ? { diffImages } : {}),
+          ...(acceptances ? { acceptances } : {}),
         });
         const reportPath = join(componentOutDir, "report.html");
         await mkdir(componentOutDir, { recursive: true });

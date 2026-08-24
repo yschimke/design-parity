@@ -1,0 +1,20 @@
+{
+  "pins": [
+    "statuses",
+    "validationFailures",
+    "survivingMaskIds"
+  ],
+  "statuses": {
+    "m3-pair-first": {
+      "status": "valid"
+    },
+    "m3-pair-second": {
+      "status": "valid"
+    }
+  },
+  "validationFailures": [],
+  "survivingMaskIds": [
+    "m3-pair-first",
+    "m3-pair-second"
+  ]
+}

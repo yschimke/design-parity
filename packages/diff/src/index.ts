@@ -6,8 +6,13 @@
  * summary, and reference/candidate/diff triptychs. a11y + i18n lead; tokens,
  * semantics, and raw visual diff follow (docs/PRINCIPLES.md).
  */
-export { diff } from "./diff.js";
-export type { DiffOptions, DiffResult, Triptych } from "./diff.js";
+export { diff, renderAcceptanceSummary } from "./diff.js";
+export type {
+  DiffOptions,
+  DiffResult,
+  KnownDifferencesOptions,
+  Triptych,
+} from "./diff.js";
 
 export { defaultDiffConfig, resolveConfig } from "./config.js";
 export type { DiffConfig } from "./config.js";
@@ -28,5 +33,17 @@ export {
 } from "./pairing.js";
 export type { PropertyConflict } from "./pairing.js";
 export { diffImagePair, imageKey } from "./visual.js";
-export type { VisualResult } from "./visual.js";
+export type { VisualAcceptanceOptions, VisualResult } from "./visual.js";
 export { renderSummary } from "./summary.js";
+
+export {
+  evaluateKnownDifferenceComparison,
+  tagIndexFromSemantics,
+} from "./acceptance/index.js";
+export type {
+  AcceptanceReport,
+  AcceptanceScope,
+  AcceptanceStatus,
+  KnownDifferencesComparison,
+  TagIndex,
+} from "./acceptance/index.js";
