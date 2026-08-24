@@ -136,7 +136,8 @@ export function evaluateKnownDifferenceComparison(
   };
 }
 
-function refuseElementAcceptancesWithoutSemantics(
+/** @internal Exported for a focused regression test; not part of the package entry point. */
+export function refuseElementAcceptancesWithoutSemantics(
   documentText: string,
   scope: KnownDifferencesComparison["scope"],
   statuses: AcceptanceReport["statuses"],
@@ -155,8 +156,17 @@ function refuseElementAcceptancesWithoutSemantics(
     const id = record.id;
     if (typeof id !== "string" || !statuses[id] || !record.element) continue;
     if (!sameScope(record, scope)) continue;
-    statuses[id] = { status: "refused", reasons: ["semantics-unavailable"] };
-    failures.push({ id, reason: "semantics-unavailable" });
+    const current = statuses[id];
+    const reasons = current.status === "refused" ? current.reasons ?? [] : [];
+    statuses[id] = {
+      status: "refused",
+      reasons: [...new Set([...reasons, "semantics-unavailable"])],
+    };
+    if (!failures.some((failure) =>
+      failure.id === id && failure.reason === "semantics-unavailable"
+    )) {
+      failures.push({ id, reason: "semantics-unavailable" });
+    }
   }
 }
 

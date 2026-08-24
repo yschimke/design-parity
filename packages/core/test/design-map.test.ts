@@ -194,6 +194,27 @@ describe("design-map schema", () => {
     expect(r).toEqual({ valid: true, errors: [] });
   });
 
+  it("accepts the v1 default preview's empty known-difference variant", () => {
+    const r = validateDesignMap({
+      components: [{
+        code: "ui/Icon.kt#Default",
+        source: "figma",
+        ref: "figma:K/1:2",
+        knownDifferences: {
+          "default/light": {
+            system: "m3",
+            component: "Icon/Default",
+            previewId: "icon-default__ideal__default__light",
+            referenceId: "icon-default-ideal-light",
+            variant: "",
+            overrides: {},
+          },
+        },
+      }],
+    });
+    expect(r).toEqual({ valid: true, errors: [] });
+  });
+
   it("accepts a per-reference Figma contents-only override", () => {
     const r = validateDesignMap({
       components: [
