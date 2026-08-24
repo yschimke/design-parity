@@ -48,7 +48,15 @@ describe("readPreviewBundle", () => {
     const golden = await readJson<CandidateRender>(
       here("fixtures/expected-candidate.json"),
     );
-    expect(candidates[0]).toEqual(golden);
+    const actual = candidates[0]!;
+    expect(actual.images.map((image) => image.semantics?.theme)).toEqual([
+      "light",
+      "dark",
+    ]);
+    expect({
+      ...actual,
+      images: actual.images.map(({ semantics: _semantics, ...image }) => image),
+    }).toEqual(golden);
   });
 
   it("emits data: PNG URIs with dims read from the IHDR", async () => {
@@ -263,18 +271,28 @@ describe("mergeCandidateRenders (#111)", () => {
     const dark = {
       componentId: "ui/Device.kt#DeviceBody",
       previewId: "app.DeviceKt.DeviceBodyDarkPreview",
-      images: [{ state: "default", theme: "dark" as const, uri: "d", width: 1, height: 1 }],
+      images: [{
+        state: "default", theme: "dark" as const, uri: "d", width: 1, height: 1,
+        semantics: { root: { testTag: "dark-glyph" }, theme: "dark" as const },
+      }],
       semantics: { root: { role: "screen" }, theme: "dark" as const },
     };
     const light = {
       componentId: "ui/Device.kt#DeviceBody",
       previewId: "app.DeviceKt.DeviceBodyPreview",
-      images: [{ state: "default", theme: "light" as const, uri: "l", width: 1, height: 1 }],
+      images: [{
+        state: "default", theme: "light" as const, uri: "l", width: 1, height: 1,
+        semantics: { root: { testTag: "light-glyph" }, theme: "light" as const },
+      }],
       semantics: { root: { role: "screen" }, theme: "light" as const },
     };
     const merged = mergeCandidateRenders(dark, light);
     expect(merged.componentId).toBe("ui/Device.kt#DeviceBody");
     expect(merged.images.map((i) => i.theme)).toEqual(["dark", "light"]);
+    expect(merged.images.map((i) => i.semantics?.root.testTag)).toEqual([
+      "dark-glyph",
+      "light-glyph",
+    ]);
     // The diff keys tokens off one tree; prefer the light one regardless of order.
     expect(merged.semantics.theme).toBe("light");
     // previewId keeps the first render's, still reconcilable to a source preview.
@@ -868,4 +886,3 @@ describe("themeTokenSetsFromBundle", () => {
     expect(themeTokenSetsFromBundle(bundle)).toEqual([]);
   });
 });
-

@@ -515,6 +515,19 @@ function acceptanceMarkup(input: ReportInput["acceptances"]): string {
   const entries = Object.entries(input ?? {});
   if (entries.length === 0) return "";
   const rows = entries.map(([key, report]) => {
+    const validation = report.validationFailures
+      .map((failure) => {
+        const target = failure.id !== undefined
+          ? failure.id
+          : failure.index !== undefined
+            ? `record ${failure.index}`
+            : "document";
+        return `<li><code>${escapeHtml(target)}</code> refused — ${escapeHtml(failure.reason)}</li>`;
+      })
+      .join("");
+    const rejected = report.documentRejected
+      ? '<li><strong>Document rejected; no committed acceptance was applied.</strong></li>'
+      : "";
     const statuses = Object.entries(report.statuses)
       .map(([id, status]) => {
         const detail = status.causes?.length
@@ -529,7 +542,7 @@ function acceptanceMarkup(input: ReportInput["acceptances"]): string {
       <span class="chip">raw ${report.scores.raw.toFixed(2)}%</span>
       <span class="chip">accepted ${report.scores.accepted.toFixed(2)}%</span>
       <span class="chip">unaccepted ${report.scores.unaccepted.toFixed(2)}%</span>
-      <ul>${statuses}</ul>
+      <ul>${rejected}${validation}${statuses}</ul>
     </li>`;
   }).join("\n");
   return `<div class="finding-section">

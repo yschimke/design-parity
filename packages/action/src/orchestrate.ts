@@ -78,8 +78,12 @@ export interface OrchestrateOptions {
   /** Where triptych PNGs are written (optional). */
   outDir?: string;
   diffConfig?: Partial<DiffConfig>;
-  /** Exact catalog scopes for pairs that should consume the committed acceptance document. */
-  knownDifferences?: KnownDifferencesOptions;
+  /**
+   * Exact catalog scopes keyed by component correspondence. Keeping the image
+   * keys inside that component prevents common keys such as `default/light`
+   * from colliding across a multi-component run.
+   */
+  knownDifferences?: ReadonlyMap<string, KnownDifferencesOptions>;
   /**
    * The repo's `design-map.json` `tokens` section — design-name ↔ code-name
    * token aliases, passed to the diff so token-compliance matches differing
@@ -441,12 +445,15 @@ export async function orchestrate(
       // Renderer-native findings (daemon path) supersede the default checks
       // for this component (issue #43); the parity diff itself is unchanged.
       const native = await options.nativeChecks?.(corr.code, ctx);
+      const knownDifferences = options.knownDifferences?.get(
+        specTokenKey(corr.code, corr.source),
+      );
       const diffOptions = {
         repoRoot: options.repoRoot,
         ...(componentOutDir ? { outDir: componentOutDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
-        ...(options.knownDifferences
-          ? { knownDifferences: options.knownDifferences }
+        ...(knownDifferences
+          ? { knownDifferences }
           : {}),
         ...(options.tokenAlias ? { tokenAlias: options.tokenAlias } : {}),
         ...(native ? { checks: nativeChecksProvider(native) } : {}),

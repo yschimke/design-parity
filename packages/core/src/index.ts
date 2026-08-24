@@ -56,6 +56,7 @@ export {
   entryRefs,
   entryPreviewIds,
 } from "./design-map.js";
+export type { KnownDifferenceScope } from "./design-map.js";
 
 export type { DtcgReadResult } from "./dtcg.js";
 export {

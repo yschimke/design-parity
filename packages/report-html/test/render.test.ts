@@ -185,6 +185,27 @@ function referenceType(html: string): string {
 }
 
 describe("renderHtmlReport on the figma button fixtures", () => {
+  it("surfaces document-level known-difference rejection before statuses", async () => {
+    const { reference, candidate, verdict } = await loadInputs();
+    const html = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      repoRoot,
+      acceptances: {
+        "default/light/compact": {
+          documentRejected: true,
+          statuses: {},
+          validationFailures: [{ reason: "duplicate-id" }],
+          scores: { raw: 90, accepted: 100, unaccepted: 90 },
+          suppressing: [],
+        },
+      },
+    });
+    expect(html).toContain("Document rejected; no committed acceptance was applied.");
+    expect(html).toContain("duplicate-id");
+  });
+
   it("emits one self-contained HTML doc with the componentId, status, and findings", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     const diffImages: DiffImage[] = [
