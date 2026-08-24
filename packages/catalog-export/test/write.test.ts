@@ -44,6 +44,67 @@ function catalogWith(idealUri: string, layoutUri: string): Catalog {
 }
 
 describe("writeCatalog", () => {
+  it("carries the source repo's committed known differences", async () => {
+    // The publish half of the parity acceptance contract. Unconditional rather than opt-in: an
+    // acceptance the repo committed and the bundle omits is one that silently stops suppressing,
+    // which is the failure mode the whole contract is built to avoid.
+    await mkdir(join(src, ".design-parity", "known-differences", "glyph"), { recursive: true });
+    await writeFile(
+      join(src, ".design-parity", "known-differences.json"),
+      '{"schema":"compose-preview-known-differences/v1","acceptances":[]}',
+    );
+    await writeFile(join(src, ".design-parity", "known-differences", "glyph", "mask.png"), "mask");
+
+    const result = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
+      // The repository root, NOT `sourceRoot`: that one is where relative image URIs resolve — the
+      // render output — and reusing it here type-checks, reads plausibly and publishes nothing,
+      // because `<renders>/.design-parity/` never exists.
+      knownDifferencesRoot: src,
+    });
+
+    expect(result.knownDifferences?.artifactCount).toBe(1);
+    expect(await readFile(join(out, "parity", "known-differences.json"), "utf8")).toBe(
+      '{"schema":"compose-preview-known-differences/v1","acceptances":[]}',
+    );
+    expect(
+      await readFile(join(out, "parity", "known-differences", "glyph", "mask.png"), "utf8"),
+    ).toBe("mask");
+  });
+
+  it("clears a previous publish when the copy is switched off", async () => {
+    // Skipping the copy is not the same as skipping the cleanup. A caller that carried acceptances
+    // once and then set `knownDifferences: false` on a reused output directory would otherwise
+    // publish a bundle still containing them — suppressing differences after being explicitly
+    // switched off, and only on the second render.
+    await mkdir(join(src, ".design-parity", "known-differences", "glyph"), { recursive: true });
+    await writeFile(
+      join(src, ".design-parity", "known-differences.json"),
+      '{"schema":"compose-preview-known-differences/v1","acceptances":[]}',
+    );
+    await writeFile(join(src, ".design-parity", "known-differences", "glyph", "mask.png"), "mask");
+    await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
+      knownDifferencesRoot: src,
+    });
+
+    const second = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
+      knownDifferencesRoot: src,
+      knownDifferences: false,
+    });
+    expect(second.knownDifferences).toBeUndefined();
+    await expect(readFile(join(out, "parity", "known-differences.json"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(join(out, "parity", "known-differences", "glyph", "mask.png"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("writes no parity directory for a repo that has accepted nothing", async () => {
+    const result = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out, {
+      knownDifferencesRoot: src,
+    });
+    expect(result.knownDifferences?.documentPath).toBeUndefined();
+    await expect(readFile(join(out, "parity", "known-differences.json"), "utf8")).rejects.toThrow();
+  });
+
   it("writes manifest, DTCG tokens, figma variables, and image bytes from data URIs", async () => {
     const result = await writeCatalog(catalogWith(PNG_DATA_URI, PNG_DATA_URI), out);
 

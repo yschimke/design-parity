@@ -97,8 +97,25 @@ if (!values["allow-incomplete"] && (missing.length > 0 || withoutSemantics.lengt
 
 // Images in the bundle are relative to the render dir; resolve them from there.
 const sourceRoot = rendersPath.endsWith(".zip") ? dirname(rendersPath) : rendersPath;
+// Committed parity acceptances are repository content, so they resolve against the CHECKOUT rather
+// than the render dir — which is routinely a temp dir or an unzipped artifact and never carries a
+// `.design-parity/`. Left to `writeCatalog`'s own `process.cwd()` default, which is the repository
+// for every way this script is invoked; naming it here would only hard-code the same answer.
 const result = await writeCatalog(catalog, outPath, { sourceRoot, direction });
 
+// Every skip, by name. `skipped` exists so an acceptance that failed to publish is never silent, and
+// it is silent unless something prints it: a repo whose mask is a symlink, or is past the size
+// ceiling, or carries a name a checkout cannot create, would otherwise get a clean-looking publish
+// whose committed acceptance suppresses nothing.
+for (const entry of result.knownDifferences?.skipped ?? []) {
+  console.warn(`[${spec.system}] known difference not published (${entry.reason}): ${entry.path}`);
+}
+
+const acceptances = result.knownDifferences;
+const acceptanceSummary = acceptances?.documentPath
+  ? `, ${acceptances.artifactCount} acceptance artifact(s)` +
+    (acceptances.skipped.length > 0 ? `, ${acceptances.skipped.length} skipped` : "")
+  : "";
 console.log(
-  `[${spec.system}] ${catalog.components.length} component(s), ${result.imageCount} image(s), direction=${direction} → ${result.manifestPath}`,
+  `[${spec.system}] ${catalog.components.length} component(s), ${result.imageCount} image(s)${acceptanceSummary}, direction=${direction} → ${result.manifestPath}`,
 );
