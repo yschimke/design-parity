@@ -288,22 +288,26 @@ export async function diff(
 
   // 5. visual diff (table stakes).
   const visuals: VisualResult[] = [];
-  const tagIndex = options.knownDifferences
-    ? tagIndexFromSemantics(candidate.semantics.root)
-    : undefined;
   for (const pair of pairs) {
     const scope = options.knownDifferences?.scopes[imageKey(pair.reference)];
+    // A merged candidate may contain images authored by different previews.
+    // Only the tree captured with this image can safely drive its element gate.
+    // The legacy render-wide tree is unambiguous only for a single-image render.
+    const semantics = pair.candidate.semantics ??
+      (candidate.images.length === 1 ? candidate.semantics : undefined);
     visuals.push(
       await diffImagePair(
         repoRoot,
         pair.reference,
         pair.candidate,
         config,
-        scope && tagIndex
+        scope
           ? {
               repoRoot,
               scope,
-              tagIndex,
+              ...(semantics
+                ? { tagIndex: tagIndexFromSemantics(semantics.root) }
+                : {}),
               ...(options.knownDifferences?.documentPath
                 ? { documentPath: options.knownDifferences.documentPath }
                 : {}),
@@ -417,11 +421,22 @@ export function renderAcceptanceSummary(
   const lines = entries.flatMap(([key, report]) => {
     const scores = report.scores;
     const head = `- \`${key}\`: raw ${scores.raw.toFixed(2)}%, accepted ${scores.accepted.toFixed(2)}%, unaccepted ${scores.unaccepted.toFixed(2)}%`;
+    const validation = report.validationFailures.map((failure) => {
+      const target = failure.id !== undefined
+        ? `\`${failure.id}\``
+        : failure.index !== undefined
+          ? `record ${failure.index}`
+          : "document";
+      return `  - ${target}: refused (${failure.reason})`;
+    });
+    const rejected = report.documentRejected
+      ? ["  - **document rejected; no committed acceptance was applied**"]
+      : [];
     const statuses = Object.entries(report.statuses).map(
       ([id, status]) =>
         `  - \`${id}\`: ${status.status}${status.causes?.length ? ` (${status.causes.join(", ")})` : ""}${status.reasons?.length ? ` (${status.reasons.join(", ")})` : ""}`,
     );
-    return [head, ...statuses];
+    return [head, ...rejected, ...validation, ...statuses];
   });
   return `\n\n### Scoped known differences\n\n${lines.join("\n")}`;
 }

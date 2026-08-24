@@ -100,6 +100,19 @@ export function evaluateKnownDifferenceComparison(
     },
   });
 
+  // Missing per-image semantics is different from a tag genuinely disappearing.
+  // The portable contract cannot run an element gate without the authoritative
+  // tree, so surface a host-level refusal instead of claiming `element-moved`.
+  // Geometric records remain eligible because they do not consume semantics.
+  if (input.tagIndex === undefined && result.statuses) {
+    refuseElementAcceptancesWithoutSemantics(
+      documentText,
+      input.scope,
+      result.statuses,
+      result.validationFailures,
+    );
+  }
+
   const survivors = result.survivingMasks ?? [];
   const scores = scoreComparison({
     reference: input.reference,
@@ -123,11 +136,49 @@ export function evaluateKnownDifferenceComparison(
   };
 }
 
+function refuseElementAcceptancesWithoutSemantics(
+  documentText: string,
+  scope: KnownDifferencesComparison["scope"],
+  statuses: AcceptanceReport["statuses"],
+  failures: AcceptanceReport["validationFailures"],
+): void {
+  let records: unknown;
+  try {
+    records = (JSON.parse(documentText) as { acceptances?: unknown }).acceptances;
+  } catch {
+    return;
+  }
+  if (!Array.isArray(records)) return;
+  for (const value of records) {
+    if (!value || typeof value !== "object") continue;
+    const record = value as Record<string, unknown>;
+    const id = record.id;
+    if (typeof id !== "string" || !statuses[id] || !record.element) continue;
+    if (!sameScope(record, scope)) continue;
+    statuses[id] = { status: "refused", reasons: ["semantics-unavailable"] };
+    failures.push({ id, reason: "semantics-unavailable" });
+  }
+}
+
+function sameScope(
+  record: Record<string, unknown>,
+  scope: KnownDifferencesComparison["scope"],
+): boolean {
+  for (const key of ["system", "component", "previewId", "referenceId", "variant"] as const) {
+    if (record[key] !== scope[key]) return false;
+  }
+  const actual = record.overrides ?? {};
+  if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
+  const a = Object.entries(actual as Record<string, unknown>).sort(([x], [y]) => x.localeCompare(y));
+  const b = Object.entries(scope.overrides).sort(([x], [y]) => x.localeCompare(y));
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /** Build the exact tag/count/bounds index the offline element gate consumes. */
 export function tagIndexFromSemantics(
   root: { testTag?: string; bounds?: { x: number; y: number; width: number; height: number }; children?: unknown[] },
 ): TagIndex {
-  const out: TagIndex = {};
+  const out = Object.create(null) as TagIndex;
   const visit = (node: typeof root): void => {
     if (typeof node.testTag === "string") {
       const current = out[node.testTag] ?? { count: 0 };

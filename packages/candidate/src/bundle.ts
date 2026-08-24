@@ -383,7 +383,7 @@ export function previewToCandidate(
         `preview '${entry.id}' references image '${imgPath}' which is not in the zip`,
       );
     }
-    images.push(toImage(imgBytes, params, state, entry.id));
+    const image = toImage(imgBytes, params, state, entry.id);
 
     // Semantics blob (the #38 contract). Optional per capture; a bundle that
     // omits it degrades to visual/structural-only, matching graceful checks.
@@ -398,10 +398,12 @@ export function previewToCandidate(
       }
       const tree = normalizeSemantics(raw, themeForPreview(params, entry.id), params);
       if (tree) {
+        image.semantics = tree;
         semantics ??= tree;
         if (tree.theme === "light") lightSemantics ??= tree;
       }
     }
+    images.push(image);
   }
 
   const rawPreviewId = rawPreviewIdForEntry(bundle, entry);
@@ -456,9 +458,10 @@ function applyVariantTag(
  * component whose themes/states are authored as separate `@Preview`s and bound
  * by a `design-map` previewId variant list (issue #111). Their images are
  * concatenated (each already re-tagged onto its variant slot), so the report's
- * theme matrix fills every column for one component. The merged semantics prefer
- * a light-themed tree (the diff keys tokens off one), then `a`'s; `previewId`
- * keeps `a`'s, which still pairs the merged render back to a source preview.
+ * theme matrix fills every column for one component. Each image already carries
+ * the semantics captured with that exact preview; the render-wide semantics
+ * still prefer a light tree for legacy token/semantic checks. `previewId` keeps
+ * `a`'s, which still pairs the merged render back to a source preview.
  */
 export function mergeCandidateRenders(
   a: CandidateRender,

@@ -52,6 +52,7 @@ function toImage(p: RenderedPreview, repoRoot: string | undefined): Image {
   if (theme) image.theme = theme;
   const size = sizeFromParams(params);
   if (size) image.size = size;
+  if (p.semantics) image.semantics = p.semantics;
   return image;
 }
 

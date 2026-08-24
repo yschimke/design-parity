@@ -1,6 +1,7 @@
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -9,11 +10,14 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { afterAll } from "vitest";
+import { unzipSync } from "fflate";
 
 import { diff } from "../src/diff.js";
 import { tagIndexFromSemantics } from "../src/acceptance/evaluate.js";
@@ -21,6 +25,7 @@ import { scoreComparison } from "../src/acceptance/vendor/known-difference-score
 import {
   enclosingBox,
   evaluateKnownDifferences,
+  locallyResolvedIssues,
   resampleArea,
 } from "../src/acceptance/vendor/known-differences.js";
 import {
@@ -33,11 +38,22 @@ import {
   padPngTo,
 } from "../src/acceptance/vendor/png-lite.js";
 
-const ROOT = join(
+const FIXTURE_ARCHIVE = join(
   dirname(fileURLToPath(import.meta.url)),
   "fixtures",
-  "known-differences",
+  "known-differences.zip",
 );
+const EXTRACTED = mkdtempSync(join(tmpdir(), "design-parity-conformance-"));
+for (const [relative, bytes] of Object.entries(
+  unzipSync(new Uint8Array(readFileSync(FIXTURE_ARCHIVE))),
+)) {
+  if (relative.endsWith("/")) continue;
+  const target = join(EXTRACTED, relative);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, bytes);
+}
+const ROOT = EXTRACTED;
+afterAll(() => rmSync(EXTRACTED, { recursive: true, force: true }));
 
 const readJson = (path: string): any => JSON.parse(readFileSync(path, "utf8"));
 const raster = (path: string): any => decodePng(new Uint8Array(readFileSync(path)));
@@ -116,6 +132,13 @@ describe("compose-preview-known-differences/v1 conformance", () => {
             counts[entry.status] = (counts[entry.status] ?? 0) + 1;
           }
           expect(counts).toEqual(expected.statusCounts);
+        } else if (pin === "locallyResolvedIssues") {
+          const document = readJson(join(dir, "known-differences.json"));
+          expect(locallyResolvedIssues(document.acceptances, result.statuses)).toEqual(
+            expected.locallyResolvedIssues,
+          );
+        } else {
+          throw new Error(`unsupported case conformance pin: ${pin}`);
         }
       }
     });
@@ -135,22 +158,39 @@ describe("compose-preview-known-differences/v1 conformance", () => {
         plane: meta.plane,
         masks: (meta.masks ?? []).map((name: string) => raster(join(dir, name))),
       });
-      if (expected.scores.raw !== undefined) {
-        expect(result.raw).toBeCloseTo(expected.scores.raw, 10);
-      }
-      if (expected.scores.accepted !== undefined) {
-        expect(result.accepted).toBeCloseTo(expected.scores.accepted, 10);
-      }
-      if (expected.scores.unaccepted !== undefined) {
-        expect(result.unaccepted).toBeCloseTo(expected.scores.unaccepted, 10);
-      }
-      expect(result.stages.plane).toEqual(expected.scorePlane);
-      for (const region of ["whole", "accepted", "unaccepted"]) {
-        const present = result.stages.regions[region].reference.present.reduce(
-          (sum: number, value: number) => sum + value,
-          0,
-        );
-        expect(present).toBe(expected.presence[region]);
+      for (const pin of expected.pins) {
+        if (pin === "scores") {
+          for (const name of ["raw", "accepted", "unaccepted"] as const) {
+            if (expected.scores[name] !== undefined) {
+              expect(result[name]).toBeCloseTo(expected.scores[name], 10);
+            }
+          }
+        } else if (pin === "scorePlane") {
+          expect(result.stages.plane).toEqual(expected.scorePlane);
+        } else if (pin === "presence") {
+          for (const region of ["whole", "accepted", "unaccepted"]) {
+            const present = result.stages.regions[region].reference.present.reduce(
+              (sum: number, value: number) => sum + value,
+              0,
+            );
+            expect(present).toBe(expected.presence[region]);
+          }
+        } else if (pin === "samples") {
+          for (const sample of expected.samples) {
+            const plane = result.stages.regions[sample.region][sample.side];
+            const index = sample.y * result.stages.plane.width + sample.x;
+            expect(Boolean(plane.present[index])).toBe(sample.present);
+            expect([...plane.pixels.subarray(index * 4, index * 4 + 4)]).toEqual(
+              sample.rgba,
+            );
+          }
+        } else if (pin === "rawEqualsUnaccepted") {
+          expect(Object.is(result.raw, result.unaccepted)).toBe(
+            expected.rawEqualsUnaccepted,
+          );
+        } else {
+          throw new Error(`unsupported scoring conformance pin: ${pin}`);
+        }
       }
     });
   }
@@ -221,6 +261,25 @@ describe("compose-preview-known-differences/v1 conformance", () => {
     })).toEqual({ glyph: { count: 2 } });
   });
 
+  it("indexes JavaScript prototype names as ordinary tags", () => {
+    const index = tagIndexFromSemantics({
+      children: [
+        { testTag: "__proto__", bounds: { x: 1, y: 2, width: 3, height: 4 } },
+        { testTag: "constructor", bounds: { x: 5, y: 6, width: 7, height: 8 } },
+      ],
+    });
+    expect(Object.getPrototypeOf(index)).toBeNull();
+    expect(index["__proto__"]?.count).toBe(1);
+    expect(index["constructor"]?.count).toBe(1);
+    const projected = projectTagIndex(index, { x: 0, y: 0, width: 20, height: 20 }, {
+      plane: "full-canvas",
+      box: { x: 0, y: 0, width: 20, height: 20 },
+    });
+    expect(Object.getPrototypeOf(projected)).toBeNull();
+    expect(projected["__proto__"].count).toBe(1);
+    expect(projected["constructor"].count).toBe(1);
+  });
+
   it("keeps the raw visual finding while reporting scoped scores and statuses", async () => {
     const fixture = join(ROOT, "cases", "pilot-40-iconbutton-tonal-glyph");
     const repo = mkdtempSync(join(tmpdir(), "design-parity-acceptance-"));
@@ -230,6 +289,9 @@ describe("compose-preview-known-differences/v1 conformance", () => {
         recursive: true,
       });
       const document = readJson(join(fixture, "known-differences.json"));
+      document.acceptances[0].referenceSha256 = createHash("sha256")
+        .update(readFileSync(join(fixture, "canonical-reference.png")))
+        .digest("hex");
       document.acceptances[0].plane.box.x = 0;
       document.acceptances[0].plane.box.y = 0;
       writeFileSync(join(committed, "known-differences.json"), JSON.stringify(document));
