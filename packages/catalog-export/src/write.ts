@@ -9,6 +9,8 @@
  * themes/<theme>.dtcg.json # one per alternate named theme (when declared)
  * figma-variables.json    # the Figma variable-collection projection (when present)
  * images/<component>/<variant>__<state>[__theme][__size].png
+ * parity/known-differences.json          # the source repo's committed acceptances, verbatim
+ * parity/known-differences/<id>/…        # their masks and accepted-candidate crops
  * ```
  *
  * Image bytes are resolved from each {@link Image.uri}: a `data:` URI is decoded
@@ -28,6 +30,10 @@ import {
   buildAnnotationManifest,
   isEmptyAnnotationManifest,
 } from "./annotations.js";
+import {
+  writeKnownDifferences,
+  type KnownDifferencesResult,
+} from "./knownDifferences.js";
 import { toFigmaVariables } from "./figma.js";
 import { imagePath, toCatalogManifest, wireframePath, type ManifestOptions } from "./manifest.js";
 import type { Catalog } from "./types.js";
@@ -39,6 +45,16 @@ export interface WriteOptions extends ManifestOptions {
   figmaVariables?: boolean;
   /** Pretty-print JSON with this indent. Default `2`. */
   indent?: number;
+  /**
+   * Also carry the source repo's `.design-parity/known-differences*` into the bundle. Default
+   * `true`.
+   *
+   * The escape hatch exists for a caller assembling a bundle from a directory that is not the
+   * acceptances' repository — the only case where reading `.design-parity/` would carry someone
+   * else's records. It is **not** an optimisation: skipping it makes every committed acceptance in
+   * that bundle suppress nothing.
+   */
+  knownDifferences?: boolean;
 }
 
 export interface WriteResult {
@@ -59,6 +75,15 @@ export interface WriteResult {
   wireframeCount?: number;
   /** Absolute path to the annotation manifest, when the catalog produced one. */
   annotationsPath?: string;
+  /**
+   * What the source repo's committed known differences produced, when it commits any.
+   *
+   * Present even when nothing was carried, so a caller can tell "this repo accepts nothing" from
+   * "the acceptances were skipped" — `skipped` is the half worth reading, and a publisher that
+   * dropped a mask without saying so would leave an acceptance suppressing nothing with nothing
+   * anywhere explaining why.
+   */
+  knownDifferences?: KnownDifferencesResult;
 }
 
 const DATA_URI = /^data:([^;,]*)?(;base64)?,(.*)$/s;
@@ -171,6 +196,17 @@ export async function writeCatalog(
     await mkdir(dirname(annotationsPath), { recursive: true });
     await writeJson(annotationsPath, annotations, indent);
     result.annotationsPath = annotationsPath;
+  }
+
+  // The source repo's committed parity acceptances, carried verbatim — see `knownDifferences.ts`
+  // for why this module copies rather than parses, and for what publishing them on the render path
+  // means for how soon an edit reaches a serving host.
+  //
+  // Unconditional rather than opt-in: an acceptance the repo committed and the bundle omits is an
+  // acceptance that silently stops suppressing, which is the failure mode this whole contract is
+  // built to avoid. A repo that commits none gets an empty result and no files.
+  if (opts.knownDifferences !== false) {
+    result.knownDifferences = await writeKnownDifferences(out, { sourceRoot });
   }
 
   return result;

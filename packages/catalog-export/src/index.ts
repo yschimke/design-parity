@@ -31,6 +31,21 @@ export { buildCatalog, buildComponent } from "./ingest.js";
 export type { ComponentSource } from "./ingest.js";
 
 export {
+  ARTIFACT_DIRECTORY as KNOWN_DIFFERENCE_ARTIFACT_DIRECTORY,
+  DOCUMENT_FILE as KNOWN_DIFFERENCE_DOCUMENT_FILE,
+  MAX_ARTIFACT_BYTES as KNOWN_DIFFERENCE_MAX_ARTIFACT_BYTES,
+  MAX_DOCUMENT_BYTES as KNOWN_DIFFERENCE_MAX_DOCUMENT_BYTES,
+  PUBLISHED_DIRECTORY as KNOWN_DIFFERENCE_PUBLISHED_DIRECTORY,
+  SOURCE_DIRECTORY as KNOWN_DIFFERENCE_SOURCE_DIRECTORY,
+  publishedArtifactPath,
+  writeKnownDifferences,
+} from "./knownDifferences.js";
+export type {
+  KnownDifferencesOptions,
+  KnownDifferencesResult,
+} from "./knownDifferences.js";
+
+export {
   INTERACTIVE_ROLES,
   MIN_TOUCH_TARGET_DP,
   buildGreenlines,
