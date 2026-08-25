@@ -15,7 +15,8 @@
     "./schema/verdict.schema.json": "./schema/verdict.schema.json",
     "./cache": "./dist/cli/cache-cli.js",
     "./import": "./dist/cli/import-cli.js",
-    "./publish": "./dist/cli/publish-cli.js"
+    "./publish": "./dist/cli/publish-cli.js",
+    "./resolve": "./dist/cli/resolve-cli.js"
   },
   "files": [
     "dist",

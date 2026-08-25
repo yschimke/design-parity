@@ -24,4 +24,17 @@ describe("run CLI landing-page index flags", () => {
     const args = parseArgs(["run", "--components", "ui/Button.kt#PrimaryButton"]);
     expect(indexOptions(args)).toBeUndefined();
   });
+
+  it("accepts an evidence output and verification URL for resolution", () => {
+    const args = parseArgs([
+      "run",
+      "--components", "ui/Button.kt#PrimaryButton",
+      "--acceptance-evidence", "out/acceptances.json",
+      "--verification-url", "https://github.com/owner/repo/pull/12",
+      "--issue-index", "out/issues.json",
+    ]);
+    expect(args.acceptanceEvidencePath).toBe("out/acceptances.json");
+    expect(args.verificationUrl).toBe("https://github.com/owner/repo/pull/12");
+    expect(args.issueIndexPath).toBe("out/issues.json");
+  });
 });

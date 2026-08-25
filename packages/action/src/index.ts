@@ -85,6 +85,19 @@ export {
   verdictSchemaPath,
   VERDICT_FORMAT_VERSION,
 } from "./baseline.js";
+
+export {
+  acceptanceEvidence,
+  canonicalIssue,
+  resolveKnownDifferences,
+  writeAcceptanceEvidence,
+  ACCEPTANCE_EVIDENCE_SCHEMA,
+} from "./resolution.js";
+export type {
+  AcceptanceEvidence,
+  AcceptanceEvidenceEntry,
+  ResolutionResult,
+} from "./resolution.js";
 export type {
   BaselineArtifacts,
   BaselineComponent,

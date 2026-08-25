@@ -38,6 +38,7 @@ import { orchestrate, type ParityReport } from "../orchestrate.js";
 import { loadSpecTokens } from "../specTokens.js";
 import { pushBack } from "../pushback.js";
 import { renderReport } from "../report.js";
+import { writeAcceptanceEvidence } from "../resolution.js";
 import {
   parseShard,
   partitionComponents,
@@ -61,6 +62,9 @@ interface Args {
   shard?: ShardSelector;
   referenceCache?: string;
   referenceCacheOnly: boolean;
+  acceptanceEvidencePath?: string;
+  verificationUrl?: string;
+  issueIndexPath?: string;
 }
 
 export function parseArgs(args: string[]): Args {
@@ -127,6 +131,15 @@ export function parseArgs(args: string[]): Args {
       case "--reference-cache-only":
         out.referenceCacheOnly = true;
         break;
+      case "--acceptance-evidence":
+        out.acceptanceEvidencePath = next();
+        break;
+      case "--verification-url":
+        out.verificationUrl = next();
+        break;
+      case "--issue-index":
+        out.issueIndexPath = next();
+        break;
       // One slice of the run (`--shard 2/6`). Throws on a malformed or
       // out-of-range selector: a typo that silently compared everything (or
       // nothing) would land as a merged index that looks complete.
@@ -191,6 +204,7 @@ export async function main(): Promise<number> {
         "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir] " +
         "[--repo-slug owner/repo --branch <branch> --source-commit <sha> --bundle-image <file>] " +
         "[--reference-cache <dir> [--reference-cache-only]] " +
+        "[--acceptance-evidence <file> [--verification-url <url>] [--issue-index <file>]] " +
         "[--shard <index>/<total>] [--push-back [--canvas-endpoint <url>]]\n",
     );
     return 2;
@@ -301,6 +315,27 @@ export async function main(): Promise<number> {
 
   stdout.write(renderReport(report) + "\n");
 
+  let staleAcceptanceIds: string[] = [];
+  if (args.acceptanceEvidencePath) {
+    const path = resolvePath(args.repoRoot, args.acceptanceEvidencePath);
+    const evidence = await writeAcceptanceEvidence(path, report, {
+      ...(args.verificationUrl ? { verificationUrl: args.verificationUrl } : {}),
+      documentPath: resolvePath(args.repoRoot, ".design-parity/known-differences.json"),
+      ...(args.issueIndexPath
+        ? { issueIndexPath: resolvePath(args.repoRoot, args.issueIndexPath) }
+        : {}),
+    });
+    staleAcceptanceIds = Object.entries(evidence.statuses)
+      .filter(([, status]) => status.stale === true)
+      .map(([id]) => id);
+    stdout.write(`\nWrote acceptance evidence to ${path}\n`);
+    if (staleAcceptanceIds.length > 0) {
+      stdout.write(
+        `Stale known differences (closed issue with live acceptance): ${staleAcceptanceIds.join(", ")}\n`,
+      );
+    }
+  }
+
   // Emitted before push-back and the page listing so a shard that dies in either
   // still leaves the merge a complete declaration of what it did.
   if (args.shard && args.outDir) {
@@ -339,7 +374,7 @@ export async function main(): Promise<number> {
   // failure being reported — the same "publish, then apply the verdict" ordering
   // a hand-written workflow has to get right by hand.
   if (args.shard) return 0;
-  return report.blocked ? 1 : 0;
+  return report.blocked || staleAcceptanceIds.length > 0 ? 1 : 0;
 }
 
 // Self-execute when invoked directly (`node dist/cli/run.js …`), guarded so
