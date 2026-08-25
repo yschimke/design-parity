@@ -14,6 +14,8 @@
 //   publish → put a staged artifact dir on its branch, re-parented on the tip
 //             (the sharded workflow's publisher; baseline mode calls the same
 //             code in-process);
+//   resolve → remove proven-resolved known differences and generate the atomic
+//             cleanup/issue-closure PR body;
 //   anything else → a parity run.
 //
 // `run` and `merge` export `main` and we invoke it explicitly: importing the
@@ -27,7 +29,7 @@
 // workflow pinned `@main` calling a subcommand the *published* CLI predates
 // (`publish`, once) would have quietly stopped publishing behind a green step.
 // Only a leading `-` means "no subcommand, flags for a parity run".
-const SUBCOMMANDS = new Set(["run", "reverse", "merge", "cache", "import", "shard", "publish"]);
+const SUBCOMMANDS = new Set(["run", "reverse", "merge", "cache", "import", "shard", "publish", "resolve"]);
 const subcommand = process.argv[2];
 if (subcommand && !subcommand.startsWith("-") && !SUBCOMMANDS.has(subcommand)) {
   const { version } = await import("node:fs/promises")
@@ -58,6 +60,9 @@ if (process.argv[2] === "reverse") {
   process.exit(await main());
 } else if (process.argv[2] === "shard") {
   const { main } = await import("@design-parity/action/shard");
+  process.exit(await main());
+} else if (process.argv[2] === "resolve") {
+  const { main } = await import("@design-parity/action/resolve");
   process.exit(await main());
 } else {
   const { main } = await import("@design-parity/action/run");

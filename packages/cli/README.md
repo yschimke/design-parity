@@ -38,6 +38,39 @@ Most consumers don't wire this by hand: the
 is the whole pipeline behind a `shards:` number. See
 [`docs/PARALLEL_PARITY.md`](https://github.com/yschimke/design-parity/blob/main/docs/PARALLEL_PARITY.md).
 
+## Resolve scoped known differences
+
+Have the fixing run write compact, reviewable evidence, including the fixing PR that performed the
+verification:
+
+```sh
+npx design-parity run --repo . --components "$ALL" \
+  --acceptance-evidence /tmp/design-parity-acceptances.json \
+  --issue-index /tmp/parity-issues.json \
+  --verification-url https://github.com/owner/catalog/pull/123
+```
+
+`--issue-index` is the catalog's published `parity/issues.json`. The evidence keeps lifecycle
+(`open`, `closed`, or `unknown`) separate from comparison status and exits non-zero only for the
+unsafe lifecycle combination: a closed issue whose acceptance is not resolved. A missing, malformed,
+or conflicting index row is `unknown`, never inferred as closed.
+
+Then remove only the records observed as unambiguously `resolved`, delete their matching artifact
+directories, and write the PR body that keeps cleanup and issue closure in one merge:
+
+```sh
+npx design-parity resolve --repo . \
+  --evidence /tmp/design-parity-acceptances.json \
+  --owned-issue owner/catalog#42 \
+  --body-out /tmp/design-parity-resolution-pr.md
+```
+
+`--owned-issue` is an explicit assertion that this repository's one
+`.design-parity/known-differences.json` owns every acceptance for that canonical issue. The command
+adds `Closes owner/catalog#42` only when all siblings in the document resolved and ownership was
+asserted. Without it, resolved records are still removed but the body records that the issue remains
+open for a cross-catalog ownership check.
+
 ## `reverse` — design → code
 
 Ask the committed `design-map.json` which code implements a design node — the

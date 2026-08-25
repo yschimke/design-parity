@@ -73,6 +73,12 @@ describe("design-parity bin launcher", () => {
     expect(stderr).toContain("--dir and --branch are required");
   });
 
+  it("dispatches `resolve` to its own main", async () => {
+    const { code, stderr } = await runBin(["resolve"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("--evidence is required");
+  });
+
   // The launcher used to send an unrecognised subcommand to the `else` branch —
   // a parity RUN. `design-parity publish …` against a CLI predating `publish`
   // therefore printed "Parity pass" and exited 0 while publishing nothing: a
