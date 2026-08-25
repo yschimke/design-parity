@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.60](https://github.com/yschimke/design-parity/compare/v0.1.59...v0.1.60) (2026-08-25)
+
+
+### Features
+
+* **catalog-export:** publish a repo's committed known differences ([#388](https://github.com/yschimke/design-parity/issues/388)) ([44ec6b3](https://github.com/yschimke/design-parity/commit/44ec6b3c015715faffef5d4e388f662cae7a005f))
+* close the scoped acceptance loop safely ([#393](https://github.com/yschimke/design-parity/issues/393)) ([8a6a915](https://github.com/yschimke/design-parity/commit/8a6a9151211a47960fb842f22b6c7a96dc42cb76))
+* **diff:** apply scoped known differences ([#390](https://github.com/yschimke/design-parity/issues/390)) ([e854d3e](https://github.com/yschimke/design-parity/commit/e854d3ef80d49d3dd6bd62a35ff918f19fa5b04a))
+
+
+### Bug Fixes
+
+* address scoped acceptance review gaps ([#392](https://github.com/yschimke/design-parity/issues/392)) ([da04fc0](https://github.com/yschimke/design-parity/commit/da04fc09156bc206083c582cb0eca15d21225774))
+* address scoped-acceptance review findings ([#391](https://github.com/yschimke/design-parity/issues/391)) ([edc284a](https://github.com/yschimke/design-parity/commit/edc284a9973767e4695fd2a7fbbe53820b7498fe))
+
 ## [0.1.59](https://github.com/yschimke/design-parity/compare/v0.1.58...v0.1.59) (2026-08-22)
 
 
