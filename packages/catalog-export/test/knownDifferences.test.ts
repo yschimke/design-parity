@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  ARTIFACT_INDEX_FILE,
+  ARTIFACT_INDEX_SCHEMA,
   MAX_ARTIFACT_BYTES,
   MAX_DOCUMENT_BYTES,
   publishedArtifactPath,
@@ -184,6 +186,108 @@ describe("writeKnownDifferences", () => {
     expect(result.documentPath).toBeUndefined();
     expect(result.artifactCount).toBe(0);
     expect(result.skipped).toEqual([{ path: ".design-parity", reason: "symlink" }]);
+  });
+
+  /** The published index, parsed — or null when this publish wrote none. */
+  async function publishedIndex(): Promise<{ schema: string; artifacts: string[] } | null> {
+    const raw = await readFile(join(out, "parity", ARTIFACT_INDEX_FILE), "utf8").catch(() => null);
+    return raw === null ? null : JSON.parse(raw);
+  }
+
+  it("publishes the list of artifacts it wrote, so no consumer has to derive one", async () => {
+    // The point of the index. A serving host needs to know which files to copy from a delivery
+    // branch; the only place that lived was inside the document, so the host parsed the contract —
+    // and inherited every pre-read refusal the engine has as a rule it must mirror. A mirror that
+    // drifts stricter starves a legal record of its artifacts and changes its verdict. The producer
+    // already knows the answer exactly: it wrote the files.
+    await commit("known-differences.json", DOCUMENT);
+    await commit("known-differences/glyph/mask.png", "mask bytes");
+    await commit("known-differences/glyph/accepted-candidate.png", "crop bytes");
+    await commit("known-differences/glyph/nested/extra.png", "nested bytes");
+
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
+    const index = await publishedIndex();
+    expect(index?.schema).toBe(ARTIFACT_INDEX_SCHEMA);
+    expect(index?.artifacts).toEqual([
+      "glyph/accepted-candidate.png",
+      "glyph/mask.png",
+      "glyph/nested/extra.png",
+    ]);
+    // The list and the count are the same fact, so they cannot disagree.
+    expect(index?.artifacts).toEqual(result.artifacts);
+    expect(index?.artifacts.length).toBe(result.artifactCount);
+  });
+
+  it("names only what it actually wrote", async () => {
+    // A skipped file must be absent from the index as well as from the tree. A list naming a file
+    // that was never published would send a consumer fetching a 404 and, worse, would read as this
+    // publisher vouching for it.
+    await commit("known-differences.json", DOCUMENT);
+    await commit("known-differences/glyph/mask.png", "mask bytes");
+    await commit("known-differences/glyph/CON.png", "reserved");
+    await commit("known-differences/glyph/huge.png", "x".repeat(MAX_ARTIFACT_BYTES + 1));
+
+    await writeKnownDifferences(out, { repositoryRoot: src });
+    expect((await publishedIndex())?.artifacts).toEqual(["glyph/mask.png"]);
+  });
+
+  it("publishes an empty list when the document names no artifacts", async () => {
+    // An empty list is a statement — "this producer publishes an index, and it carried nothing" —
+    // where an absent file is a shrug that sends the consumer back to deriving the list from the
+    // contract. Reaching this used to be an early `return` past the index write.
+    await commit("known-differences.json", DOCUMENT);
+
+    await writeKnownDifferences(out, { repositoryRoot: src });
+    expect((await publishedIndex())?.artifacts).toEqual([]);
+  });
+
+  it("publishes an empty list when the artifact root is a symlink", async () => {
+    // Same reasoning, on a path that also records a skip: the root is refused, nothing is carried,
+    // and the index says so rather than being absent.
+    await commit("known-differences.json", DOCUMENT);
+    const elsewhere = join(src, "elsewhere");
+    await mkdir(elsewhere, { recursive: true });
+    await symlink(elsewhere, join(src, ".design-parity", "known-differences"));
+
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(result.skipped).toContainEqual({ path: "known-differences", reason: "symlink" });
+    expect((await publishedIndex())?.artifacts).toEqual([]);
+  });
+
+  it("clears the index when the repo has stopped accepting", async () => {
+    // The index is one of the paths this module owns, so it is subject to the same rule the
+    // document and the tree are: a bundle must describe the repository's *current* state. A stale
+    // index left behind would name artifacts that are no longer published.
+    await commit("known-differences.json", DOCUMENT);
+    await commit("known-differences/glyph/mask.png", "mask bytes");
+    await writeKnownDifferences(out, { repositoryRoot: src });
+    expect((await publishedIndex())?.artifacts).toEqual(["glyph/mask.png"]);
+
+    await rm(join(src, ".design-parity"), { recursive: true, force: true });
+    await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(await publishedIndex()).toBeNull();
+  });
+
+  it("does not collide with a record whose id is the index's own name", async () => {
+    // Why the index is a sibling of the document rather than `known-differences/index.json`. A
+    // record `id` is a §4 portable segment and `index.json` is one, so a record so named publishes
+    // to `known-differences/index.json/mask.png` — a directory where the index would have been a
+    // file. Rare, legal, and unrepresentable on any filesystem.
+    await commit(
+      "known-differences.json",
+      JSON.stringify({
+        schema: "compose-preview-known-differences/v1",
+        acceptances: [{ id: "index.json", mask: "mask.png" }],
+      }),
+    );
+    await commit("known-differences/index.json/mask.png", "mask bytes");
+
+    const result = await writeKnownDifferences(out, { repositoryRoot: src });
+    expect(result.artifacts).toEqual(["index.json/mask.png"]);
+    expect(
+      await readFile(join(out, "parity", "known-differences", "index.json", "mask.png"), "utf8"),
+    ).toBe("mask bytes");
+    expect((await publishedIndex())?.artifacts).toEqual(["index.json/mask.png"]);
   });
 
   it("clears a previous publish when the repo has stopped accepting", async () => {

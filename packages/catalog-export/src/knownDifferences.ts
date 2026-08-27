@@ -77,6 +77,36 @@ export const ARTIFACT_DIRECTORY = "known-differences";
 export const PUBLISHED_DIRECTORY = "parity";
 
 /**
+ * The list of artifacts this publisher actually wrote, published beside the document.
+ *
+ * **A fetch plan, not an authority.** A serving host has to know which artifact files to copy from a
+ * delivery branch, and until now the only place that information existed was inside the document —
+ * so the host parsed the contract to find out. The moment it does that it inherits a question it has
+ * no business answering: *will the engine actually read this record?* Every pre-read refusal the
+ * engine has is a rule the host then has to mirror, and a mirror that drifts **stricter** anywhere
+ * starves a legal record of its artifacts and turns it into `artifact-unreadable` — a changed
+ * verdict. Over the contract's per-record validation that is not a risk but a matter of time.
+ *
+ * The producer already knows the answer exactly: it wrote the files. Publishing the list turns
+ * "interpret the contract" into "copy a list", and removes the reason for a second implementation
+ * of `compose-preview-known-differences/v1` to exist in a serving host at all.
+ *
+ * **A sibling of the document, not a member of the artifact tree.** `known-differences/index.json`
+ * was the obvious spelling and it is not safe: a record `id` is a §4 portable segment, `index.json`
+ * *is* one, and a record so named publishes its artifacts to `known-differences/index.json/mask.png`
+ * — a directory where the index would be a file. Rare, legal, and unrepresentable on any filesystem.
+ * A sibling cannot collide with any `<id>/` a producer may choose.
+ *
+ * The document remains the contract. A list that disagrees with it is not an error to report: a file
+ * the list omits is simply not staged, and evaluates as `artifact-unreadable` — already the verdict
+ * for a file a producer forgot to commit.
+ */
+export const ARTIFACT_INDEX_FILE = "known-differences-index.json";
+
+/** The index's own schema token, so a consumer can refuse a shape it does not understand. */
+export const ARTIFACT_INDEX_SCHEMA = "compose-preview-known-difference-artifacts/v1";
+
+/**
  * The two ceilings, versioned with the schema.
  *
  * Restated from the contract because this package cannot import it, and checked here so a bundle is
@@ -109,6 +139,13 @@ export interface KnownDifferencesResult {
   documentPath?: string;
   /** How many artifact files were carried across. */
   artifactCount: number;
+  /**
+   * Their `<id>/<file>` paths, in the order they were written — the published index's contents.
+   *
+   * Exposed rather than only written to disk so a caller can assert on what was carried without
+   * re-reading the bundle, and so the count and the list can never disagree.
+   */
+  artifacts: string[];
   /**
    * Paths the publisher declined to carry, each with why.
    *
@@ -154,7 +191,7 @@ export async function writeKnownDifferences(
   const out = resolve(outDir);
   const documentPath = join(out, PUBLISHED_DIRECTORY, DOCUMENT_FILE);
   const destinationRoot = join(out, PUBLISHED_DIRECTORY, ARTIFACT_DIRECTORY);
-  const result: KnownDifferencesResult = { artifactCount: 0, skipped: [] };
+  const result: KnownDifferencesResult = { artifactCount: 0, artifacts: [], skipped: [] };
 
   // **Clear before writing**, and before any early return. `outDir` is routinely reused across
   // renders, and every path out of this function has to leave the bundle describing the repository's
@@ -216,14 +253,48 @@ export async function writeKnownDifferences(
   // inside. A linked root would hand the walk someone else's tree wholesale.
   const artifactRoot = join(source, ARTIFACT_DIRECTORY);
   const rootStat = await lstat(artifactRoot).catch(() => null);
-  if (!rootStat) return result;
-  if (rootStat.isSymbolicLink()) {
+  if (rootStat?.isSymbolicLink()) {
     result.skipped.push({ path: ARTIFACT_DIRECTORY, reason: "symlink" });
-    return result;
+  } else if (rootStat?.isDirectory()) {
+    await copyTree(artifactRoot, destinationRoot, [], result);
   }
-  if (!rootStat.isDirectory()) return result;
-  await copyTree(artifactRoot, destinationRoot, [], result);
+
+  // **The index goes wherever the document went.** Reached on every path that published a document,
+  // including the ones that carried no artifacts at all — a repo with an acceptance-free document,
+  // a missing artifact root, a symlinked one. Those are the cases an early `return` used to take,
+  // and skipping the index there would have been the one thing it must not do: a consumer reads a
+  // missing index as "this producer does not publish one" and falls back to deriving the list from
+  // the contract, which is exactly the derivation this exists to retire. An empty list is a
+  // statement; an absent file is a shrug.
+  await writeArtifactIndex(out, result);
   return result;
+}
+
+/**
+ * Publish the list of artifacts that were actually written.
+ *
+ * Written **after** the walk and from its result, so the list can only ever name files that exist:
+ * a path skipped as non-portable, over-sized or symlinked is absent from both, and the two cannot
+ * drift because neither is derived from anything but the writes themselves.
+ *
+ * Written even when the walk carried nothing — an empty list is a real statement ("this document
+ * names no artifacts I could publish") and is what lets a consumer distinguish a producer that
+ * publishes the index from one that does not. Falling back to deriving the list for an empty index
+ * would make the two indistinguishable again, which is the confusion this file exists to end.
+ */
+async function writeArtifactIndex(
+  out: string,
+  result: KnownDifferencesResult,
+): Promise<void> {
+  const path = join(out, PUBLISHED_DIRECTORY, ARTIFACT_INDEX_FILE);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(
+    path,
+    // Two spaces and a trailing newline, like every other JSON this package publishes: the bundle
+    // is diffed by reviewers on a delivery branch, and a one-line file makes every change look like
+    // the whole file changed.
+    `${JSON.stringify({ schema: ARTIFACT_INDEX_SCHEMA, artifacts: result.artifacts }, null, 2)}\n`,
+  );
 }
 
 async function copyTree(
@@ -269,6 +340,7 @@ async function copyTree(
     await mkdir(dirname(to), { recursive: true });
     await writeFile(to, await readFile(from));
     result.artifactCount += 1;
+    result.artifacts.push(relative.join("/"));
   }
 }
 
@@ -284,6 +356,7 @@ async function copyTree(
 export async function clearPublishedKnownDifferences(outDir: string): Promise<void> {
   const out = resolve(outDir);
   await rm(join(out, PUBLISHED_DIRECTORY, DOCUMENT_FILE), { force: true });
+  await rm(join(out, PUBLISHED_DIRECTORY, ARTIFACT_INDEX_FILE), { force: true });
   await rm(join(out, PUBLISHED_DIRECTORY, ARTIFACT_DIRECTORY), { recursive: true, force: true });
 }
 
