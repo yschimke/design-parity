@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 
 // @ts-expect-error — plain JS helper, shared with the sync script so the two cannot disagree.
 import { toUpstream, toVendored } from "./vendor-transform.mjs";
+// @ts-expect-error — plain JS helper, shared with the sync script so the two cannot disagree.
+import { namesUpstream } from "./vendor-upstream.mjs";
 
 const VENDOR_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -72,23 +74,48 @@ describe("vendored known-differences engine provenance", () => {
   });
 
   it.each([
+    // Specifiers — every form ESM allows, in all three quote styles.
     ['import { x } from "./a.mjs";', 'import { x } from "./a.js";'],
     ["import { x } from './a.mjs';", "import { x } from './a.js';"],
+    ["import { x } from `./a.mjs`;", "import { x } from `./a.js`;"],
     ['import "./side-effect.mjs";', 'import "./side-effect.js";'],
     ['const m = await import("./dyn.mjs");', 'const m = await import("./dyn.js");'],
     ['export { y } from "../up/b.mjs";', 'export { y } from "../up/b.js";'],
-    ['const nested = "./deep/dir/c.mjs";', 'const nested = "./deep/dir/c.js";'],
-    // Not a relative specifier, so not the transform's business — and rewriting it would corrupt
-    // a string the module means literally.
+    ['export * from "./star.mjs";', 'export * from "./star.js";'],
+    // Not specifiers — filenames the module means literally. Rewriting one changes what it opens
+    // at runtime, and the inverse restores it perfectly, so the round-trip and the digest both
+    // still pass: a change nothing anywhere reports. The word `from` inside a string is the same
+    // trap from the other side.
+    ['const fixture = "./fixtures/case.mjs";', 'const fixture = "./fixtures/case.mjs";'],
+    ['const msg = "copied from ./a.mjs";', 'const msg = "copied from ./a.mjs";'],
     ['const notAPath = "keep.mjs";', 'const notAPath = "keep.mjs";'],
   ])("rewrites %s and inverts exactly", (upstream: string, expected: string) => {
-    // The transform is *declared*, so it has to cover every relative-specifier form ESM allows —
-    // not merely the one upstream happens to use today. A form it misses passes the round-trip and
-    // the digest check unchanged (both are built from this same pattern) while the emitted module
-    // resolves a `.mjs` file the build never writes: green sync, runtime failure.
+    // The transform is *declared*, so it has to be exact in both directions: broad enough to reach
+    // every specifier, narrow enough to leave every other string alone. Both failures are silent —
+    // one emits a module resolving a file the build never writes, the other quietly changes a
+    // filename — and neither is visible to the digest check, which is built from this same pattern.
     const vendored: string = toVendored(upstream);
     expect(vendored).toBe(`// @ts-nocheck\n${expected}`);
     expect(toUpstream(vendored)).toBe(upstream);
+  });
+
+  it.each([
+    ["https://github.com/yschimke/compose-ai-tools.git", true],
+    ["https://github.com/yschimke/compose-ai-tools", true],
+    ["git@github.com:yschimke/compose-ai-tools.git", true],
+    ["ssh://git@github.com/yschimke/compose-ai-tools", true],
+    // The path suffix is right and the repository is not. A first version of this check accepted
+    // all three: reachability then proves only that the commit exists on the impostor, so a
+    // provenance record could look fully verified while naming bytes never landed upstream.
+    ["https://evil.example/yschimke/compose-ai-tools.git", false],
+    ["git@evil.example:yschimke/compose-ai-tools.git", false],
+    ["/tmp/x/yschimke/compose-ai-tools", false],
+    // A host that merely *starts* with the real one — why this parses the URL instead of matching
+    // a pattern against it.
+    ["https://github.com.evil.example/yschimke/compose-ai-tools", false],
+    ["https://github.com/yschimke/design-parity", false],
+  ])("%s names upstream: %s", (url: string, expected: boolean) => {
+    expect(namesUpstream(url)).toBe(expected);
   });
 
   it("records every vendored module, and only vendored modules", () => {

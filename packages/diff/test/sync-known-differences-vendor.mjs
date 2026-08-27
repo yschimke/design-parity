@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 
 import { toVendored } from "./vendor-transform.mjs";
 import { FIXTURE_DIR, buildFixtureArchive } from "./vendor-archive.mjs";
+import { UPSTREAM_HOST, UPSTREAM_SLUG, namesUpstream } from "./vendor-upstream.mjs";
 
 const checkout = process.argv[2];
 const ref = process.argv[3] ?? "origin/main";
@@ -55,9 +56,14 @@ const git = (...args) =>
  * `execFileSync` error dump, which is exactly what the reader does not need. Unexpected failures
  * keep their stack, because for those the trace *is* the information.
  */
+const REFUSED = 3;
 const refuse = (message) => {
   process.stderr.write(`${message}\n`);
-  process.exit(1);
+  // A distinct code, because the scheduled workflow has to tell these two apart: a refusal *is*
+  // drift and belongs in the report, while a crash — a missing dependency, a runner without git —
+  // is a broken job. Collapsing them let a setup error open a drift issue every week, claiming the
+  // engine had moved on a pin that had not.
+  process.exit(REFUSED);
 };
 
 // **Verify the checkout is the repository this provenance is about to name.** Every `git` call
@@ -66,7 +72,6 @@ const refuse = (message) => {
 // precisely the "land it upstream first" rule, defeated: a fork, or a local branch never pushed,
 // would produce a provenance record naming a commit that does not exist upstream — and the offline
 // test cannot tell, because by construction it only re-checks the digests recorded here.
-const UPSTREAM_SLUG = "yschimke/compose-ai-tools";
 const remotes = git("config", "--get-regexp", String.raw`^remote\..*\.url$`)
   .split("\n")
   .filter(Boolean)
@@ -74,13 +79,11 @@ const remotes = git("config", "--get-regexp", String.raw`^remote\..*\.url$`)
     const at = line.indexOf(" ");
     return { name: line.slice(7, at - 4), url: line.slice(at + 1) };
   });
-const upstreamRemote = remotes.find(({ url }) =>
-  new RegExp(String.raw`[:/]${UPSTREAM_SLUG}(\.git)?/?$`).test(url.trim()),
-);
+const upstreamRemote = remotes.find(({ url }) => namesUpstream(url));
 if (!upstreamRemote) {
   refuse(
-    `nothing written: ${checkout} has no remote pointing at ${UPSTREAM_SLUG} ` +
-      `(found: ${remotes.map((r) => r.url).join(", ") || "none"}). ` +
+    `nothing written: ${checkout} has no remote at ${UPSTREAM_HOST}/${UPSTREAM_SLUG} ` +
+      `(found: ${remotes.map((r) => r.url.trim()).join(", ") || "none"}). ` +
       "The provenance would name a repository this checkout is not.",
   );
 }

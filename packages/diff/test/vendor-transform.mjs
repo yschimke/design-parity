@@ -23,24 +23,36 @@
 const MARKER = "// @ts-nocheck\n";
 
 /**
- * Every relative-specifier form the rewrite has to reach.
+ * The rewrite, scoped to **module specifiers only**.
  *
- * An earlier version matched only double-quoted static `from` clauses, which covered what upstream
- * happens to contain today and nothing more. That is not good enough for a *declared* transform:
- * a side-effect `import "./x.mjs"`, a dynamic `import("./x.mjs")` or a single-quoted specifier
- * would pass straight through, and — because the inverse and the digest check are built from this
- * same pattern — the round-trip would still verify. The sync would report success while emitting a
- * module that resolves a `.mjs` file the build never writes, failing only at runtime.
+ * Two failure modes, and this pattern is the narrow path between them.
  *
- * So match the specifier by its delimiters rather than by the syntax around it: an opening quote or
- * backtick, `./` or `../`, a path, the extension, the matching closing delimiter.
+ * Matching only double-quoted static `from` clauses — the first version — misses a side-effect
+ * `import "./x.mjs"`, a dynamic `import("./x.mjs")` and any single-quoted specifier. Those pass
+ * through untouched, and since the inverse and the digest check are built from this same pattern,
+ * the round-trip still verifies while the emitted module resolves a `.mjs` file the build never
+ * writes: a green sync, a runtime failure.
+ *
+ * Matching *any* quoted relative `.mjs` path — the over-correction — is worse, because it is
+ * silent in both directions. An ordinary runtime string such as `const fixture = "./case.mjs"` is
+ * a filename the module means literally; rewriting it changes what the module opens at runtime,
+ * and the inverse restores it perfectly, so every test still passes and the digest still matches.
+ * Nothing anywhere reports it.
+ *
+ * So anchor on the syntax that actually makes a string a specifier — `from`, or `import` with or
+ * without its call parenthesis — and require the quote to open immediately after it. A literal
+ * that merely contains the word (`"copied from ./a.mjs"`) has no quote in that position and is
+ * left alone.
  */
 const specifier = (extension) =>
-  new RegExp(String.raw`(["'\x60])(\.{1,2}/[A-Za-z0-9._\-/]+)\.${extension}\1`, "g");
+  new RegExp(
+    String.raw`(\b(?:from|import)\s*\(?\s*)(["'\x60])(\.{1,2}/[A-Za-z0-9._\-/]+)\.${extension}\2`,
+    "g",
+  );
 
 /** Upstream `.mjs` source → the vendored `.ts` text. */
 export function toVendored(source) {
-  return `${MARKER}${source.replace(specifier("mjs"), "$1$2.js$1")}`;
+  return `${MARKER}${source.replace(specifier("mjs"), "$1$2$3.js$2")}`;
 }
 
 /** The exact inverse of {@link toVendored}. Throws if the input is not a vendored file. */
@@ -48,5 +60,5 @@ export function toUpstream(vendored) {
   if (!vendored.startsWith(MARKER)) {
     throw new Error("not a vendored module: missing the `// @ts-nocheck` line");
   }
-  return vendored.slice(MARKER.length).replace(specifier("js"), "$1$2.mjs$1");
+  return vendored.slice(MARKER.length).replace(specifier("js"), "$1$2$3.mjs$2");
 }

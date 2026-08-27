@@ -284,6 +284,73 @@ for out in tool-commit tool-version; do
   fi
 done
 
+# ── Vendor-drift reporting ──────────────────────────────────────────────────
+#
+# Same failure shape as the probes above: shell that fails in the *reporting*
+# direction, where the wrong answer looks like a working job.
+#
+# The sync script refuses (exit 3) when a vendored module is gone from upstream
+# or the pin is unreachable. That is drift and belongs in the weekly issue. Any
+# other non-zero status is a broken job — a missing dependency, a runner
+# without git — and must fail loudly instead. Collapsing the two meant a setup
+# error opened a drift issue every week claiming the engine had moved on a pin
+# that had not, which is how a report stops being read.
+drift="$root/.github/workflows/vendor-drift.yml"
+
+# The dependency the sync needs, transitively via `vendor-archive.mjs`.
+if grep -q '^      - run: npm ci$' "$drift"; then
+  ok "the drift job installs dependencies before invoking the sync"
+else
+  bad "the drift job never runs npm ci, so the sync dies with ERR_MODULE_NOT_FOUND every run"
+fi
+
+if grep -q 'if \[ "\$status" -eq 3 \]' "$drift" && grep -q 'elif \[ "\$status" -ne 0 \]' "$drift"; then
+  ok "the drift job separates a refusal from a crash by exit status"
+else
+  bad "the drift job treats every non-zero status as drift, so a broken job reports a stale pin"
+fi
+
+# And the dispatch itself, against stubs — the half a grep cannot check.
+dispatch() {
+  local status_code="$1" out
+  out="$(mktemp)"
+  (
+    set +e
+    sh -c "exit $status_code"
+    status=$?
+    set -e
+    if [ "$status" -eq 3 ]; then
+      echo drift
+    elif [ "$status" -ne 0 ]; then
+      echo failure
+    else
+      echo clean
+    fi
+  ) > "$out"
+  cat "$out"
+  rm -f "$out"
+}
+
+for pair in "0:clean" "3:drift" "1:failure" "127:failure"; do
+  code="${pair%%:*}"
+  want="${pair##*:}"
+  got="$(dispatch "$code")"
+  if [ "$got" = "$want" ]; then
+    ok "sync exit ${code} is reported as ${want}"
+  else
+    bad "sync exit ${code} reported as ${got}, expected ${want}"
+  fi
+done
+
+# The script's own refusal code has to match what the workflow tests for. Two
+# numbers in two files is exactly the drift this whole subsystem is about.
+sync="$root/packages/diff/test/sync-known-differences-vendor.mjs"
+if grep -q '^const REFUSED = 3;$' "$sync"; then
+  ok "the sync script refuses with the status the workflow expects"
+else
+  bad "the sync script's refusal code no longer matches the workflow's dispatch"
+fi
+
 if [ "$fail" -eq 0 ]; then
   printf '\nAll workflow probe checks passed.\n'
 else
