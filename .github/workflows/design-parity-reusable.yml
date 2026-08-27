@@ -717,29 +717,46 @@ jobs:
           MODULE: ${{ inputs.module }}
         run: |
           set -uo pipefail
-          # `:a:b` ⇒ `a/b`, matching how the slice step derives the manifest path.
-          path="${MODULE#:}"
-          # An artifact name may not contain `:`, and one run can call this workflow
-          # once per module (wear-m3-catalog runs `:catalog` and `:remote-catalog`),
-          # so the module has to be IN the name or the second upload collides with
-          # the first. Shard index too, for a sharded module whose shards both fail.
-          echo "RENDER_FAILURE_SLUG=$(printf '%s' "${MODULE#:}" | tr ':' '-')" >> "$GITHUB_ENV"
-          dir="${path//://}/build/test-results"
-          if [ ! -d "$dir" ]; then
-            echo "::warning::No test results under ${dir} — the render failed before the task ran."
+          # An artifact name may not contain `:`, and one run can call this workflow once per
+          # module (wear-m3-catalog runs `:catalog` and `:remote-catalog`), so the module has to be
+          # IN the name or the second upload collides with the first. The hash keeps `:foo:bar` and
+          # `:foo-bar` apart, which stripping separators alone would not.
+          echo "RENDER_FAILURE_SLUG=$(printf '%s' "${MODULE#:}" | tr ':' '-')-$(printf '%s' "$MODULE" | sha256sum | cut -c1-8)" >> "$GITHUB_ENV"
+          # FIND the results; do not derive them from the module path. A Gradle project's path and
+          # its directory are independent — `project(":catalog").projectDir = file("samples/catalog")`
+          # is legal and this workflow never requires them to agree — so `:a:b` ⇒ `a/b` would look in
+          # the wrong place and report "no results" while the file sat elsewhere. The upload step
+          # below already globs; match it.
+          mapfile -t xmls < <(find . -path '*/build/test-results/*' -name '*.xml' -print | sort)
+          if [ "${#xmls[@]}" -eq 0 ]; then
+            echo "::warning::No test results anywhere under the workspace — the render failed before the task ran."
             exit 0
           fi
-          # Only the cases that actually failed; a passing suite's XML is noise.
           found=0
-          while IFS= read -r xml; do
+          for xml in "${xmls[@]}"; do
             grep -q '<failure\|<error' "$xml" || continue
             found=1
-            echo "::group::${xml#"${path//://}/build/test-results/"}"
-            # The <failure>/<error> bodies hold the exception and its stack.
-            sed -n '/<testcase/,/<\/testcase>/p' "$xml" | sed -n '/<failure\|<error/,/<\/failure>\|<\/error>/p' | head -80
+            echo "::group::${xml#./}"
+            # Each failure carries the NAME of the testcase it belongs to. Printing the <failure>
+            # body alone loses that, and a suite holds one testcase per preview — so a stack with no
+            # name attached is exactly the question this step exists to answer, left unanswered.
+            awk '
+              /<testcase/ {
+                # `.*name="` matches greedily and lands on `classname="`, naming every
+                # failure after the class rather than the case; searching the whole line
+                # finds `<testsuite name=` when a writer puts both tags on one line. Cut
+                # to the tag, then take the first `name="` at an attribute boundary
+                # (` classname="` has no space before `name`).
+                rest = substr($0, index($0, "<testcase"))
+                name = (match(rest, /[[:space:]]name="[^"]*"/)) ? substr(rest, RSTART + 7, RLENGTH - 8) : "(unnamed)"
+              }
+              /<failure|<error/ { printing = 1; printf "── %s\n", name }
+              printing { print }
+              /<\/failure>|<\/error>|\/>[[:space:]]*$|<\/testcase>/ { if (printing) { printing = 0; print "" } }
+            ' "$xml" | head -120
             echo "::endgroup::"
-          done < <(find "$dir" -name '*.xml' -print)
-          [ "$found" = 1 ] || echo "::warning::No failing cases in ${dir} — the task failed outside the tests themselves."
+          done
+          [ "$found" = 1 ] || echo "::warning::No failing cases in any test-results — the task failed outside the tests themselves."
 
       # And the raw results, for anything the summary above truncated.
       - name: Upload the failed render's test results
