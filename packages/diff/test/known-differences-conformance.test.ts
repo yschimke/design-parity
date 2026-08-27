@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { afterAll } from "vitest";
 import { unzipSync } from "fflate";
+import { PNG } from "pngjs";
 
 import { diff } from "../src/diff.js";
 import {
@@ -439,6 +440,132 @@ describe("compose-preview-known-differences/v1 conformance", () => {
       expect(result.summary).toContain("raw ");
       expect(result.summary).toContain("accepted ");
       expect(result.summary).toContain("unaccepted ");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("normalises partial alpha on the production decode path, not only in this suite", () => {
+    // **The gap this suite cannot see on its own.** Every case above reaches the engine through
+    // `decodePng`, which puts partial-alpha pixels on the contract's straight-alpha grid. The real
+    // path does not: `visual.ts` reads with `pngjs` and hands those bytes straight to
+    // `evaluateKnownDifferenceComparison`, so the partial-alpha conformance cases passed here while
+    // production compared pixels off the grid.
+    //
+    // Colour 200 at alpha 128 premultiplies to 100 and unpremultiplies to 199, so 200 and 199 are
+    // two spellings of one premultiplied bucket. The **score** cannot tell them apart — its kernel
+    // premultiplies, and both land on 100 — so the divergence surfaces in the candidate gate, which
+    // compares straight channels against the accepted crop. At `candidateTolerance: 0` one spelling
+    // is `valid` and the other is `invalidated: candidate-changed`, on a candidate whose bytes never
+    // moved. That is why the tolerance is pinned to 0 here rather than inherited from the fixture,
+    // whose 2 absorbs the difference and hides the whole thing.
+    const repo = mkdtempSync(join(tmpdir(), "design-parity-alpha-"));
+    try {
+      const committed = join(repo, ".design-parity");
+      const artifacts = join(committed, "known-differences", "alpha-spelling");
+      mkdirSync(artifacts, { recursive: true });
+
+      const side = 24;
+      const rgba = (colour: number, alpha: number) => {
+        const png = new PNG({ width: side, height: side });
+        for (let i = 0; i < png.data.length; i += 4) {
+          png.data[i] = png.data[i + 1] = png.data[i + 2] = colour;
+          png.data[i + 3] = alpha;
+        }
+        return PNG.sync.write(png);
+      };
+      // 199 at alpha 128 is a fixed point of the normalisation, so the committed crop is on the grid
+      // exactly as a real published artifact decoded by `decodePng` would be.
+      const accepted = rgba(199, 128);
+      // 8-bit greyscale with no alpha, which is what the contract's mask encoding rule requires —
+      // an RGBA mask is `mask-encoding-invalid` however white its pixels are.
+      const mask = (() => {
+        const png = new PNG({ width: side, height: side });
+        for (let i = 0; i < png.data.length; i += 4) {
+          png.data[i] = png.data[i + 1] = png.data[i + 2] = 255;
+          png.data[i + 3] = 255;
+        }
+        return PNG.sync.write(png, { colorType: 0 });
+      })();
+      writeFileSync(join(artifacts, "accepted-candidate.png"), accepted);
+      writeFileSync(join(artifacts, "mask.png"), mask);
+
+      const sha = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+      // The record is the pilot case's, with only what this test is about overridden: its own
+      // artifacts, a plane the size of the rasters below, and `candidateTolerance: 0`. Hand-rolling
+      // one instead produced `schema-invalid` — the shape has required fields this test has no
+      // opinion about, and inventing them is how a fixture ends up testing its own typos.
+      const spelledRaster = (colour: number) => {
+        const pixels = new Uint8Array(side * side * 4);
+        for (let i = 0; i < pixels.length; i += 4) {
+          pixels[i] = pixels[i + 1] = pixels[i + 2] = colour;
+          pixels[i + 3] = 128;
+        }
+        return { width: side, height: side, pixels };
+      };
+      // An opaque reference the candidate genuinely differs from. Handing the same pixels to both
+      // sides is `acceptance-is-noop` — with nothing to accept, the record is refused before the
+      // candidate gate this test exists for ever runs.
+      const referenceRaster = {
+        width: side,
+        height: side,
+        pixels: (() => {
+          const pixels = new Uint8Array(side * side * 4);
+          for (let i = 0; i < pixels.length; i += 4) pixels[i + 3] = 255;
+          return pixels;
+        })(),
+      };
+      // The plane the evaluation will derive from this pair, not one guessed at: a recorded plane
+      // that disagrees is `plane-changed`, refused for the same reason.
+      const resolvedPlane = resolvePlane(referenceRaster, spelledRaster(199)).plane;
+
+      const pilot = readJson(
+        join(ROOT, "cases", "pilot-40-iconbutton-tonal-glyph", "known-differences.json"),
+      );
+      const record = {
+        ...pilot.acceptances[0],
+        id: "alpha-spelling",
+        mask: "mask.png",
+        acceptedCandidate: "accepted-candidate.png",
+        maskSha256: sha(mask),
+        acceptedCandidateSha256: sha(accepted),
+        plane: resolvedPlane,
+        candidateTolerance: 0,
+      };
+      // The pilot record pins a semantics element, and this test hands the evaluation no tag index —
+      // which is `element-moved`, another refusal ahead of the gate under test. The element is
+      // optional, and this case is about a candidate's spelling rather than where a node sits.
+      delete (record as { element?: unknown }).element;
+      writeFileSync(
+        join(committed, "known-differences.json"),
+        JSON.stringify({ schema: "compose-preview-known-differences/v1", acceptances: [record] }),
+      );
+
+      const run = (colour: number) =>
+        evaluateKnownDifferenceComparison({
+          repoRoot: repo,
+          scope: {
+            system: record.system,
+            component: record.component,
+            previewId: record.previewId,
+            referenceId: record.referenceId,
+            variant: record.variant,
+            overrides: {},
+            // The pilot record's own hash, so the reference gate compares equal and this test is
+            // about the candidate's spelling and nothing else.
+            referenceSha256: record.referenceSha256,
+          },
+          // The reference is the accepted spelling; only the candidate's spelling varies.
+          reference: referenceRaster,
+          candidate: spelledRaster(colour),
+          tagIndex: {},
+        });
+
+      const onGrid = run(199);
+      const offGrid = run(200);
+      expect(onGrid?.statuses["alpha-spelling"]).toEqual({ status: "valid" });
+      // The whole report, so a divergence anywhere — a status, a cause, a score — fails this.
+      expect(offGrid).toEqual(onGrid);
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

@@ -18,6 +18,34 @@ import {
   resolvePlane,
 } from "./vendor/known-difference-plane.js";
 import { scoreComparison as scoreJs } from "./vendor/known-difference-score.js";
+import { normaliseAlpha } from "./vendor/png-lite.js";
+
+/**
+ * One incoming raster on the contract's straight-alpha grid, without touching the caller's buffer.
+ *
+ * `png-lite`'s rule is that the normalisation applies to **every** raster reaching a comparison, not
+ * only to PNGs it decoded itself — a raster off a canvas has been through the host's premultiplied
+ * round trip and one read from a file has not. Our conformance suite decodes through `decodePng` and
+ * so was already on the grid; the production path reads with `pngjs` (`visual.ts`) and was not, so
+ * colour 200 at alpha 128 arrived as 200 here and as 199 there. That is `candidate-changed` on a
+ * candidate whose bytes never moved, decided by which decoder read the file.
+ *
+ * Copied rather than normalised in place because `diffImagePair` keeps using the same buffers for
+ * `pixelmatch` and the triptych: the acceptance verdict is what this contract governs, and silently
+ * moving the pixels the visual score is computed over would be a different change.
+ *
+ * `normaliseAlpha` is idempotent, so applying it to a raster a caller already normalised is free
+ * rather than wrong — which is what lets this sit here without knowing where the raster came from.
+ */
+function onTheContractGrid(raster: {
+  width: number;
+  height: number;
+  pixels: Uint8Array | Uint8ClampedArray;
+}): { width: number; height: number; pixels: Uint8Array } {
+  const pixels = Uint8Array.from(raster.pixels);
+  normaliseAlpha(pixels);
+  return { width: raster.width, height: raster.height, pixels };
+}
 
 const evaluateKnownDifferences = evaluateJs as unknown as (input: {
   documentText: string;
@@ -74,7 +102,9 @@ export function evaluateKnownDifferenceComparison(
     documentText = "";
   }
 
-  const resolved = resolvePlane(input.reference, input.candidate);
+  const reference = onTheContractGrid(input.reference);
+  const candidate = onTheContractGrid(input.candidate);
+  const resolved = resolvePlane(reference, candidate);
   const result = evaluateKnownDifferences({
     documentText,
     readArtifact: artifactReader(artifactRoot),
@@ -83,12 +113,12 @@ export function evaluateKnownDifferenceComparison(
       referenceSha256: input.scope.referenceSha256 ?? null,
       plane: resolved.plane,
       canonicalReference: canonicalRaster(
-        input.reference,
+        reference,
         resolved.boxes.reference,
         resolved.plane,
       ),
       canonicalCandidate: canonicalRaster(
-        input.candidate,
+        candidate,
         resolved.boxes.candidate,
         resolved.plane,
       ),
@@ -115,8 +145,11 @@ export function evaluateKnownDifferenceComparison(
 
   const survivors = result.survivingMasks ?? [];
   const scores = scoreComparison({
-    reference: input.reference,
-    candidate: input.candidate,
+    // The same normalised rasters the gates ran on. The score is computed over the same pixels the
+    // verdict is, and the conformance suite scores over `decodePng` output — so scoring the raw
+    // buffers here would put the published number on a different grid from the one it is pinned on.
+    reference,
+    candidate,
     referenceBox: resolved.boxes.reference,
     candidateBox: resolved.boxes.candidate,
     plane: resolved.plane,
