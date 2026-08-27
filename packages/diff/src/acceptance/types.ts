@@ -59,6 +59,18 @@ export interface AcceptanceReport {
   suppressing: string[];
 }
 
+/**
+ * An {@link AcceptanceReport} as it may come back *off disk*.
+ *
+ * `scores.version` is required on a freshly produced report — the engine always stamps it — but
+ * every report serialized before the field existed lacks it, and no TypeScript property can repair
+ * an object that is already written. Renderers read both, so they read this: absent means the
+ * kernel is unknown, which is said by omitting the version rather than by printing one.
+ */
+export type PersistedAcceptanceReport = Omit<AcceptanceReport, "scores"> & {
+  scores: Omit<AcceptanceReport["scores"], "version"> & { version?: number };
+};
+
 export interface KnownDifferencesComparison {
   /** Repository root containing `.design-parity/known-differences.json`. */
   repoRoot: string;

@@ -30,8 +30,16 @@ export interface AcceptanceReportView {
     { status: string; causes?: string[]; reasons?: string[] }
   >;
   validationFailures: Array<{ id?: string; index?: number; reason: string }>;
-  /** Mirrors `AcceptanceReport['scores']`, `version` included — see its doc in `@design-parity/diff`. */
-  scores: { raw: number; accepted: number; unaccepted: number; version: number };
+  /**
+   * Mirrors `AcceptanceReport['scores']` — see its doc in `@design-parity/diff`.
+   *
+   * `version` is **optional here and required there**, and the asymmetry is the point. The engine
+   * always stamps what it produces, so a fresh report has it. This package renders *persisted*
+   * reports too, and every one written before the field existed lacks it; a required property
+   * cannot repair an object that was already serialized. Absent means "unknown", which the renderer
+   * says by omitting the chip rather than by claiming a version.
+   */
+  scores: { raw: number; accepted: number; unaccepted: number; version?: number };
   suppressing: string[];
 }
 

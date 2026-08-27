@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
 import { afterAll } from "vitest";
 import { unzipSync } from "fflate";
 
-import { diff } from "../src/diff.js";
+import { diff, renderAcceptanceSummary } from "../src/diff.js";
 import {
   evaluateKnownDifferenceComparison,
   refuseElementAcceptancesWithoutSemantics,
@@ -450,6 +450,31 @@ describe("compose-preview-known-differences/v1 conformance", () => {
       rmSync(repo, { recursive: true, force: true });
     }
   });
+  it("says nothing about the kernel when a stored report predates the field", () => {
+    // The mirror image of the test above. `version` is required on a freshly produced report, so
+    // the engine always stamps it — but reports persisted before the field existed cannot grow one,
+    // and a required TypeScript property does not reach an object already written to disk. The
+    // renderer has to say "unknown" by omission: `score vundefined` asserts something false about
+    // which arithmetic produced the numbers, which is worse than saying nothing.
+    const legacy = {
+      documentRejected: false,
+      statuses: {},
+      validationFailures: [],
+      scores: { raw: 90, accepted: 100, unaccepted: 90 },
+      suppressing: [],
+    };
+    const summary = renderAcceptanceSummary({ "default/light/compact": legacy });
+    expect(summary).toContain("raw 90.00%");
+    expect(summary).not.toContain("score v");
+    expect(summary).not.toContain("undefined");
+
+    // And a report that does carry one still says so.
+    const stamped = { ...legacy, scores: { ...legacy.scores, version: SCORE_TUNING.SCORE_VERSION } };
+    expect(renderAcceptanceSummary({ "default/light/compact": stamped })).toContain(
+      `(score v${SCORE_TUNING.SCORE_VERSION})`,
+    );
+  });
+
   it("keeps the score kernel version in one place — the vendored tuning", () => {
     // `version` on a report is only worth trusting if exactly one file decides it. A second copy of
     // the constant drifts silently the next time the kernel changes upstream, and then a number

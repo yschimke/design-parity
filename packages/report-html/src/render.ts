@@ -542,7 +542,7 @@ function acceptanceMarkup(input: ReportInput["acceptances"]): string {
       <span class="chip">raw ${report.scores.raw.toFixed(2)}%</span>
       <span class="chip">accepted ${report.scores.accepted.toFixed(2)}%</span>
       <span class="chip">unaccepted ${report.scores.unaccepted.toFixed(2)}%</span>
-      <span class="chip" title="Which pixel kernel minted these numbers — a change moves every score and no verdict.">score v${report.scores.version}</span>
+      ${report.scores.version === undefined ? "" : `<span class="chip" title="Which pixel kernel minted these numbers — a change moves every score and no verdict.">score v${report.scores.version}</span>`}
       <ul>${rejected}${validation}${statuses}</ul>
     </li>`;
   }).join("\n");
