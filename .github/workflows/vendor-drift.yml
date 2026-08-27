@@ -37,8 +37,22 @@ jobs:
       - name: Re-vendor against upstream main
         id: sync
         run: |
-          node packages/diff/test/sync-known-differences-vendor.mjs \
-            /tmp/compose-ai-tools origin/main
+          # A *failed* sync is drift too, and the loudest kind: the script refuses to write when a
+          # vendored module has been renamed or removed upstream, or when the pinned commit is no
+          # longer reachable. Letting the step die here would fail the job before `behind` is set,
+          # so the one case that most needs a report would produce silence instead.
+          if ! node packages/diff/test/sync-known-differences-vendor.mjs \
+              /tmp/compose-ai-tools origin/main > /tmp/sync.log 2>&1; then
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'diff<<DRIFT'
+              echo 'The re-vendor could not complete. This is drift the sync refuses to paper over:'
+              echo
+              tail -n 20 /tmp/sync.log
+              echo DRIFT
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if git diff --quiet -- packages/diff/src/acceptance/vendor; then
             echo "behind=false" >> "$GITHUB_OUTPUT"
           else
