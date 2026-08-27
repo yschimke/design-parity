@@ -13,23 +13,23 @@
  *
  * The **decisions** below — sheet-or-whole-image, alpha before colour, widen by one sample cell, the
  * coverage fallback — are `cli/serve-web/src/scorer/contentBox.ts`'s, unchanged, and its comments are
- * where the reasoning for each lives. What this file changes is the one host-dependent step: the
+ * where the reasoning for each lives. What this file changed was the one host-dependent step: the
  * sampling downscale is the portable area average rather than `drawImage`, whose filter is not
  * reproducible off-browser.
  *
- * **Which means the browser's own `contentBox` and this one differ until the rebaseline.** They are
- * measuring the same picture through two kernels, so they agree on any box whose edges are not
- * within a sample cell of a partially-covered pixel and can differ by one there. That is the same
- * one-off move [D3](parity-batches/00-decisions.md#d3--the-score-rebaseline-is-versioned-and-when)
- * already covers, and it is why the acceptance path uses *this* function on both engines rather than
- * whichever one the host has: an acceptance evaluated against two different planes is the failure
- * this module exists to prevent, while a legacy score measured through `drawImage` is merely a
- * number that is about to move once.
+ * **The browser's own `contentBox` measures through the same kernel as of the D3 rebaseline.** It
+ * used not to: the two were measuring the same picture through two resamplers, so they agreed on
+ * any box whose edges were not within a sample cell of a partially-covered pixel and could differ by
+ * one there. `cli/serve-web/src/scorer/frames.ts` now samples with {@link resampleArea} too, which
+ * is what closed that gap — and the acceptance path still uses *this* function on both engines
+ * rather than whichever one the host has, because a host that later changed its mind would be the
+ * failure this module exists to prevent.
  */
 
 // The resampler and the outward-rounding rule live with the rest of the reference implementation of
 // the contract; this file is a second consumer of them rather than a second copy.
-import { enclosingBox, resampleArea } from "./known-differences.js";
+import { enclosingBox } from "./known-differences.js";
+import { cropTo, resampleArea } from "./known-difference-resample.js";
 
 /**
  * Detection tuning, mirroring `cli/serve-web/src/scorer/tuning.ts` for the reason
@@ -188,15 +188,7 @@ export function resolvePlane(reference, candidate) {
  * single-ratio resample would land the candidate at the right x and the wrong y.
  */
 export function canonicalRaster(image, box, plane) {
-  const cropped = { width: box.width, height: box.height, pixels: new Uint8Array(box.width * box.height * 4) };
-  for (let y = 0; y < box.height; y++) {
-    for (let x = 0; x < box.width; x++) {
-      const source = ((box.y + y) * image.width + (box.x + x)) * 4;
-      cropped.pixels.set(image.pixels.subarray(source, source + 4), (y * box.width + x) * 4);
-    }
-  }
-  if (cropped.width === plane.box.width && cropped.height === plane.box.height) return cropped;
-  return resampleArea(cropped, plane.box.width, plane.box.height);
+  return cropTo(image, box, plane.box.width, plane.box.height);
 }
 
 /**
@@ -230,6 +222,17 @@ export function canonicalRaster(image, box, plane) {
  * there. Dropping the entry entirely would say the tag had *vanished*, which is a different verdict.
  */
 export function projectTagIndex(tagIndex, candidateBox, plane) {
+  // **Null-prototype, because the keys are producer-controlled tag names.** A `testTag` of
+  // `__proto__` is a perfectly ordinary string in a semantics tree and a catastrophic object key: on
+  // a plain `{}`, `projected[tag] = …` *replaces the prototype* instead of creating an own property.
+  // The tag then vanishes from `Object.keys` and every iteration built on it, while `projected[tag]`
+  // still answers through the prototype chain — so a consumer that iterates and one that looks up
+  // disagree about whether the producer published that tag at all, and an element acceptance
+  // targeting it resolves differently depending on which the reader used.
+  //
+  // Same defence and same reason as the `id-not-safe` rules on record ids, one module over: this
+  // index is keyed by names that never pass through them. `joinedIssues` in `known-differences.mjs`
+  // already builds its map this way.
   const projected = Object.create(null);
   for (const [tag, entry] of Object.entries(tagIndex ?? {})) {
     if (!entry || typeof entry !== "object") continue;

@@ -36,9 +36,40 @@ export const KNOWN_DIFFERENCES_SCHEMA = "compose-preview-known-differences/v1";
 /**
  * The budget, versioned with the schema.
  *
- * The five ceilings are *inclusive* — a document at exactly 256 acceptances, exactly 128 megapixels,
- * exactly 8192 px on a side or exactly 8 MiB per artifact is legal, and one unit past refuses. A
- * `>=` check would reject both and leave two engines free to disagree about the case in between.
+ * The ceilings are *inclusive* — a document at exactly 256 acceptances, exactly 128 megapixels,
+ * exactly 8192 px on a side, exactly 8 MiB per artifact, exactly 64 MiB of artifacts in total or
+ * exactly 640 MiB of peak live raster is legal, and one unit past refuses. A `>=` check would reject
+ * both and leave two engines free to disagree about the case in between.
+ *
+ * `maxRasterBytes` and `maxTotalArtifactBytes` are the two ceilings that are about the *reader*
+ * rather than the document, and they exist because the others quietly implied them: a document
+ * inside every one of them could still oblige an engine to hold well over a gigabyte, which is a
+ * resource decision the caps were making without anyone taking it.
+ *
+ * `maxRasterBytes` bounds the *decoded* side and is measured by {@link peakRasterBytes} from the
+ * declared headers, before a single raster is allocated. `maxTotalArtifactBytes` is its compressed
+ * twin, and closes the gap that left: 256 records × 2 artifacts × 8 MiB is four gigabytes of
+ * entirely legal compressed bytes, and padding inside the compressed stream is legal — the
+ * conformance fixtures do it deliberately — so a 1×1 image padded to 8 MiB contributes about sixteen
+ * bytes to `maxRasterBytes` and eight megabytes to a reader that has to hold it.
+ *
+ * The offline engine escapes that by re-reading from disk (see the preflight pass in
+ * {@link evaluateKnownDifferences}: headers one record at a time, retaining nothing). A browser
+ * cannot: `readArtifact` is synchronous by design, because the evaluation ladder is a sequence of
+ * ordering requirements and threading a promise through it would turn each into a race — so the
+ * adapter must fetch ahead and hold what it fetched. Without this ceiling the bound on what it holds
+ * was four gigabytes; with it, 64 MiB.
+ *
+ * **It is summed over every record whose two artifacts the reader answered for**, whatever any later
+ * header check says about them. That is deliberately not the `preflightClean` set the pixel budget
+ * uses, and the difference is the whole reason this ceiling can be enforced anywhere but here. An
+ * adapter deciding what to retain sees a *superset* of `preflightClean` — it has the headers but not
+ * the mask-encoding rules or either hash — so a total restricted to clean records is one an adapter
+ * can only over-estimate, and over-estimating a ceiling means skipping a body the engine then asks
+ * for, which is `artifact-unreadable`: a verdict change, from a planner. Summed over answered reads,
+ * the total is a pure function of what round one already saw, so both sides compute the same number.
+ * Counting a record the second pass will never re-read over-counts, and over-counting is the safe
+ * direction for a ceiling: it refuses a little early rather than holding a little too much.
  *
  * `maxPreflightBytes` is the odd one out and is not a ceiling on anything a document may declare: it
  * is how much of an artifact the reader must serve so the header preflight can reach a verdict. It
@@ -54,8 +85,53 @@ export const BUDGET = {
   maxPixels: 128_000_000,
   maxAxis: 8192,
   maxArtifactBytes: 8 * 1024 * 1024,
+  maxTotalArtifactBytes: 64 * 1024 * 1024,
   maxPreflightBytes: 4096,
+  maxRasterBytes: 640 * 1024 * 1024,
 };
+
+/**
+ * Bytes per pixel of a decoded raster, and the buffers one decode holds at its peak.
+ *
+ * Every decode normalises to 8-bit RGBA whatever the file's colour type is, so a raster is exactly
+ * four bytes a pixel and the accounting needs no colour-type term. `DECODE_WORKING_MULTIPLE` is the
+ * transient side: at its peak a decode holds the inflated scanline bytes and the raster it is
+ * filling — for RGBA the output aliases the scanlines, for every other colour type the scanlines are
+ * *smaller* than the raster — so two raster-sized buffers is the shape, and three is a bound that
+ * covers the per-row filter byte (`h × (4w + 1)` is `4wh + h`) and every colour type at once without
+ * a case analysis. Deliberately a bound rather than a measurement: an accounting an implementation
+ * can under-shoot by being clever is one two engines disagree about.
+ */
+export const RASTER_BYTES_PER_PIXEL = 4;
+export const DECODE_WORKING_MULTIPLE = 3;
+
+/**
+ * The peak live raster bytes a document obliges an engine to hold, from its **declared** headers.
+ *
+ *     peak = 4 × Σ(w·h over every artifact)  +  4 × 3 × max(w·h over every artifact)
+ *
+ * The first term is what is *retained*: the gates need both of a record's rasters and the union
+ * needs the masks of the survivors, so every artifact's raster is live at once by the time a verdict
+ * exists. The second is the *transient* working set of the one decode in flight; decodes are
+ * sequential and each releases before the next, so charging the largest single artifact once is
+ * exact rather than conservative. Resampling a record onto its canonical plane needs no term of its
+ * own: the plane is the mask's own dimensions (`dimension-mismatch` is the verdict when it is not),
+ * so a plane raster is bounded by a raster already counted.
+ *
+ * **Why this is not a restatement of `maxPixels`.** The two caps bind on different documents, and
+ * both are reachable. 512 artifacts of 250,000 pixels total exactly 128 megapixels and peak at
+ * ~515 MB — refused by `maxPixels`, nowhere near the memory ceiling. One record holding an
+ * 8000 × 8000 mask and an 8000 × 8000 accepted candidate is *also* exactly 128 megapixels, inside
+ * every axis and byte cap, and peaks at ~1.28 GB — legal under every cap `v1` had before this one,
+ * which is the hole: the pixel cap chose a memory floor nobody had agreed to. 640 MiB is the figure
+ * that keeps the first document legal and refuses the second.
+ */
+export function peakRasterBytes(totalPixels, largestArtifactPixels) {
+  return (
+    RASTER_BYTES_PER_PIXEL * totalPixels +
+    RASTER_BYTES_PER_PIXEL * DECODE_WORKING_MULTIPLE * largestArtifactPixels
+  );
+}
 
 // Not a comment's promise — the one relationship between those two constants, checked where it
 // cannot rot. Shrinking the prefix below what a conforming header can occupy would turn legal
@@ -229,91 +305,11 @@ const causeRank = new Map(CAUSE_ORDER.map((token, index) => [token, index]));
 // The portable pixel path (batch 00's D5, answers 1 and 5)
 // ---------------------------------------------------------------------------------------------
 
-/**
- * The named resampler: an **area average over exact source footprints**, per channel, on
- * non-premultiplied 8-bit RGBA, rounded half-up and clamped.
- *
- * Chosen over anything host-provided because `drawImage`'s filter is not reproducible off-browser
- * and its smoothing quality is implementation-dependent — the same unchanged candidate bytes would
- * otherwise produce different canonical pixels in the two engines and falsely invalidate as
- * `candidate-changed`. An area average needs no kernel radius, no edge-extension rule (a footprint
- * is clipped to the source rectangle and never samples outside it), and reduces to an exact box
- * filter at integer ratios and to nearest-neighbour when upscaling by an integer — so the three
- * cases an implementation is most likely to special-case are all the same arithmetic here.
- *
- * **Not premultiplied**, deliberately: premultiplying and un-premultiplying introduces a rounding
- * step each way that two engines would have to agree on for no benefit, and this contract's
- * artifacts are opaque by construction (a mask is greyscale with no alpha; an accepted candidate is
- * a crop of an already-composited render). Alpha is averaged as an ordinary fourth channel.
- *
- * Accumulate in double precision and round **half-up** (`Math.floor(v + 0.5)`) exactly once, at the
- * end — rounding per contribution is where two implementations drift.
- */
-export function resampleArea(source, targetWidth, targetHeight) {
-  const { width, height, pixels } = source;
-  const out = new Uint8Array(targetWidth * targetHeight * 4);
-  // **Exact integer arithmetic, not floating footprints.** Scaling every coordinate by the target
-  // dimension turns each overlap into a difference of integers: destination `tx` covers source
-  // units `[tx·W, (tx+1)·W]` once both sides are multiplied by `T`, and a source column `sx` covers
-  // `[sx·T, (sx+1)·T]`. Their overlap is then exact, the weights are exact, and the average is a
-  // ratio of two integers rounded once.
-  //
-  // The floating version was subtly wrong at exactly the boundary this contract cares most about:
-  // resizing 108 columns to 87 puts destination 84 on a true `201.5`, which double arithmetic
-  // computes as `201.4999999999998` and rounds *down* — half-up in the specification and half-down
-  // in the implementation, from one unlucky ratio. A one-channel error is enough to move a
-  // tolerance-boundary gate verdict, so the kernel that exists to make two engines agree cannot be
-  // the thing that disagrees. The magnitudes stay far inside the safe-integer range: the scaled area
-  // of one destination pixel is `W × H`, at most 8192² here, and the numerator at most 255 times
-  // that.
-  for (let ty = 0; ty < targetHeight; ty++) {
-    const y0 = ty * height;
-    const y1 = (ty + 1) * height;
-    for (let tx = 0; tx < targetWidth; tx++) {
-      const x0 = tx * width;
-      const x1 = (tx + 1) * width;
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      let a = 0;
-      let area = 0;
-      for (let sy = Math.floor(y0 / targetHeight); sy < height; sy++) {
-        const coverY = Math.min(y1, (sy + 1) * targetHeight) - Math.max(y0, sy * targetHeight);
-        if (coverY <= 0) break;
-        for (let sx = Math.floor(x0 / targetWidth); sx < width; sx++) {
-          const coverX = Math.min(x1, (sx + 1) * targetWidth) - Math.max(x0, sx * targetWidth);
-          if (coverX <= 0) break;
-          const weight = coverX * coverY;
-          const i = (sy * width + sx) * 4;
-          r += pixels[i] * weight;
-          g += pixels[i + 1] * weight;
-          b += pixels[i + 2] * weight;
-          a += pixels[i + 3] * weight;
-          area += weight;
-        }
-      }
-      const d = (ty * targetWidth + tx) * 4;
-      if (area === 0) continue;
-      out[d] = roundHalfUp(r, area);
-      out[d + 1] = roundHalfUp(g, area);
-      out[d + 2] = roundHalfUp(b, area);
-      out[d + 3] = roundHalfUp(a, area);
-    }
-  }
-  return { width: targetWidth, height: targetHeight, pixels: out };
-}
-
-/**
- * `round(numerator / denominator)` with halves going up, computed without ever forming the quotient.
- *
- * Both arguments are non-negative integers, so this is `floor((2n + d) / 2d)` — exact wherever the
- * inputs are, which is the whole point of the integer footprints above. Clamped for the same reason
- * the float version was: a channel is a byte.
- */
-function roundHalfUp(numerator, denominator) {
-  const value = Math.floor((2 * numerator + denominator) / (2 * denominator));
-  return Math.max(0, Math.min(255, value));
-}
+// The named resampler and the outward-rounding rule are the contract's, but they are arithmetic
+// over rasters and nothing else, so they live in their own module — `format-compare.js` takes the
+// kernel without taking the ladder. Re-exported here because this is where the contract's readers
+// have always found them.
+export { resampleArea } from "./known-difference-resample.js";
 
 function clamp8(value) {
   return Math.max(0, Math.min(255, Math.floor(value + 0.5)));
@@ -463,6 +459,59 @@ export function issueKey(issue) {
   return `${issue.owner}/${issue.repo}#${issue.number}`;
 }
 
+/**
+ * Join comparison verdicts to the issue index without changing either wire contract.
+ *
+ * `statuses` is the comparison axis. `issueRows` is the independently-published lifecycle axis,
+ * and absence from it is deliberately `unknown`: only a row that positively says `closed` is
+ * evidence of closure. Duplicate rows are ordinary (one issue can carry several locator blocks),
+ * but contradictory states are not evidence either way and therefore also collapse to `unknown`.
+ *
+ * Both sides are canonicalised to `owner/repo#number`. Acceptance URLs are hand-authored and may
+ * use `www.`, mixed case, a trailing slash or a fragment; joining their raw strings to the index's
+ * rebuilt URLs silently loses exactly the closed row stale detection needs.
+ */
+export function acceptanceLifecycles(documentRecords, statuses, issueRows = []) {
+  const indexed = new Map();
+  for (const row of issueRows ?? []) {
+    const issue = indexedIssue(row);
+    const state = row?.state === "open" || row?.state === "closed" ? row.state : null;
+    if (!issue || !state) continue;
+    const key = issueKey(issue);
+    const previous = indexed.get(key);
+    if (previous === undefined) indexed.set(key, state);
+    else if (previous !== state) indexed.set(key, null);
+  }
+
+  const joined = Object.create(null);
+  for (const record of documentRecords ?? []) {
+    if (typeof record?.id !== "string" || statuses?.[record.id] === undefined) continue;
+    const issue = parseIssue(record.issue);
+    const key = issue ? issueKey(issue) : null;
+    const lifecycle = key === null ? "unknown" : indexed.get(key) ?? "unknown";
+    const status = statuses[record.id].status;
+    joined[record.id] = {
+      issue: key,
+      lifecycle,
+      stale: lifecycle === "closed" && status !== "resolved",
+    };
+  }
+  return joined;
+}
+
+function indexedIssue(row) {
+  if (typeof row?.repository === "string" && Number.isSafeInteger(row?.number) && row.number > 0) {
+    const parts = row.repository.split("/");
+    if (
+      parts.length === 2 &&
+      parts.every((part) => /^[A-Za-z0-9._-]+$/.test(part))
+    ) {
+      return { owner: parts[0].toLowerCase(), repo: parts[1].toLowerCase(), number: row.number };
+    }
+  }
+  return parseIssue(row?.url);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Evaluation
 // ---------------------------------------------------------------------------------------------
@@ -526,19 +575,24 @@ export function issueKey(issue) {
  *   [`known-difference-score.mjs`](./known-difference-score.mjs) suppresses, and forming it is the
  *   one thing that has to happen after the gates and before the score (I5).
  */
-export function evaluateKnownDifferences({ documentText, readArtifact, comparison = null, catalog = null }) {
-  const parsed = parseDocument(documentText);
-  if (parsed.failure) return { validationFailures: [parsed.failure] };
-  const records = parsed.document.acceptances;
-
-  const documentFailures = [];
+/**
+ * The document-level failures decided by the records' **identity alone** — no artifact is read to
+ * reach any of them.
+ *
+ * Extracted so {@link readsNoArtifacts} and the evaluation itself cannot drift: a consumer that
+ * plans its reads from a second copy of these rules would fetch for a document the engine rejects,
+ * or skip for one it accepts, and only the second is a verdict change — which is exactly why the two
+ * must be one function rather than two that agree today.
+ */
+function identityFailures(records) {
+  const failures = [];
 
   // Identity first: a record with no usable key cannot be reported any other way, and a duplicated
   // key cannot be represented in a map at all. Both reject the document.
   const unkeyable = records
     .map((record, index) => ({ record, index }))
     .filter(({ record }) => typeof record?.id !== "string" || record.id.trim() === "");
-  for (const { index } of unkeyable) documentFailures.push({ index, reason: "id-missing" });
+  for (const { index } of unkeyable) failures.push({ index, reason: "id-missing" });
 
   // **Collisions are detected case-folded, and reported under the first spelling seen.** `foo` and
   // `FOO` are distinct map keys and the *same directory* on Windows and on a default macOS
@@ -558,9 +612,44 @@ export function evaluateKnownDifferences({ documentText, readArtifact, compariso
     .filter(([, count]) => count > 1)
     .map(([key]) => firstSeen.get(key))
     .sort((a, b) => a.index - b.index);
-  for (const { id } of duplicates) documentFailures.push({ id, reason: "duplicate-id" });
+  for (const { id } of duplicates) failures.push({ id, reason: "duplicate-id" });
 
-  if (records.length > BUDGET.maxAcceptances) documentFailures.push({ reason: "document-too-large" });
+  if (records.length > BUDGET.maxAcceptances) failures.push({ reason: "document-too-large" });
+
+  return failures;
+}
+
+/**
+ * Whether this document is rejected **before a single artifact is read**.
+ *
+ * For a consumer that must fetch ahead — a browser, where `readArtifact` is synchronous by design
+ * and the bytes have to be in hand before the ladder starts — this is the difference between
+ * prefetching a document's artifacts and prefetching nothing at all. A rejected document produces no
+ * `statuses` and reads nothing, so every byte fetched for one is a byte held for no verdict: up to
+ * 256 × 2 × 8 MiB of legal, individually-capped artifacts, which is the exhaustion the caps exist to
+ * prevent, reached through the guard itself.
+ *
+ * It answers only what the *text* decides — the size ceiling, a parse failure, a repeated member,
+ * an unkeyable or duplicated id, the record count. Everything past that needs headers, and a
+ * consumer planning reads from headers it has not fetched is planning from nothing.
+ *
+ * Deliberately not "will the engine read *this* artifact": that is a per-record question whose
+ * answer is `preflightClean`, and a caller approximating it from headers alone would over-count as
+ * often as under-count. This is the half that is exactly decidable, and it is the half that matters
+ * for a document nobody should be fetching for.
+ */
+export function readsNoArtifacts(documentText) {
+  const parsed = parseDocument(documentText);
+  if (parsed.failure) return true;
+  return identityFailures(parsed.document.acceptances).length > 0;
+}
+
+export function evaluateKnownDifferences({ documentText, readArtifact, comparison = null, catalog = null }) {
+  const parsed = parseDocument(documentText);
+  if (parsed.failure) return { validationFailures: [parsed.failure] };
+  const records = parsed.document.acceptances;
+
+  const documentFailures = identityFailures(records);
 
   // **Any document-level failure ends it here, before a single artifact is fetched.** An earlier
   // revision stopped the loop below only for `document-too-large`, so a document rejected for a
@@ -581,24 +670,45 @@ export function evaluateKnownDifferences({ documentText, readArtifact, compariso
   // is knowable — `statuses` is absent for a document-level rejection — so continuing to fetch the
   // remaining artifacts buys nothing and costs everything the cap was defending.
   const evaluations = [];
+  let artifactBytes = 0;
   let pixels = 0;
+  let largestArtifactPixels = 0;
   for (const [index, record] of records.entries()) {
     if (documentFailures.some((failure) => failure.reason === "document-too-large")) break;
     const evaluation = preflightRecord(record, index, readArtifact, catalog);
     evaluations.push(evaluation);
+    // **Before the `preflightClean` gate, deliberately.** Every record the reader answered for
+    // counts, because that is the only total an adapter can compute without re-deriving
+    // `preflightRecord` — see the note on `maxTotalArtifactBytes` in {@link BUDGET}. Checked as a
+    // running total and short-circuited like the others: past the ceiling nothing further about the
+    // document is knowable, and continuing to fetch costs exactly what the cap is defending.
+    artifactBytes += evaluation.artifactBytes;
+    if (artifactBytes > BUDGET.maxTotalArtifactBytes) {
+      pushOnce(documentFailures, { reason: "document-too-large" });
+      break;
+    }
     if (!evaluation.preflightClean) continue;
     for (const header of evaluation.headers) {
       const area = header.width * header.height;
+      // **The memory ceiling is checked as you go, like every other aggregate here.** Both terms of
+      // {@link peakRasterBytes} only ever grow as headers are added, so a running check refuses at
+      // the first header that puts the document over and stops reading — the same short-circuit the
+      // pixel cap gets, and for the same reason: past the ceiling nothing further about the document
+      // is knowable, and continuing to fetch costs exactly what the cap is defending.
+      const nextPixels = pixels + area;
+      const nextLargest = largestArtifactPixels > area ? largestArtifactPixels : area;
       if (
         header.width > BUDGET.maxAxis ||
         header.height > BUDGET.maxAxis ||
         area > BUDGET.maxPixels ||
-        pixels + area > BUDGET.maxPixels
+        nextPixels > BUDGET.maxPixels ||
+        peakRasterBytes(nextPixels, nextLargest) > BUDGET.maxRasterBytes
       ) {
         pushOnce(documentFailures, { reason: "document-too-large" });
         break;
       }
-      pixels += area;
+      pixels = nextPixels;
+      largestArtifactPixels = nextLargest;
     }
   }
 
@@ -916,6 +1026,10 @@ function preflightRecord(record, index, readArtifact, catalog) {
     reasons: [],
     headers: [],
     preflightClean: false,
+    // What the reader said this record's two artifacts weigh, once both reads have answered — 0
+    // until then, and 0 forever for a record that never got as far as reading. Summed by
+    // {@link evaluateKnownDifferences} against `maxTotalArtifactBytes`.
+    artifactBytes: 0,
     mask: null,
     accepted: null,
   };
@@ -975,6 +1089,11 @@ function preflightRecord(record, index, readArtifact, catalog) {
   if (maskRead.byteLength > BUDGET.maxArtifactBytes) oversized.push("artifact-too-large");
   if (acceptedRead.byteLength > BUDGET.maxArtifactBytes) oversized.push("artifact-too-large");
   if (oversized.length > 0) return fail(...oversized);
+
+  // Recorded here and not later: past this point every remaining check is about what the bytes
+  // *say*, and the aggregate is about what they *weigh*. An artifact already refused for busting the
+  // per-artifact cap is not carried into the total — the document is keeping neither.
+  evaluation.artifactBytes = maskRead.byteLength + acceptedRead.byteLength;
 
   // **Truncated here as well, whatever the reader served.** `{ prefix: N }` is a request, and a host
   // may not be in a position to honour it — a `fetch` that cannot range-request, a reader that
@@ -1402,13 +1521,11 @@ function elementCauses(element, tagIndex) {
     Math.abs(bounds.x + bounds.width - (baseline.x + baseline.width)),
     Math.abs(bounds.y + bounds.height - (baseline.y + baseline.height)),
   );
-  // **Compared as a ratio, not against a scaled tolerance.** `tolerance × min(width, height)` is a
-  // float multiplication and lands just under the true value often enough to matter: with tolerance
-  // `0.145` and a 200px baseline it gives `28.999999999999996`, so a displacement of exactly 29 —
-  // which *is* the inclusive boundary — reports `element-moved` here and `valid` in a consumer using
-  // decimals or the ratio. Dividing instead makes the boundary exact wherever the recorded tolerance
-  // is: `29 / 200` and the literal `0.145` are the same double, because both are the nearest double
-  // to the same real number.
+  // **Compared by exact cross multiplication, never floating-point ratio or product.** The
+  // tolerance grammar makes the decimal an exact multiple of `1 / ELEMENT_TOLERANCE_SCALE`, so the
+  // inclusive gate is `displacement × scale <= toleranceMicros × minDimension`. Both sides must be
+  // arbitrary-precision integers: a ratio happens to fix the familiar `0.145 × 200` boundary, but
+  // diverges again at schema-valid safe-integer bounds (pinned by the large-products fixture).
   const minDimension = Math.min(baseline.width, baseline.height);
   // **Exact integer arithmetic, in `BigInt`.** `element.tolerance` is spelled as a plain decimal
   // with at most six fraction digits, so it is an exact multiple of `1 / SCALE` and scaling recovers
@@ -1574,4 +1691,3 @@ export function locallyResolvedIssues(documentRecords, statuses) {
     .map(([key]) => key)
     .sort();
 }
-
