@@ -699,6 +699,62 @@ jobs:
           # reporting "no candidate render available" on a green job.
           test -s build/design-parity/candidates.bundle.png
 
+      # WHAT ACTUALLY FAILED, in the log, without a re-render.
+      #
+      # `bundle pack` runs the render as a Gradle test task, so a preview that
+      # cannot draw surfaces as `Execution failed for task ':m:composePreviewRender'
+      # > There were failing tests. See the results at: …/build/test-results/…` —
+      # a path on a runner that is about to be destroyed. The message names the one
+      # file nobody can read, and the CLI's own advice ("re-run with --verbose") means
+      # paying for the whole render again to find out.
+      #
+      # So print the failures here instead. The XML carries the exception and stack
+      # per preview, which is the difference between "the render failed" and "this
+      # preview threw this". Cheap, runs only on failure, and needs no second render.
+      - name: Why the render failed
+        if: ${{ failure() && steps.slice.outputs.count != '0' }}
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          set -uo pipefail
+          # `:a:b` ⇒ `a/b`, matching how the slice step derives the manifest path.
+          path="${MODULE#:}"
+          # An artifact name may not contain `:`, and one run can call this workflow
+          # once per module (wear-m3-catalog runs `:catalog` and `:remote-catalog`),
+          # so the module has to be IN the name or the second upload collides with
+          # the first. Shard index too, for a sharded module whose shards both fail.
+          echo "RENDER_FAILURE_SLUG=$(printf '%s' "${MODULE#:}" | tr ':' '-')" >> "$GITHUB_ENV"
+          dir="${path//://}/build/test-results"
+          if [ ! -d "$dir" ]; then
+            echo "::warning::No test results under ${dir} — the render failed before the task ran."
+            exit 0
+          fi
+          # Only the cases that actually failed; a passing suite's XML is noise.
+          found=0
+          while IFS= read -r xml; do
+            grep -q '<failure\|<error' "$xml" || continue
+            found=1
+            echo "::group::${xml#"${path//://}/build/test-results/"}"
+            # The <failure>/<error> bodies hold the exception and its stack.
+            sed -n '/<testcase/,/<\/testcase>/p' "$xml" | sed -n '/<failure\|<error/,/<\/failure>\|<\/error>/p' | head -80
+            echo "::endgroup::"
+          done < <(find "$dir" -name '*.xml' -print)
+          [ "$found" = 1 ] || echo "::warning::No failing cases in ${dir} — the task failed outside the tests themselves."
+
+      # And the raw results, for anything the summary above truncated.
+      - name: Upload the failed render's test results
+        if: ${{ failure() && steps.slice.outputs.count != '0' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: >-
+            render-failure-${{ env.RENDER_FAILURE_SLUG || github.job }}-${{
+            strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: |
+            **/build/test-results/**
+            **/build/reports/tests/**
+          if-no-files-found: ignore
+          retention-days: 7
+
       # The reference side, imported on its own schedule rather than re-fetched
       # here. Every shard reads the same commit of the same branch, so N shards
       # multiply the reference cost by nothing at all — where N live fan-outs
