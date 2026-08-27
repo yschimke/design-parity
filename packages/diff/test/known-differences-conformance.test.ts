@@ -49,9 +49,19 @@ const FIXTURE_ARCHIVE = join(
   "fixtures",
   "known-differences.zip",
 );
-const FIXTURE_ARCHIVE_SHA256 =
-  "72c76d180b1053b1f51db121c1c5c52234d52d130cace8912e61edb8a0619cf4";
-const FIXTURE_FILE_COUNT = 1141;
+// Read from the provenance record rather than restated here. Two copies of a pin is the same
+// defect this suite's provenance test exists to catch, one level up: a corpus regenerated at a new
+// commit while a hand-written constant still names the old digest looks exactly like a corpus that
+// never moved. `PROVENANCE.json` is written by the sync that produced both, so it cannot disagree
+// with what it snapshotted — and the assertions below then check the committed archive *is* that.
+const FIXTURE_PROVENANCE = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "acceptance", "vendor", "PROVENANCE.json"),
+    "utf8",
+  ),
+).fixtures;
+const FIXTURE_ARCHIVE_SHA256: string = FIXTURE_PROVENANCE.archiveSha256;
+const FIXTURE_FILE_COUNT: number = FIXTURE_PROVENANCE.fileCount;
 const FIXTURE_CASE_COUNTS = {
   cases: 190,
   plane: 6,
