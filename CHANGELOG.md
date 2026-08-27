@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.62](https://github.com/yschimke/design-parity/compare/v0.1.61...v0.1.62) (2026-08-27)
+
+
+### Features
+
+* **catalog-export:** publish the known-difference artifact list ([#401](https://github.com/yschimke/design-parity/issues/401)) ([ded5974](https://github.com/yschimke/design-parity/commit/ded5974e7038aaa75317199bed5ec8669f593906))
+
+
+### Bug Fixes
+
+* **diff:** scope the vendor rewrite, verify the host, and stop false drift ([#399](https://github.com/yschimke/design-parity/issues/399)) ([72aa074](https://github.com/yschimke/design-parity/commit/72aa0748cb495e63008d8179291423a1a65a0902))
+
 ## [0.1.61](https://github.com/yschimke/design-parity/compare/v0.1.60...v0.1.61) (2026-08-27)
 
 
