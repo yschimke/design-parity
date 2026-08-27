@@ -20,13 +20,14 @@ import { afterAll } from "vitest";
 import { unzipSync } from "fflate";
 import { PNG } from "pngjs";
 
-import { diff } from "../src/diff.js";
+import { diff, renderAcceptanceSummary } from "../src/diff.js";
 import {
   evaluateKnownDifferenceComparison,
   refuseElementAcceptancesWithoutSemantics,
   tagIndexFromSemantics,
 } from "../src/acceptance/evaluate.js";
 import { scoreComparison } from "../src/acceptance/vendor/known-difference-score.js";
+import { SCORE_TUNING } from "../src/acceptance/vendor/known-difference-tuning.js";
 import {
   enclosingBox,
   evaluateKnownDifferences,
@@ -450,6 +451,12 @@ describe("compose-preview-known-differences/v1 conformance", () => {
       expect(result.summary).toContain("raw ");
       expect(result.summary).toContain("accepted ");
       expect(result.summary).toContain("unaccepted ");
+      // The kernel version is stamped by the engine that minted the numbers, and reaches the
+      // summary alongside them. A stored report from another release is then self-describing: a
+      // reader can tell a real regression from a rebaseline, since a kernel change moves every
+      // score and no verdict.
+      expect(result.acceptances?.default.scores.version).toBe(SCORE_TUNING.SCORE_VERSION);
+      expect(result.summary).toContain(`(score v${SCORE_TUNING.SCORE_VERSION})`);
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -579,5 +586,61 @@ describe("compose-preview-known-differences/v1 conformance", () => {
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
+  });
+
+  it("says nothing about the kernel when a stored report predates the field", () => {
+    // The mirror image of the test above. `version` is required on a freshly produced report, so
+    // the engine always stamps it — but reports persisted before the field existed cannot grow one,
+    // and a required TypeScript property does not reach an object already written to disk. The
+    // renderer has to say "unknown" by omission: `score vundefined` asserts something false about
+    // which arithmetic produced the numbers, which is worse than saying nothing.
+    const legacy = {
+      documentRejected: false,
+      statuses: {},
+      validationFailures: [],
+      scores: { raw: 90, accepted: 100, unaccepted: 90 },
+      suppressing: [],
+    };
+    const summary = renderAcceptanceSummary({ "default/light/compact": legacy });
+    expect(summary).toContain("raw 90.00%");
+    expect(summary).not.toContain("score v");
+    expect(summary).not.toContain("undefined");
+
+    // And a report that does carry one still says so.
+    const stamped = { ...legacy, scores: { ...legacy.scores, version: SCORE_TUNING.SCORE_VERSION } };
+    expect(renderAcceptanceSummary({ "default/light/compact": stamped })).toContain(
+      `(score v${SCORE_TUNING.SCORE_VERSION})`,
+    );
+  });
+
+  it("keeps the score kernel version in one place — the vendored tuning", () => {
+    // `version` on a report is only worth trusting if exactly one file decides it. A second copy of
+    // the constant drifts silently the next time the kernel changes upstream, and then a number
+    // carries a version it does not implement — worse than no version at all, because a wrong one
+    // gets believed. So the value may appear only in the vendored tuning; everywhere else reads it.
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+    const owner = join("acceptance", "vendor", "known-difference-tuning.ts");
+    const literal = /SCORE_VERSION\s*[:=]\s*\d/;
+    const offenders: string[] = [];
+
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".git") {
+            continue;
+          }
+          walk(path);
+        } else if (/\.(ts|mts|mjs|js)$/.test(entry.name) && !path.endsWith(owner)) {
+          if (literal.test(readFileSync(path, "utf8"))) offenders.push(path.slice(repoRoot.length + 1));
+        }
+      }
+    };
+    walk(join(repoRoot, "packages"));
+
+    expect(offenders).toEqual([]);
+    // And the one place that does define it agrees with what the engine hands out.
+    expect(literal.test(readFileSync(join(repoRoot, "packages", "diff", "src", owner), "utf8"))).toBe(true);
+    expect(typeof SCORE_TUNING.SCORE_VERSION).toBe("number");
   });
 });
