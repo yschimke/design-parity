@@ -48,15 +48,15 @@ const FIXTURE_ARCHIVE = join(
   "known-differences.zip",
 );
 const FIXTURE_ARCHIVE_SHA256 =
-  "1814f88704a15996611b77f3c6fdc34fbaff3cfe50f54bddaec2e671909af66c";
-const FIXTURE_FILE_COUNT = 1360;
+  "72c76d180b1053b1f51db121c1c5c52234d52d130cace8912e61edb8a0619cf4";
+const FIXTURE_FILE_COUNT = 1141;
 const FIXTURE_CASE_COUNTS = {
-  cases: 183,
+  cases: 190,
   plane: 6,
   resample: 9,
   rounding: 5,
-  scoring: 6,
-  tagProjection: 6,
+  scoring: 8,
+  tagProjection: 7,
 };
 const fixtureArchiveBytes = new Uint8Array(readFileSync(FIXTURE_ARCHIVE));
 const fixtureEntries = unzipSync(fixtureArchiveBytes);
@@ -103,15 +103,19 @@ function fixtureReader(dir: string, synthesize: any[] = []) {
   };
 }
 
-function comparison(dir: string, value: any): any {
+function comparison(_dir: string, value: any): any {
   if (!value) return null;
+  // **Resolved against the fixture ROOT, not the case directory.** `case.json` names the canonical
+  // rasters by root-relative path so identical rasters are stored once for the whole tree, and every
+  // runtime resolves them the same way. Joining against the case directory looks for
+  // `cases/<id>/rasters/<hash>.png`, which does not exist.
   return {
     ...value,
     canonicalReference: value.canonicalReference
-      ? raster(join(dir, value.canonicalReference))
+      ? raster(join(ROOT, value.canonicalReference))
       : null,
     canonicalCandidate: value.canonicalCandidate
-      ? raster(join(dir, value.canonicalCandidate))
+      ? raster(join(ROOT, value.canonicalCandidate))
       : null,
   };
 }
@@ -375,18 +379,23 @@ describe("compose-preview-known-differences/v1 conformance", () => {
       cpSync(join(fixture, "artifacts"), join(committed, "known-differences"), {
         recursive: true,
       });
+      // The canonical rasters are named by `case.json`, by a path relative to the fixture ROOT —
+      // identical rasters are stored once for the whole tree rather than per case. Reading the
+      // names from the case rather than assuming `canonical-reference.png` beside it is also what
+      // keeps this test from re-encoding a layout the tree is free to change.
+      const meta = readJson(join(fixture, "case.json"));
+      const referencePath = join(ROOT, meta.comparison.canonicalReference);
+      const candidatePath = join(ROOT, meta.comparison.canonicalCandidate);
       const document = readJson(join(fixture, "known-differences.json"));
       document.acceptances[0].referenceSha256 = createHash("sha256")
-        .update(readFileSync(join(fixture, "canonical-reference.png")))
+        .update(readFileSync(referencePath))
         .digest("hex");
       document.acceptances[0].plane.box.x = 0;
       document.acceptances[0].plane.box.y = 0;
       writeFileSync(join(committed, "known-differences.json"), JSON.stringify(document));
 
-      const ref = raster(join(fixture, "canonical-reference.png"));
-      const cand = raster(join(fixture, "canonical-candidate.png"));
-      const referencePath = join(fixture, "canonical-reference.png");
-      const candidatePath = join(fixture, "canonical-candidate.png");
+      const ref = raster(referencePath);
+      const cand = raster(candidatePath);
       const result = await diff(
         {
           componentId: "IconButton/Tonal",
