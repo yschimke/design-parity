@@ -30,6 +30,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.19.0
+      # The sync imports `vendor-archive.mjs`, which imports `fflate`. `checkout` and `setup-node`
+      # install nothing, so without this the script dies with ERR_MODULE_NOT_FOUND on every run.
+      - run: npm ci
       - name: Fetch upstream
         run: |
           git clone --filter=blob:none --no-checkout \
@@ -41,8 +44,17 @@ jobs:
           # vendored module has been renamed or removed upstream, or when the pinned commit is no
           # longer reachable. Letting the step die here would fail the job before `behind` is set,
           # so the one case that most needs a report would produce silence instead.
-          if ! node packages/diff/test/sync-known-differences-vendor.mjs \
-              /tmp/compose-ai-tools origin/main > /tmp/sync.log 2>&1; then
+          set +e
+          node packages/diff/test/sync-known-differences-vendor.mjs \
+            /tmp/compose-ai-tools origin/main > /tmp/sync.log 2>&1
+          status=$?
+          set -e
+          # Exit 3 is the script *refusing* — a vendored module gone from upstream, a pin no longer
+          # reachable. That is drift, and the loudest kind, so it goes in the report. Any other
+          # non-zero status is a broken job (a missing dependency, a runner without git), and must
+          # fail loudly rather than masquerade as a stale pin: a setup error that opens a drift
+          # issue every week teaches everyone to ignore the one week it is real.
+          if [ "$status" -eq 3 ]; then
             echo "behind=true" >> "$GITHUB_OUTPUT"
             {
               echo 'diff<<DRIFT'
@@ -52,6 +64,10 @@ jobs:
               echo DRIFT
             } >> "$GITHUB_OUTPUT"
             exit 0
+          elif [ "$status" -ne 0 ]; then
+            echo "The sync failed for a reason that is not drift:" >&2
+            cat /tmp/sync.log >&2
+            exit "$status"
           fi
           # Compare the *content*, not the record. `PROVENANCE.json` carries the upstream commit, so
           # it is rewritten every time upstream `main` advances at all — including for changes that
