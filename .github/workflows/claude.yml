@@ -53,9 +53,9 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.19.0
+          node-version: 24.20.0
           cache: npm
-      - uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1.0.201
+      - uses: anthropics/claude-code-action@70fec183852c4f82f3f1969faed7dd60c5149ca7 # v1.0.207
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Applying the `claude` label to an issue starts a work session on it
