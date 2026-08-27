@@ -671,6 +671,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/design-parity
+          # Mtime floor for the failure diagnostic below. Earlier steps can leave failing JUnit
+          # reports of their own — a `design-map-command` running a Gradle test with
+          # `ignoreFailures` is the case in point — and a workspace-wide search would then blame
+          # an unrelated testcase for a render that never wrote a report at all. Only results
+          # newer than this marker belong to this shard's render.
+          touch build/design-parity/.render-start
           args=()
           while IFS= read -r id; do args+=(--id "$id"); done < slice-previews.txt
           # An empty exclusion list means this shard owns everything — passing
@@ -698,6 +704,101 @@ jobs:
           # exiting 0, which would sail past `set -e` and leave the parity run
           # reporting "no candidate render available" on a green job.
           test -s build/design-parity/candidates.bundle.png
+
+      # WHAT ACTUALLY FAILED, in the log, without a re-render.
+      #
+      # `bundle pack` runs the render as a Gradle test task, so a preview that
+      # cannot draw surfaces as `Execution failed for task ':m:composePreviewRender'
+      # > There were failing tests. See the results at: …/build/test-results/…` —
+      # a path on a runner that is about to be destroyed. The message names the one
+      # file nobody can read, and the CLI's own advice ("re-run with --verbose") means
+      # paying for the whole render again to find out.
+      #
+      # So print the failures here instead. The XML carries the exception and stack
+      # per preview, which is the difference between "the render failed" and "this
+      # preview threw this". Cheap, runs only on failure, and needs no second render.
+      - name: Why the render failed
+        if: ${{ failure() && steps.slice.outputs.count != '0' }}
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          set -uo pipefail
+          # An artifact name may not contain `:`, and one run can call this workflow once per
+          # module (wear-m3-catalog runs `:catalog` and `:remote-catalog`), so the module has to be
+          # IN the name or the second upload collides with the first. The hash keeps `:foo:bar` and
+          # `:foo-bar` apart, which stripping separators alone would not.
+          echo "RENDER_FAILURE_SLUG=$(printf '%s' "${MODULE#:}" | tr ':' '-')-$(printf '%s' "$MODULE" | sha256sum | cut -c1-8)" >> "$GITHUB_ENV"
+          # FIND the results; do not derive them from the module path. A Gradle project's path and
+          # its directory are independent — `project(":catalog").projectDir = file("samples/catalog")`
+          # is legal and this workflow never requires them to agree — so `:a:b` ⇒ `a/b` would look in
+          # the wrong place and report "no results" while the file sat elsewhere. The upload step
+          # below already globs; match it.
+          # Scope to what THIS render wrote, using the marker the render step drops before it
+          # starts. Without that floor an unrelated failing report left by an earlier step reads
+          # as a failing preview. A render takes minutes, so same-second mtime ties are not a
+          # practical concern; if the marker is missing the render never began, and the sweep
+          # widens to everything so the log still shows whatever is there, labelled as such.
+          marker=build/design-parity/.render-start
+          if [ -e "$marker" ]; then
+            mapfile -t xmls < <(find . -path '*/build/test-results/*' -name '*.xml' -newer "$marker" -print | sort)
+            empty_note="No test results newer than the render marker — the render failed before writing any."
+          else
+            mapfile -t xmls < <(find . -path '*/build/test-results/*' -name '*.xml' -print | sort)
+            empty_note="No test results anywhere under the workspace — the render failed before the task ran."
+            [ "${#xmls[@]}" -eq 0 ] || echo "::warning::No render marker; the render step never started. The results below predate it and may be unrelated."
+          fi
+          if [ "${#xmls[@]}" -eq 0 ]; then
+            echo "::warning::${empty_note}"
+            exit 0
+          fi
+          found=0
+          for xml in "${xmls[@]}"; do
+            grep -q '<failure\|<error' "$xml" || continue
+            found=1
+            echo "::group::${xml#./}"
+            # Each failure carries the NAME of the testcase it belongs to. Printing the <failure>
+            # body alone loses that, and a suite holds one testcase per preview — so a stack with no
+            # name attached is exactly the question this step exists to answer, left unanswered.
+            # Truncate INSIDE awk. Piping to `head` looks equivalent and is not: GitHub runs this
+            # with `bash -e`, `set -uo pipefail` above does not clear errexit, and a truncated
+            # pipeline reports awk's SIGPIPE 141 — so the step would abort on the first oversized
+            # XML, never closing this group and never reaching the later files. Exactly the
+            # failure this step exists to survive.
+            awk -v max=120 '
+              function out(s) {
+                if (shown < max) { print s; shown++; return }
+                if (!warned) { print "  … truncated at " max " lines; full XML in the render-failure artifact."; warned = 1 }
+              }
+              /<testcase/ {
+                # `.*name="` matches greedily and lands on `classname="`, naming every
+                # failure after the class rather than the case; searching the whole line
+                # finds `<testsuite name=` when a writer puts both tags on one line. Cut
+                # to the tag, then take the first `name="` at an attribute boundary
+                # (` classname="` has no space before `name`).
+                rest = substr($0, index($0, "<testcase"))
+                name = (match(rest, /[[:space:]]name="[^"]*"/)) ? substr(rest, RSTART + 7, RLENGTH - 8) : "(unnamed)"
+              }
+              /<failure|<error/ { printing = 1; out(sprintf("── %s", name)) }
+              printing { out($0) }
+              /<\/failure>|<\/error>|\/>[[:space:]]*$|<\/testcase>/ { if (printing) { printing = 0; out("") } }
+            ' "$xml"
+            echo "::endgroup::"
+          done
+          [ "$found" = 1 ] || echo "::warning::No failing cases in any test-results — the task failed outside the tests themselves."
+
+      # And the raw results, for anything the summary above truncated.
+      - name: Upload the failed render's test results
+        if: ${{ failure() && steps.slice.outputs.count != '0' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: >-
+            render-failure-${{ env.RENDER_FAILURE_SLUG || github.job }}-${{
+            strategy.job-index || 0 }}-${{ github.run_attempt }}
+          path: |
+            **/build/test-results/**
+            **/build/reports/tests/**
+          if-no-files-found: ignore
+          retention-days: 7
 
       # The reference side, imported on its own schedule rather than re-fetched
       # here. Every shard reads the same commit of the same branch, so N shards
