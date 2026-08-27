@@ -1,0 +1,99 @@
+name: vendor drift
+
+# The blocking half of this lives in `npm test`: `vendor-provenance.test.ts` proves the vendored
+# engine is `compose-ai-tools` at the pinned commit, offline and hermetically. What it deliberately
+# cannot see is upstream *moving* — the pin stays honest while going stale.
+#
+# So this job watches for that, and only reports. Re-vendoring is a deliberate act: it lands a new
+# scoring kernel, and every published score can move with it. Failing every PR because upstream
+# merged something would train people to ignore the signal that matters.
+
+on:
+  schedule:
+    # Mondays, ahead of the week's work rather than during it.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: vendor-drift
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.19.0
+      - name: Fetch upstream
+        run: |
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/yschimke/compose-ai-tools.git /tmp/compose-ai-tools
+      - name: Re-vendor against upstream main
+        id: sync
+        run: |
+          node packages/diff/test/sync-known-differences-vendor.mjs \
+            /tmp/compose-ai-tools origin/main
+          if git diff --quiet -- packages/diff/src/acceptance/vendor; then
+            echo "behind=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'diff<<DRIFT'
+              # Just the module sources — PROVENANCE.json restates the same fact as a hash.
+              git diff --stat -- packages/diff/src/acceptance/vendor/'*.ts'
+              echo DRIFT
+            } >> "$GITHUB_OUTPUT"
+          fi
+      - name: Summarise
+        run: |
+          if [ "${{ steps.sync.outputs.behind }}" = "true" ]; then
+            echo "The vendored engine is behind upstream \`main\`." >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "${{ steps.sync.outputs.diff }}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The vendored engine matches upstream \`main\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # One issue, reopened and re-bodied rather than a new one each Monday — the drift is a
+      # standing condition, not a weekly event, and a pile of duplicates is how a signal dies.
+      - name: Report
+        if: steps.sync.outputs.behind == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRIFT: ${{ steps.sync.outputs.diff }}
+        run: |
+          title='chore(diff): the vendored known-differences engine is behind upstream'
+          {
+            printf '%s\n' 'The scheduled check re-vendored `packages/diff/src/acceptance/vendor` from'
+            printf '%s\n' '[`compose-ai-tools@main`](https://github.com/yschimke/compose-ai-tools/tree/main/scripts/design-artifacts)'
+            printf '%s\n\n' 'and the result differs from what is committed here.'
+            printf '%s\n' '```'
+            printf '%s\n' "$DRIFT"
+            printf '%s\n\n' '```'
+            printf '%s\n\n' 'To bring it forward, against a checkout of `compose-ai-tools`:'
+            printf '%s\n' '```sh'
+            printf '%s\n' 'node packages/diff/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>'
+            printf '%s\n' 'node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout>'
+            printf '%s\n' 'npm test'
+            printf '%s\n\n' '```'
+            printf '%s\n' 'Re-vendor the fixtures alongside the engine: a kernel change moves the expected scores in'
+            printf '%s\n\n' 'the conformance corpus, and the two are only meaningful pinned to the same commit.'
+            printf '%s\n' 'This is a report, not a failure — re-vendoring changes published scores and is a decision,'
+            printf '%s\n' 'not routine maintenance.'
+          } > /tmp/drift-body.md
+          existing=$(gh issue list --state all --search "$title in:title" \
+            --json number,state --jq '.[0] | select(.) | "\(.number) \(.state)"')
+          if [ -n "$existing" ]; then
+            number=${existing%% *}
+            state=${existing##* }
+            [ "$state" = "CLOSED" ] && gh issue reopen "$number"
+            gh issue edit "$number" --body-file /tmp/drift-body.md
+          else
+            gh issue create --title "$title" --body-file /tmp/drift-body.md
+          fi

@@ -96,4 +96,3 @@ export function sha256Hex(bytes) {
   for (const word of state) hex += (word >>> 0).toString(16).padStart(8, "0");
   return hex;
 }
-

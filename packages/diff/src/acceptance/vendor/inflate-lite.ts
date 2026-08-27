@@ -302,4 +302,3 @@ export function adler32(bytes) {
   }
   return ((b << 16) | a) >>> 0;
 }
-

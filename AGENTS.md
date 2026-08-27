@@ -102,6 +102,28 @@ generic advice.
   three of them and missed in the fourth is dropped **in silence** — no type
   error, no test failure, just an absent key in the published catalog. Flag any
   new optional field that doesn't appear at every hop, with a test at each.
+- **Never hand-edit `packages/diff/src/acceptance/vendor/`.** Those eight modules
+  are `compose-ai-tools`' `scripts/design-artifacts/*.mjs` byte-for-byte, with
+  one declared mechanical transform (a `// @ts-nocheck` line, and `./x.mjs` →
+  `./x.js`). Two copies of a scoring engine that drift apart is the exact
+  failure the contract exists to prevent: each looks self-consistent while the
+  two report different numbers for the same pixels. Land the change **upstream
+  first**, then re-vendor:
+
+  ```sh
+  node packages/diff/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>
+  node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout>
+  ```
+
+  Re-vendor the fixtures alongside the engine — a kernel change moves the
+  expected scores in the conformance corpus, and the two are only meaningful
+  pinned to the same commit. `vendor/PROVENANCE.json` records the upstream
+  commit and both digests; `packages/diff/test/vendor-provenance.test.ts`
+  recovers the upstream bytes from each copy and checks them, so an in-place
+  edit fails the suite offline. A separate scheduled workflow
+  (`.github/workflows/vendor-drift.yml`) reports when the pin has gone stale —
+  it never fails a PR, because re-vendoring changes published scores and is a
+  decision rather than routine maintenance.
 - **Watch for drift in code vendored from here.** `compose-ai-tools`'
   `scripts/design-artifacts/generate-design-catalog.mjs` carries an inline copy
   of `packages/catalog-export/src/spec.ts`'s join, because the published package
