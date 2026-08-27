@@ -42,6 +42,7 @@ export {
 } from "./acceptance/index.js";
 export type {
   AcceptanceReport,
+  PersistedAcceptanceReport,
   AcceptanceScope,
   AcceptanceStatus,
   KnownDifferencesComparison,
