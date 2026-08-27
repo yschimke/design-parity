@@ -420,7 +420,10 @@ export function renderAcceptanceSummary(
   if (entries.length === 0) return "";
   const lines = entries.flatMap(([key, report]) => {
     const scores = report.scores;
-    const head = `- \`${key}\`: raw ${scores.raw.toFixed(2)}%, accepted ${scores.accepted.toFixed(2)}%, unaccepted ${scores.unaccepted.toFixed(2)}%`;
+    // The kernel version rides with the numbers. Without it a reader comparing this run against a
+    // stored one cannot tell a regression from a rebaseline, since a kernel change moves every score
+    // and no verdict.
+    const head = `- \`${key}\`: raw ${scores.raw.toFixed(2)}%, accepted ${scores.accepted.toFixed(2)}%, unaccepted ${scores.unaccepted.toFixed(2)}% (score v${scores.version})`;
     const validation = report.validationFailures.map((failure) => {
       const target = failure.id !== undefined
         ? `\`${failure.id}\``

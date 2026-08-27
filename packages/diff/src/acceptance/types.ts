@@ -41,7 +41,21 @@ export interface AcceptanceReport {
   documentRejected: boolean;
   statuses: Record<string, AcceptanceStatus>;
   validationFailures: Array<{ id?: string; index?: number; reason: string }>;
-  scores: { raw: number; accepted: number; unaccepted: number };
+  /**
+   * The three numbers, and **which pixel path minted them**.
+   *
+   * `version` mirrors `SCORE_VERSION` in the vendored tuning, and travels with the scores rather
+   * than beside them because it is a fact *about* these numbers: the kernel changes deliberately
+   * (1 was the browser's `drawImage`, 2 the portable area average on straight alpha, 3 that kernel
+   * premultiplied), and each change moves every published score without changing any verdict. A
+   * consumer holding a stored report from another release can then tell a genuine regression from a
+   * rebaseline, instead of reporting a difference that is entirely in the arithmetic.
+   *
+   * Stamped by the engine that produced the scores and never restated by a caller — a caller
+   * carrying its own copy of the constant can label a number with a version it did not implement,
+   * which is worse than no version at all, because the wrong one gets trusted.
+   */
+  scores: { raw: number; accepted: number; unaccepted: number; version: number };
   suppressing: string[];
 }
 

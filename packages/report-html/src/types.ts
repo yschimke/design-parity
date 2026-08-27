@@ -30,7 +30,8 @@ export interface AcceptanceReportView {
     { status: string; causes?: string[]; reasons?: string[] }
   >;
   validationFailures: Array<{ id?: string; index?: number; reason: string }>;
-  scores: { raw: number; accepted: number; unaccepted: number };
+  /** Mirrors `AcceptanceReport['scores']`, `version` included — see its doc in `@design-parity/diff`. */
+  scores: { raw: number; accepted: number; unaccepted: number; version: number };
   suppressing: string[];
 }
 
