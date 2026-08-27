@@ -1,6 +1,7 @@
 export { evaluateKnownDifferenceComparison, tagIndexFromSemantics } from "./evaluate.js";
 export type {
   AcceptanceReport,
+  PersistedAcceptanceReport,
   AcceptanceScope,
   AcceptanceStatus,
   Box,

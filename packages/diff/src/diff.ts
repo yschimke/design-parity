@@ -53,6 +53,7 @@ import {
 import {
   tagIndexFromSemantics,
   type AcceptanceReport,
+  type PersistedAcceptanceReport,
   type AcceptanceScope,
 } from "./acceptance/index.js";
 
@@ -414,13 +415,16 @@ export async function diff(
 }
 
 export function renderAcceptanceSummary(
-  reports: Record<string, AcceptanceReport>,
+  reports: Record<string, PersistedAcceptanceReport>,
 ): string {
   const entries = Object.entries(reports);
   if (entries.length === 0) return "";
   const lines = entries.flatMap(([key, report]) => {
     const scores = report.scores;
-    const head = `- \`${key}\`: raw ${scores.raw.toFixed(2)}%, accepted ${scores.accepted.toFixed(2)}%, unaccepted ${scores.unaccepted.toFixed(2)}%`;
+    // The kernel version rides with the numbers. Without it a reader comparing this run against a
+    // stored one cannot tell a regression from a rebaseline, since a kernel change moves every score
+    // and no verdict.
+    const head = `- \`${key}\`: raw ${scores.raw.toFixed(2)}%, accepted ${scores.accepted.toFixed(2)}%, unaccepted ${scores.unaccepted.toFixed(2)}%${scores.version === undefined ? "" : ` (score v${scores.version})`}`;
     const validation = report.validationFailures.map((failure) => {
       const target = failure.id !== undefined
         ? `\`${failure.id}\``

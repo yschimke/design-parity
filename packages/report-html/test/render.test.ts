@@ -204,6 +204,12 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     });
     expect(html).toContain("Document rejected; no committed acceptance was applied.");
     expect(html).toContain("duplicate-id");
+    // This fixture is deliberately shaped like a report persisted before `scores.version` existed.
+    // A required TypeScript property cannot repair an object that was serialized without it, so the
+    // renderer has to cope at runtime: no version is knowable here, and a chip reading
+    // `score vundefined` states something false about which kernel produced these numbers.
+    expect(html).not.toContain("vundefined");
+    expect(html).not.toContain("score v");
   });
 
   it("emits one self-contained HTML doc with the componentId, status, and findings", async () => {

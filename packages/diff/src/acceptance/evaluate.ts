@@ -19,6 +19,7 @@ import {
 } from "./vendor/known-difference-plane.js";
 import { scoreComparison as scoreJs } from "./vendor/known-difference-score.js";
 import { normaliseAlpha } from "./vendor/png-lite.js";
+import { SCORE_TUNING } from "./vendor/known-difference-tuning.js";
 
 /**
  * One incoming raster on the contract's straight-alpha grid, without touching the caller's buffer.
@@ -164,6 +165,9 @@ export function evaluateKnownDifferenceComparison(
       raw: scores.raw,
       accepted: scores.accepted,
       unaccepted: scores.unaccepted,
+      // Read from the engine's own tuning at the point the numbers are produced. Restating it
+      // anywhere downstream would let a caller label a score with a kernel it does not implement.
+      version: SCORE_TUNING.SCORE_VERSION,
     },
     suppressing: survivors.map((entry: { id: string }) => entry.id),
   };
