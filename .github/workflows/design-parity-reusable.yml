@@ -671,6 +671,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/design-parity
+          # Mtime floor for the failure diagnostic below. Earlier steps can leave failing JUnit
+          # reports of their own — a `design-map-command` running a Gradle test with
+          # `ignoreFailures` is the case in point — and a workspace-wide search would then blame
+          # an unrelated testcase for a render that never wrote a report at all. Only results
+          # newer than this marker belong to this shard's render.
+          touch build/design-parity/.render-start
           args=()
           while IFS= read -r id; do args+=(--id "$id"); done < slice-previews.txt
           # An empty exclusion list means this shard owns everything — passing
@@ -727,9 +733,22 @@ jobs:
           # is legal and this workflow never requires them to agree — so `:a:b` ⇒ `a/b` would look in
           # the wrong place and report "no results" while the file sat elsewhere. The upload step
           # below already globs; match it.
-          mapfile -t xmls < <(find . -path '*/build/test-results/*' -name '*.xml' -print | sort)
+          # Scope to what THIS render wrote, using the marker the render step drops before it
+          # starts. Without that floor an unrelated failing report left by an earlier step reads
+          # as a failing preview. A render takes minutes, so same-second mtime ties are not a
+          # practical concern; if the marker is missing the render never began, and the sweep
+          # widens to everything so the log still shows whatever is there, labelled as such.
+          marker=build/design-parity/.render-start
+          if [ -e "$marker" ]; then
+            mapfile -t xmls < <(find . -path '*/build/test-results/*' -name '*.xml' -newer "$marker" -print | sort)
+            empty_note="No test results newer than the render marker — the render failed before writing any."
+          else
+            mapfile -t xmls < <(find . -path '*/build/test-results/*' -name '*.xml' -print | sort)
+            empty_note="No test results anywhere under the workspace — the render failed before the task ran."
+            [ "${#xmls[@]}" -eq 0 ] || echo "::warning::No render marker; the render step never started. The results below predate it and may be unrelated."
+          fi
           if [ "${#xmls[@]}" -eq 0 ]; then
-            echo "::warning::No test results anywhere under the workspace — the render failed before the task ran."
+            echo "::warning::${empty_note}"
             exit 0
           fi
           found=0
@@ -740,7 +759,16 @@ jobs:
             # Each failure carries the NAME of the testcase it belongs to. Printing the <failure>
             # body alone loses that, and a suite holds one testcase per preview — so a stack with no
             # name attached is exactly the question this step exists to answer, left unanswered.
-            awk '
+            # Truncate INSIDE awk. Piping to `head` looks equivalent and is not: GitHub runs this
+            # with `bash -e`, `set -uo pipefail` above does not clear errexit, and a truncated
+            # pipeline reports awk's SIGPIPE 141 — so the step would abort on the first oversized
+            # XML, never closing this group and never reaching the later files. Exactly the
+            # failure this step exists to survive.
+            awk -v max=120 '
+              function out(s) {
+                if (shown < max) { print s; shown++; return }
+                if (!warned) { print "  … truncated at " max " lines; full XML in the render-failure artifact."; warned = 1 }
+              }
               /<testcase/ {
                 # `.*name="` matches greedily and lands on `classname="`, naming every
                 # failure after the class rather than the case; searching the whole line
@@ -750,10 +778,10 @@ jobs:
                 rest = substr($0, index($0, "<testcase"))
                 name = (match(rest, /[[:space:]]name="[^"]*"/)) ? substr(rest, RSTART + 7, RLENGTH - 8) : "(unnamed)"
               }
-              /<failure|<error/ { printing = 1; printf "── %s\n", name }
-              printing { print }
-              /<\/failure>|<\/error>|\/>[[:space:]]*$|<\/testcase>/ { if (printing) { printing = 0; print "" } }
-            ' "$xml" | head -120
+              /<failure|<error/ { printing = 1; out(sprintf("── %s", name)) }
+              printing { out($0) }
+              /<\/failure>|<\/error>|\/>[[:space:]]*$|<\/testcase>/ { if (printing) { printing = 0; out("") } }
+            ' "$xml"
             echo "::endgroup::"
           done
           [ "$found" = 1 ] || echo "::warning::No failing cases in any test-results — the task failed outside the tests themselves."
