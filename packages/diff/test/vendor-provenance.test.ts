@@ -20,6 +20,12 @@ const PROVENANCE = join(VENDOR_DIR, "PROVENANCE.json");
 interface Provenance {
   repository: string;
   commit: string;
+  fixtures: {
+    upstream: string;
+    archive: string;
+    fileCount: number;
+    archiveSha256: string;
+  };
   files: Record<
     string,
     { upstream: string; upstreamSha256: string; vendoredSha256: string }
@@ -52,6 +58,39 @@ const onDisk = readdirSync(VENDOR_DIR)
  * without a checkout, a network call, or trusting whoever ran the sync last.
  */
 describe("vendored known-differences engine provenance", () => {
+  it("pins the conformance corpus to the same commit as the engine", () => {
+    // A kernel change moves the expected scores across the corpus, so an engine and a corpus from
+    // different revisions make the conformance result meaningless *while still passing*. One sync
+    // writes both at one verified commit; this checks the archive on disk is the one it recorded.
+    const archive = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "fixtures", "known-differences.zip"),
+    );
+    expect(createHash("sha256").update(archive).digest("hex")).toBe(
+      provenance.fixtures.archiveSha256,
+    );
+    expect(provenance.fixtures.fileCount).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['import { x } from "./a.mjs";', 'import { x } from "./a.js";'],
+    ["import { x } from './a.mjs';", "import { x } from './a.js';"],
+    ['import "./side-effect.mjs";', 'import "./side-effect.js";'],
+    ['const m = await import("./dyn.mjs");', 'const m = await import("./dyn.js");'],
+    ['export { y } from "../up/b.mjs";', 'export { y } from "../up/b.js";'],
+    ['const nested = "./deep/dir/c.mjs";', 'const nested = "./deep/dir/c.js";'],
+    // Not a relative specifier, so not the transform's business — and rewriting it would corrupt
+    // a string the module means literally.
+    ['const notAPath = "keep.mjs";', 'const notAPath = "keep.mjs";'],
+  ])("rewrites %s and inverts exactly", (upstream: string, expected: string) => {
+    // The transform is *declared*, so it has to cover every relative-specifier form ESM allows —
+    // not merely the one upstream happens to use today. A form it misses passes the round-trip and
+    // the digest check unchanged (both are built from this same pattern) while the emitted module
+    // resolves a `.mjs` file the build never writes: green sync, runtime failure.
+    const vendored: string = toVendored(upstream);
+    expect(vendored).toBe(`// @ts-nocheck\n${expected}`);
+    expect(toUpstream(vendored)).toBe(upstream);
+  });
+
   it("records every vendored module, and only vendored modules", () => {
     expect(Object.keys(provenance.files).sort()).toEqual(onDisk);
     expect(provenance.commit).toMatch(/^[0-9a-f]{40}$/);

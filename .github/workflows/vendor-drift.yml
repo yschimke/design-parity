@@ -53,14 +53,23 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --quiet -- packages/diff/src/acceptance/vendor; then
+          # Compare the *content*, not the record. `PROVENANCE.json` carries the upstream commit, so
+          # it is rewritten every time upstream `main` advances at all — including for changes that
+          # touch nothing this package vendors. Diffing the whole directory would therefore raise a
+          # drift issue with an empty module diff on most weeks, and a report that cries wolf is a
+          # report nobody reads. The vendored modules and the corpus archive are the pin that
+          # actually matters.
+          if git diff --quiet -- \
+              packages/diff/src/acceptance/vendor/'*.ts' \
+              packages/diff/test/fixtures/known-differences.zip; then
             echo "behind=false" >> "$GITHUB_OUTPUT"
           else
             echo "behind=true" >> "$GITHUB_OUTPUT"
             {
               echo 'diff<<DRIFT'
-              # Just the module sources — PROVENANCE.json restates the same fact as a hash.
-              git diff --stat -- packages/diff/src/acceptance/vendor/'*.ts'
+              git diff --stat -- \
+                packages/diff/src/acceptance/vendor/'*.ts' \
+                packages/diff/test/fixtures/known-differences.zip
               echo DRIFT
             } >> "$GITHUB_OUTPUT"
           fi
@@ -110,4 +119,20 @@ jobs:
             gh issue edit "$number" --body-file /tmp/drift-body.md
           else
             gh issue create --title "$title" --body-file /tmp/drift-body.md
+          fi
+      # Drift is a *condition*, so the issue has to end when the condition does. Without this the
+      # report opened on a stale week stays open forever, still asserting the engine differs from
+      # upstream long after someone re-vendored — and a standing issue that is no longer true is
+      # indistinguishable from one nobody got round to.
+      - name: Stand down
+        if: steps.sync.outputs.behind == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title='chore(diff): the vendored known-differences engine is behind upstream'
+          open=$(gh issue list --state open --search "$title in:title" \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue close "$open" \
+              --comment 'The vendored engine matches upstream `main` again — closed by the scheduled check.'
           fi

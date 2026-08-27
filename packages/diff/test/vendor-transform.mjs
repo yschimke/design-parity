@@ -20,18 +20,33 @@
  * introduces becomes invisible again.
  */
 
+const MARKER = "// @ts-nocheck\n";
+
+/**
+ * Every relative-specifier form the rewrite has to reach.
+ *
+ * An earlier version matched only double-quoted static `from` clauses, which covered what upstream
+ * happens to contain today and nothing more. That is not good enough for a *declared* transform:
+ * a side-effect `import "./x.mjs"`, a dynamic `import("./x.mjs")` or a single-quoted specifier
+ * would pass straight through, and — because the inverse and the digest check are built from this
+ * same pattern — the round-trip would still verify. The sync would report success while emitting a
+ * module that resolves a `.mjs` file the build never writes, failing only at runtime.
+ *
+ * So match the specifier by its delimiters rather than by the syntax around it: an opening quote or
+ * backtick, `./` or `../`, a path, the extension, the matching closing delimiter.
+ */
+const specifier = (extension) =>
+  new RegExp(String.raw`(["'\x60])(\.{1,2}/[A-Za-z0-9._\-/]+)\.${extension}\1`, "g");
+
 /** Upstream `.mjs` source → the vendored `.ts` text. */
 export function toVendored(source) {
-  return `// @ts-nocheck\n${source.replace(/(from\s*"\.\/[A-Za-z0-9._-]+)\.mjs"/g, '$1.js"')}`;
+  return `${MARKER}${source.replace(specifier("mjs"), "$1$2.js$1")}`;
 }
 
 /** The exact inverse of {@link toVendored}. Throws if the input is not a vendored file. */
 export function toUpstream(vendored) {
-  const marker = "// @ts-nocheck\n";
-  if (!vendored.startsWith(marker)) {
+  if (!vendored.startsWith(MARKER)) {
     throw new Error("not a vendored module: missing the `// @ts-nocheck` line");
   }
-  return vendored
-    .slice(marker.length)
-    .replace(/(from\s*"\.\/[A-Za-z0-9._-]+)\.js"/g, '$1.mjs"');
+  return vendored.slice(MARKER.length).replace(specifier("js"), "$1$2.mjs$1");
 }

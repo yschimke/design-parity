@@ -1,41 +1,33 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+/**
+ * Snapshot the conformance corpus from a `compose-ai-tools` checkout.
+ *
+ * Thin wrapper: the archive is built by `vendor-archive.mjs`, which the engine sync also uses, so
+ * the corpus and the engine cannot be snapshotted from different revisions. Prefer running
+ * `sync-known-differences-vendor.mjs` — it does both at one verified commit and records it.
+ *
+ *   node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout> [ref]
+ */
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { zipSync } from "fflate";
+import { buildFixtureArchive } from "./vendor-archive.mjs";
 
-const sourceRepo = process.argv[2];
-if (!sourceRepo) {
-  throw new Error(
-    "usage: node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout>",
+const checkout = process.argv[2];
+const ref = process.argv[3] ?? "origin/main";
+if (!checkout) {
+  process.stderr.write(
+    "usage: node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout> [ref]\n",
   );
+  process.exit(2);
 }
 
-const source = resolve(
-  sourceRepo,
-  "scripts/design-artifacts/fixtures/known-differences",
-);
-const output = fileURLToPath(
-  new URL("fixtures/known-differences.zip", import.meta.url),
-);
-const files = [];
-const visit = (dir) => {
-  for (const name of readdirSync(dir).sort()) {
-    const path = join(dir, name);
-    const info = statSync(path);
-    if (info.isDirectory()) visit(path);
-    else if (info.isFile()) files.push(path);
-    else throw new Error(`unsupported fixture entry: ${path}`);
-  }
-};
-visit(source);
-
-const entries = Object.create(null);
-const epoch = new Date("1980-01-01T00:00:00Z");
-for (const path of files) {
-  const name = relative(source, path).split(sep).join("/");
-  entries[name] = [new Uint8Array(readFileSync(path)), { mtime: epoch }];
-}
-writeFileSync(output, zipSync(entries, { level: 9, mtime: epoch }));
-console.log(`wrote ${output} (${files.length} canonical files)`);
+const commit = execFileSync("git", ["-C", checkout, "rev-parse", ref], {
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"],
+}).trim();
+const output = fileURLToPath(new URL("fixtures/known-differences.zip", import.meta.url));
+const { bytes, fileCount } = buildFixtureArchive(checkout, commit);
+writeFileSync(output, bytes);
+console.log(`wrote ${output} (${fileCount} canonical files from ${commit})`);

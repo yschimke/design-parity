@@ -17,11 +17,12 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { toVendored } from "./vendor-transform.mjs";
+import { FIXTURE_DIR, buildFixtureArchive } from "./vendor-archive.mjs";
 
 const checkout = process.argv[2];
 const ref = process.argv[3] ?? "origin/main";
@@ -137,7 +138,16 @@ if (missing.length > 0) {
       "rename or delete its copy first — the sync mirrors, it does not choose.",
   );
 }
+// The corpus goes with the engine, at the same commit and in the same run. Snapshotting them
+// separately is how `fixtures/known-differences.md` came to document a commit and a digest that
+// no longer described the archive committed beside it — and a kernel change moves the expected
+// scores, so an engine and a corpus from different revisions make the conformance result mean
+// nothing while still passing.
+const archive = buildFixtureArchive(checkout, commit);
+const archivePath = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "known-differences.zip");
+
 for (const [path, text] of writes) writeFileSync(path, text);
+writeFileSync(archivePath, archive.bytes);
 
 writeFileSync(
   join(VENDOR_DIR, "PROVENANCE.json"),
@@ -150,6 +160,12 @@ writeFileSync(
       // checked, so it cannot quietly describe a different repository than the one vendored from.
       repository: upstreamRemote.url.trim(),
       commit,
+      fixtures: {
+        upstream: FIXTURE_DIR,
+        archive: "packages/diff/test/fixtures/known-differences.zip",
+        fileCount: archive.fileCount,
+        archiveSha256: createHash("sha256").update(archive.bytes).digest("hex"),
+      },
       files,
     },
     null,
@@ -157,4 +173,6 @@ writeFileSync(
   )}\n`,
 );
 
-console.log(`vendored ${modules.length} module(s) from ${commit}`);
+console.log(
+  `vendored ${modules.length} module(s) and ${archive.fileCount} corpus file(s) from ${commit}`,
+);
