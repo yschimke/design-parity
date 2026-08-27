@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.61](https://github.com/yschimke/design-parity/compare/v0.1.60...v0.1.61) (2026-08-27)
+
+
+### Features
+
+* **diff:** surface the score kernel version alongside the scores ([#396](https://github.com/yschimke/design-parity/issues/396)) ([a940644](https://github.com/yschimke/design-parity/commit/a940644259fe446e8fc5794638c5c734287aff82))
+
+
+### Bug Fixes
+
+* **diff:** normalise partial alpha on the production decode path ([#395](https://github.com/yschimke/design-parity/issues/395)) ([be1d82b](https://github.com/yschimke/design-parity/commit/be1d82bb55fba43477157df83464c94cd273d013))
+
 ## [0.1.60](https://github.com/yschimke/design-parity/compare/v0.1.59...v0.1.60) (2026-08-25)
 
 
