@@ -68,6 +68,32 @@ export interface PreviewParams {
    * `themeTokenSetsFromBundle` joins a theme's tokens to it.
    */
   wrapperClassName?: string;
+  /**
+   * Render density (`@Preview(density = …)`, dpi/160). Needed to resolve
+   * {@link captureGutter} from dp to the pixels the PNG is measured in.
+   */
+  density?: number;
+  /**
+   * `@CaptureGutter` — transparent dp the render's bounds were extended by on
+   * each edge, so a shadow or focus ring drawn outside the component is not
+   * cropped at the image edge. `null`/absent means the render is tight to the
+   * component.
+   *
+   * It travels so a consumer can take it back off: the canvas minus the gutter
+   * is the component, and a comparison that keeps it compares the wrong frame.
+   */
+  captureGutter?: CaptureGutterDp | null;
+}
+
+/**
+ * Per-edge dp of a declared capture gutter, mirroring compose-preview's
+ * `CaptureGutterDp`. Every edge defaults to 0 when the producer omits it.
+ */
+export interface CaptureGutterDp {
+  start?: number;
+  top?: number;
+  end?: number;
+  bottom?: number;
 }
 
 /** One entry of `compose-preview show --json`. */

@@ -50,6 +50,39 @@ export interface Image {
    * render-wide preferred tree for every image.
    */
   semantics?: SemanticTree;
+  /**
+   * Transparent margin the RENDERER added outside the component's own bounds,
+   * in **pixels** — a declared frame, not content. A renderer extends a capture
+   * this way so a shadow or focus ring drawn outside the component is not
+   * cropped at the image edge; compose-preview's `@CaptureGutter` states it in
+   * dp and a candidate source resolves it to px here.
+   *
+   * It has to be subtracted before comparing, and not merely tolerated at the
+   * edges. A reference is rasterised to the CANDIDATE's width, so an undeclared
+   * gutter does not add a border — it rescales the whole comparison and shifts
+   * the content under a top-left alignment. An 8dp gutter on a 136dp frame is a
+   * 12% zoom error: components that match their reference pixel-for-pixel have
+   * scored ~30% differing because of it.
+   *
+   * Absent (every image without a declared gutter) means the render is tight to
+   * the component and nothing is cropped.
+   */
+  gutter?: ImageGutter;
+}
+
+/**
+ * A declared transparent margin around a rendered component, in pixels.
+ *
+ * Per-edge rather than a single number because a renderer may extend only the
+ * edges that need it, and `start`/`end` are the writing-direction names the
+ * producing annotation uses; images here are already laid out, so `start` is
+ * the left edge.
+ */
+export interface ImageGutter {
+  start: number;
+  top: number;
+  end: number;
+  bottom: number;
 }
 
 /**

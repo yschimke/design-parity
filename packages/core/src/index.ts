@@ -9,6 +9,7 @@ export type {
   LinkMethod,
   Theme,
   Image,
+  ImageGutter,
   TypographyToken,
   ReferencePropertyType,
   ReferenceProperty,

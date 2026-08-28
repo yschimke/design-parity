@@ -44,6 +44,7 @@ import {
   type CandidateRender,
   type DesignTokens,
   type Image,
+  type ImageGutter,
   type SemanticTree,
   type Theme,
   type TypographyToken,
@@ -248,6 +249,31 @@ function paramsFor(
   return { ...(entry.params ?? {}), ...(capture.params ?? {}) };
 }
 
+/**
+ * Resolve a declared `@CaptureGutter` from dp to the pixels the PNG is measured
+ * in, or `undefined` when the render is tight to its component.
+ *
+ * Density defaults to 1 rather than being required: a producer that states a
+ * gutter but omits `density` is telling us dp, and dp = px at 1×. Guessing a
+ * higher density would crop away real content, so the conservative reading wins.
+ * Edges round to whole pixels, and an all-zero gutter is dropped — it says the
+ * same thing as no gutter and only invites a no-op crop.
+ */
+export function gutterFor(params: PreviewParams): ImageGutter | undefined {
+  const g = params.captureGutter;
+  if (!g) return undefined;
+  const density = typeof params.density === "number" && params.density > 0 ? params.density : 1;
+  const px = (dp: number | undefined) => Math.round(Math.max(0, dp ?? 0) * density);
+  const gutter = {
+    start: px(g.start),
+    top: px(g.top),
+    end: px(g.end),
+    bottom: px(g.bottom),
+  };
+  const any = gutter.start || gutter.top || gutter.end || gutter.bottom;
+  return any ? gutter : undefined;
+}
+
 function toImage(
   bytes: Uint8Array,
   params: PreviewParams,
@@ -260,6 +286,8 @@ function toImage(
   if (theme) image.theme = theme;
   const size = normalizeSize(params.widthDp);
   if (size) image.size = size;
+  const gutter = gutterFor(params);
+  if (gutter) image.gutter = gutter;
   return image;
 }
 
