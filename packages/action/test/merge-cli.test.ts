@@ -267,6 +267,55 @@ describe("merge (parity findings)", () => {
     expect(err).toContain("not valid JSON");
   });
 
+  it("leaves nothing publishable when it refuses over unreadable findings", async () => {
+    // The refusal has to happen BEFORE the first write to `out`. The wrapper workflow publishes
+    // whenever `out/**` is non-empty and folds every nonzero exit into `blocked=true`, so a
+    // refusal taken after the reports and indexes are on disk ships the partial board it just
+    // refused — and without a `run.json`, which is written later still.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    await writeFile(join(a, "findings.json"), '{"previews": {"a/A.kt#A": [');
+    const out = join(root, "out");
+
+    const { code } = await runMerge(["merge", a, "--out", out]);
+    expect(code).toBe(1);
+    await expect(readdir(out)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses a manifest that parses but omits its previews map", async () => {
+    // A producer never emits this: `writeParityFindings` deletes the file rather than writing an
+    // empty map. So it means a truncated or foreign artifact, and reading it as "nothing to
+    // report" would delete the manifest and publish failing rows with no explanations.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    await writeFile(
+      join(a, "findings.json"),
+      JSON.stringify({ schema: "compose-preview-parity-findings/v1" }),
+    );
+    const out = join(root, "out");
+
+    const { code, err } = await runMerge(["merge", a, "--out", out]);
+    expect(code).toBe(1);
+    expect(err).toContain("no readable 'previews' map");
+  });
+
+  it("refuses a preview whose sets are not a list", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    await writeFile(
+      join(a, "findings.json"),
+      JSON.stringify({
+        schema: "compose-preview-parity-findings/v1",
+        previews: { "a/A.kt#A": { status: "fail" } },
+      }),
+    );
+    const out = join(root, "out");
+
+    const { code, err } = await runMerge(["merge", a, "--out", out]);
+    expect(code).toBe(1);
+    expect(err).toContain("non-list set for 'a/A.kt#A'");
+  });
+
   it("removes a previous merge's findings once the run comes back clean", async () => {
     const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
     const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);

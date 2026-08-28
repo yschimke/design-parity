@@ -150,18 +150,23 @@ async function copyComponentDirs(from: string, to: string): Promise<number> {
  * every entry carries — so a carried component keeps its verdict even where the preview-id alias
  * cannot be recovered.
  */
-async function mergeParityFindings(
+async function readParityFindings(
   shardDirs: readonly string[],
-  outDir: string,
   carriedCodes: readonly string[],
   previousDir: string | undefined,
-): Promise<boolean> {
+): Promise<Record<string, unknown[]>> {
   // ABSENT and MALFORMED are not the same thing, and collapsing them is how a run publishes rows
   // that say `fail` with no machine-readable explanation behind any of them. A shard with nothing
-  // to report writes no file, which is the common case and silent; a shard whose file is truncated
-  // or is not the shape this reads throws, and the caller refuses to publish — the same posture
+  // to report writes no file at all, which is the common case and silent; anything else that is
+  // not the shape this reads throws, and the caller refuses to publish — the same posture
   // `verifyShardReports` takes, and for the same reason: this runs after every shard has spent its
   // full budget, so quietly losing a slice is the expensive failure.
+  //
+  // "Not that shape" includes a document that parses but omits `previews`, and a `previews` entry
+  // that is not a list of sets. Neither is something a producer emits — `writeParityFindings`
+  // deletes the file rather than writing an empty map — so both mean a truncated or foreign
+  // artifact, and treating either as "nothing to report" is the same silent loss by a quieter
+  // route.
   const read = async (dir: string): Promise<Record<string, unknown[]>> => {
     const file = join(dir, PARITY_FINDINGS_FILE);
     let raw: string;
@@ -178,9 +183,13 @@ async function mergeParityFindings(
       throw new Error(`${file} is not valid JSON: ${String(err)}`);
     }
     const previews = (doc as { previews?: unknown } | null)?.previews;
-    if (previews === undefined) return {};
     if (!previews || typeof previews !== "object" || Array.isArray(previews)) {
       throw new Error(`${file} has no readable 'previews' map`);
+    }
+    for (const [key, sets] of Object.entries(previews)) {
+      if (!Array.isArray(sets)) {
+        throw new Error(`${file} has a non-list set for '${key}'`);
+      }
     }
     return previews as Record<string, unknown[]>;
   };
@@ -189,7 +198,6 @@ async function mergeParityFindings(
   const add = (from: Record<string, unknown[]>, keys?: readonly string[]) => {
     for (const [key, sets] of Object.entries(from)) {
       if (keys && !keys.includes(key)) continue;
-      if (!Array.isArray(sets)) continue;
       (previews[key] ??= []).push(...sets);
     }
   };
@@ -198,7 +206,14 @@ async function mergeParityFindings(
   if (previousDir && carriedCodes.length > 0) {
     add(await read(previousDir), carriedCodes);
   }
+  return previews;
+}
 
+/** Write the merged manifest, or remove a previous one when this run has nothing to say. */
+async function writeParityFindings(
+  outDir: string,
+  previews: Record<string, unknown[]>,
+): Promise<boolean> {
   if (Object.keys(previews).length === 0) {
     // Same rule as the single-run path: a merge that produced nothing must REMOVE a previous
     // manifest rather than leave it standing as though it were this run's.
@@ -246,11 +261,6 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   }
 
   const merged = mergeShards(reports);
-  const outDir = resolvePath(cwd(), args.outDir);
-  await mkdir(outDir, { recursive: true });
-
-  let components = 0;
-  for (const dir of dirs) components += await copyComponentDirs(dir, outDir);
 
   // Carry forward what this run did not produce. A reference the run could not
   // read — rate limited, a source briefly unreachable — would otherwise vanish
@@ -263,6 +273,38 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     ? await readRunManifest(resolvePath(cwd(), args.previousDir))
     : undefined;
   const carried = carryForward(merged.entries, previous);
+
+  // Read and validate the findings HERE, above the first write to `out`, for the same reason
+  // `verifyShardReports` refuses above `mkdir`: the wrapper workflow publishes whenever `out/**`
+  // is non-empty and folds every nonzero exit into `blocked=true`, so a refusal taken after the
+  // reports and indexes are on disk would ship the partial board it just refused — and, because
+  // `run.json` is written later still, ship it without one. Refusing before anything exists is
+  // what makes that unrepresentable rather than merely discouraged, and it needs no agreement
+  // from a workflow that may be running an older published `merge`.
+  let findingPreviews: Record<string, unknown[]>;
+  try {
+    findingPreviews = await readParityFindings(
+      dirs,
+      carried.map((e) => e.code),
+      args.previousDir ? resolvePath(cwd(), args.previousDir) : undefined,
+    );
+  } catch (err) {
+    // Loud and specific, exactly like `verifyShardReports` above: a shard whose findings cannot be
+    // read is a slice of the verdict silently missing from a board that will still say `fail`, and
+    // nothing downstream can tell that from a run that was simply clean.
+    stderr.write(
+      "Refusing to publish a run whose findings could not be merged:\n" +
+        `  - ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    return 1;
+  }
+
+  const outDir = resolvePath(cwd(), args.outDir);
+  await mkdir(outDir, { recursive: true });
+
+  let components = 0;
+  for (const dir of dirs) components += await copyComponentDirs(dir, outDir);
+
   for (const entry of carried) {
     const dir = entry.reportPath?.split("/")[0];
     if (!dir) continue;
@@ -300,24 +342,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   });
   await writeFile(join(outDir, "README.md"), readme);
   await writeFile(join(outDir, "index.html"), html);
-  // Loud and specific, exactly like `verifyShardReports` above: a shard whose findings cannot be
-  // read is a slice of the verdict silently missing from a board that will still say `fail`, and
-  // nothing downstream can tell that from a run that was simply clean.
-  let findings = false;
-  try {
-    findings = await mergeParityFindings(
-      dirs,
-      outDir,
-      carried.map((e) => e.code),
-      args.previousDir ? resolvePath(cwd(), args.previousDir) : undefined,
-    );
-  } catch (err) {
-    stderr.write(
-      "Refusing to publish a run whose findings could not be merged:\n" +
-        `  - ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-    return 1;
-  }
+  const findings = await writeParityFindings(outDir, findingPreviews);
   await writeRunManifest(outDir, {
     formatVersion: RUN_MANIFEST_VERSION,
     ...(args.sourceCommit ? { sourceCommit: args.sourceCommit } : {}),
