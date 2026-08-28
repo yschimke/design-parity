@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.64](https://github.com/yschimke/design-parity/compare/v0.1.63...v0.1.64) (2026-08-28)
+
+
+### Bug Fixes
+
+* **diff:** rewrite a specifier that carries a comment, and skip the symlink test without privileges ([#414](https://github.com/yschimke/design-parity/issues/414)) ([ba48421](https://github.com/yschimke/design-parity/commit/ba484214594cb614887925813bc7eb7c149c545b))
+* **parity:** capture the render's own output, so a failure outside the tests explains itself ([#411](https://github.com/yschimke/design-parity/issues/411)) ([b1978d7](https://github.com/yschimke/design-parity/commit/b1978d76d7fd4136551b67c5de32a217378f0502))
+* **parity:** pass the render's include list as a file too, so a comma in an id survives ([#413](https://github.com/yschimke/design-parity/issues/413)) ([3a03290](https://github.com/yschimke/design-parity/commit/3a03290fb1573b1eab0449ba9e4ec26983b704ab))
+
 ## [0.1.63](https://github.com/yschimke/design-parity/compare/v0.1.62...v0.1.63) (2026-08-28)
 
 
