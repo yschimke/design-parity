@@ -27,6 +27,7 @@
  * {@link https://github.com/yschimke/design-parity/blob/main/packages/adapters/figma/src/reference-cache.ts | ReferenceCache}.
  */
 import {
+  FigmaNodeNotFoundError,
   FigmaRateLimitError,
   ReferenceCacheWriter,
   cacheKeyOf,
@@ -44,6 +45,13 @@ import { entryRefs } from "@design-parity/core";
  * that a catalog is a handful of requests rather than one per component.
  */
 const NODE_BATCH = 50;
+
+/**
+ * Node ids per `GET /v1/images/:key`. The endpoint takes a comma-separated
+ * `ids` exactly like the nodes endpoint, so a render pass costs one request per
+ * 50 nodes rather than one per node.
+ */
+const IMAGE_BATCH = 50;
 
 /** One node the import is responsible for. */
 export interface ImportTarget {
@@ -312,6 +320,55 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
 
     const fetched = await fetchStructures(opts.client, fileKey, take, result);
 
+    // Resolve every render URL first, batched, then download them.
+    //
+    // Splitting the two halves is what makes the batching possible: `ids=` takes
+    // 50 nodes per request, but each node's bytes come from its own signed CDN
+    // URL. The resolve half spends the per-token rate limit; the download half
+    // does not, so a limiter that stops the first can still be drained of the
+    // second.
+    //
+    // Grouped by `contentsOnly` because it varies per node and goes in the
+    // query, so it applies to a whole batch. `format` and `scale` are
+    // import-wide, so they do not split the groups.
+    const renderUrls = new Map<string, string>();
+    const renderErrors = new Map<string, unknown>();
+    let rateLimited = false;
+    const byContentsOnly = new Map<boolean, string[]>();
+    for (const nodeId of take) {
+      if (!fetched.has(nodeId)) continue;
+      const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
+      const group = byContentsOnly.get(nodeContentsOnly) ?? [];
+      group.push(nodeId);
+      byContentsOnly.set(nodeContentsOnly, group);
+    }
+    resolve: for (const [nodeContentsOnly, ids] of byContentsOnly) {
+      for (let i = 0; i < ids.length; i += IMAGE_BATCH) {
+        const chunk = ids.slice(i, i + IMAGE_BATCH);
+        try {
+          const urls = await opts.client.renderImageUrls(fileKey, chunk, {
+            format,
+            ...(opts.imageScale !== undefined ? { scale: opts.imageScale } : {}),
+            contentsOnly: nodeContentsOnly,
+          });
+          for (const id of chunk) {
+            const url = urls[id];
+            if (url) renderUrls.set(id, url);
+            else renderErrors.set(id, new FigmaNodeNotFoundError(fileKey, id));
+          }
+        } catch (err) {
+          // A batch fails as a unit, so the error is every node's in it. That is
+          // the cost of batching — a 429 now strands up to IMAGE_BATCH nodes
+          // rather than one — paid for by hitting the limiter ~50x less often.
+          for (const id of chunk) renderErrors.set(id, err);
+          if (err instanceof FigmaRateLimitError) {
+            rateLimited = true;
+            break resolve;
+          }
+        }
+      }
+    }
+
     for (const nodeId of take) {
       const node = fetched.get(nodeId);
       if (!node) {
@@ -322,20 +379,33 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
         result.complete = false;
         continue;
       }
+      const url = renderUrls.get(nodeId);
+      if (url === undefined) {
+        const err = renderErrors.get(nodeId);
+        if (err === undefined) {
+          // Never asked for: the limiter stopped the resolve pass before this
+          // node's batch. Untouched, so it stays stale and is next run's oldest
+          // — the same outcome the old per-node loop's `break` produced, and
+          // counted the same way (silently, not as a failure of its own).
+          result.complete = false;
+          continue;
+        }
+        result.warnings.push(`${fileKey}/${nodeId}: image not refreshed (${message(err)})`);
+        result.carried += 1;
+        result.failed += 1;
+        result.complete = false;
+        continue;
+      }
       try {
         const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
-        const rendered = await opts.client.renderImage(fileKey, nodeId, {
-          format,
-          ...(opts.imageScale !== undefined ? { scale: opts.imageScale } : {}),
-          contentsOnly: nodeContentsOnly,
-        });
+        const bytes = await opts.client.downloadImage(url, nodeId);
         await writer.put({
           fileKey,
           nodeId,
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes: rendered.bytes, format, contentsOnly: nodeContentsOnly },
+          image: { bytes, format, contentsOnly: nodeContentsOnly },
         });
         result.refreshed += 1;
       } catch (err) {
@@ -345,13 +415,12 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
         result.carried += 1;
         result.failed += 1;
         result.complete = false;
-        if (err instanceof FigmaRateLimitError) {
-          result.warnings.push(
-            `${fileKey}: rate limited — stopping this import; the rest carry forward and refresh next run`,
-          );
-          break;
-        }
       }
+    }
+    if (rateLimited) {
+      result.warnings.push(
+        `${fileKey}: rate limited — stopping this import; the rest carry forward and refresh next run`,
+      );
     }
 
     await importComponentSets(opts, writer, fileKey, version, fetched, wanted, result, now, log);

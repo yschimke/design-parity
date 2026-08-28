@@ -261,6 +261,41 @@ export class FigmaRestClient {
       includeNodeId?: boolean;
     } = {},
   ): Promise<RenderedImage> {
+    const urls = await this.renderImageUrls(fileKey, [nodeId], opts);
+    const url = urls[nodeId];
+    if (!url) {
+      throw new FigmaNodeNotFoundError(fileKey, nodeId);
+    }
+    return { bytes: await this.downloadImage(url, nodeId), url };
+  }
+
+  /**
+   * `GET /v1/images/:key?ids=a,b,c&format=…` — signed URLs for MANY nodes in
+   * ONE request, keyed by node id. A node the response omits maps to `null`.
+   *
+   * The endpoint has always accepted a comma-separated `ids`, exactly like
+   * `/v1/files/:key/nodes`, but {@link renderImage} asked for a single node and
+   * the import called it per node. Structure was batched; renders were not, so
+   * refreshing a 581-node kit spent ~581 rate-limited requests where ~12 do —
+   * and since the limiter is per token and shared across every repo holding it,
+   * that is what made a full import take several passes instead of one
+   * (wear-m3-catalog, 2026-08-28).
+   *
+   * Callers must group by anything that goes in the query — `format`, `scale`,
+   * `contentsOnly` — since those apply to the whole batch, not per node.
+   */
+  async renderImageUrls(
+    fileKey: string,
+    nodeIds: string[],
+    opts: {
+      scale?: number;
+      format?: "png" | "svg";
+      contentsOnly?: boolean;
+      includeNodeId?: boolean;
+    } = {},
+  ): Promise<Record<string, string | null>> {
+    const out: Record<string, string | null> = {};
+    if (nodeIds.length === 0) return out;
     const format = opts.format ?? "png";
     const scale = opts.scale ?? 2;
     const query =
@@ -269,20 +304,29 @@ export class FigmaRestClient {
         : `format=png&scale=${scale}`;
     const contentsOnly = opts.contentsOnly ?? true;
     const res = await this.#get<ImagesResponse>(
-      `/v1/images/${fileKey}?ids=${encodeURIComponent(nodeId)}&${query}` +
+      `/v1/images/${fileKey}?ids=${encodeURIComponent(nodeIds.join(","))}&${query}` +
         `&contents_only=${contentsOnly}`,
     );
-    const url = res.images[nodeId];
-    if (!url) {
-      throw new FigmaNodeNotFoundError(fileKey, nodeId);
+    for (const nodeId of nodeIds) {
+      out[nodeId] = res.images[nodeId] ?? null;
     }
+    return out;
+  }
+
+  /**
+   * Download a rendered image from the signed URL {@link renderImageUrls}
+   * returned. Deliberately separate: the URL is served by Figma's CDN rather
+   * than the API, so downloads do NOT spend the per-token rate limit and a
+   * caller may keep draining them after the API itself has started refusing.
+   */
+  async downloadImage(url: string, label = "image"): Promise<Uint8Array> {
     const imgRes = await this.#fetchRetrying(url);
     if (!imgRes.ok) {
       throw new FigmaApiError(
         imgRes.status,
-        `figma: failed to download rendered image for '${nodeId}' (${imgRes.status})`,
+        `figma: failed to download rendered image for '${label}' (${imgRes.status})`,
       );
     }
-    return { bytes: new Uint8Array(await imgRes.arrayBuffer()), url };
+    return new Uint8Array(await imgRes.arrayBuffer());
   }
 }

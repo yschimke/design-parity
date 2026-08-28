@@ -44,8 +44,13 @@ function json(obj: unknown): Response {
 
 interface FakeOptions {
   version?: string;
-  /** Node ids the API refuses to render, and how. */
+  /** Node ids whose whole REQUEST fails, and how. Batched: this fails the batch. */
   imageFails?: Record<string, "429" | "500">;
+  /**
+   * Node ids the API omits from a successful `images` map — how Figma actually
+   * reports a node it cannot render. Per node, so it survives batching.
+   */
+  imageMissing?: string[];
   /** Fail every `/nodes` request. */
   structureFails?: boolean;
 }
@@ -68,13 +73,22 @@ function fakeFigma(opts: FakeOptions = {}): { fetch: FetchLike; paths: string[] 
       return json({ nodes });
     }
     if (url.includes("/v1/images/")) {
-      const id = decodeURIComponent(new URL(url).searchParams.get("ids") ?? "");
-      const failure = opts.imageFails?.[id];
+      // `ids` is comma-separated, exactly like `/nodes?` above: the endpoint has
+      // always taken a batch, and the import now sends one.
+      const ids = decodeURIComponent(new URL(url).searchParams.get("ids") ?? "").split(",");
+      // A batch is one request, so one configured failure fails all of it —
+      // which is the behaviour the real API has and the import has to survive.
+      const failure = ids.map((id) => opts.imageFails?.[id]).find(Boolean);
       if (failure === "429") {
         return new Response("slow down", { status: 429, headers: { "retry-after": "0" } });
       }
       if (failure === "500") return new Response("boom", { status: 500 });
-      return json({ err: null, images: { [id]: `https://img.test/${id}.svg` } });
+      const images: Record<string, string> = {};
+      for (const id of ids) {
+        if (opts.imageMissing?.includes(id)) continue;
+        images[id] = `https://img.test/${id}.svg`;
+      }
+      return json({ err: null, images });
     }
     return new Response(svg);
   };
@@ -311,7 +325,29 @@ describe("importReferences", () => {
     });
   });
 
-  it("keeps the previous entry for a node it could not render, and stays stale", async () => {
+  it("renders a whole batch of nodes in ONE images request", async () => {
+    const dir = await cacheDir();
+    const fake = fakeFigma();
+    const result = await importReferences({
+      cacheDir: dir,
+      refs: [`figma:${FILE}/1:1`, `figma:${FILE}/1:2`, `figma:${FILE}/1:3`],
+      client: client(fake.fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ refreshed: 3, failed: 0, complete: true });
+    // The point of the change: three nodes, one rate-limited request. Per node
+    // this was three, and at kit scale ~581 — which is what made a full import
+    // take several passes against a per-token limiter shared across repos.
+    const imageRequests = fake.paths.filter((path) => path.includes("/v1/images/"));
+    expect(imageRequests).toHaveLength(1);
+    const asked = decodeURIComponent(
+      new URL(BASE + imageRequests[0]!).searchParams.get("ids") ?? "",
+    ).split(",");
+    expect(asked.sort()).toEqual(["1:1", "1:2", "1:3"]);
+  });
+
+  it("strands the whole batch when the REQUEST fails, and carries every node forward", async () => {
     const dir = await cacheDir();
     const refs = [`figma:${FILE}/1:1`, `figma:${FILE}/1:2`];
     await importReferences({
@@ -329,6 +365,42 @@ describe("importReferences", () => {
       force: true,
     });
 
+    // The cost of batching, stated: a request-level failure belongs to every
+    // node in the batch, where per-node requests isolated it to one. Accepted
+    // because it is only ever a REQUEST-level fault — a node Figma cannot
+    // render is omitted from `images` instead, and stays isolated (above).
+    // Nothing is lost either way: both carry forward whole and refresh first.
+    expect(result).toMatchObject({ refreshed: 0, failed: 2, complete: false });
+    const cache = await ReferenceCache.open(dir);
+    for (const nodeId of ["1:1", "1:2"]) {
+      expect(cache!.entry(FILE, nodeId)).toMatchObject({
+        fileVersion: "v1",
+        fetchedAt: "2026-01-01T00:00:00.000Z",
+      });
+    }
+  });
+
+  it("keeps the previous entry for a node it could not render, and stays stale", async () => {
+    const dir = await cacheDir();
+    const refs = [`figma:${FILE}/1:1`, `figma:${FILE}/1:2`];
+    await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(fakeFigma({ version: "v1" }).fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+    });
+
+    const result = await importReferences({
+      cacheDir: dir,
+      refs,
+      client: client(fakeFigma({ version: "v2", imageMissing: ["1:2"] }).fetch),
+      now: at("2026-02-01T00:00:00.000Z"),
+      force: true,
+    });
+
+    // Isolated to the one node: a node Figma cannot render is omitted from the
+    // `images` map rather than failing the request, so batching its neighbours
+    // alongside it does not cost them their refresh.
     expect(result).toMatchObject({ refreshed: 1, failed: 1, complete: false });
     const cache = await ReferenceCache.open(dir);
     // Refreshed.
