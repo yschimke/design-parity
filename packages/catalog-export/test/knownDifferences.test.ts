@@ -247,7 +247,8 @@ describe("writeKnownDifferences", () => {
     await commit("known-differences.json", DOCUMENT);
     const elsewhere = join(src, "elsewhere");
     await mkdir(elsewhere, { recursive: true });
-    await symlink(elsewhere, join(src, ".design-parity", "known-differences"));
+    const link = await tryLink(elsewhere, join(src, ".design-parity", "known-differences"));
+    if (!link) return;
 
     const result = await writeKnownDifferences(out, { repositoryRoot: src });
     expect(result.skipped).toContainEqual({ path: "known-differences", reason: "symlink" });

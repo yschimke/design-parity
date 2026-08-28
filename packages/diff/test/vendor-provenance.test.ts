@@ -82,6 +82,22 @@ describe("vendored known-differences engine provenance", () => {
     ['const m = await import("./dyn.mjs");', 'const m = await import("./dyn.js");'],
     ['export { y } from "../up/b.mjs";', 'export { y } from "../up/b.js";'],
     ['export * from "./star.mjs";', 'export * from "./star.js";'],
+    // A comment is legal between the keyword and its specifier, and a gap of whitespace alone
+    // reached none of these — the specifier kept its `.mjs` and the vendored module resolved a file
+    // the build never emits. Webpack's magic comment is the one that turns up in real source, and
+    // it sits *inside* the parenthesis.
+    ['import /* why */ "./a.mjs";', 'import /* why */ "./a.js";'],
+    [
+      'const m = await import(/* webpackChunkName: "c" */ "./dyn.mjs");',
+      'const m = await import(/* webpackChunkName: "c" */ "./dyn.js");',
+    ],
+    ['export { y } from // note\n  "./b.mjs";', 'export { y } from // note\n  "./b.js";'],
+    // Comments before the *binding* rather than the specifier: already reached, kept so the
+    // broadened gap cannot quietly stop reaching them.
+    [
+      'import /* a */ /* b */ { x } from "./multi.mjs";',
+      'import /* a */ /* b */ { x } from "./multi.js";',
+    ],
     // Not specifiers — filenames the module means literally. Rewriting one changes what it opens
     // at runtime, and the inverse restores it perfectly, so the round-trip and the digest both
     // still pass: a change nothing anywhere reports. The word `from` inside a string is the same

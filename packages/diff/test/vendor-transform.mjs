@@ -43,10 +43,20 @@ const MARKER = "// @ts-nocheck\n";
  * without its call parenthesis — and require the quote to open immediately after it. A literal
  * that merely contains the word (`"copied from ./a.mjs"`) has no quote in that position and is
  * left alone.
+ *
+ * "Immediately after" has to mean *after the comments too*. A comment is legal between the keyword
+ * and its specifier — `import /* why *\/ "./a.mjs"`, and webpack's
+ * `import(/* webpackChunkName: "x" *\/ "./a.mjs")` in particular, which puts one inside the
+ * parenthesis. A gap of whitespace alone reached neither, so such a specifier kept its `.mjs` and
+ * the vendored module resolved a file the TypeScript build never emits — the same silent runtime
+ * failure the narrow first version had, reintroduced by the fix for it. The anchor is unchanged, so
+ * nothing else is admitted.
  */
+const GAP = String.raw`(?:\s|/\*[\s\S]*?\*/|//[^\n]*\n)*`;
+
 const specifier = (extension) =>
   new RegExp(
-    String.raw`(\b(?:from|import)\s*\(?\s*)(["'\x60])(\.{1,2}/[A-Za-z0-9._\-/]+)\.${extension}\2`,
+    String.raw`(\b(?:from|import)${GAP}\(?${GAP})(["'\x60])(\.{1,2}/[A-Za-z0-9._\-/]+)\.${extension}\2`,
     "g",
   );
 
