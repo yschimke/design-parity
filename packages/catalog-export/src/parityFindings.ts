@@ -75,6 +75,16 @@ export interface ParityFinding {
 /** One run's conclusion about one (preview, reference) pair. */
 export interface ParityFindingSet {
   referenceId?: string;
+  /**
+   * Which design source this verdict was measured against (`figma`, `stitch`, …).
+   *
+   * The joinable identity a producer CAN supply where `referenceId` — minted at publish — is one it
+   * cannot. It matters as soon as one code handle is diffed against several sources: those results
+   * share a code handle and a candidate preview id, so without this a publisher has no way to tell
+   * the Figma verdict from the Stitch one and would show each against both boards. A preview server
+   * ignores the field; it exists for the step in between.
+   */
+  source?: string;
   status?: VerdictStatus;
   reportUrl?: string;
   findings: ParityFinding[];
@@ -98,6 +108,8 @@ export interface ParityTrees {
 export interface ParityFindingSetOptions extends ParityTrees {
   /** The serve/catalog reference id this verdict compared against, when known. */
   referenceId?: string;
+  /** The design source it was measured against, for a publisher that has to tell two apart. */
+  source?: string;
   /** Where the run published its own report, so the panel can link out to it. */
   reportUrl?: string;
 }
@@ -106,7 +118,11 @@ export interface ParityFindingSetOptions extends ParityTrees {
 function drawable(bounds: Bounds | undefined): Bounds | undefined {
   if (!bounds) return undefined;
   const { x, y, width, height } = bounds;
-  if (![x, y, width, height].every((n) => typeof n === "number" && Number.isFinite(n))) {
+  if (
+    ![x, y, width, height].every(
+      (n) => typeof n === "number" && Number.isFinite(n),
+    )
+  ) {
     return undefined;
   }
   const box = {
@@ -122,19 +138,28 @@ function drawable(bounds: Bounds | undefined): Bounds | undefined {
 function asBounds(value: unknown): Bounds | undefined {
   if (!value || typeof value !== "object") return undefined;
   const b = value as Record<string, unknown>;
-  const numeric = ["x", "y", "width", "height"].every((k) => typeof b[k] === "number");
+  const numeric = ["x", "y", "width", "height"].every(
+    (k) => typeof b[k] === "number",
+  );
   return numeric ? (value as Bounds) : undefined;
 }
 
 /** First node in a tree whose label matches, case- and whitespace-insensitively. */
-function nodeByLabel(tree: SemanticTree | undefined, label: string): SemanticNode | undefined {
+function nodeByLabel(
+  tree: SemanticTree | undefined,
+  label: string,
+): SemanticNode | undefined {
   if (!tree) return undefined;
   const want = label.trim().toLowerCase();
   if (!want) return undefined;
   let found: SemanticNode | undefined;
   const visit = (node: SemanticNode): void => {
     if (found) return;
-    if (node.bounds && node.label !== undefined && node.label.trim().toLowerCase() === want) {
+    if (
+      node.bounds &&
+      node.label !== undefined &&
+      node.label.trim().toLowerCase() === want
+    ) {
       found = node;
       return;
     }
@@ -145,13 +170,16 @@ function nodeByLabel(tree: SemanticTree | undefined, label: string): SemanticNod
 }
 
 /** Flatten a `detail` to the string map the wire type carries, dropping what cannot flatten. */
-function flattenDetail(detail: Record<string, unknown> | undefined): Record<string, string> {
+function flattenDetail(
+  detail: Record<string, unknown> | undefined,
+): Record<string, string> {
   const out: Record<string, string> = {};
   if (!detail) return out;
   for (const [key, value] of Object.entries(detail)) {
     if (value === undefined || value === null) continue;
     if (typeof value === "string") out[key] = value;
-    else if (typeof value === "number" || typeof value === "boolean") out[key] = String(value);
+    else if (typeof value === "number" || typeof value === "boolean")
+      out[key] = String(value);
     // `bounds` and the nested conflict lists are geometry and structure, not a readout: they are
     // consumed as anchors above, and stringifying them would print JSON into a hover card.
     else if (key !== "bounds") out[key] = JSON.stringify(value);
@@ -167,7 +195,10 @@ function flattenDetail(detail: Record<string, unknown> | undefined): Record<stri
  * a candidate node the design file has no counterpart for — a finding anchored on
  * one panel only still answers "where" for the panel that has it.
  */
-export function findingAnchors(finding: Finding, trees: ParityTrees): ParityAnchor[] {
+export function findingAnchors(
+  finding: Finding,
+  trees: ParityTrees,
+): ParityAnchor[] {
   const anchors: ParityAnchor[] = [];
   const detail = finding.detail as Record<string, unknown> | undefined;
 
@@ -178,7 +209,10 @@ export function findingAnchors(finding: Finding, trees: ParityTrees): ParityAnch
     return anchors;
   }
 
-  const label = typeof detail?.["label"] === "string" ? (detail["label"] as string) : undefined;
+  const label =
+    typeof detail?.["label"] === "string"
+      ? (detail["label"] as string)
+      : undefined;
   if (label) {
     for (const [side, tree] of [
       ["reference", trees.reference],
@@ -203,8 +237,13 @@ export function findingAnchors(finding: Finding, trees: ParityTrees): ParityAnch
 }
 
 /** One finding, projected onto the wire. */
-export function toParityFinding(finding: Finding, trees: ParityTrees = {}): ParityFinding {
-  const detail = flattenDetail(finding.detail as Record<string, unknown> | undefined);
+export function toParityFinding(
+  finding: Finding,
+  trees: ParityTrees = {},
+): ParityFinding {
+  const detail = flattenDetail(
+    finding.detail as Record<string, unknown> | undefined,
+  );
   const anchors = findingAnchors(finding, trees);
   return {
     kind: finding.kind,
@@ -226,12 +265,15 @@ export function buildParityFindingSet(
   verdict: Verdict,
   options: ParityFindingSetOptions = {},
 ): ParityFindingSet {
-  const { referenceId, reportUrl, ...trees } = options;
+  const { referenceId, source, reportUrl, ...trees } = options;
   return {
     ...(referenceId ? { referenceId } : {}),
+    ...(source ? { source } : {}),
     status: verdict.status,
     ...(reportUrl ? { reportUrl } : {}),
-    findings: verdict.findings.map((finding) => toParityFinding(finding, trees)),
+    findings: verdict.findings.map((finding) =>
+      toParityFinding(finding, trees),
+    ),
   };
 }
 
@@ -263,7 +305,9 @@ export function buildParityFindingsManifest(
   for (const entry of entries) {
     const set = buildParityFindingSet(entry.verdict, entry);
     if (set.findings.length === 0) continue;
-    for (const previewId of new Set(entry.previewIds.filter((id) => id.trim()))) {
+    for (const previewId of new Set(
+      entry.previewIds.filter((id) => id.trim()),
+    )) {
       (previews[previewId] ??= []).push(set);
     }
   }
@@ -275,6 +319,8 @@ export function buildParityFindingsManifest(
 }
 
 /** True when a manifest would show nothing — callers skip writing it entirely. */
-export function isEmptyParityFindings(manifest: ParityFindingsManifest): boolean {
+export function isEmptyParityFindings(
+  manifest: ParityFindingsManifest,
+): boolean {
   return Object.keys(manifest.previews).length === 0;
 }

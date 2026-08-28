@@ -139,7 +139,10 @@ describe("orchestrate (golden figma button vs candidate)", () => {
       referenceImages: [],
     };
     const declared = new Map([
-      [specTokenKey(corr.code, corr.source), { colors: { onSurface: "#161D1B" } }],
+      [
+        specTokenKey(corr.code, corr.source),
+        { colors: { onSurface: "#161D1B" } },
+      ],
     ]);
     const report = await orchestrate({
       repoRoot,
@@ -149,7 +152,9 @@ describe("orchestrate (golden figma button vs candidate)", () => {
       direction: "code-led",
       referenceTokens: declared,
     });
-    expect(report.results[0]!.reference?.tokens?.colors?.onSurface).toBe("#161D1B");
+    expect(report.results[0]!.reference?.tokens?.colors?.onSurface).toBe(
+      "#161D1B",
+    );
   });
 
   it("fails soft when an adapter throws — error does not escalate or block", async () => {
@@ -258,10 +263,77 @@ describe("run output artifacts (#49, #50)", () => {
       const kinds = new Set(set.findings.map((f: { kind: string }) => f.kind));
       expect(kinds.has("contrast")).toBe(true);
       expect(kinds.has("token")).toBe(true);
-      const token = set.findings.find((f: { kind: string }) => f.kind === "token");
+      const token = set.findings.find(
+        (f: { kind: string }) => f.kind === "token",
+      );
       expect(typeof token.detail.token).toBe("string");
       // A token finding is a claim about the component's own box, so it anchors to the frame.
-      expect(token.anchors?.some((a: { side: string }) => a.side === "actual")).toBe(true);
+      expect(
+        token.anchors?.some((a: { side: string }) => a.side === "actual"),
+      ).toBe(true);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("names the source, so two boards' verdicts stay apart (#106)", async () => {
+    // One code handle diffed against several sources shares a code handle AND a candidate preview
+    // id, so without this a publisher would show the Figma verdict under the Stitch board too.
+    const { reference, candidate } = await load();
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      await orchestrate({
+        repoRoot,
+        registry: reg(adapterReturning(reference)),
+        correspondences: [
+          { ...corr, source: "figma" },
+          { ...corr, source: "stitch" },
+        ],
+        candidate: () => candidate,
+        direction: "design-led",
+        outDir,
+      });
+      const manifest = JSON.parse(
+        await readFile(join(outDir, PARITY_FINDINGS_FILE), "utf8"),
+      );
+      const sets = manifest.previews[corr.code];
+      expect(sets.length).toBe(2);
+      expect(sets.map((s: { source: string }) => s.source).sort()).toEqual([
+        "figma",
+        "stitch",
+      ]);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes a previous run's findings once the run comes back clean", async () => {
+    // `outDir` is a documented, reused path, so declining to write is not enough: the old manifest
+    // would sit there being read as current, reporting findings the code has since fixed.
+    const { reference, candidate } = await load();
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      await orchestrate({
+        repoRoot,
+        registry: reg(adapterReturning(reference)),
+        correspondences: [corr],
+        candidate: () => candidate,
+        direction: "design-led",
+        outDir,
+      });
+      await readFile(join(outDir, PARITY_FINDINGS_FILE), "utf8");
+
+      await orchestrate({
+        repoRoot,
+        registry: reg(throwingAdapter),
+        correspondences: [corr],
+        candidate: () => undefined,
+        direction: "code-led",
+        outDir,
+      });
+      await expect(
+        readFile(join(outDir, PARITY_FINDINGS_FILE), "utf8"),
+      ).rejects.toThrow();
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
@@ -325,8 +397,12 @@ describe("run output artifacts (#49, #50)", () => {
       );
       // Both reports were actually written to their own dirs (the second didn't
       // overwrite the first).
-      expect(await readFile(rS!.reportPath!, "utf8")).toContain("<!doctype html>");
-      expect(await readFile(rC!.reportPath!, "utf8")).toContain("<!doctype html>");
+      expect(await readFile(rS!.reportPath!, "utf8")).toContain(
+        "<!doctype html>",
+      );
+      expect(await readFile(rC!.reportPath!, "utf8")).toContain(
+        "<!doctype html>",
+      );
 
       // The landing page carries a Source column so the two rows are told apart.
       const readme = await readFile(join(outDir, "README.md"), "utf8");
@@ -385,7 +461,13 @@ describe("nativeChecks injection (daemon path, #43)", () => {
       // The renderer supplies one distinctive native a11y finding for this component.
       nativeChecks: (code) =>
         code === corr.code
-          ? [{ kind: "a11y", severity: "warn", message: "NATIVE: from the daemon" }]
+          ? [
+              {
+                kind: "a11y",
+                severity: "warn",
+                message: "NATIVE: from the daemon",
+              },
+            ]
           : undefined,
       direction: "code-led",
     });
@@ -398,7 +480,9 @@ describe("nativeChecks injection (daemon path, #43)", () => {
       { kind: "a11y", severity: "warn", message: "NATIVE: from the daemon" },
     ]);
     // …while the default checks' contrast finding (present without injection) is gone.
-    expect(verdict.findings.some((f) => f.message.includes("WCAG"))).toBe(false);
+    expect(verdict.findings.some((f) => f.message.includes("WCAG"))).toBe(
+      false,
+    );
   });
 
   it("falls back to the default checks when nativeChecks returns undefined", async () => {
@@ -495,7 +579,12 @@ describe("preferring the reference variant the candidate claims", () => {
         componentId: code,
         ref,
         properties: [
-          { name: "Size", type: "variant", value, options: ["Small", "Medium"] },
+          {
+            name: "Size",
+            type: "variant",
+            value,
+            options: ["Small", "Medium"],
+          },
         ],
       };
     },
@@ -506,14 +595,20 @@ describe("preferring the reference variant the candidate claims", () => {
     },
   });
 
-  const claiming = (candidate: CandidateRender, props: Record<string, string>) => ({
+  const claiming = (
+    candidate: CandidateRender,
+    props: Record<string, string>,
+  ) => ({
     ...candidate,
     images: candidate.images.map((i) => ({ ...i, props })),
   });
 
   it("re-targets to the sibling that matches, and diffs against it", async () => {
     const { reference, candidate } = await load();
-    const calls = { resolved: [] as string[], siblings: [] as Array<[string, string]> };
+    const calls = {
+      resolved: [] as string[],
+      siblings: [] as Array<[string, string]>,
+    };
 
     const report = await orchestrate({
       repoRoot,
@@ -539,7 +634,10 @@ describe("preferring the reference variant the candidate claims", () => {
 
   it("keeps the mapped reference and reports it unpairable when no sibling exists", async () => {
     const { reference, candidate } = await load();
-    const calls = { resolved: [] as string[], siblings: [] as Array<[string, string]> };
+    const calls = {
+      resolved: [] as string[],
+      siblings: [] as Array<[string, string]>,
+    };
 
     const report = await orchestrate({
       repoRoot,
@@ -560,7 +658,10 @@ describe("preferring the reference variant the candidate claims", () => {
 
   it("asks for nothing when the candidate declares no properties", async () => {
     const { reference, candidate } = await load();
-    const calls = { resolved: [] as string[], siblings: [] as Array<[string, string]> };
+    const calls = {
+      resolved: [] as string[],
+      siblings: [] as Array<[string, string]>,
+    };
 
     await orchestrate({
       repoRoot,

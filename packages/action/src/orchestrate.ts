@@ -23,7 +23,7 @@ import type {
   VerdictStatus,
 } from "@design-parity/core";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
@@ -610,6 +610,12 @@ async function writeParityFindings(
     entries.push({
       previewIds,
       verdict: result.verdict,
+      // The one joinable identity a run CAN supply. `orchestrate` diffs a single code handle
+      // against every source that claims it (#106), and those results share a code handle AND a
+      // candidate preview id — so without this a publisher cannot tell the Figma verdict from the
+      // Stitch one, and would show each under both boards. That is a false claim, not a missing
+      // one, which is the failure this whole manifest is careful about everywhere else.
+      ...(result.source ? { source: result.source } : {}),
       ...(result.candidate?.semantics
         ? { candidate: result.candidate.semantics }
         : {}),
@@ -619,10 +625,14 @@ async function writeParityFindings(
     });
   }
   const manifest = buildParityFindingsManifest(entries);
-  if (isEmptyParityFindings(manifest)) return;
-  await writeFile(
-    join(outDir, PARITY_FINDINGS_FILE),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8",
-  );
+  const target = join(outDir, PARITY_FINDINGS_FILE);
+  if (isEmptyParityFindings(manifest)) {
+    // A clean run has to REMOVE the file, not merely decline to write one. `outDir` is a documented,
+    // reused path, so a previous failing run's manifest would otherwise sit there being read as
+    // current — machine consumers going on reporting findings the code has since fixed. Absent is
+    // the honest state for a run with nothing to say.
+    await rm(target, { force: true });
+    return;
+  }
+  await writeFile(target, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }

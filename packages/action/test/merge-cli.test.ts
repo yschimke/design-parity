@@ -252,6 +252,38 @@ describe("merge (parity findings)", () => {
     expect(Object.keys(doc.previews).sort()).toEqual(["a/A.kt#A", "b/B.kt#B"]);
   });
 
+  it("refuses to publish when a shard's findings are unreadable", async () => {
+    // Treating a truncated file like an absent one publishes `fail` rows with no machine-readable
+    // explanation behind any of them, and `verifyShardReports` cannot see the loss — it validates
+    // `shard.json` only. Same posture as that check: refuse rather than publish a partial run.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    await writeFile(join(a, "findings.json"), '{"previews": {"a/A.kt#A": [');
+    const out = join(root, "out");
+
+    const { code, err } = await runMerge(["merge", a, "--out", out]);
+    expect(code).toBe(1);
+    expect(err).toContain("findings could not be merged");
+    expect(err).toContain("not valid JSON");
+  });
+
+  it("removes a previous merge's findings once the run comes back clean", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    await writeShardFindings(a, { "a/A.kt#A": [finding("A drifted")] });
+    const out = join(root, "out");
+    expect((await runMerge(["merge", a, "--out", out])).code).toBe(0);
+    await readFile(join(out, "findings.json"), "utf8");
+
+    // A second shard-1-of-1 in its own root: same run shape, this time with nothing to report.
+    const cleanRoot = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const b = await writeShardDir(cleanRoot, 1, 1, ["a/A.kt#A"]);
+    expect((await runMerge(["merge", b, "--out", out])).code).toBe(0);
+    await expect(
+      readFile(join(out, "findings.json"), "utf8"),
+    ).rejects.toThrow();
+  });
+
   it("writes nothing when no shard reported a finding", async () => {
     const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
     const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
