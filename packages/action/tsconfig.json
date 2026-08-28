@@ -4,18 +4,45 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*"
+  ],
   "references": [
-    { "path": "../core" },
-    { "path": "../resolver" },
-    { "path": "../policy" },
-    { "path": "../diff" },
-    { "path": "../report-html" },
-    { "path": "../checks" },
-    { "path": "../candidate" },
-    { "path": "../adapters/figma" },
-    { "path": "../adapters/stitch" },
-    { "path": "../adapters/claude-design" },
-    { "path": "../adapters/bundle" }
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../resolver"
+    },
+    {
+      "path": "../policy"
+    },
+    {
+      "path": "../diff"
+    },
+    {
+      "path": "../report-html"
+    },
+    {
+      "path": "../catalog-export"
+    },
+    {
+      "path": "../checks"
+    },
+    {
+      "path": "../candidate"
+    },
+    {
+      "path": "../adapters/figma"
+    },
+    {
+      "path": "../adapters/stitch"
+    },
+    {
+      "path": "../adapters/claude-design"
+    },
+    {
+      "path": "../adapters/bundle"
+    }
   ]
 }
