@@ -11,6 +11,7 @@
  * images/<component>/<variant>__<state>[__theme][__size].png
  * parity/known-differences.json          # the source repo's committed acceptances, verbatim
  * parity/known-differences/<id>/…        # their masks and accepted-candidate crops
+ * parity/findings.json                   # a run's verdicts, when the caller has any
  * ```
  *
  * Image bytes are resolved from each {@link Image.uri}: a `data:` URI is decoded
@@ -30,6 +31,11 @@ import {
   buildAnnotationManifest,
   isEmptyAnnotationManifest,
 } from "./annotations.js";
+import {
+  buildParityFindingsManifest,
+  isEmptyParityFindings,
+  type ParityFindingsEntry,
+} from "./parityFindings.js";
 import {
   clearPublishedKnownDifferences,
   writeKnownDifferences,
@@ -66,6 +72,19 @@ export interface WriteOptions extends ManifestOptions {
    * exists, so every committed acceptance would silently fail to reach the bundle.
    */
   knownDifferencesRoot?: string;
+  /**
+   * A run's verdicts, to publish as `parity/findings.json` — the a11y, i18n, token and layout
+   * findings a preview server shows under its comparison panels.
+   *
+   * Passed in rather than derived, because this package cannot produce one: a catalog export is
+   * code-led and knows only what the code IS, while a finding is a claim about a code/design PAIR
+   * that only a diff run has. A caller with no verdicts (the ordinary sticker-sheet export) omits
+   * this and the file is not written — which is also what a run whose every component passed gets,
+   * since a set with no findings is dropped.
+   */
+  parityFindings?: readonly ParityFindingsEntry[];
+  /** Stamped into `parity/findings.json`. Omitted when absent, never defaulted to "now". */
+  generatedAt?: string;
 }
 
 export interface WriteResult {
@@ -86,6 +105,8 @@ export interface WriteResult {
   wireframeCount?: number;
   /** Absolute path to the annotation manifest, when the catalog produced one. */
   annotationsPath?: string;
+  /** Absolute path to `parity/findings.json`, when a caller supplied verdicts carrying findings. */
+  parityFindingsPath?: string;
   /**
    * What the source repo's committed known differences produced, when it commits any.
    *
@@ -207,6 +228,20 @@ export async function writeCatalog(
     await mkdir(dirname(annotationsPath), { recursive: true });
     await writeJson(annotationsPath, annotations, indent);
     result.annotationsPath = annotationsPath;
+  }
+
+  // The run's verdict, for the same compare panels the annotation layer draws over — what the run
+  // CONCLUDED, beside what each side is. Written only when a caller had verdicts and at least one
+  // carried a finding: a "Design parity" panel with nothing under it on every passing component is
+  // noise a reader learns to skip, and takes the failing ones with it.
+  if (opts.parityFindings?.length) {
+    const findings = buildParityFindingsManifest(opts.parityFindings, opts.generatedAt);
+    if (!isEmptyParityFindings(findings)) {
+      const findingsPath = join(out, "parity", "findings.json");
+      await mkdir(dirname(findingsPath), { recursive: true });
+      await writeJson(findingsPath, findings, indent);
+      result.parityFindingsPath = findingsPath;
+    }
   }
 
   // The source repo's committed parity acceptances, carried verbatim — see `knownDifferences.ts`

@@ -130,11 +130,39 @@ not one to guess at here.
 | `greenlines.ts` | Findings + semantics → the greenline annotation layer. |
 | `redlines.ts` | Semantics → the redline (layout) annotation layer. |
 | `annotations.ts` | Redlines + typography → the `compose-preview-annotations/v1` manifest. |
+| `parityFindings.ts` | A run's verdicts → the `compose-preview-parity-findings/v1` manifest, with each finding anchored to the region it is about. |
 | `manifest.ts` | The pure `catalog.json` builder (paths only, no I/O). |
 | `figma.ts` | `DesignTokens` → a Figma variable collection. |
 | `write.ts` | The one I/O step: materialize the bundle to disk. |
 
 Depends only on `@design-parity/core`.
+
+## The parity verdict (`parity/findings.json`)
+
+The annotation layers above say what each side **is**. A comparison also needs
+what a run **concluded** — that a label truncates once localized, that padding is
+24 where the spec asserts 16, that the two frames were never comparable — and
+neither an annotation nor a visual score can produce that: an annotation reports
+both numbers without knowing which one the spec asserts, and a percentage moves
+identically for a padding change and a colour change.
+
+So `parityFindings.ts` projects a run's `Verdict`s into
+`compose-preview-parity-findings/v1`, keyed by the ids a preview server routes
+on and scoped by the reference each verdict compared against. `writeCatalog`
+writes it when a caller passes `parityFindings` — a plain sticker-sheet export
+has no verdicts and writes nothing, and neither does a run whose components all
+passed.
+
+The interesting half is the **anchors**: a finding has to say where it is, in
+each panel's own pixel space, or the server can only print it as prose. Findings
+carry no geometry, so it is recovered from the trees the run already diffed —
+a box the check measured (`detail.bounds`, which the a11y checks emit) is used as
+it stands; a `detail.label` is matched against each tree by label, the same match
+`@design-parity/report-html`'s overlay makes, deliberately rather than a second
+rule that could disagree with it; and a `token` finding anchors to each tree's
+root frame, because that is the scope of the claim. Anything else gets no anchor
+and reads as prose — a highlight pointing at the wrong element is worse than
+none, since the reader has no way to tell.
 
 ## Annotation layers, and what they promise
 
