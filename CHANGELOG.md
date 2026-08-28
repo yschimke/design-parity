@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.68](https://github.com/yschimke/design-parity/compare/v0.1.67...v0.1.68) (2026-08-28)
+
+
+### Bug Fixes
+
+* make a missing reference cache loud instead of silently live-fetching ([#423](https://github.com/yschimke/design-parity/issues/423)) ([6f4d2f1](https://github.com/yschimke/design-parity/commit/6f4d2f116587c2d620d04ee9223910eea4484870))
+
 ## [0.1.67](https://github.com/yschimke/design-parity/compare/v0.1.66...v0.1.67) (2026-08-28)
 
 
