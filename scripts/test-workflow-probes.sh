@@ -342,6 +342,95 @@ for pair in "0:clean" "3:drift" "1:failure" "127:failure"; do
   fi
 done
 
+# ── 6. The --id-file branch, and the argv it builds ─────────────────────────
+# A preview id MAY CONTAIN A COMMA — an `@Preview(widthDp = …, heightDp = …)`
+# mints `…AppCardRemote_width=227dp,height=200dp,dpi=320` — and `--id`
+# comma-splits its values, so the repeated-`--id` spelling shatters such an id
+# and `composePreviewBundle` dies naming the first fragment
+# (compose-ai-tools#4615). `--id-file` has no delimiter to collide with.
+#
+# Nothing reached this until now: the workflow's own `if` was covered only by
+# the shape guards in section 1, which say the probe is spelled safely and
+# nothing at all about which flag it then passes. So this runs the workflow's
+# OWN block — extracted, not copied, so it cannot pass against a shape the
+# workflow no longer has — against a stub CLI, and reads the argv back out.
+idfile_block=""
+if start="$(grep -n 'help_text="\$(compose-preview bundle --help' "$parity" | cut -d: -f1)" \
+   && [ -n "$start" ] \
+   && end="$(grep -n 'while IFS= read -r id; do args+=(--id "\$id"); done < slice-previews.txt' "$parity" | cut -d: -f1)" \
+   && [ -n "$end" ] && [ "$end" -gt "$start" ]; then
+  idfile_block="$(sed -n "${start},$((end + 1))p" "$parity")"
+else
+  # Also the shape BEFORE #413, where the repeated-`--id` loop sits above the probe
+  # rather than inside a branch below it: the range comes out reversed, sed prints
+  # nothing, and an empty block would otherwise fail the two assertions below with a
+  # blank argv instead of saying what is actually missing.
+  bad "design-parity-reusable.yml: found no --id-file selection block to check — the probe and the --id fallback are not a single if/else, so the render cannot be choosing between them"
+fi
+
+# $1 = what `compose-preview bundle --help` prints. Echoes the resulting argv,
+# one element per line, from a temp cwd holding a comma-bearing id.
+select_args() {
+  local bin work
+  bin="$(mktemp -d)"
+  work="$(mktemp -d)"
+  cat > "$bin/compose-preview" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' $(printf '%q' "$1")
+exit 2
+EOF
+  chmod +x "$bin/compose-preview"
+  # The real shape from wear-m3-catalog's :remote-catalog, comma and all.
+  printf '%s\n' 'pkg.CatalogKt.AppCardRemote_width=227dp,height=200dp,dpi=320' > "$work/slice-previews.txt"
+  (
+    set -euo pipefail
+    PATH="$bin:$PATH"
+    cd "$work"
+    args=()
+    eval "$idfile_block" > /dev/null
+    printf '%s\n' "${args[@]}"
+  )
+  rm -rf "$bin" "$work"
+}
+
+if [ -n "$idfile_block" ]; then
+  capable="$(select_args 'Usage: compose-preview bundle pack [--id <id>] [--id-file <file>]')"
+  # Two elements: the flag and an ABSOLUTE path, because the render step runs
+  # from the workspace root and the file is named relative to it.
+  if [ "$(printf '%s\n' "$capable" | wc -l)" -eq 2 ] \
+     && [ "$(printf '%s\n' "$capable" | head -1)" = "--id-file" ] \
+     && case "$(printf '%s\n' "$capable" | tail -1)" in /*/slice-previews.txt) true ;; *) false ;; esac; then
+    ok "a CLI advertising --id-file is passed --id-file <abs path>, never a split --id"
+  else
+    bad "the --id-file branch built the wrong argv: $(printf '%s\n' "$capable" | tr '\n' ' ')"
+  fi
+
+  # ...and the fallback still passes the id WHOLE. It is a worse spelling (the
+  # CLI splits it downstream) but the workflow must not do the splitting itself,
+  # or the warning would understate what already went wrong.
+  old_cli="$(select_args 'Usage: compose-preview bundle pack [--id <id>]')"
+  if [ "$(printf '%s\n' "$old_cli" | wc -l)" -eq 2 ] \
+     && [ "$(printf '%s\n' "$old_cli" | head -1)" = "--id" ] \
+     && [ "$(printf '%s\n' "$old_cli" | tail -1)" = 'pkg.CatalogKt.AppCardRemote_width=227dp,height=200dp,dpi=320' ]; then
+    ok "an older CLI falls back to one whole --id per line, unsplit by the workflow"
+  else
+    bad "the --id fallback did not pass the id whole: $(printf '%s\n' "$old_cli" | tr '\n' ' ')"
+  fi
+fi
+
+# ── 7. The failure diagnostic prints the render log on BOTH no-failure paths ─
+# `bundle pack` failing before any JUnit XML exists — a Gradle configuration
+# error, a module that does not exist — is the case render.log was captured
+# for, and it is the case that took the zero-XML `exit 0` and never printed it.
+# Both paths now call one function; assert the call sites rather than the text,
+# so a third path cannot quietly grow its own copy.
+if [ "$(grep -c '^\s*render_log$' "$parity")" -eq 2 ] \
+   && grep -qE '^\s*render_log\(\) \{' "$parity"; then
+  ok "design-parity-reusable.yml: both no-failure paths tail render.log through one function"
+else
+  bad "design-parity-reusable.yml: the render.log tail is not reached from both no-failure paths — the zero-XML exit is the one that needs it most"
+fi
+
 # The script's own refusal code has to match what the workflow tests for. Two
 # numbers in two files is exactly the drift this whole subsystem is about.
 sync="$root/packages/diff/test/sync-known-differences-vendor.mjs"
