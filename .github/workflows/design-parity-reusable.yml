@@ -683,7 +683,27 @@ jobs:
           # `--exclude-preview-id ""` would be read as excluding nothing named,
           # so skip the flag rather than pass an empty value.
           if [ -s slice-excluded.txt ]; then
-            args+=(--exclude-preview-id "$(paste -sd, - < slice-excluded.txt)")
+            # A preview id MAY CONTAIN A COMMA — an `@Preview(widthDp = …, heightDp = …)` mints
+            # `…Button_width=227dp, height=100dp, dpi=320` — so the comma-joined
+            # `--exclude-preview-id` cannot carry this list. Joined and re-split, each id shatters
+            # into fragments, and because a plain pattern matches on SUBSTRING the fragment
+            # `dpi=320` then matches every preview in the module: wear-m3-catalog's
+            # `:remote-catalog` excluded all 58 of 58 and the render died "nothing would render"
+            # (compose-ai-tools#4602). The file form has no delimiter to collide with, because a
+            # line break cannot occur inside an id — and `slice-excluded.txt` is already exactly
+            # that file, one id per line.
+            #
+            # Feature-detected rather than version-gated: this reusable workflow is shared, and a
+            # consumer still pinned below the release that added the flag would fail outright on an
+            # unrecognised option. Asking the CLI what it supports keeps those consumers on the old
+            # behaviour — correct for ids without commas, which is every catalog that works today —
+            # and upgrades them the moment they bump.
+            if compose-preview bundle --help 2>/dev/null | grep -qe '--exclude-preview-id-file'; then
+              args+=(--exclude-preview-id-file "$(pwd)/slice-excluded.txt")
+            else
+              echo "::warning title=compose-preview too old for --exclude-preview-id-file::Falling back to the comma-joined --exclude-preview-id. A preview id containing a comma will be shattered into fragments that can exclude the whole module (compose-ai-tools#4602). Bump the composePreviewPlugin pin to 1.40.0 or later."
+              args+=(--exclude-preview-id "$(paste -sd, - < slice-excluded.txt)")
+            fi
           fi
           run() {
             if [ "${{ inputs.desktop-render }}" = "true" ]; then
