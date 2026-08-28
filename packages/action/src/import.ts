@@ -328,43 +328,66 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
     // does not, so a limiter that stops the first can still be drained of the
     // second.
     //
-    // Grouped by `contentsOnly` because it varies per node and goes in the
-    // query, so it applies to a whole batch. `format` and `scale` are
-    // import-wide, so they do not split the groups.
+    // Grouped by `contentsOnly` because it varies per node
+    // (`imageContentsOnlyByNode`) and goes in the query, so it applies to a
+    // whole batch. `format` and `scale` are import-wide, so they do not split
+    // the groups.
+    //
+    // Batches are then ORDERED BY THE OLDEST NODE EACH CARRIES, not by mode.
+    // `take` arrives oldest-first, and that ordering is the whole resume
+    // strategy: a run that the limiter cuts short has to have spent what it did
+    // get on the stalest nodes, or an import never converges. Draining one
+    // mode's batches before the other's would break exactly that — with one
+    // `false` node second-oldest behind hundreds of `true` ones, every `true`
+    // batch would go first, and a rate limit could strand that one node import
+    // after import while much newer nodes refreshed around it.
     const renderUrls = new Map<string, string>();
     const renderErrors = new Map<string, unknown>();
     let rateLimited = false;
+    const position = new Map<string, number>();
     const byContentsOnly = new Map<boolean, string[]>();
-    for (const nodeId of take) {
-      if (!fetched.has(nodeId)) continue;
+    take.forEach((nodeId, index) => {
+      if (!fetched.has(nodeId)) return;
+      position.set(nodeId, index);
       const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
       const group = byContentsOnly.get(nodeContentsOnly) ?? [];
       group.push(nodeId);
       byContentsOnly.set(nodeContentsOnly, group);
-    }
-    resolve: for (const [nodeContentsOnly, ids] of byContentsOnly) {
+    });
+    const batches: { contentsOnly: boolean; ids: string[]; oldest: number }[] = [];
+    for (const [nodeContentsOnly, ids] of byContentsOnly) {
       for (let i = 0; i < ids.length; i += IMAGE_BATCH) {
         const chunk = ids.slice(i, i + IMAGE_BATCH);
-        try {
-          const urls = await opts.client.renderImageUrls(fileKey, chunk, {
-            format,
-            ...(opts.imageScale !== undefined ? { scale: opts.imageScale } : {}),
-            contentsOnly: nodeContentsOnly,
-          });
-          for (const id of chunk) {
-            const url = urls[id];
-            if (url) renderUrls.set(id, url);
-            else renderErrors.set(id, new FigmaNodeNotFoundError(fileKey, id));
-          }
-        } catch (err) {
-          // A batch fails as a unit, so the error is every node's in it. That is
-          // the cost of batching — a 429 now strands up to IMAGE_BATCH nodes
-          // rather than one — paid for by hitting the limiter ~50x less often.
-          for (const id of chunk) renderErrors.set(id, err);
-          if (err instanceof FigmaRateLimitError) {
-            rateLimited = true;
-            break resolve;
-          }
+        // Each group holds `take` order, so a chunk's first node is its oldest.
+        batches.push({
+          contentsOnly: nodeContentsOnly,
+          ids: chunk,
+          oldest: position.get(chunk[0]!) ?? 0,
+        });
+      }
+    }
+    batches.sort((a, b) => a.oldest - b.oldest);
+
+    resolve: for (const batch of batches) {
+      try {
+        const urls = await opts.client.renderImageUrls(fileKey, batch.ids, {
+          format,
+          ...(opts.imageScale !== undefined ? { scale: opts.imageScale } : {}),
+          contentsOnly: batch.contentsOnly,
+        });
+        for (const id of batch.ids) {
+          const url = urls[id];
+          if (url) renderUrls.set(id, url);
+          else renderErrors.set(id, new FigmaNodeNotFoundError(fileKey, id));
+        }
+      } catch (err) {
+        // A batch fails as a unit, so the error is every node's in it. That is
+        // the cost of batching — a 429 now strands up to IMAGE_BATCH nodes
+        // rather than one — paid for by hitting the limiter ~50x less often.
+        for (const id of batch.ids) renderErrors.set(id, err);
+        if (err instanceof FigmaRateLimitError) {
+          rateLimited = true;
+          break resolve;
         }
       }
     }

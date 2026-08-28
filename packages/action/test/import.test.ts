@@ -347,6 +347,31 @@ describe("importReferences", () => {
     expect(asked.sort()).toEqual(["1:1", "1:2", "1:3"]);
   });
 
+  it("orders batches by their oldest node, not by contents-only mode", async () => {
+    const dir = await cacheDir();
+    const fake = fakeFigma();
+    // One `contents_only=false` node, second-oldest, behind enough `true` nodes
+    // to fill more than one batch. Draining a mode at a time would put EVERY
+    // `true` batch ahead of it, so a rate limit could strand the second-stalest
+    // node import after import while newer ones refreshed around it.
+    const ids = ["1:0", "1:1", ...Array.from({ length: 51 }, (_, i) => `2:${i}`)];
+    await importReferences({
+      cacheDir: dir,
+      refs: ids.map((id) => `figma:${FILE}/${id}`),
+      client: client(fake.fetch),
+      now: at("2026-01-01T00:00:00.000Z"),
+      imageContentsOnlyByNode: new Map([[`${FILE}/1:1`, false]]),
+    });
+
+    const modes = fake.paths
+      .filter((path) => path.includes("/v1/images/"))
+      .map((path) => new URL(BASE + path).searchParams.get("contents_only"));
+    // Three batches: 52 `true` nodes split at IMAGE_BATCH, plus the lone
+    // `false`. The `false` batch carries take-index 1, so it goes SECOND —
+    // between the two `true` batches, not after both of them.
+    expect(modes).toEqual(["true", "false", "true"]);
+  });
+
   it("strands the whole batch when the REQUEST fails, and carries every node forward", async () => {
     const dir = await cacheDir();
     const refs = [`figma:${FILE}/1:1`, `figma:${FILE}/1:2`];
