@@ -164,6 +164,13 @@ behind a single warning while the workflow file said it made no Figma calls. If
 you must land the parity wiring first, set `require-reference-cache: false`
 explicitly and treat it as a TODO — a visible opt-out beats a silent fallback.
 
+**That opt-out needs a `figma-token`.** The run's credential guard skips only
+when a token *and* a cache branch are both absent, so a configured-but-missing
+branch with no token sails past it and then fails every Figma reference
+individually — a soft-failed board rather than the live fallback you asked for.
+Opting out means choosing live fetching, so pass the credential live fetching
+needs.
+
 Locally:
 
 ```sh
