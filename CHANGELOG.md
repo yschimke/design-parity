@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.67](https://github.com/yschimke/design-parity/compare/v0.1.66...v0.1.67) (2026-08-28)
+
+
+### Bug Fixes
+
+* **action:** refuse a corrupt findings merge before anything is publishable ([#421](https://github.com/yschimke/design-parity/issues/421)) ([fe67bfd](https://github.com/yschimke/design-parity/commit/fe67bfd35b59979288a06e55528e39e3161ba615))
+
 ## [0.1.66](https://github.com/yschimke/design-parity/compare/v0.1.65...v0.1.66) (2026-08-28)
 
 
