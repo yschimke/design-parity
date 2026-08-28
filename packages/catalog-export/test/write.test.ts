@@ -199,6 +199,68 @@ describe("writeCatalog", () => {
     expect(brand.type.titleMedium.$value.fontFamily).toBe("Rubik");
   });
 
+  it("writes the run's verdicts as parity/findings.json when a caller has any", async () => {
+    const catalog: Catalog = {
+      meta: { system: "x", title: "X" },
+      components: [
+        { componentId: "A", variants: { ideal: [{ state: "default", uri: PNG_DATA_URI, width: 1, height: 1 }] }, greenlines: [], redlines: [] },
+      ],
+    };
+    const result = await writeCatalog(catalog, out, {
+      parityFindings: [
+        {
+          previewIds: ["a__ideal__default"],
+          referenceId: "design-a",
+          verdict: {
+            componentId: "A",
+            status: "fail",
+            findings: [
+              {
+                kind: "token",
+                severity: "error",
+                message: "spacing.padding: 24 vs spec 16",
+                detail: { token: "spacing.padding", expected: 16, actual: 24 },
+              },
+            ],
+          },
+          candidate: { root: { role: "A", bounds: { x: 0, y: 0, width: 20, height: 10 } } },
+        },
+      ],
+    });
+    expect(result.parityFindingsPath).toBe(join(out, "parity", "findings.json"));
+    const doc = JSON.parse(await readFile(result.parityFindingsPath, "utf8"));
+    expect(doc.schema).toBe("compose-preview-parity-findings/v1");
+    const set = doc.previews["a__ideal__default"][0];
+    expect(set.referenceId).toBe("design-a");
+    expect(set.findings[0].detail).toEqual({
+      token: "spacing.padding",
+      expected: "16",
+      actual: "24",
+    });
+    expect(set.findings[0].anchors).toEqual([
+      { side: "actual", bounds: { x: 0, y: 0, width: 20, height: 10 } },
+    ]);
+  });
+
+  it("writes no findings file for an export with no verdicts, or verdicts with no findings", async () => {
+    const catalog: Catalog = {
+      meta: { system: "x", title: "X" },
+      components: [
+        { componentId: "A", variants: { ideal: [{ state: "default", uri: PNG_DATA_URI, width: 1, height: 1 }] }, greenlines: [], redlines: [] },
+      ],
+    };
+    expect((await writeCatalog(catalog, out)).parityFindingsPath).toBeUndefined();
+    const clean = await writeCatalog(catalog, out, {
+      parityFindings: [
+        {
+          previewIds: ["a"],
+          verdict: { componentId: "A", status: "pass", findings: [] },
+        },
+      ],
+    });
+    expect(clean.parityFindingsPath).toBeUndefined();
+  });
+
   it("skips token/figma files when the catalog has no themeTokens", async () => {
     const catalog: Catalog = {
       meta: { system: "x", title: "X" },

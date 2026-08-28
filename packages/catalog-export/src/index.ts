@@ -77,6 +77,25 @@ export type {
 } from "./annotations.js";
 
 export {
+  PARITY_FINDINGS_SCHEMA,
+  buildParityFindingSet,
+  buildParityFindingsManifest,
+  findingAnchors,
+  isEmptyParityFindings,
+  toParityFinding,
+} from "./parityFindings.js";
+export type {
+  ParityAnchor,
+  ParityFinding,
+  ParityFindingSet,
+  ParityFindingSetOptions,
+  ParityFindingsEntry,
+  ParityFindingsManifest,
+  ParitySide,
+  ParityTrees,
+} from "./parityFindings.js";
+
+export {
   imagePath,
   livePreviewUrl,
   slug,
