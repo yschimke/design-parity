@@ -677,8 +677,28 @@ jobs:
           # an unrelated testcase for a render that never wrote a report at all. Only results
           # newer than this marker belong to this shard's render.
           touch build/design-parity/.render-start
+          # ONE capability probe for both flags below. Capture, THEN grep: this step runs under
+          # `set -euo pipefail` and `--help` exits non-zero on the usage path, so piping the probe
+          # into `grep` inside an `if` would let that status beat grep's match and report a capable
+          # CLI as incapable. scripts/test-workflow-probes.sh pins this shape.
+          help_text="$(compose-preview bundle --help 2>&1 || true)"
+
           args=()
-          while IFS= read -r id; do args+=(--id "$id"); done < slice-previews.txt
+          # `--id` comma-splits its values, and a preview id may contain a comma — an
+          # `@Preview(widthDp = …, heightDp = …)` mints
+          # `…AppCardRemote_width=227dp,height=200dp,dpi=320`. Split, it becomes three ids. The
+          # render does not notice (it matches ids by SUBSTRING, so the fragments still select
+          # something) but `composePreviewBundle` matches EXACTLY and dies with
+          # `preview id not found: …AppCardRemote_width=227dp` — the first fragment
+          # (compose-ai-tools#4615). `slice-previews.txt` is already one id per line, which has no
+          # such ambiguity.
+          if printf '%s' "$help_text" | grep -qe '--id-file'; then
+            echo "Packing $(wc -l < slice-previews.txt) preview(s) via --id-file (delimiter-free)."
+            args+=(--id-file "$(pwd)/slice-previews.txt")
+          else
+            echo "::warning title=compose-preview too old for --id-file::Falling back to repeated --id. A preview id containing a comma will be split, and composePreviewBundle will fail with 'preview id not found' naming the first fragment (compose-ai-tools#4615). Bump the composePreviewPlugin pin."
+            while IFS= read -r id; do args+=(--id "$id"); done < slice-previews.txt
+          fi
           # An empty exclusion list means this shard owns everything — passing
           # `--exclude-preview-id ""` would be read as excluding nothing named,
           # so skip the flag rather than pass an empty value.
@@ -704,7 +724,6 @@ jobs:
             # a CLI that HAS the flag would be read as lacking it and silently fall back to the
             # comma form this change exists to stop using. scripts/test-workflow-probes.sh pins
             # exactly this shape, and caught it here.
-            help_text="$(compose-preview bundle --help 2>&1 || true)"
             if printf '%s' "$help_text" | grep -qe '--exclude-preview-id-file'; then
               # Say so POSITIVELY. Only the fallback used to announce itself, so "the warning is
               # absent" was the only evidence the file form had been chosen — indistinguishable
