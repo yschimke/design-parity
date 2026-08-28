@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.66](https://github.com/yschimke/design-parity/compare/v0.1.65...v0.1.66) (2026-08-28)
+
+
+### Features
+
+* **action:** emit the run's findings where a machine can read them ([#420](https://github.com/yschimke/design-parity/issues/420)) ([44addf0](https://github.com/yschimke/design-parity/commit/44addf0559442505272cb7883db43d1f272d6917))
+
+
+### Bug Fixes
+
+* **parity:** tail the render log on the zero-XML path, and cover the --id-file branch ([#417](https://github.com/yschimke/design-parity/issues/417)) ([db05b26](https://github.com/yschimke/design-parity/commit/db05b26d95e88eefcb7f7eb1c99a748ab6110f8e))
+
 ## [0.1.65](https://github.com/yschimke/design-parity/compare/v0.1.64...v0.1.65) (2026-08-28)
 
 
