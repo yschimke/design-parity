@@ -180,6 +180,28 @@ on:
         required: false
         type: string
         default: ""
+      require-reference-cache:
+        description: >
+          Treat a configured-but-unreadable `reference-cache-branch` as an
+          error instead of falling back to live fetching. Default `true`,
+          because the fallback silently breaks the promise the input above
+          makes.
+
+          The gap it closes: the cache is only actually consulted when the
+          branch CLONES. If the branch does not exist — never bootstrapped, or
+          pruned — the run passed no `--reference-cache` flags at all and
+          fetched every reference live, on every run, behind a single warning.
+          A repo could therefore read as cache-only in its workflow file while
+          paying the full per-run API cost that issue #289 was about, and
+          nothing said so. wear-m3-catalog sat in exactly that state.
+
+          Set `false` only to bootstrap: a repo adopting the cache has to run
+          the import once before its first parity run, and this makes that
+          ordering explicit rather than something you discover from an API
+          bill. Prefer running the import first.
+        required: false
+        type: boolean
+        default: true
       render-timeout:
         description: "Seconds `bundle pack` may spend rendering, per shard. This is the INNER timeout; keep `timeout-minutes` above it."
         required: false
@@ -890,6 +912,7 @@ jobs:
         env:
           BRANCH: ${{ inputs.reference-cache-branch }}
           CACHE_DIR: ${{ runner.temp }}/reference-cache
+          REQUIRE: ${{ inputs.require-reference-cache }}
         run: |
           set -euo pipefail
           repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
@@ -897,10 +920,16 @@ jobs:
             rm -rf "$CACHE_DIR/.git"
             echo "dir=${CACHE_DIR}" >> "$GITHUB_OUTPUT"
             echo "Reference cache from ${BRANCH}: $(du -sh "$CACHE_DIR" | cut -f1)."
+          elif [ "${REQUIRE}" = "true" ]; then
+            # Configured but unreadable. Falling through here is what made a
+            # repo fetch every reference live while its workflow said it made
+            # no Figma calls — the failure this input exists to make loud.
+            echo "::error title=Reference cache missing::'${BRANCH}' does not exist or could not be read, so this run would fetch every reference live — the per-run API cost issue #289 removed. Run the import workflow (design-parity-import-reusable.yml) once to build the branch, then re-run. To deliberately allow live fetching, set require-reference-cache: false."
+            exit 1
           else
-            # Not fatal: the run proceeds and reports the references it cannot
+            # Opted out. The run proceeds and reports the references it cannot
             # find, which is a visible gap rather than a silent one.
-            echo "::warning title=No reference cache::Could not read '${BRANCH}'. Run the import workflow (design-parity-import-reusable.yml) to build it."
+            echo "::warning title=No reference cache::Could not read '${BRANCH}'; fetching references live because require-reference-cache is false. Run the import workflow (design-parity-import-reusable.yml) to build it."
           fi
 
       - name: Run design-parity
