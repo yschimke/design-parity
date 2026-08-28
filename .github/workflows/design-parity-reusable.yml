@@ -805,8 +805,25 @@ jobs:
             empty_note="No test results anywhere under the workspace — the render failed before the task ran."
             [ "${#xmls[@]}" -eq 0 ] || echo "::warning::No render marker; the render step never started. The results below predate it and may be unrelated."
           fi
+          # The render command's own output. Tail rather than head: a Gradle failure puts
+          # "What went wrong" at the end. A function because BOTH no-failure paths need it and
+          # only one of them used to have it — see the call sites below.
+          render_log() {
+            if [ -s build/design-parity/render.log ]; then
+              echo "::group::compose-preview bundle pack output (last 200 lines)"
+              tail -n 200 build/design-parity/render.log
+              echo "::endgroup::"
+            else
+              echo "::warning::No render output captured either — the step failed before invoking compose-preview."
+            fi
+          }
           if [ "${#xmls[@]}" -eq 0 ]; then
             echo "::warning::${empty_note}"
+            # …and this is the path that most needs the log. No XML at all means the failure came
+            # before any test ran — a Gradle configuration error, a module that does not exist —
+            # which is exactly the class of failure the render.log tail was added for, and it was
+            # the one path that exited without printing it.
+            render_log
             exit 0
           fi
           found=0
@@ -845,14 +862,8 @@ jobs:
           if [ "$found" != 1 ]; then
             echo "::warning::No failing cases in any test-results — the task failed outside the tests themselves."
             # …which is precisely when the render command's own output is the only thing that can
-            # say why. Tail rather than head: a Gradle failure puts "What went wrong" at the end.
-            if [ -s build/design-parity/render.log ]; then
-              echo "::group::compose-preview bundle pack output (last 200 lines)"
-              tail -n 200 build/design-parity/render.log
-              echo "::endgroup::"
-            else
-              echo "::warning::No render output captured either — the step failed before invoking compose-preview."
-            fi
+            # say why.
+            render_log
           fi
 
       # And the raw results, for anything the summary above truncated.
