@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.69](https://github.com/yschimke/design-parity/compare/v0.1.68...v0.1.69) (2026-08-28)
+
+
+### Bug Fixes
+
+* close the reference-cache skip-path bypass and fail before the render ([#425](https://github.com/yschimke/design-parity/issues/425)) ([3ee04a7](https://github.com/yschimke/design-parity/commit/3ee04a7350cf03b49dc5d74de5b5d2e4911a4d3e))
+
+
+### Performance Improvements
+
+* **action:** batch the image renders an import asks Figma for ([#427](https://github.com/yschimke/design-parity/issues/427)) ([5b4f5c7](https://github.com/yschimke/design-parity/commit/5b4f5c73376f5a2d0cd086bbdccd5638b8115b64))
+
 ## [0.1.68](https://github.com/yschimke/design-parity/compare/v0.1.67...v0.1.68) (2026-08-28)
 
 
