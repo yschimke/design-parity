@@ -152,8 +152,17 @@ jobs:
       reference-cache-branch: design-parity/reference   # ← this
 ```
 
-Run the import once by hand (`workflow_dispatch`) before the first parity run,
-or that run reports every component as a cache miss.
+**Bootstrap the cache before you point at it.** Run the import once by hand
+(`workflow_dispatch`) before the first parity run. Until the branch exists there
+is nothing to read, and `require-reference-cache` (default `true`) fails the run
+rather than letting it quietly fetch everything live.
+
+That ordering is the whole adoption rule, and it is easy to get wrong in a way
+nothing reports: wear-m3-catalog set `reference-cache-branch` without ever
+running the import, so for months every run fetched all 581 references live
+behind a single warning while the workflow file said it made no Figma calls. If
+you must land the parity wiring first, set `require-reference-cache: false`
+explicitly and treat it as a TODO — a visible opt-out beats a silent fallback.
 
 Locally:
 
@@ -178,6 +187,12 @@ npx design-parity run --repo . --components … \
 `--reference-cache-only` — what the workflow passes — makes a miss an error
 instead. That distinction is the point: without it, a miss quietly reaches for
 the network and the run is rate-limitable again, just less often.
+
+The same reasoning applies one level up, to the *branch* rather than a node.
+Those flags are only passed when the branch clones; a branch that is missing
+entirely used to mean no flags at all, and therefore a fully live run. That is
+what `require-reference-cache` closes — an absent cache is now a loud setup
+error, not a silent return to per-run fetching.
 
 A miss is a per-component error, which the pipeline already fails soft on
 (Principle: a broken adapter must not break the run). It names the node and says
