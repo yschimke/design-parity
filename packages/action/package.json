@@ -33,6 +33,7 @@
     "@design-parity/policy": "^0.1.24",
     "@design-parity/diff": "^0.1.24",
     "@design-parity/report-html": "^0.1.24",
+    "@design-parity/catalog-export": "^0.1.24",
     "@design-parity/checks": "^0.1.24",
     "@design-parity/candidate": "^0.1.24",
     "@design-parity/adapter-figma": "^0.1.24",

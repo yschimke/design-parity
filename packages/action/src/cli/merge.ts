@@ -18,7 +18,7 @@
  * explain it.
  */
 import { argv, cwd, exit, stderr, stdout } from "node:process";
-import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -26,6 +26,7 @@ import { directionPolicy } from "@design-parity/policy";
 import { renderIndex } from "@design-parity/report-html";
 
 import { mergeShards, verifyShardReports, type ShardReport } from "../shard.js";
+import { PARITY_FINDINGS_FILE } from "../orchestrate.js";
 import {
   RUN_MANIFEST_VERSION,
   carryForward,
@@ -132,6 +133,87 @@ async function copyComponentDirs(from: string, to: string): Promise<number> {
 }
 
 /**
+ * Combine the shards' `findings.json` into one, carrying a previous run's rows for the components
+ * this run did not re-measure.
+ *
+ * Needed because the findings live at a shard's ROOT, not inside a component dir: `copyComponentDirs`
+ * moves the reports across and would leave every shard's verdict behind, so a sharded run — which is
+ * the CI path — would publish a board whose rows say `fail` and whose comparisons say nothing.
+ *
+ * The union is safe without reconciliation for the same reason the report dirs are: shards partition
+ * the components, which `verifyShardReports` has already established. Sets are concatenated rather
+ * than replaced anyway, so a key that did somehow appear twice keeps both verdicts instead of one
+ * arbitrarily winning.
+ *
+ * Carry-forward follows the same rule as the board above it: a finding does not stop being one
+ * because this run could not re-measure it. Carried rows are keyed by their code handle — the key
+ * every entry carries — so a carried component keeps its verdict even where the preview-id alias
+ * cannot be recovered.
+ */
+async function mergeParityFindings(
+  shardDirs: readonly string[],
+  outDir: string,
+  carriedCodes: readonly string[],
+  previousDir: string | undefined,
+): Promise<boolean> {
+  // ABSENT and MALFORMED are not the same thing, and collapsing them is how a run publishes rows
+  // that say `fail` with no machine-readable explanation behind any of them. A shard with nothing
+  // to report writes no file, which is the common case and silent; a shard whose file is truncated
+  // or is not the shape this reads throws, and the caller refuses to publish — the same posture
+  // `verifyShardReports` takes, and for the same reason: this runs after every shard has spent its
+  // full budget, so quietly losing a slice is the expensive failure.
+  const read = async (dir: string): Promise<Record<string, unknown[]>> => {
+    const file = join(dir, PARITY_FINDINGS_FILE);
+    let raw: string;
+    try {
+      raw = await readFile(file, "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return {};
+      throw new Error(`${file} could not be read: ${String(err)}`);
+    }
+    let doc: unknown;
+    try {
+      doc = JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`${file} is not valid JSON: ${String(err)}`);
+    }
+    const previews = (doc as { previews?: unknown } | null)?.previews;
+    if (previews === undefined) return {};
+    if (!previews || typeof previews !== "object" || Array.isArray(previews)) {
+      throw new Error(`${file} has no readable 'previews' map`);
+    }
+    return previews as Record<string, unknown[]>;
+  };
+
+  const previews: Record<string, unknown[]> = {};
+  const add = (from: Record<string, unknown[]>, keys?: readonly string[]) => {
+    for (const [key, sets] of Object.entries(from)) {
+      if (keys && !keys.includes(key)) continue;
+      if (!Array.isArray(sets)) continue;
+      (previews[key] ??= []).push(...sets);
+    }
+  };
+
+  for (const dir of shardDirs) add(await read(dir));
+  if (previousDir && carriedCodes.length > 0) {
+    add(await read(previousDir), carriedCodes);
+  }
+
+  if (Object.keys(previews).length === 0) {
+    // Same rule as the single-run path: a merge that produced nothing must REMOVE a previous
+    // manifest rather than leave it standing as though it were this run's.
+    await rm(join(outDir, PARITY_FINDINGS_FILE), { force: true });
+    return false;
+  }
+  await writeFile(
+    join(outDir, PARITY_FINDINGS_FILE),
+    `${JSON.stringify({ schema: "compose-preview-parity-findings/v1", previews }, null, 2)}\n`,
+    "utf8",
+  );
+  return true;
+}
+
+/**
  * `rawArgs` defaults to the process argv; passing it explicitly is how tests
  * drive the command without mutating `process` (the `node:process` named imports
  * are bound at module load, so stubbing `process.argv` would not reach them).
@@ -218,6 +300,24 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   });
   await writeFile(join(outDir, "README.md"), readme);
   await writeFile(join(outDir, "index.html"), html);
+  // Loud and specific, exactly like `verifyShardReports` above: a shard whose findings cannot be
+  // read is a slice of the verdict silently missing from a board that will still say `fail`, and
+  // nothing downstream can tell that from a run that was simply clean.
+  let findings = false;
+  try {
+    findings = await mergeParityFindings(
+      dirs,
+      outDir,
+      carried.map((e) => e.code),
+      args.previousDir ? resolvePath(cwd(), args.previousDir) : undefined,
+    );
+  } catch (err) {
+    stderr.write(
+      "Refusing to publish a run whose findings could not be merged:\n" +
+        `  - ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    return 1;
+  }
   await writeRunManifest(outDir, {
     formatVersion: RUN_MANIFEST_VERSION,
     ...(args.sourceCommit ? { sourceCommit: args.sourceCommit } : {}),
@@ -231,7 +331,9 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   stdout.write(
     `Merged ${reports.length}/${merged.total} shard(s): ` +
       `${merged.entries.length} component(s), ${components} report dir(s), ` +
-      `${merged.warnings.length} warning(s) → ${outDir}\n` +
+      `${merged.warnings.length} warning(s)` +
+      (findings ? ", findings" : "") +
+      ` → ${outDir}\n` +
       (carried.length > 0
         ? `Carried ${carried.length} component(s) forward from the previous run ` +
           `(not refreshed here) — ${entries.length} on the board.\n`

@@ -75,6 +75,10 @@ event** (mirroring the sibling `compose-ai-tools` `apply` action):
   browsable artifacts** — a top-level `README.md` + `index.html` landing page
   (linking each component's report, with a "generated, do not edit" banner),
   each component's self-contained `report.html` triptych, a machine-readable
+  `findings.json` (`compose-preview-parity-findings/v1` — what the run
+  *concluded*, keyed by preview id and code handle with each finding anchored to
+  the region it is about, so a preview server can draw the verdict under its own
+  comparison instead of linking out to a page it cannot read), a machine-readable
   `verdict.json` (a versioned `BaselineSummary` — carries `formatVersion` +
   `$schema`, validated against
   [`schema/verdict.schema.json`](./schema/verdict.schema.json); see

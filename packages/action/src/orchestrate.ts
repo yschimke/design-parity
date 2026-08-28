@@ -23,7 +23,7 @@ import type {
   VerdictStatus,
 } from "@design-parity/core";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
@@ -37,6 +37,11 @@ import {
   type Triptych,
 } from "@design-parity/diff";
 import { directionPolicy } from "@design-parity/policy";
+import {
+  buildParityFindingsManifest,
+  isEmptyParityFindings,
+  type ParityFindingsEntry,
+} from "@design-parity/catalog-export";
 import {
   renderHtmlReport,
   renderIndex,
@@ -269,6 +274,14 @@ function inlineCandidateThumb(
   }
 }
 
+/**
+ * The run's machine-readable findings, beside `run.json` and the per-component reports.
+ *
+ * Named for what it is rather than for the schema, like every other artifact on a reporting
+ * branch: `run.json` is the summary, this is what the run concluded.
+ */
+export const PARITY_FINDINGS_FILE = "findings.json";
+
 export type ComponentStatus = "ok" | "skipped" | "error";
 
 export interface ComponentResult {
@@ -332,7 +345,10 @@ function worst(a: VerdictStatus, b: VerdictStatus): VerdictStatus {
 export async function orchestrate(
   options: OrchestrateOptions,
 ): Promise<ParityReport> {
-  const ctx: AdapterContext = { repoRoot: options.repoRoot, env: options.env ?? {} };
+  const ctx: AdapterContext = {
+    repoRoot: options.repoRoot,
+    env: options.env ?? {},
+  };
   const results: ComponentResult[] = [];
   const warnings: string[] = [];
   let status: VerdictStatus = "pass";
@@ -398,7 +414,8 @@ export async function orchestrate(
       // and used for every reference lookup this component makes — the first
       // resolve and the variant re-target below, which must agree or the
       // re-targeted node arrives scaled differently from the one it replaces.
-      const refCtx = corr.density === undefined ? ctx : { ...ctx, density: corr.density };
+      const refCtx =
+        corr.density === undefined ? ctx : { ...ctx, density: corr.density };
       let reference = await resolveReference(adapter, corr, refCtx);
       result.reference = reference;
 
@@ -433,7 +450,8 @@ export async function orchestrate(
       const declared = options.referenceTokens?.get(
         specTokenKey(corr.code, corr.source),
       );
-      if (declared) reference.tokens = mergeReferenceTokens(reference.tokens, declared);
+      if (declared)
+        reference.tokens = mergeReferenceTokens(reference.tokens, declared);
 
       // Each component writes into its own subdir so triptychs (keyed only by
       // image variant) and the HTML page don't collide across components (#49),
@@ -452,9 +470,7 @@ export async function orchestrate(
         repoRoot: options.repoRoot,
         ...(componentOutDir ? { outDir: componentOutDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
-        ...(knownDifferences
-          ? { knownDifferences }
-          : {}),
+        ...(knownDifferences ? { knownDifferences } : {}),
         ...(options.tokenAlias ? { tokenAlias: options.tokenAlias } : {}),
         ...(native ? { checks: nativeChecksProvider(native) } : {}),
       };
@@ -473,7 +489,8 @@ export async function orchestrate(
       if (deduped.length !== verdict.findings.length) {
         verdict.findings = deduped;
         verdict.status = verdictStatus(deduped);
-        result.summary = renderSummary(verdict) + renderAcceptanceSummary(acceptances ?? {});
+        result.summary =
+          renderSummary(verdict) + renderAcceptanceSummary(acceptances ?? {});
       }
       result.triptychs = triptychs;
 
@@ -520,7 +537,8 @@ export async function orchestrate(
       return {
         code: r.code,
         ...(r.source ? { source: r.source } : {}),
-        status: r.verdict?.status ?? (r.status === "error" ? "error" : "skipped"),
+        status:
+          r.verdict?.status ?? (r.status === "error" ? "error" : "skipped"),
         ...(r.reportPath && slug ? { reportPath: `${slug}/report.html` } : {}),
         ...(thumbnail ? { thumbnail } : {}),
       };
@@ -530,9 +548,24 @@ export async function orchestrate(
     await writeFile(join(options.outDir, "README.md"), readme);
     await writeFile(join(options.outDir, "index.html"), html);
     indexEntries = entries;
+
+    // The findings, in a shape something other than a human can read.
+    //
+    // `run.json` beside this carries the verdict SUMMARY — code, source, status, where the report
+    // is — and the findings themselves have only ever existed inside `report-html`'s inlined page.
+    // That page is the right artifact for a pull request and the wrong one for anything
+    // downstream: a preview server showing the same comparison cannot open an HTML file and read
+    // the sentences back out of it.
+    //
+    // Anchors are derived by `@design-parity/catalog-export`, deliberately rather than a second
+    // time here. `report-html`'s overlay matches a layout finding to a node by label; a second
+    // matcher would let the report and the server disagree about which element a finding is
+    // about, which is the one disagreement neither of them could show you.
+    await writeParityFindings(options.outDir, results);
   }
 
-  const blocked = directionPolicy(options.direction).blocksPr && status === "fail";
+  const blocked =
+    directionPolicy(options.direction).blocksPr && status === "fail";
   return {
     status,
     blocked,
@@ -541,4 +574,65 @@ export async function orchestrate(
     warnings,
     ...(indexEntries ? { indexEntries } : {}),
   };
+}
+
+/**
+ * Write the run's findings as `compose-preview-parity-findings/v1`, or nothing when there are none.
+ *
+ * Two things this deliberately does NOT fill in, both because a run cannot know them:
+ *
+ * - **`referenceId`.** Sets are unscoped. The serve/catalog reference id is minted by whoever
+ *   writes `references/index.json`, which is the same reason `withReferenceAnnotations` takes its
+ *   mapping from the caller. A publisher that resolves one can scope the set; unscoped means "this
+ *   describes the render whichever reference it is read against", which is exactly right for the
+ *   one-reference-per-preview case every consumer starts from.
+ * - **`reportUrl`.** A run knows its `reportPath`, not the URL that path will be served from.
+ *
+ * Keyed by BOTH the candidate's preview id and the code handle: the two namespaces a consumer
+ * might hold, and the same dual keying `buildAnnotationManifest` uses. Neither is the id a preview
+ * server routes on — that is the catalog's sticker id, minted at publish — so a publisher re-keys.
+ * Emitting both is what makes that join possible from either side.
+ *
+ * Nothing is written for a run whose components all passed: an empty manifest is a file a reader
+ * has to open to learn it says nothing.
+ */
+async function writeParityFindings(
+  outDir: string,
+  results: readonly ComponentResult[],
+): Promise<void> {
+  const entries: ParityFindingsEntry[] = [];
+  for (const result of results) {
+    if (!result.verdict) continue;
+    const previewIds = [result.candidate?.previewId, result.code].filter(
+      (id): id is string => !!id && id.trim().length > 0,
+    );
+    if (previewIds.length === 0) continue;
+    entries.push({
+      previewIds,
+      verdict: result.verdict,
+      // The one joinable identity a run CAN supply. `orchestrate` diffs a single code handle
+      // against every source that claims it (#106), and those results share a code handle AND a
+      // candidate preview id — so without this a publisher cannot tell the Figma verdict from the
+      // Stitch one, and would show each under both boards. That is a false claim, not a missing
+      // one, which is the failure this whole manifest is careful about everywhere else.
+      ...(result.source ? { source: result.source } : {}),
+      ...(result.candidate?.semantics
+        ? { candidate: result.candidate.semantics }
+        : {}),
+      ...(result.reference?.layout
+        ? { reference: result.reference.layout }
+        : {}),
+    });
+  }
+  const manifest = buildParityFindingsManifest(entries);
+  const target = join(outDir, PARITY_FINDINGS_FILE);
+  if (isEmptyParityFindings(manifest)) {
+    // A clean run has to REMOVE the file, not merely decline to write one. `outDir` is a documented,
+    // reused path, so a previous failing run's manifest would otherwise sit there being read as
+    // current — machine consumers going on reporting findings the code has since fixed. Absent is
+    // the honest state for a run with nothing to say.
+    await rm(target, { force: true });
+    return;
+  }
+  await writeFile(target, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
