@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.63](https://github.com/yschimke/design-parity/compare/v0.1.62...v0.1.63) (2026-08-28)
+
+
+### Features
+
+* **parity:** say why a candidate render failed, without a second render ([#406](https://github.com/yschimke/design-parity/issues/406)) ([be2a707](https://github.com/yschimke/design-parity/commit/be2a707752ca737e52921d923b41e8eb26946eab))
+
+
+### Bug Fixes
+
+* **parity:** pass render exclusions as a file, so a comma in a preview id survives ([#408](https://github.com/yschimke/design-parity/issues/408)) ([5e21daa](https://github.com/yschimke/design-parity/commit/5e21daaed044e283ce4eed539c087822561ce907))
+
 ## [0.1.62](https://github.com/yschimke/design-parity/compare/v0.1.61...v0.1.62) (2026-08-27)
 
 
