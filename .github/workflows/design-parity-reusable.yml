@@ -706,6 +706,11 @@ jobs:
             # exactly this shape, and caught it here.
             help_text="$(compose-preview bundle --help 2>&1 || true)"
             if printf '%s' "$help_text" | grep -qe '--exclude-preview-id-file'; then
+              # Say so POSITIVELY. Only the fallback used to announce itself, so "the warning is
+              # absent" was the only evidence the file form had been chosen — indistinguishable
+              # from the step never reaching this branch at all. A reader should not have to infer
+              # which path ran from something that is not printed.
+              echo "Excluding $(wc -l < slice-excluded.txt) preview(s) via --exclude-preview-id-file (delimiter-free)."
               args+=(--exclude-preview-id-file "$(pwd)/slice-excluded.txt")
             else
               echo "::warning title=compose-preview too old for --exclude-preview-id-file::Falling back to the comma-joined --exclude-preview-id. A preview id containing a comma will be shattered into fragments that can exclude the whole module (compose-ai-tools#4602). Bump the composePreviewPlugin pin to 1.40.0 or later."
@@ -723,9 +728,16 @@ jobs:
           # foreground/background colours and per-node design tokens, so the
           # token / contrast / a11y checks can evaluate instead of reporting them
           # as missing from the candidate.
+          # Tee the render's own output. `bundle pack` fails for reasons that never reach a JUnit
+          # report — a Gradle configuration error, a missing module, `composePreviewBundle` failing
+          # after the render tests passed — and in those cases the diagnostic below could only say
+          # "the task failed outside the tests themselves" and stop. The runner is then destroyed
+          # with the one message that explains it. Keeping a copy costs nothing and makes that case
+          # self-explaining. `tee` returns 0, so under `pipefail` the pipeline still carries pack's
+          # own exit status and `set -e` aborts exactly as before.
           run compose-preview bundle pack --module "$MODULE" "${args[@]}" \
             --with-semantics -o build/design-parity/candidates.bundle.png \
-            --timeout "$RENDER_TIMEOUT"
+            --timeout "$RENDER_TIMEOUT" 2>&1 | tee build/design-parity/render.log
           # Assert the artifact rather than trusting the exit status: a failed
           # Gradle model query has been observed printing an error and still
           # exiting 0, which would sail past `set -e` and leave the parity run
@@ -811,7 +823,18 @@ jobs:
             ' "$xml"
             echo "::endgroup::"
           done
-          [ "$found" = 1 ] || echo "::warning::No failing cases in any test-results — the task failed outside the tests themselves."
+          if [ "$found" != 1 ]; then
+            echo "::warning::No failing cases in any test-results — the task failed outside the tests themselves."
+            # …which is precisely when the render command's own output is the only thing that can
+            # say why. Tail rather than head: a Gradle failure puts "What went wrong" at the end.
+            if [ -s build/design-parity/render.log ]; then
+              echo "::group::compose-preview bundle pack output (last 200 lines)"
+              tail -n 200 build/design-parity/render.log
+              echo "::endgroup::"
+            else
+              echo "::warning::No render output captured either — the step failed before invoking compose-preview."
+            fi
+          fi
 
       # And the raw results, for anything the summary above truncated.
       - name: Upload the failed render's test results
