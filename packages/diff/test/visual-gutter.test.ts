@@ -88,15 +88,29 @@ describe("declared capture gutter (wear-m3-catalog#138)", () => {
     expect(cropGutter(raster, even(9))).toBe(raster);
   });
 
-  it("crops each edge independently", () => {
+  it("crops each edge independently, keeping the pixels the offsets name", () => {
+    // Every pixel gets a distinct red channel = y * width + x, so a start/end or
+    // top/bottom swap picks a different region and fails. Asserting only the
+    // output dimensions would pass for any 2x1 crop, which is the whole bug
+    // this test exists to catch.
     const png = new PNG({ width: 5, height: 4 });
-    // Mark the pixel that must survive a start=1/top=2 crop.
-    for (let i = 0; i < png.data.length; i += 4) png.data[i + 3] = 0xff;
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 5; x++) {
+        const i = (y * 5 + x) * 4;
+        png.data[i] = y * 5 + x;
+        png.data[i + 1] = 0;
+        png.data[i + 2] = 0;
+        png.data[i + 3] = 0xff;
+      }
+    }
     const raster = { width: 5, height: 4, data: png.data };
 
     const out = cropGutter(raster, { start: 1, top: 2, end: 2, bottom: 1 });
 
     expect(out.width).toBe(2);
     expect(out.height).toBe(1);
+    // Row y=2, columns x=1..2 — ids 11 and 12.
+    expect([out.data[0], out.data[4]]).toEqual([11, 12]);
+    expect(out.data[3]).toBe(0xff);
   });
 });

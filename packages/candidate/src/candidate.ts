@@ -14,6 +14,7 @@ import {
   SpawnComposePreviewCli,
   sizeFromParams,
   stateFromParams,
+  gutterFor,
   themeForPreview,
   type ComposePreviewCli,
   type RenderRequest,
@@ -52,6 +53,11 @@ function toImage(p: RenderedPreview, repoRoot: string | undefined): Image {
   if (theme) image.theme = theme;
   const size = sizeFromParams(params);
   if (size) image.size = size;
+  // A live render declares its gutter the same way a bundled one does; without
+  // this the CLI path kept the false gutter-induced score the bundle path had
+  // just been fixed for.
+  const gutter = gutterFor(params);
+  if (gutter) image.gutter = gutter;
   if (p.semantics) image.semantics = p.semantics;
   return image;
 }
