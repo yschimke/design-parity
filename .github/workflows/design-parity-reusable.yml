@@ -698,7 +698,14 @@ jobs:
             # unrecognised option. Asking the CLI what it supports keeps those consumers on the old
             # behaviour — correct for ids without commas, which is every catalog that works today —
             # and upgrades them the moment they bump.
-            if compose-preview bundle --help 2>/dev/null | grep -qe '--exclude-preview-id-file'; then
+            # Capture, THEN grep. Piping the probe straight into `grep` inside an `if` looks
+            # equivalent and is not: this step runs under `set -euo pipefail`, so a `--help` that
+            # exits non-zero (the usage path does) wins the pipeline's status over grep's match —
+            # a CLI that HAS the flag would be read as lacking it and silently fall back to the
+            # comma form this change exists to stop using. scripts/test-workflow-probes.sh pins
+            # exactly this shape, and caught it here.
+            help_text="$(compose-preview bundle --help 2>&1 || true)"
+            if printf '%s' "$help_text" | grep -qe '--exclude-preview-id-file'; then
               args+=(--exclude-preview-id-file "$(pwd)/slice-excluded.txt")
             else
               echo "::warning title=compose-preview too old for --exclude-preview-id-file::Falling back to the comma-joined --exclude-preview-id. A preview id containing a comma will be shattered into fragments that can exclude the whole module (compose-ai-tools#4602). Bump the composePreviewPlugin pin to 1.40.0 or later."
