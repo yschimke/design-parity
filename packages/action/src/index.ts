@@ -9,7 +9,7 @@
 export { createAdapterRegistry } from "./registry.js";
 export type { AdapterRegistry, RegistryOptions } from "./registry.js";
 
-export { orchestrate } from "./orchestrate.js";
+export { orchestrate, PARITY_FINDINGS_FILE } from "./orchestrate.js";
 export type {
   OrchestrateOptions,
   CandidateProvider,

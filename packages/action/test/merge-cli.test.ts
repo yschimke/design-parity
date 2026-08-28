@@ -83,12 +83,18 @@ describe("merge CLI args", () => {
   it("threads the landing-page link context through", () => {
     expect(
       parseArgs([
-        "merge", "a",
-        "--out", "out",
-        "--repo-slug", "owner/repo",
-        "--branch", "design-parity/main",
-        "--source-commit", "abc123",
-        "--bundle-image", "candidates.bundle.png",
+        "merge",
+        "a",
+        "--out",
+        "out",
+        "--repo-slug",
+        "owner/repo",
+        "--branch",
+        "design-parity/main",
+        "--source-commit",
+        "abc123",
+        "--bundle-image",
+        "candidates.bundle.png",
       ]),
     ).toMatchObject({
       repoSlug: "owner/repo",
@@ -114,30 +120,37 @@ describe("merge", () => {
     const out = join(root, "merged");
 
     const { code, out: log } = await runMerge([
-      "merge", a, b,
-      "--out", out,
-      "--repo-slug", "owner/repo",
-      "--branch", "design-parity/main",
+      "merge",
+      a,
+      b,
+      "--out",
+      out,
+      "--repo-slug",
+      "owner/repo",
+      "--branch",
+      "design-parity/main",
     ]);
 
     expect(code).toBe(0);
     expect(log).toMatch(/Merged 2\/2 shard\(s\): 3 component\(s\)/);
 
     const entries = (await readdir(out)).sort();
-    expect(entries).toEqual([
-      "README.md",
-      // The machine-readable twin of the two pages above: what the NEXT run
-      // reads to carry forward whatever it cannot refresh.
-      "run.json",
-      "index.html",
-      "ui-A-kt-One",
-      "ui-B-kt-Two",
-      "ui-C-kt-Three",
-    ].sort());
-    // Every component's report survives the copy, from both shards.
-    expect(await readFile(join(out, "ui-B-kt-Two", "report.html"), "utf8")).toContain(
-      "ui/B.kt#Two",
+    expect(entries).toEqual(
+      [
+        "README.md",
+        // The machine-readable twin of the two pages above: what the NEXT run
+        // reads to carry forward whatever it cannot refresh.
+        "run.json",
+        "index.html",
+        "ui-A-kt-One",
+        "ui-B-kt-Two",
+        "ui-C-kt-Three",
+      ].sort(),
     );
+    // Every component's report survives the copy, from both shards.
+    expect(
+      await readFile(join(out, "ui-B-kt-Two", "report.html"), "utf8"),
+    ).toContain("ui/B.kt#Two");
     // The merged landing page replaces the shards' partial ones and lists all
     // three components in component order, not shard-completion order.
     const index = await readFile(join(out, "index.html"), "utf8");
@@ -163,7 +176,12 @@ describe("merge", () => {
   it("refuses to publish when a shard never reported", async () => {
     const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
     const a = await writeShardDir(root, 1, 3, ["ui/A.kt#One"]);
-    const { code, err } = await runMerge(["merge", a, "--out", join(root, "merged")]);
+    const { code, err } = await runMerge([
+      "merge",
+      a,
+      "--out",
+      join(root, "merged"),
+    ]);
     expect(code).toBe(1);
     expect(err).toMatch(/refusing to publish a partial run/);
     expect(err).toMatch(/shard\(s\) 2, 3 of 3 did not report/);
@@ -184,7 +202,9 @@ describe("merge", () => {
 
     expect(code).toBe(1);
     expect(log).toMatch(/Parity fail \(design-led\) — blocking/);
-    expect(await readFile(join(out, "index.html"), "utf8")).toContain("A.kt#One");
+    expect(await readFile(join(out, "index.html"), "utf8")).toContain(
+      "A.kt#One",
+    );
     expect(await readdir(out)).toContain("ui-B-kt-Two");
   });
 
@@ -195,10 +215,64 @@ describe("merge", () => {
   });
 });
 
+/** One shard's `findings.json`, keyed the way `orchestrate` writes it. */
+async function writeShardFindings(
+  dir: string,
+  previews: Record<string, Array<Record<string, unknown>>>,
+): Promise<void> {
+  await writeFile(
+    join(dir, "findings.json"),
+    JSON.stringify({ schema: "compose-preview-parity-findings/v1", previews }),
+  );
+}
+
+const finding = (message: string) => ({
+  status: "fail",
+  findings: [{ kind: "token", severity: "error", message }],
+});
+
+describe("merge (parity findings)", () => {
+  it("unions every shard's findings, which live outside the report dirs", async () => {
+    // The failure this guards: `copyComponentDirs` moves the reports and leaves each shard's
+    // verdict behind, so a sharded run — the CI path — publishes a board whose rows say `fail`
+    // and whose comparisons say nothing.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 2, ["a/A.kt#A"]);
+    const b = await writeShardDir(root, 2, 2, ["b/B.kt#B"]);
+    await writeShardFindings(a, { "a/A.kt#A": [finding("A drifted")] });
+    await writeShardFindings(b, { "b/B.kt#B": [finding("B drifted")] });
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge(["merge", a, b, "--out", out]);
+    expect(code).toBe(0);
+    expect(log).toContain("findings");
+
+    const doc = JSON.parse(await readFile(join(out, "findings.json"), "utf8"));
+    expect(doc.schema).toBe("compose-preview-parity-findings/v1");
+    expect(Object.keys(doc.previews).sort()).toEqual(["a/A.kt#A", "b/B.kt#B"]);
+  });
+
+  it("writes nothing when no shard reported a finding", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const a = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    const out = join(root, "out");
+
+    const { code } = await runMerge(["merge", a, "--out", out]);
+    expect(code).toBe(0);
+    await expect(
+      readFile(join(out, "findings.json"), "utf8"),
+    ).rejects.toThrow();
+  });
+});
+
 /** A previous run's published branch: `run.json` plus each row's report dir. */
 async function writePreviousDir(
   root: string,
-  entries: Array<{ code: string; status?: "pass" | "fail"; carriedFrom?: string }>,
+  entries: Array<{
+    code: string;
+    status?: "pass" | "fail";
+    carriedFrom?: string;
+  }>,
   sourceCommit = "0000000previous",
 ): Promise<string> {
   const dir = join(root, "previous");
@@ -206,7 +280,10 @@ async function writePreviousDir(
   for (const e of entries) {
     const slug = e.code.replace(/[^a-z0-9_]+/gi, "-");
     await mkdir(join(dir, slug), { recursive: true });
-    await writeFile(join(dir, slug, "report.html"), `<html>old ${e.code}</html>`);
+    await writeFile(
+      join(dir, slug, "report.html"),
+      `<html>old ${e.code}</html>`,
+    );
   }
   await writeFile(
     join(dir, "run.json"),
@@ -228,6 +305,48 @@ async function writePreviousDir(
 }
 
 describe("merge --previous (partial refresh)", () => {
+  it("carries a previous run's findings for the rows it carries", async () => {
+    // Same rule as the board above them: a finding does not stop being one because this run
+    // could not re-measure it. A carried row whose panel went blank would put a `fail` on the
+    // board over a comparison saying nothing.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
+    await writeShardFindings(shard, { "a/A.kt#A": [finding("A drifted")] });
+    const previous = await writePreviousDir(root, [
+      { code: "a/A.kt#A" },
+      // `pass` so the merge is not blocked; a passing verdict still carries warnings, which is
+      // exactly the row whose panel must not go blank on a partial refresh.
+      { code: "b/B.kt#B" },
+    ]);
+    await writeShardFindings(previous, {
+      "a/A.kt#A": [finding("stale A")],
+      "b/B.kt#B": [finding("B drifted")],
+    });
+    const out = join(root, "out");
+
+    const { code } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+      "--source-commit",
+      "abc1234",
+    ]);
+    expect(code).toBe(0);
+
+    const doc = JSON.parse(await readFile(join(out, "findings.json"), "utf8"));
+    // The carried row keeps its verdict…
+    expect(doc.previews["b/B.kt#B"][0].findings[0].message).toBe("B drifted");
+    // …and the re-measured one is this run's, not the previous run's.
+    expect(
+      doc.previews["a/A.kt#A"].map(
+        (s: { findings: Array<{ message: string }> }) => s.findings[0].message,
+      ),
+    ).toEqual(["A drifted"]);
+  });
+
   it("carries forward rows this run did not produce, with their reports", async () => {
     const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
     const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
@@ -260,7 +379,9 @@ describe("merge --previous (partial refresh)", () => {
     expect(manifest.entries[0].carriedFrom).toBeUndefined();
     expect(manifest.entries[1].carriedFrom).toBe("0000000previous");
     // The carried row's report came along, or its link would 404.
-    expect(await readFile(join(out, "b-B-kt-B", "report.html"), "utf8")).toContain("old");
+    expect(
+      await readFile(join(out, "b-B-kt-B", "report.html"), "utf8"),
+    ).toContain("old");
   });
 
   it("keeps the original commit when a row is carried more than once", async () => {
@@ -276,7 +397,9 @@ describe("merge --previous (partial refresh)", () => {
     await runMerge(["merge", shard, "--out", out, "--previous", previous]);
 
     const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
-    const carried = manifest.entries.find((e: { code: string }) => e.code === "b/B.kt#B");
+    const carried = manifest.entries.find(
+      (e: { code: string }) => e.code === "b/B.kt#B",
+    );
     expect(carried.carriedFrom).toBe("1111111original");
   });
 
@@ -347,7 +470,14 @@ describe("merge --previous (partial refresh)", () => {
     const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"]);
     const out = join(root, "out");
 
-    await runMerge(["merge", shard, "--out", out, "--source-commit", "deadbee"]);
+    await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--source-commit",
+      "deadbee",
+    ]);
 
     const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
     expect(manifest.formatVersion).toBe(1);

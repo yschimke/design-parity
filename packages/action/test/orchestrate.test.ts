@@ -19,6 +19,7 @@ import {
   REPORT_MARKER,
   CMP_PROMOTION,
   specTokenKey,
+  PARITY_FINDINGS_FILE,
   type AdapterRegistry,
 } from "../src/index.js";
 
@@ -216,6 +217,71 @@ describe("run output artifacts (#49, #50)", () => {
         expect(p).toContain(join(outDir, "ui-Tile-kt-LightOn"));
         expect(pathsB).not.toContain(p);
       }
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the run's findings where a machine can read them (#419)", async () => {
+    const { reference, candidate } = await load();
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      await orchestrate({
+        repoRoot,
+        registry: reg(adapterReturning(reference)),
+        correspondences: [corr],
+        candidate: () => candidate,
+        direction: "design-led",
+        outDir,
+      });
+
+      const manifest = JSON.parse(
+        await readFile(join(outDir, PARITY_FINDINGS_FILE), "utf8"),
+      );
+      expect(manifest.schema).toBe("compose-preview-parity-findings/v1");
+
+      // Keyed by BOTH namespaces a consumer might hold. Neither is the sticker id a preview
+      // server routes on — that is minted at publish — so emitting both is what lets a
+      // publisher join from either side.
+      expect(Object.keys(manifest.previews)).toContain(corr.code);
+      if (candidate.previewId) {
+        expect(Object.keys(manifest.previews)).toContain(candidate.previewId);
+      }
+
+      const set = manifest.previews[corr.code][0];
+      expect(set.status).toBe("fail");
+      // Unscoped: the serve reference id is minted by whoever writes `references/index.json`.
+      expect(set.referenceId).toBeUndefined();
+      expect(set.reportUrl).toBeUndefined();
+
+      // The findings this golden actually produces, carried with their structure intact.
+      const kinds = new Set(set.findings.map((f: { kind: string }) => f.kind));
+      expect(kinds.has("contrast")).toBe(true);
+      expect(kinds.has("token")).toBe(true);
+      const token = set.findings.find((f: { kind: string }) => f.kind === "token");
+      expect(typeof token.detail.token).toBe("string");
+      // A token finding is a claim about the component's own box, so it anchors to the frame.
+      expect(token.anchors?.some((a: { side: string }) => a.side === "actual")).toBe(true);
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes no findings file for a run with nothing to report", async () => {
+    // An empty manifest is a file a reader has to open to learn it says nothing.
+    const outDir = await mkdtemp(join(tmpdir(), "dp-out-"));
+    try {
+      await orchestrate({
+        repoRoot,
+        registry: reg(throwingAdapter),
+        correspondences: [corr],
+        candidate: () => undefined,
+        direction: "code-led",
+        outDir,
+      });
+      await expect(
+        readFile(join(outDir, PARITY_FINDINGS_FILE), "utf8"),
+      ).rejects.toThrow();
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
