@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.65](https://github.com/yschimke/design-parity/compare/v0.1.64...v0.1.65) (2026-08-28)
+
+
+### Features
+
+* **catalog-export:** publish a run's verdict for the preview server to draw ([#415](https://github.com/yschimke/design-parity/issues/415)) ([cb25fcb](https://github.com/yschimke/design-parity/commit/cb25fcb7d59d644c2be1ff71cd58af951cec98fc))
+
 ## [0.1.64](https://github.com/yschimke/design-parity/compare/v0.1.63...v0.1.64) (2026-08-28)
 
 
