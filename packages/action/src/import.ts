@@ -39,7 +39,7 @@ import {
 import type { DesignMap } from "@design-parity/core";
 import { entryRefs } from "@design-parity/core";
 
-import { normalisePlaceholders, type PlaceholderFill } from "./placeholder.js";
+import { NO_PLACEHOLDER, normalisePlaceholders, type PlaceholderFill } from "./placeholder.js";
 
 /**
  * Node ids per `GET /v1/files/:key/nodes`. Mirrors the adapter's own batch
@@ -236,9 +236,23 @@ export function refreshOrder(
     // A mode change is a reason to refresh, exactly as `contentsOnly` above is:
     // the paint is applied at download, so without this the new mode reaches
     // only nodes re-read for some other reason and the cache ends up half
-    // normalised, with nothing on it saying which half is which. An entry
-    // written before the option existed carries a checkerboard.
-    if ((entry.imagePlaceholderFill ?? "checkerboard") !== placeholderFill) return true;
+    // normalised, with nothing on it saying which half is which.
+    //
+    // Three states, not two.
+    //
+    // `NO_PLACEHOLDER` means a scan looked and found no empty image fill, so no
+    // mode can change a pixel of this entry and it is never due on these
+    // grounds. That is the state this check exists for: 549 of the kit's 581
+    // nodes are in it, and recording a mode on them instead made the first
+    // switch re-fetch every one to rewrite it byte-identically.
+    //
+    // Absent means an entry written before normalisation existed, which is
+    // verbatim Figma output — and verbatim IS the checkerboard, so it compares
+    // as one. That keeps a consumer who stays on `checkerboard` from sweeping
+    // its whole cache for nothing, while a switch away from it still re-reads
+    // everything, which is right: presence is unknown on those entries.
+    const recorded = entry.imagePlaceholderFill ?? "checkerboard";
+    if (recorded !== NO_PLACEHOLDER && recorded !== placeholderFill) return true;
     return force || entry.fileVersion !== fileVersion;
   });
   return due.sort((a, b) => {
@@ -450,6 +464,11 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       try {
         const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
         let bytes = await opts.client.downloadImage(url, nodeId);
+        // What this entry records about the mode. A PNG render carries no
+        // pattern to rewrite, so no mode can ever apply to it; `checkerboard`
+        // caches verbatim without scanning, so presence stays unknown and the
+        // mode is what gets recorded.
+        let placeholderRecord: string = format === "svg" ? placeholderFill : NO_PLACEHOLDER;
         if (format === "svg" && placeholderFill !== "checkerboard") {
           // Normalise before the bytes are cached, so the committed reference
           // and every run reading it see the same thing. Reported per node
@@ -459,6 +478,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
             Buffer.from(bytes).toString("utf8"),
             placeholderFill,
           );
+          placeholderRecord = rewrites.length > 0 ? placeholderFill : NO_PLACEHOLDER;
           if (rewrites.length > 0) {
             bytes = new Uint8Array(Buffer.from(svg, "utf8"));
             result.placeholders += 1;
@@ -476,7 +496,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes, format, contentsOnly: nodeContentsOnly, placeholderFill },
+          image: { bytes, format, contentsOnly: nodeContentsOnly, placeholderFill: placeholderRecord },
         });
         result.refreshed += 1;
       } catch (err) {

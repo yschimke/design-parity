@@ -43,6 +43,26 @@ export type PlaceholderFill =
   /** An explicit `#RGB`, `#RRGGBB` or `#RRGGBBAA`. */
   | `#${string}`;
 
+/**
+ * Recorded in place of a mode where a scan found no empty image fill.
+ *
+ * The mode only matters for entries that HAVE a placeholder, so recording the
+ * mode on every entry makes a mode change look like a reason to re-read the
+ * whole kit: the first switch on `wear-m3-catalog` refreshed 581 nodes where 32
+ * carry a placeholder, re-fetching 549 to rewrite them byte-identically.
+ *
+ * Not simply "absent means nothing here", which was the tempting version and is
+ * wrong: an entry written before the mode was recorded at all is ALSO absent,
+ * and may well carry a checkerboard. Reading absence as "no placeholder" would
+ * leave every pre-existing cache unnormalisable, silently — the exact failure
+ * the mode check was added to fix. So absence keeps meaning "unknown, re-read
+ * once", and this marker is what a scan writes when it has actually looked.
+ *
+ * Deliberately not a valid mode, so it cannot be confused with one; note that
+ * `transparent` PAINTS `none`, which is a different thing from this.
+ */
+export const NO_PLACEHOLDER = "no-placeholder";
+
 /** One placeholder the normaliser replaced, for the import's log. */
 export interface PlaceholderRewrite {
   /** `<image>` element id carrying the tile. */

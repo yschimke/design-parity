@@ -11,7 +11,7 @@ import {
 } from "@design-parity/adapter-figma";
 
 import { importReferences, refreshOrder } from "../src/import.js";
-import { isCheckerboard, normalisePlaceholders } from "../src/placeholder.js";
+import { NO_PLACEHOLDER, isCheckerboard, normalisePlaceholders } from "../src/placeholder.js";
 
 /**
  * A checkerboard tile, with the grid offset by `phase` pixels on both axes.
@@ -171,6 +171,7 @@ describe("normalisePlaceholders", () => {
 describe("importReferences, placeholder normalisation", () => {
   const tile = checkerTile(400, 50, 26);
   const placeholderSvg = svgWith(tile);
+  let served = placeholderSvg;
 
   const fakeFigma = (): FetchLike => async (url) => {
     if (url.includes("?depth=1")) {
@@ -206,10 +207,15 @@ describe("importReferences, placeholder normalisation", () => {
         headers: { "content-type": "application/json" },
       });
     }
-    return new Response(placeholderSvg);
+    return new Response(served);
   };
 
-  async function runImport(placeholderFill?: "flat" | "checkerboard") {
+  const plainSvg =
+    '<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect width="10" height="10" fill="#123456"/></svg>';
+
+  async function runImport(placeholderFill?: "flat" | "checkerboard", document?: string) {
+    served = document ?? placeholderSvg;
     const cacheDir = await mkdtemp(join(tmpdir(), "dp-placeholder-"));
     const result = await importReferences({
       cacheDir,
@@ -223,7 +229,8 @@ describe("importReferences, placeholder normalisation", () => {
       ...(placeholderFill ? { placeholderFill } : {}),
     });
     const cached = await readFile(join(cacheDir, "AbCdEf123456", "1-2", "image.svg"), "utf8");
-    return { result, cached };
+    const index = JSON.parse(await readFile(join(cacheDir, "index.json"), "utf8"));
+    return { result, cached, index };
   }
 
   it("normalises by default, and says so in the count", async () => {
@@ -232,6 +239,16 @@ describe("importReferences, placeholder normalisation", () => {
     expect(result.placeholders).toBe(1);
     expect(cached).toContain('fill="#ececec"');
     expect(cached).not.toContain("data:image/png;base64,");
+  });
+
+  it("records the mode on a node that has a placeholder", async () => {
+    const { index } = await runImport();
+    expect(index.entries[0].imagePlaceholderFill).toBe("flat");
+  });
+
+  it("records no-placeholder on a node that has none, so a mode switch skips it", async () => {
+    const { index } = await runImport(undefined, plainSvg);
+    expect(index.entries[0].imagePlaceholderFill).toBe(NO_PLACEHOLDER);
   });
 
   it("caches Figma's own output when asked for checkerboard", async () => {
@@ -273,5 +290,31 @@ describe("refreshOrder, placeholder mode", () => {
 
   it("leaves a node already cached under the wanted mode alone", () => {
     expect(refreshOrder(["1:2"], () => entry("flat"), "v1", false, true, "flat")).toEqual([]);
+  });
+
+  it("never re-reads an entry a scan found no placeholder in, under any mode", () => {
+    // The whole point: 549 of the kit's 581 nodes have nothing a mode can
+    // change, and re-fetching them to rewrite them byte-identically is what
+    // this marker exists to stop.
+    for (const mode of ["flat", "checkerboard", "transparent", "#ff00ff"] as const) {
+      expect(
+        refreshOrder(["1:2"], () => entry(NO_PLACEHOLDER), "v1", false, true, mode),
+      ).toEqual([]);
+    }
+  });
+
+  it("does not sweep a cache that is staying on checkerboard", () => {
+    // An entry written before normalisation existed is verbatim Figma output,
+    // and verbatim IS the checkerboard — so it is already what `checkerboard`
+    // asks for and re-reading it would buy nothing. Switching AWAY from
+    // checkerboard still re-reads it (the case above), which is right, because
+    // presence is unknown on an entry nothing has scanned.
+    expect(refreshOrder(["1:2"], () => entry(), "v1", false, true, "checkerboard")).toEqual([]);
+  });
+
+  it("still re-reads a node whose recorded mode differs", () => {
+    expect(refreshOrder(["1:2"], () => entry("checkerboard"), "v1", false, true, "flat")).toEqual([
+      "1:2",
+    ]);
   });
 });
