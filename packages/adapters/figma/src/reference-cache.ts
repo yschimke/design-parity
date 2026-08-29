@@ -73,15 +73,36 @@ export interface ReferenceCacheEntry {
    */
   imageContentsOnly?: boolean;
   /**
-   * How an empty image slot was painted when this entry was written — the
-   * import's `--placeholder-fill`. Older entries omit it and therefore mean
-   * `checkerboard`, which is what every entry written before the option
-   * existed contains.
+   * Figma render scale used for this image. **PNG only** — the client sends
+   * scale as `format=png&scale=…` and omits it for SVG — so an SVG entry has
+   * none. Absent on a PNG entry means 2, which is what the client renders at
+   * when no scale is given, not the API's bare 1.
+   *
+   * Recorded so a scale change is a reason to refresh. It is passed to Figma at
+   * render time but was never persisted, so nothing could compare it — the same
+   * shape as [imageFormat], which was persisted and compared nowhere.
+   */
+  imageScale?: number;
+  /**
+   * What this entry records about the import's `--placeholder-fill`, in three
+   * states:
+   *
+   * - **a mode** (`flat`, `checkerboard`, `#rrggbb`) — this entry carries an
+   *   empty image fill, painted that way.
+   * - **`no-placeholder`** — a scan looked and found none, so no mode can change
+   *   a pixel of this entry.
+   * - **absent** — written before the mode was recorded at all. Presence is
+   *   unknown, so it is due a re-read once and then settles.
    *
    * Recorded so a mode change is a reason to refresh, exactly as
-   * [imageContentsOnly] is. Without it the mode reaches only nodes that happen
-   * to be re-read for some other reason, and a cache ends up half normalised
-   * with nothing on it saying which half is which.
+   * [imageContentsOnly] is: the paint is applied at download, so without it the
+   * mode reaches only nodes re-read for some other reason and a cache ends up
+   * half normalised with nothing on it saying which half is which.
+   *
+   * The third state is what keeps that cheap. Recording a mode on every entry
+   * made a switch look like a reason to re-read the whole kit — the first one on
+   * `wear-m3-catalog` refreshed all 581 nodes to rewrite 549 of them
+   * byte-identically, on the one lane allowed to spend the Figma token.
    */
   imagePlaceholderFill?: string;
   /**
@@ -341,6 +362,7 @@ export class ReferenceCacheWriter {
       format: "png" | "svg";
       contentsOnly?: boolean;
       placeholderFill?: string;
+      scale?: number;
     };
     /** Mark a component set, which is cached without a render. */
     structureOnly?: boolean;
@@ -367,6 +389,7 @@ export class ReferenceCacheWriter {
             imageFormat: input.image.format,
             imageContentsOnly: input.image.contentsOnly ?? true,
             imagePlaceholderFill: input.image.placeholderFill ?? "checkerboard",
+            ...(input.image.scale !== undefined ? { imageScale: input.image.scale } : {}),
           }
         : {}),
       ...(input.structureOnly ? { structureOnly: true } : {}),

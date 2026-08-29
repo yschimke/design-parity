@@ -39,7 +39,7 @@ import {
 import type { DesignMap } from "@design-parity/core";
 import { entryRefs } from "@design-parity/core";
 
-import { normalisePlaceholders, type PlaceholderFill } from "./placeholder.js";
+import { NO_PLACEHOLDER, normalisePlaceholders, type PlaceholderFill } from "./placeholder.js";
 
 /**
  * Node ids per `GET /v1/files/:key/nodes`. Mirrors the adapter's own batch
@@ -54,6 +54,13 @@ const NODE_BATCH = 50;
  * 50 nodes rather than one per node.
  */
 const IMAGE_BATCH = 50;
+
+/**
+ * What `FigmaRestClient.renderImageUrls` renders a PNG at when no scale is
+ * given (`rest-client.ts`: `opts.scale ?? 2`). Recording the API's bare 1 here
+ * would claim a 2x render was 1x.
+ */
+const PNG_DEFAULT_SCALE = 2;
 
 /** One node the import is responsible for. */
 export interface ImportTarget {
@@ -226,6 +233,8 @@ export function refreshOrder(
   force: boolean,
   imageContentsOnly: boolean | ((nodeId: string) => boolean) = true,
   placeholderFill: PlaceholderFill = "checkerboard",
+  imageFormat: "png" | "svg" = "svg",
+  imageScale = PNG_DEFAULT_SCALE,
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
@@ -233,12 +242,49 @@ export function refreshOrder(
     const desired =
       typeof imageContentsOnly === "function" ? imageContentsOnly(id) : imageContentsOnly;
     if ((entry.imageContentsOnly ?? true) !== desired) return true;
+    // A format change is a reason to refresh, and never was one: `imageFormat`
+    // was recorded but never compared, so a cache built with `--format png`
+    // stayed PNG under a later `--format svg`. It went unnoticed because a mode
+    // difference happened to refresh those rows as a side effect — a side effect
+    // `NO_PLACEHOLDER` correctly stops, which is what surfaced this. Compared
+    // before the placeholder check, because the format decides whether a
+    // placeholder can exist at all: a PNG render carries no pattern to rewrite.
+    if ((entry.imageFormat ?? "svg") !== imageFormat) return true;
+    // Scale, for the same reason and with the same history: it is sent to Figma
+    // at render time, was never persisted, and so could not be compared. Also
+    // before the placeholder short-circuit — a `no-placeholder` entry still has
+    // pixels, and they are still the wrong size at the wrong scale.
+    //
+    // PNG only, and defaulting to 2 rather than 1: the client sends scale for
+    // `format=png` alone (`format=png&scale=…`) and defaults it to 2 when none
+    // is given, so an SVG entry has no scale to be wrong about and a PNG entry
+    // fetched without `--scale` is 2x. Recording 1 there would claim a 2x render
+    // was 1x, and a later explicit `--scale 1` would then compare equal and keep
+    // the 2x image. The format is compared above, so reaching here means both
+    // sides agree on it.
+    if (imageFormat === "png" && (entry.imageScale ?? PNG_DEFAULT_SCALE) !== imageScale) {
+      return true;
+    }
     // A mode change is a reason to refresh, exactly as `contentsOnly` above is:
     // the paint is applied at download, so without this the new mode reaches
     // only nodes re-read for some other reason and the cache ends up half
-    // normalised, with nothing on it saying which half is which. An entry
-    // written before the option existed carries a checkerboard.
-    if ((entry.imagePlaceholderFill ?? "checkerboard") !== placeholderFill) return true;
+    // normalised, with nothing on it saying which half is which.
+    //
+    // Three states, not two.
+    //
+    // `NO_PLACEHOLDER` means a scan looked and found no empty image fill, so no
+    // mode can change a pixel of this entry and it is never due on these
+    // grounds. That is the state this check exists for: 549 of the kit's 581
+    // nodes are in it, and recording a mode on them instead made the first
+    // switch re-fetch every one to rewrite it byte-identically.
+    //
+    // Absent means an entry written before normalisation existed, which is
+    // verbatim Figma output — and verbatim IS the checkerboard, so it compares
+    // as one. That keeps a consumer who stays on `checkerboard` from sweeping
+    // its whole cache for nothing, while a switch away from it still re-reads
+    // everything, which is right: presence is unknown on those entries.
+    const recorded = entry.imagePlaceholderFill ?? "checkerboard";
+    if (recorded !== NO_PLACEHOLDER && recorded !== placeholderFill) return true;
     return force || entry.fileVersion !== fileVersion;
   });
   return due.sort((a, b) => {
@@ -262,6 +308,10 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
   const limit = opts.limit && opts.limit > 0 ? opts.limit : Infinity;
 
   const placeholderFill = opts.placeholderFill ?? "flat";
+  // Only PNG renders carry a scale — the client sends it as `format=png&scale=…`
+  // and SVG requests omit it entirely — so an SVG entry records none rather than
+  // a number that could never make it stale.
+  const effectiveScale = format === "png" ? (opts.imageScale ?? PNG_DEFAULT_SCALE) : undefined;
 
   const result: ImportResult = {
     refreshed: 0,
@@ -316,6 +366,8 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       opts.force === true,
       (id) => contentsOnlyFor(fileKey, id),
       placeholderFill,
+      format,
+      effectiveScale ?? PNG_DEFAULT_SCALE,
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
@@ -450,6 +502,11 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       try {
         const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
         let bytes = await opts.client.downloadImage(url, nodeId);
+        // What this entry records about the mode. A PNG render carries no
+        // pattern to rewrite, so no mode can ever apply to it; `checkerboard`
+        // caches verbatim without scanning, so presence stays unknown and the
+        // mode is what gets recorded.
+        let placeholderRecord: string = format === "svg" ? placeholderFill : NO_PLACEHOLDER;
         if (format === "svg" && placeholderFill !== "checkerboard") {
           // Normalise before the bytes are cached, so the committed reference
           // and every run reading it see the same thing. Reported per node
@@ -459,6 +516,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
             Buffer.from(bytes).toString("utf8"),
             placeholderFill,
           );
+          placeholderRecord = rewrites.length > 0 ? placeholderFill : NO_PLACEHOLDER;
           if (rewrites.length > 0) {
             bytes = new Uint8Array(Buffer.from(svg, "utf8"));
             result.placeholders += 1;
@@ -476,7 +534,13 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes, format, contentsOnly: nodeContentsOnly, placeholderFill },
+          image: {
+            bytes,
+            format,
+            contentsOnly: nodeContentsOnly,
+            placeholderFill: placeholderRecord,
+            ...(effectiveScale !== undefined ? { scale: effectiveScale } : {}),
+          },
         });
         result.refreshed += 1;
       } catch (err) {
