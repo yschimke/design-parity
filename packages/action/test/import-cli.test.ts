@@ -13,6 +13,7 @@ describe("import CLI arguments", () => {
       prune: false,
       format: "svg",
       contentsOnly: true,
+      placeholderFill: "flat",
     });
     expect(args.scale).toBeUndefined();
   });
@@ -40,6 +41,25 @@ describe("import CLI arguments", () => {
 
   it("ignores a format it cannot render rather than importing nonsense", () => {
     expect(parseArgs(["import", "--cache", "rc", "--format", "jpeg"]).format).toBe("svg");
+  });
+
+  it("takes a placeholder mode, by name or as a colour", () => {
+    const named = ["flat", "checkerboard", "transparent"] as const;
+    for (const mode of named) {
+      expect(parseArgs(["import", "--cache", "rc", "--placeholder-fill", mode]).placeholderFill).toBe(
+        mode,
+      );
+    }
+    expect(
+      parseArgs(["import", "--cache", "rc", "--placeholder-fill", "#ff00ff80"]).placeholderFill,
+    ).toBe("#ff00ff80");
+  });
+
+  it("keeps the default for an unusable placeholder mode rather than failing the import", () => {
+    // A stale cache is worse than one placeholder painted the usual grey.
+    expect(
+      parseArgs(["import", "--cache", "rc", "--placeholder-fill", "chartreuse"]).placeholderFill,
+    ).toBe("flat");
   });
 
   it("treats an unparseable --max as no ceiling", () => {

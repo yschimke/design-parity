@@ -97,6 +97,17 @@ on:
         required: false
         type: boolean
         default: true
+      placeholder-fill:
+        description: >
+          What to paint where the kit left an image slot empty — a Figma IMAGE fill with no image
+          behind it, which Figma renders as its checkerboard. `flat` (the default) paints the mean
+          of the tile's own colours; a checkerboard amplifies a small geometry error ~8x and then
+          saturates, and two at different pitches differ in ~50% of pixels however small the real
+          error. `checkerboard` caches Figma's output verbatim, `transparent` paints none, or give
+          an explicit `#rrggbb`. Only the paint changes: the slot's geometry is still compared.
+        required: false
+        type: string
+        default: flat
       design-parity-version:
         description: "npm version of the `design-parity` CLI to run (must be >= the release carrying `import`)."
         required: false
@@ -252,6 +263,7 @@ jobs:
           FIGMA_CONTENTS_ONLY: ${{ inputs.figma-contents-only }}
           FORCE: ${{ inputs.force }}
           PRUNE: ${{ inputs.prune }}
+          PLACEHOLDER_FILL: ${{ inputs.placeholder-fill }}
         run: |
           set -euo pipefail
           if [ -n "${DP_REF:-}" ]; then
@@ -267,6 +279,7 @@ jobs:
           if [ "${IMAGE_SCALE}" != "0" ]; then opts+=(--scale "${IMAGE_SCALE}"); fi
           if [ "${FORCE}" = "true" ]; then opts+=(--force); fi
           if [ "${PRUNE}" = "true" ]; then opts+=(--prune); fi
+          if [ -n "${PLACEHOLDER_FILL}" ]; then opts+=(--placeholder-fill "${PLACEHOLDER_FILL}"); fi
 
           log="${RUNNER_TEMP}/import.txt"
           "${dp[@]}" import \
@@ -280,7 +293,7 @@ jobs:
           # into the step's outputs. Guarded: grep exits 1 on no match, and
           # failing here would abandon a completed import before it is pushed —
           # losing exactly the work this workflow exists to preserve.
-          grep -E '^(refreshed|carried|failed|unchanged|pruned|complete)=' "$log" \
+          grep -E '^(refreshed|carried|failed|unchanged|pruned|placeholders|complete)=' "$log" \
             >> "$GITHUB_OUTPUT" || echo "::warning::Import printed no summary lines."
 
       # One commit per import that changed something, onto the branch — so the

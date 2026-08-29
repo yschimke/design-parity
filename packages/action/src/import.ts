@@ -39,6 +39,8 @@ import {
 import type { DesignMap } from "@design-parity/core";
 import { entryRefs } from "@design-parity/core";
 
+import { normalisePlaceholders, type PlaceholderFill } from "./placeholder.js";
+
 /**
  * Node ids per `GET /v1/files/:key/nodes`. Mirrors the adapter's own batch
  * size: small enough that a chunk which fails is cheap to lose, large enough
@@ -78,6 +80,19 @@ export interface ImportOptions {
   imageFormat?: "png" | "svg";
   imageScale?: number;
   /**
+   * What to paint where the kit left an image slot empty — a Figma `IMAGE` fill
+   * with no image behind it, which Figma renders as its checkerboard.
+   *
+   * Defaults to `flat`, because a checkerboard is a bad thing to measure
+   * against: it amplifies a small geometry error ~8x and then saturates, and
+   * two checkerboards at different pitches differ in ~50% of pixels however
+   * small the real error. Only the paint is replaced, so the path keeps its
+   * geometry and a wrong frame still diffs. `checkerboard` caches Figma's
+   * output verbatim. SVG imports only — a PNG render carries no pattern to
+   * rewrite. See `placeholder.ts`.
+   */
+  placeholderFill?: PlaceholderFill;
+  /**
    * Figma `contents_only` export mode. Defaults to true; false includes
    * overlapping layers such as component-sheet backgrounds.
    */
@@ -99,6 +114,8 @@ export interface ImportOptions {
 export interface ImportResult {
   /** Nodes re-read from Figma and rewritten. */
   refreshed: number;
+  /** Nodes whose empty-image placeholder was normalised (see `placeholderFill`). */
+  placeholders: number;
   /**
    * Component sets cached alongside them (issue #296). Not catalog nodes: they
    * are what tells a cache-only run what its references *depict* and what their
@@ -237,8 +254,11 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
   const format = opts.imageFormat ?? "svg";
   const limit = opts.limit && opts.limit > 0 ? opts.limit : Infinity;
 
+  const placeholderFill = opts.placeholderFill ?? "flat";
+
   const result: ImportResult = {
     refreshed: 0,
+    placeholders: 0,
     sets: 0,
     carried: 0,
     failed: 0,
@@ -421,7 +441,27 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       }
       try {
         const nodeContentsOnly = contentsOnlyFor(fileKey, nodeId);
-        const bytes = await opts.client.downloadImage(url, nodeId);
+        let bytes = await opts.client.downloadImage(url, nodeId);
+        if (format === "svg" && placeholderFill !== "checkerboard") {
+          // Normalise before the bytes are cached, so the committed reference
+          // and every run reading it see the same thing. Reported per node
+          // rather than applied silently: the reference deliberately stops
+          // matching what Figma renders for these, and that is worth saying.
+          const { svg, rewrites } = normalisePlaceholders(
+            Buffer.from(bytes).toString("utf8"),
+            placeholderFill,
+          );
+          if (rewrites.length > 0) {
+            bytes = new Uint8Array(Buffer.from(svg, "utf8"));
+            result.placeholders += 1;
+            for (const r of rewrites) {
+              log(
+                `${fileKey}/${nodeId}: empty image fill ${r.colors.join("/")} ` +
+                  `(${r.sha256.slice(0, 12)}) painted ${r.paint}.`,
+              );
+            }
+          }
+        }
         await writer.put({
           fileKey,
           nodeId,

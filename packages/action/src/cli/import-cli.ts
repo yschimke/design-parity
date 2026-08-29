@@ -14,9 +14,9 @@
  * Run it on a schedule, on dispatch, or when the kit changes. It is safe to run
  * as often as you like: an unchanged file costs one request.
  *
- * Prints `refreshed=`, `carried=`, `failed=`, `unchanged=`, `pruned=` and
- * `complete=` — one `name=value` per line, readable in a log and appendable to
- * `$GITHUB_OUTPUT` verbatim.
+ * Prints `refreshed=`, `carried=`, `failed=`, `unchanged=`, `pruned=`,
+ * `placeholders=` and `complete=` — one `name=value` per line, readable in a log
+ * and appendable to `$GITHUB_OUTPUT` verbatim.
  *
  * Exit code is 0 for a partial import. That is the designed outcome, not a
  * failure: the cache is strictly better than it was, and the next run finishes
@@ -37,12 +37,14 @@ import {
   figmaRefsOf,
   importReferences,
 } from "../import.js";
+import type { PlaceholderFill } from "../placeholder.js";
 
 const TOKEN_ENV = ["FIGMA_TOKEN", "FIGMA_PAT", "FIGMA_ACCESS_TOKEN"] as const;
 
 export const USAGE =
   "design-parity import --cache <dir> [--repo .] [--max <n>] [--force] " +
-  "[--format svg|png] [--scale <n>] [--contents-only true|false] [--prune]\n";
+  "[--format svg|png] [--scale <n>] [--contents-only true|false] [--prune] " +
+  "[--placeholder-fill flat|checkerboard|transparent|#rrggbb]\n";
 
 export interface ImportArgs {
   repoRoot: string;
@@ -53,6 +55,7 @@ export interface ImportArgs {
   format: "png" | "svg";
   scale?: number;
   contentsOnly: boolean;
+  placeholderFill: PlaceholderFill;
 }
 
 export function parseArgs(args: string[]): ImportArgs {
@@ -63,6 +66,7 @@ export function parseArgs(args: string[]): ImportArgs {
     prune: false,
     format: "svg",
     contentsOnly: true,
+    placeholderFill: "flat",
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -99,6 +103,15 @@ export function parseArgs(args: string[]): ImportArgs {
       case "--contents-only":
         out.contentsOnly = next() !== "false";
         break;
+      case "--placeholder-fill": {
+        const v = next();
+        // An unrecognised value keeps the default rather than failing the run:
+        // an import that refuses to start leaves the cache stale, which is a
+        // worse outcome than one placeholder painted the usual grey.
+        if (v === "flat" || v === "checkerboard" || v === "transparent") out.placeholderFill = v;
+        else if (v && /^#[0-9a-fA-F]{3,8}$/.test(v)) out.placeholderFill = v as PlaceholderFill;
+        break;
+      }
       default:
         break;
     }
@@ -129,7 +142,9 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     stdout.write("No figma references in design-map.json — nothing to import.\n");
     // Not an error: a repo can map every component to another source, and a
     // scheduled import that fails on it would be noise for a correct config.
-    stdout.write("refreshed=0\ncarried=0\nfailed=0\nunchanged=\npruned=0\ncomplete=true\n");
+    stdout.write(
+      "refreshed=0\ncarried=0\nfailed=0\nunchanged=\npruned=0\nplaceholders=0\ncomplete=true\n",
+    );
     return 0;
   }
 
@@ -147,6 +162,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
     imageFormat: args.format,
     imageContentsOnly: args.contentsOnly,
     imageContentsOnlyByNode: figmaContentsOnlyByNodeOf(designMap, args.contentsOnly),
+    placeholderFill: args.placeholderFill,
     ...(args.scale !== undefined ? { imageScale: args.scale } : {}),
     log: (m) => stdout.write(m + "\n"),
   });
@@ -169,6 +185,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   stdout.write(`failed=${result.failed}\n`);
   stdout.write(`unchanged=${result.unchanged.join(",")}\n`);
   stdout.write(`pruned=${result.pruned.length}\n`);
+  stdout.write(`placeholders=${result.placeholders}\n`);
   stdout.write(`complete=${result.complete}\n`);
   return 0;
 }
