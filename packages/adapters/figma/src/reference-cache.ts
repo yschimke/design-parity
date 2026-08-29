@@ -29,7 +29,7 @@
  * (`1-42`) — the same one Figma's own URLs use. {@link cacheEntryDir}.
  */
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import type {
   FigmaComponentMeta,
@@ -299,6 +299,25 @@ export class ReferenceCacheWriter {
   readonly dir: string;
   readonly #doc: ReferenceCacheDoc;
 
+  /**
+   * Renders this run replaced at a DIFFERENT path, to be removed once the index
+   * that no longer names them is on disk.
+   *
+   * `put` writes `image.<format>`, so re-importing a node under a different
+   * `--format` leaves the superseded file beside the live one. These directories
+   * are committed, so that orphan is permanent: it inflates the repository, and
+   * a reader opening the directory finds two renders with nothing saying which
+   * one the index means (issue #441).
+   *
+   * Collected rather than deleted on the spot, because `put` only mutates the
+   * in-memory manifest — `write` is what persists it. A run that dies between
+   * the two leaves `index.json` still naming the OLD render, so deleting eagerly
+   * would point the committed cache at a file that is gone. Deferring keeps the
+   * failure mode "an orphan survives one more run", which is the one this is
+   * about rather than a broken cache.
+   */
+  readonly #superseded = new Set<string>();
+
   constructor(dir: string, base?: ReferenceCacheDoc) {
     this.dir = dir;
     this.#doc = base
@@ -371,10 +390,21 @@ export class ReferenceCacheWriter {
     const nodeRel = `${dir}/node.json`;
     await this.#writeText(nodeRel, JSON.stringify(input.node, null, 2) + "\n");
 
+    const previous = this.entry(input.fileKey, input.nodeId);
+
     let imageRel: string | undefined;
     if (input.image) {
       imageRel = `${dir}/image.${input.image.format}`;
       await this.#writeBytes(imageRel, input.image.bytes);
+      // Only when a render was actually written, and only at a different path.
+      // A structure-only re-put keeps the entry's old render rather than
+      // deleting one nothing has replaced, and a node put back to the format it
+      // already had is not a supersession at all.
+      if (previous?.image && previous.image !== imageRel) {
+        this.#superseded.add(previous.image);
+      }
+      // Whatever this path used to be, it is live again.
+      this.#superseded.delete(imageRel);
     }
 
     const entry: ReferenceCacheEntry = {
@@ -447,7 +477,41 @@ export class ReferenceCacheWriter {
       REFERENCE_CACHE_INDEX,
       JSON.stringify(this.#doc, null, 2) + "\n",
     );
+    await this.#removeSuperseded();
     return this.#doc;
+  }
+
+  /**
+   * Delete the renders [#superseded] holds, now that the manifest naming their
+   * replacements is on disk.
+   *
+   * This is the writer's only delete outside {@link prune}, and the paths come
+   * from a previously-read `index.json` rather than from this process — a cache
+   * directory is committed and therefore editable by anyone. So each one is
+   * checked to be inside {@link dir} before it is removed, and skipped rather
+   * than followed if it is not: `../../etc/something` in a manifest is a
+   * corrupt cache, not an instruction. Anything an entry still names is left
+   * alone as well, so a path reused by another node cannot be deleted out from
+   * under it.
+   */
+  async #removeSuperseded(): Promise<void> {
+    if (this.#superseded.size === 0) return;
+    const live = new Set(
+      this.#doc.entries.map((e) => e.image).filter((p): p is string => !!p),
+    );
+    const root = resolve(this.dir);
+    for (const rel of this.#superseded) {
+      if (live.has(rel)) continue;
+      const abs = resolve(root, rel);
+      const within = relative(root, abs);
+      if (within === "" || within.startsWith("..") || isAbsolute(within)) {
+        continue;
+      }
+      // `force`, because the file may already be gone — a half-finished earlier
+      // run, or a hand-tidied cache — and that is the state this wanted anyway.
+      await rm(abs, { force: true });
+    }
+    this.#superseded.clear();
   }
 
   async #writeText(relative: string, contents: string): Promise<void> {
