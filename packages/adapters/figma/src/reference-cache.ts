@@ -73,8 +73,10 @@ export interface ReferenceCacheEntry {
    */
   imageContentsOnly?: boolean;
   /**
-   * Figma render scale used for this image. Older entries omit it and therefore
-   * mean 1, the API's default when no `scale` is sent.
+   * Figma render scale used for this image. **PNG only** — the client sends
+   * scale as `format=png&scale=…` and omits it for SVG — so an SVG entry has
+   * none. Absent on a PNG entry means 2, which is what the client renders at
+   * when no scale is given, not the API's bare 1.
    *
    * Recorded so a scale change is a reason to refresh. It is passed to Figma at
    * render time but was never persisted, so nothing could compare it — the same
@@ -387,7 +389,7 @@ export class ReferenceCacheWriter {
             imageFormat: input.image.format,
             imageContentsOnly: input.image.contentsOnly ?? true,
             imagePlaceholderFill: input.image.placeholderFill ?? "checkerboard",
-            imageScale: input.image.scale ?? 1,
+            ...(input.image.scale !== undefined ? { imageScale: input.image.scale } : {}),
           }
         : {}),
       ...(input.structureOnly ? { structureOnly: true } : {}),

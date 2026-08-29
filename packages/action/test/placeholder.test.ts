@@ -321,18 +321,34 @@ describe("refreshOrder, placeholder mode", () => {
     // Scale is sent to Figma at render time and was never persisted, so nothing
     // could compare it. Same class as the format gap, and the last member of it:
     // a no-placeholder entry still has pixels, and they are still the wrong size.
-    const at1: ReferenceCacheEntry = { ...entry(NO_PLACEHOLDER), imageScale: 1 };
-    expect(refreshOrder(["1:2"], () => at1, "v1", false, true, "flat", "svg", 2)).toEqual(["1:2"]);
-    expect(refreshOrder(["1:2"], () => at1, "v1", false, true, "flat", "svg", 1)).toEqual([]);
+    const at1: ReferenceCacheEntry = {
+      ...entry(NO_PLACEHOLDER),
+      image: "F/1-2/image.png",
+      imageFormat: "png",
+      imageScale: 1,
+    };
+    expect(refreshOrder(["1:2"], () => at1, "v1", false, true, "flat", "png", 2)).toEqual(["1:2"]);
+    expect(refreshOrder(["1:2"], () => at1, "v1", false, true, "flat", "png", 1)).toEqual([]);
   });
 
-  it("treats an entry with no recorded scale as the API default of 1", () => {
-    expect(refreshOrder(["1:2"], () => entry(NO_PLACEHOLDER), "v1", false, true, "flat", "svg", 1)).toEqual(
-      [],
-    );
-    expect(refreshOrder(["1:2"], () => entry(NO_PLACEHOLDER), "v1", false, true, "flat", "svg", 2)).toEqual(
-      ["1:2"],
-    );
+  it("reads a PNG entry with no recorded scale as 2, which is what the client renders", () => {
+    // Not the API's bare 1: `renderImageUrls` defaults `scale` to 2, so an entry
+    // fetched without --scale is a 2x image. Recording 1 would claim otherwise,
+    // and a later explicit --scale 1 would compare equal and keep the 2x render.
+    const png: ReferenceCacheEntry = {
+      ...entry(NO_PLACEHOLDER),
+      image: "F/1-2/image.png",
+      imageFormat: "png",
+    };
+    expect(refreshOrder(["1:2"], () => png, "v1", false, true, "flat", "png", 2)).toEqual([]);
+    expect(refreshOrder(["1:2"], () => png, "v1", false, true, "flat", "png", 1)).toEqual(["1:2"]);
+  });
+
+  it("ignores scale on an SVG entry, which is never rendered with one", () => {
+    const svg: ReferenceCacheEntry = { ...entry(NO_PLACEHOLDER), imageFormat: "svg" };
+    for (const scale of [1, 2, 4]) {
+      expect(refreshOrder(["1:2"], () => svg, "v1", false, true, "flat", "svg", scale)).toEqual([]);
+    }
   });
 
   it("does not sweep a cache that is staying on checkerboard", () => {

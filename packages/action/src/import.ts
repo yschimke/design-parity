@@ -55,6 +55,13 @@ const NODE_BATCH = 50;
  */
 const IMAGE_BATCH = 50;
 
+/**
+ * What `FigmaRestClient.renderImageUrls` renders a PNG at when no scale is
+ * given (`rest-client.ts`: `opts.scale ?? 2`). Recording the API's bare 1 here
+ * would claim a 2x render was 1x.
+ */
+const PNG_DEFAULT_SCALE = 2;
+
 /** One node the import is responsible for. */
 export interface ImportTarget {
   fileKey: string;
@@ -227,7 +234,7 @@ export function refreshOrder(
   imageContentsOnly: boolean | ((nodeId: string) => boolean) = true,
   placeholderFill: PlaceholderFill = "checkerboard",
   imageFormat: "png" | "svg" = "svg",
-  imageScale = 1,
+  imageScale = PNG_DEFAULT_SCALE,
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
@@ -244,11 +251,20 @@ export function refreshOrder(
     // placeholder can exist at all: a PNG render carries no pattern to rewrite.
     if ((entry.imageFormat ?? "svg") !== imageFormat) return true;
     // Scale, for the same reason and with the same history: it is sent to Figma
-    // at render time, was never persisted, and so could not be compared. Absent
-    // means 1, the API's default when no `scale` is sent. Also before the
-    // placeholder short-circuit — a `no-placeholder` entry still has pixels, and
-    // they are still the wrong size at the wrong scale.
-    if ((entry.imageScale ?? 1) !== imageScale) return true;
+    // at render time, was never persisted, and so could not be compared. Also
+    // before the placeholder short-circuit — a `no-placeholder` entry still has
+    // pixels, and they are still the wrong size at the wrong scale.
+    //
+    // PNG only, and defaulting to 2 rather than 1: the client sends scale for
+    // `format=png` alone (`format=png&scale=…`) and defaults it to 2 when none
+    // is given, so an SVG entry has no scale to be wrong about and a PNG entry
+    // fetched without `--scale` is 2x. Recording 1 there would claim a 2x render
+    // was 1x, and a later explicit `--scale 1` would then compare equal and keep
+    // the 2x image. The format is compared above, so reaching here means both
+    // sides agree on it.
+    if (imageFormat === "png" && (entry.imageScale ?? PNG_DEFAULT_SCALE) !== imageScale) {
+      return true;
+    }
     // A mode change is a reason to refresh, exactly as `contentsOnly` above is:
     // the paint is applied at download, so without this the new mode reaches
     // only nodes re-read for some other reason and the cache ends up half
@@ -292,6 +308,10 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
   const limit = opts.limit && opts.limit > 0 ? opts.limit : Infinity;
 
   const placeholderFill = opts.placeholderFill ?? "flat";
+  // Only PNG renders carry a scale — the client sends it as `format=png&scale=…`
+  // and SVG requests omit it entirely — so an SVG entry records none rather than
+  // a number that could never make it stale.
+  const effectiveScale = format === "png" ? (opts.imageScale ?? PNG_DEFAULT_SCALE) : undefined;
 
   const result: ImportResult = {
     refreshed: 0,
@@ -347,7 +367,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       (id) => contentsOnlyFor(fileKey, id),
       placeholderFill,
       format,
-      opts.imageScale ?? 1,
+      effectiveScale ?? PNG_DEFAULT_SCALE,
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
@@ -519,7 +539,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
             format,
             contentsOnly: nodeContentsOnly,
             placeholderFill: placeholderRecord,
-            scale: opts.imageScale ?? 1,
+            ...(effectiveScale !== undefined ? { scale: effectiveScale } : {}),
           },
         });
         result.refreshed += 1;
