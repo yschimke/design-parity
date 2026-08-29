@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.70](https://github.com/yschimke/design-parity/compare/v0.1.69...v0.1.70) (2026-08-29)
+
+
+### Features
+
+* let a run report a blocking verdict without failing ([#430](https://github.com/yschimke/design-parity/issues/430)) ([6198d19](https://github.com/yschimke/design-parity/commit/6198d19e8b1ce845fd61f1996ea7dbb26342d879))
+* subtract a declared capture gutter before comparing ([#428](https://github.com/yschimke/design-parity/issues/428)) ([2b4399a](https://github.com/yschimke/design-parity/commit/2b4399a5201589f668ed362edeefcd29442e386d))
+
 ## [0.1.69](https://github.com/yschimke/design-parity/compare/v0.1.68...v0.1.69) (2026-08-28)
 
 
