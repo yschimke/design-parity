@@ -19,23 +19,29 @@ import type {
  */
 export interface DiffImage {
   key: string;
-  /**
-   * The diff heatmap PNG bytes. Optional because the engine produces none when
-   * a pair has no aligned region to diff — an entry can still be worth carrying
-   * for {@link DiffImage.candidatePng} alone.
-   */
-  png?: Uint8Array;
-  /**
-   * The candidate as actually compared, when that is not the file on disk —
-   * today, a capture whose declared `Image.gutter` the engine cropped off.
-   *
-   * The report has to prefer this over reading `Image.uri`, or it shows a panel
-   * that contradicts the score beside it: the guttered capture sits at its full
-   * size next to a reference and heatmap at the component's, and the overlay
-   * slider stretches it to the reference's box. Absent (the common case) means
-   * the file on disk is what was compared, so read that.
-   */
-  candidatePng?: Uint8Array;
+  png: Uint8Array;
+}
+
+/**
+ * The candidate as actually COMPARED, for a variant where that is not the file
+ * on disk — today, a capture whose declared `Image.gutter` the engine cropped
+ * off before scoring. Keyed like {@link DiffImage}.
+ *
+ * The report has to prefer this over reading `Image.uri`, or it shows a panel
+ * that contradicts the score beside it: the guttered capture sits at its full
+ * size next to a reference and heatmap at the component's, and the overlay
+ * slider stretches it to the reference's box.
+ *
+ * Its own array rather than a field on {@link DiffImage}, because the two are
+ * not the same thing and their presence does not coincide. A pair too
+ * dimensionally mismatched to diff has a cropped candidate and no heatmap, and
+ * folding that case into `DiffImage` would have meant making `png` optional —
+ * a source-breaking change for any consumer already passing `image.png` to
+ * something expecting `Uint8Array`.
+ */
+export interface CandidateImage {
+  key: string;
+  png: Uint8Array;
 }
 
 /** Dependency-free view of `@design-parity/diff`'s scoped acceptance result. */
@@ -66,6 +72,12 @@ export interface ReportInput {
   verdict: Verdict;
   /** Per-variant diff panels (e.g. the pixelmatch heatmaps). Optional. */
   diffImages?: DiffImage[];
+  /**
+   * Per-variant candidates as compared, where that differs from the file on
+   * disk. See {@link CandidateImage}. Absent for a variant (the common case)
+   * means read its `Image.uri`.
+   */
+  candidateImages?: CandidateImage[];
   /** Per-variant raw/accepted/unaccepted scores and per-acceptance statuses. */
   acceptances?: Record<string, AcceptanceReportView>;
   /**

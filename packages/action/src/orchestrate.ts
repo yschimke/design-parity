@@ -45,6 +45,7 @@ import {
 import {
   renderHtmlReport,
   renderIndex,
+  type CandidateImage,
   type DiffImage,
   type IndexEntry,
 } from "@design-parity/report-html";
@@ -497,23 +498,22 @@ export async function orchestrate(
       // Emit the self-contained HTML comparison page alongside the triptychs,
       // inlining each pair's diff heatmap when the engine produced one (#50).
       if (componentOutDir) {
-        // A pair earns a report entry if it carries EITHER panel: the heatmap,
-        // or a gutter-cropped candidate. Requiring the heatmap would drop the
-        // crop for a pair too dimensionally mismatched to diff — the case where
-        // showing the uncropped candidate misleads most.
         const diffImages: DiffImage[] = triptychs
-          .filter((t) => t.diff !== undefined || t.candidate !== undefined)
-          .map((t) => ({
-            key: t.key,
-            ...(t.diff ? { png: t.diff } : {}),
-            ...(t.candidate ? { candidatePng: t.candidate } : {}),
-          }));
+          .filter((t): t is Triptych & { diff: Buffer } => t.diff !== undefined)
+          .map((t) => ({ key: t.key, png: t.diff }));
+        // Independently of the heatmap: a pair too dimensionally mismatched to
+        // diff has a cropped candidate and no heatmap, and that is exactly when
+        // showing the uncropped capture misleads most.
+        const candidateImages: CandidateImage[] = triptychs
+          .filter((t): t is Triptych & { candidate: Buffer } => t.candidate !== undefined)
+          .map((t) => ({ key: t.key, png: t.candidate }));
         const html = renderHtmlReport({
           reference,
           candidate,
           verdict,
           repoRoot: options.repoRoot,
           ...(diffImages.length > 0 ? { diffImages } : {}),
+          ...(candidateImages.length > 0 ? { candidateImages } : {}),
           ...(acceptances ? { acceptances } : {}),
         });
         const reportPath = join(componentOutDir, "report.html");

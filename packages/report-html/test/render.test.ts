@@ -146,6 +146,17 @@ const ONE_PX_PNG = Buffer.from(
 );
 
 /**
+ * A 1x1 PNG distinct from {@link ONE_PX_PNG} and from anything on disk, standing
+ * in for a gutter-cropped candidate. Tests that assert it reaches the page also
+ * assert it does NOT without the crop, so "the fixture happens not to contain
+ * these bytes" is checked rather than assumed.
+ */
+const CROPPED_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/**
  * The fixture button as a design tool captures it on a `d`× board: bounds and
  * tokens in the board's own pixels, with the factor stated rather than applied
  * (`SemanticTree.density`). 160×48 dp, r8, p12, 14sp/20 at 1×.
@@ -477,22 +488,13 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     // the number printed next to it.
     const { reference, candidate, verdict } = await loadInputs();
     const key = "default/dark/compact";
-    const cropped = Buffer.from(
-      // A distinct 1x1 so its data URI cannot be confused with the on-disk file.
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    );
-    const withCrop = renderHtmlReport({
-      reference,
-      candidate,
-      verdict,
-      repoRoot,
-      diffImages: [{ key, png: ONE_PX_PNG, candidatePng: cropped }],
-    });
-    expect(withCrop).toContain(cropped.toString("base64"));
+    const cropped = CROPPED_PNG;
 
-    // And absence still means "read the file on disk" — the common case, where
-    // no gutter was declared.
+    // The assertion below is only meaningful while the fixture cannot supply
+    // these bytes itself — otherwise the unfixed renderer satisfies `toContain`
+    // by inlining the on-disk candidate and the test proves nothing. Pin that
+    // premise instead of asserting it in a comment: rendering the same inputs
+    // with no crop must NOT produce them.
     const withoutCrop = renderHtmlReport({
       reference,
       candidate,
@@ -501,20 +503,38 @@ describe("renderHtmlReport on the figma button fixtures", () => {
       diffImages: [{ key, png: ONE_PX_PNG }],
     });
     expect(withoutCrop).not.toContain(cropped.toString("base64"));
+
+    const withCrop = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      repoRoot,
+      diffImages: [{ key, png: ONE_PX_PNG }],
+      candidateImages: [{ key, png: cropped }],
+    });
+    expect(withCrop).toContain(cropped.toString("base64"));
   });
 
-  it("renders a pair carrying only a cropped candidate, with no heatmap", async () => {
+  it("renders a cropped candidate for a pair with no heatmap", async () => {
     // A pair too dimensionally mismatched to diff produces no heatmap, but still
     // needs its crop shown — that is exactly when the uncropped panel misleads
-    // most. The entry has to survive without `png`.
+    // most. `candidateImages` is keyed independently of `diffImages` precisely
+    // so this case does not depend on a heatmap existing.
     const { reference, candidate, verdict } = await loadInputs();
-    const cropped = ONE_PX_PNG;
+    const key = "default/dark/compact";
+    const cropped = CROPPED_PNG;
+
+    // Same premise as above, and it has to be re-established here: this render
+    // passes no diffImages at all, so it is a different input.
+    const bare = renderHtmlReport({ reference, candidate, verdict, repoRoot });
+    expect(bare).not.toContain(cropped.toString("base64"));
+
     const html = renderHtmlReport({
       reference,
       candidate,
       verdict,
       repoRoot,
-      diffImages: [{ key: "default/dark/compact", candidatePng: cropped }],
+      candidateImages: [{ key, png: cropped }],
     });
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain(cropped.toString("base64"));
