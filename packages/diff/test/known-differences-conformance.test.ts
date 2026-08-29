@@ -206,6 +206,15 @@ describe("compose-preview-known-differences/v1 conformance", () => {
   });
 
   const cases = join(ROOT, "cases");
+  // Most of these are milliseconds, but the byte-cap cases synthesize their
+  // fixtures at run time, and `artifacts-at-total-byte-cap` is "eight records
+  // whose artifacts total exactly 64 MiB" — the accepting half of the aggregate
+  // boundary, so the size IS the thing under test and cannot be trimmed. That
+  // case takes ~3.7s locally against vitest's 5s default, and a loaded runner
+  // crossed the line and turned `main` red (#433). Nothing is skipped: every
+  // case still runs, every assertion still holds, and a genuine hang still
+  // fails — just against a deadline sized for the work rather than 74% under it.
+  const CASE_TIMEOUT_MS = 30_000;
   for (const id of readdirSync(cases).sort()) {
     it(id, () => {
       const dir = join(cases, id);
@@ -244,7 +253,7 @@ describe("compose-preview-known-differences/v1 conformance", () => {
           throw new Error(`unsupported case conformance pin: ${pin}`);
         }
       }
-    });
+    }, CASE_TIMEOUT_MS);
   }
 
   const scoring = join(ROOT, "scoring");
