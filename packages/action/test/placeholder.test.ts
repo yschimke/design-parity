@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
 
-import { FigmaRestClient, type FetchLike } from "@design-parity/adapter-figma";
+import {
+  FigmaRestClient,
+  type FetchLike,
+  type ReferenceCacheEntry,
+} from "@design-parity/adapter-figma";
 
-import { importReferences } from "../src/import.js";
+import { importReferences, refreshOrder } from "../src/import.js";
 import { isCheckerboard, normalisePlaceholders } from "../src/placeholder.js";
 
 /**
@@ -235,5 +239,39 @@ describe("importReferences, placeholder normalisation", () => {
     expect(result.placeholders).toBe(0);
     expect(cached).toContain("data:image/png;base64,");
     expect(cached).toContain("url(#pattern0_1)");
+  });
+});
+
+/**
+ * The mode is applied at download, so it only reaches nodes the import decides
+ * to re-read. Without the mode in that decision, an existing cache keeps its
+ * checkerboards forever and the default is silently inert (issue #436).
+ */
+describe("refreshOrder, placeholder mode", () => {
+  const entry = (fill?: string): ReferenceCacheEntry => ({
+    fileKey: "F",
+    nodeId: "1:2",
+    fileVersion: "v1",
+    fetchedAt: "2026-01-01T00:00:00Z",
+    node: "F/1-2/node.json",
+    image: "F/1-2/image.svg",
+    imageFormat: "svg",
+    imageContentsOnly: true,
+    ...(fill ? { imagePlaceholderFill: fill } : {}),
+  });
+
+  it("re-reads a node cached under a different mode, with the file unmoved", () => {
+    expect(refreshOrder(["1:2"], () => entry("checkerboard"), "v1", false, true, "flat")).toEqual([
+      "1:2",
+    ]);
+  });
+
+  it("treats an entry written before the option existed as a checkerboard", () => {
+    expect(refreshOrder(["1:2"], () => entry(), "v1", false, true, "flat")).toEqual(["1:2"]);
+    expect(refreshOrder(["1:2"], () => entry(), "v1", false, true, "checkerboard")).toEqual([]);
+  });
+
+  it("leaves a node already cached under the wanted mode alone", () => {
+    expect(refreshOrder(["1:2"], () => entry("flat"), "v1", false, true, "flat")).toEqual([]);
   });
 });
