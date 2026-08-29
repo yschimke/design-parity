@@ -113,4 +113,38 @@ describe("declared capture gutter (wear-m3-catalog#138)", () => {
     expect([out.data[0], out.data[4]]).toEqual([11, 12]);
     expect(out.data[3]).toBe(0xff);
   });
+
+  it("publishes the cropped candidate, so a report can show what was compared", async () => {
+    // The panel a human reviews has to be the image the score came from. Without
+    // this the report inlines the 136px capture beside a 104px reference and a
+    // 104px heatmap, and stretches it to the reference's box under the slider.
+    const ref = img(solid(104, 104), 104, 104);
+    const cand = img(guttered([104, 104], 16), 136, 136, even(16));
+
+    const r = await diffImagePair("/nonexistent", ref, cand, defaultDiffConfig);
+
+    expect(r.candidatePng).toBeDefined();
+    const out = PNG.sync.read(Buffer.from(r.candidatePng!));
+    expect([out.width, out.height]).toEqual([104, 104]);
+    // Cropped to the component, not merely resized: the gutter was transparent,
+    // so every surviving pixel is the opaque block.
+    expect(out.data[3]).toBe(0xff);
+    expect(out.data[out.data.length - 1]).toBe(0xff);
+  });
+
+  it("omits the cropped candidate when nothing was cropped", async () => {
+    // Absence is load-bearing — it tells a consumer the file on disk IS what was
+    // compared. An undeclared gutter and an unusable declaration both mean that.
+    const ref = img(solid(104, 104), 104, 104);
+    const plain = img(solid(104, 104), 104, 104);
+    expect(
+      (await diffImagePair("/nonexistent", ref, plain, defaultDiffConfig)).candidatePng,
+    ).toBeUndefined();
+
+    // A gutter that would leave nothing behind degrades to the old comparison.
+    const absurd = img(solid(104, 104), 104, 104, even(80));
+    expect(
+      (await diffImagePair("/nonexistent", ref, absurd, defaultDiffConfig)).candidatePng,
+    ).toBeUndefined();
+  });
 });

@@ -497,9 +497,17 @@ export async function orchestrate(
       // Emit the self-contained HTML comparison page alongside the triptychs,
       // inlining each pair's diff heatmap when the engine produced one (#50).
       if (componentOutDir) {
+        // A pair earns a report entry if it carries EITHER panel: the heatmap,
+        // or a gutter-cropped candidate. Requiring the heatmap would drop the
+        // crop for a pair too dimensionally mismatched to diff — the case where
+        // showing the uncropped candidate misleads most.
         const diffImages: DiffImage[] = triptychs
-          .filter((t): t is Triptych & { diff: Buffer } => t.diff !== undefined)
-          .map((t) => ({ key: t.key, png: t.diff }));
+          .filter((t) => t.diff !== undefined || t.candidate !== undefined)
+          .map((t) => ({
+            key: t.key,
+            ...(t.diff ? { png: t.diff } : {}),
+            ...(t.candidate ? { candidatePng: t.candidate } : {}),
+          }));
         const html = renderHtmlReport({
           reference,
           candidate,

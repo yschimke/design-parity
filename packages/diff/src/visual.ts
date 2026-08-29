@@ -58,6 +58,19 @@ export interface VisualResult {
    */
   diffPng?: Buffer;
   /**
+   * The candidate PNG as actually compared — with its declared
+   * {@link Image.gutter} cropped off. Present ONLY when a gutter was really
+   * subtracted, so absence means "the file on disk is what was compared".
+   *
+   * A consumer laying out its own candidate column has to show this rather than
+   * the candidate `uri`, or it contradicts the score it is printing: the file on
+   * disk is the guttered capture, so a reader sees a 136px candidate beside a
+   * 104px reference and a 104px heatmap, and an overlay slider stretches the
+   * guttered image to the reference's box — reintroducing, in the one view a
+   * human actually reviews, exactly the misalignment the crop removed.
+   */
+  candidatePng?: Buffer;
+  /**
    * True when reference and candidate had different dimensions. They are still
    * diffed over their shared top-left overlap; the score counts the uncovered
    * border as differing (#47).
@@ -227,6 +240,13 @@ export function cropGutter(img: Raster, gutter?: ImageGutter): Raster {
   return { width, height, data, sourceSha256: img.sourceSha256 };
 }
 
+/** Re-encode a raster as PNG bytes, for handing a compared image to a consumer. */
+function rasterToPng(img: Raster): Buffer {
+  const png = new PNG({ width: img.width, height: img.height });
+  img.data.copy(png.data);
+  return PNG.sync.write(png);
+}
+
 /** Compare one matched pair, returning its score and triptych. */
 export async function diffImagePair(
   repoRoot: string,
@@ -243,7 +263,8 @@ export async function diffImagePair(
   // the reference is sized against it — otherwise the reference is rasterised
   // to a canvas wider than the component and every subsequent step compares at
   // the wrong zoom.
-  const cand = cropGutter(await readRaster(repoRoot, candidate.uri), candidate.gutter);
+  const candRaw = await readRaster(repoRoot, candidate.uri);
+  const cand = cropGutter(candRaw, candidate.gutter);
   const ref = await readRaster(repoRoot, reference.uri, cand.width);
   const key = imageKey(reference);
 
@@ -322,6 +343,11 @@ export async function diffImagePair(
     if (evaluated) result.acceptance = evaluated;
   }
   if (diffPng) result.diffPng = diffPng;
+  // Identity, not a dimension test: `cropGutter` returns its input untouched
+  // when there is nothing to crop *and* when the declaration is unusable, so a
+  // new object is exactly the case where the compared pixels are no longer the
+  // ones on disk.
+  if (cand !== candRaw) result.candidatePng = rasterToPng(cand);
   if (!sameSize) {
     result.dimensionMismatch = true;
     result.dimensions = {
