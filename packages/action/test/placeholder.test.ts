@@ -303,6 +303,20 @@ describe("refreshOrder, placeholder mode", () => {
     }
   });
 
+  it("re-reads a PNG entry when the import asks for SVG, whatever the mode says", () => {
+    // `imageFormat` was recorded but never compared, so a cache built with
+    // `--format png` stayed PNG under a later `--format svg`. A differing mode
+    // used to refresh those rows as a side effect; NO_PLACEHOLDER correctly
+    // stops that, which is what surfaced the real gap underneath.
+    const png: ReferenceCacheEntry = {
+      ...entry(NO_PLACEHOLDER),
+      image: "F/1-2/image.png",
+      imageFormat: "png",
+    };
+    expect(refreshOrder(["1:2"], () => png, "v1", false, true, "flat", "svg")).toEqual(["1:2"]);
+    expect(refreshOrder(["1:2"], () => png, "v1", false, true, "flat", "png")).toEqual([]);
+  });
+
   it("does not sweep a cache that is staying on checkerboard", () => {
     // An entry written before normalisation existed is verbatim Figma output,
     // and verbatim IS the checkerboard — so it is already what `checkerboard`

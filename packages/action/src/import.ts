@@ -226,6 +226,7 @@ export function refreshOrder(
   force: boolean,
   imageContentsOnly: boolean | ((nodeId: string) => boolean) = true,
   placeholderFill: PlaceholderFill = "checkerboard",
+  imageFormat: "png" | "svg" = "svg",
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
@@ -233,6 +234,14 @@ export function refreshOrder(
     const desired =
       typeof imageContentsOnly === "function" ? imageContentsOnly(id) : imageContentsOnly;
     if ((entry.imageContentsOnly ?? true) !== desired) return true;
+    // A format change is a reason to refresh, and never was one: `imageFormat`
+    // was recorded but never compared, so a cache built with `--format png`
+    // stayed PNG under a later `--format svg`. It went unnoticed because a mode
+    // difference happened to refresh those rows as a side effect — a side effect
+    // `NO_PLACEHOLDER` correctly stops, which is what surfaced this. Compared
+    // before the placeholder check, because the format decides whether a
+    // placeholder can exist at all: a PNG render carries no pattern to rewrite.
+    if ((entry.imageFormat ?? "svg") !== imageFormat) return true;
     // A mode change is a reason to refresh, exactly as `contentsOnly` above is:
     // the paint is applied at download, so without this the new mode reaches
     // only nodes re-read for some other reason and the cache ends up half
@@ -330,6 +339,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       opts.force === true,
       (id) => contentsOnlyFor(fileKey, id),
       placeholderFill,
+      format,
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
