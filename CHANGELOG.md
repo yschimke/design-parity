@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.71](https://github.com/yschimke/design-parity/compare/v0.1.70...v0.1.71) (2026-08-29)
+
+
+### Features
+
+* **import:** normalise Figma's empty-image checkerboard to a flat fill ([#432](https://github.com/yschimke/design-parity/issues/432)) ([2ace17d](https://github.com/yschimke/design-parity/commit/2ace17d78948ba89be06323856bed6a72673b098))
+
+
+### Bug Fixes
+
+* **diff:** size the conformance timeout for the 64 MiB case ([#434](https://github.com/yschimke/design-parity/issues/434)) ([35053f0](https://github.com/yschimke/design-parity/commit/35053f010a440b2ef8fe1dcb1ce3ac0c4a816776))
+
 ## [0.1.70](https://github.com/yschimke/design-parity/compare/v0.1.69...v0.1.70) (2026-08-29)
 
 
