@@ -9,7 +9,7 @@
  * external assets. A leaf consumer — depends only on `@design-parity/core`.
  */
 export { renderHtmlReport, toDisplayFrame } from "./render.js";
-export type { DiffImage, ReportInput } from "./types.js";
+export type { CandidateImage, DiffImage, ReportInput } from "./types.js";
 export { pairVariants } from "./variants.js";
 export type { Variant } from "./variants.js";
 export { groupFindings, tokenDelta, SECTIONS } from "./findings.js";

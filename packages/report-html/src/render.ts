@@ -30,7 +30,7 @@ import {
   type TypographyComparison,
   type TypographyGroup,
 } from "./typography.js";
-import type { DiffImage, ReportInput } from "./types.js";
+import type { CandidateImage, DiffImage, ReportInput } from "./types.js";
 import { inCodeUnits } from "./units.js";
 import { pairVariants, type Variant } from "./variants.js";
 
@@ -715,6 +715,9 @@ export function renderHtmlReport(input: ReportInput): string {
   const diffByKey = new Map<string, DiffImage>();
   for (const d of input.diffImages ?? []) diffByKey.set(d.key, d);
 
+  const comparedByKey = new Map<string, CandidateImage>();
+  for (const c of input.candidateImages ?? []) comparedByKey.set(c.key, c);
+
   const variants = pairVariants(reference.referenceImages, candidate.images);
 
   // Inline each variant's images once, then reuse for both the candidate matrix
@@ -726,11 +729,12 @@ export function renderHtmlReport(input: ReportInput): string {
     // declared gutter, the file on disk is larger than what was scored, and
     // showing it here would put a guttered panel beside a component-sized
     // reference and heatmap — and stretch it to the reference's box under the
-    // overlay slider. See `DiffImage.candidatePng`.
-    const candSrc = diff?.candidatePng
-      ? pngDataUri(diff.candidatePng)
+    // overlay slider. See `CandidateImage`.
+    const compared = comparedByKey.get(variant.key);
+    const candSrc = compared
+      ? pngDataUri(compared.png)
       : inlineFromDisk(root, variant.candidate);
-    const diffSrc = diff?.png ? pngDataUri(diff.png) : undefined;
+    const diffSrc = diff ? pngDataUri(diff.png) : undefined;
     return { variant, index, refSrc, candSrc, diffSrc };
   });
 
