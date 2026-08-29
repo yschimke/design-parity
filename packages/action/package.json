@@ -39,7 +39,8 @@
     "@design-parity/adapter-figma": "^0.1.24",
     "@design-parity/adapter-stitch": "^0.1.24",
     "@design-parity/adapter-claude-design": "^0.1.24",
-    "@design-parity/adapter-bundle": "^0.1.24"
+    "@design-parity/adapter-bundle": "^0.1.24",
+    "pngjs": "7.0.0"
   },
   "repository": {
     "type": "git",
@@ -47,5 +48,8 @@
     "directory": "packages/action"
   },
   "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/action#readme",
-  "bugs": "https://github.com/yschimke/design-parity/issues"
+  "bugs": "https://github.com/yschimke/design-parity/issues",
+  "devDependencies": {
+    "@types/pngjs": "6.0.5"
+  }
 }

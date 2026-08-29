@@ -187,6 +187,54 @@ npx design-parity run --repo . --components … \
 | `force` | Re-read everything, ignoring `version`. For when you suspect the cache itself is wrong — not for routine use, since the version check is what makes an unchanged kit cost one request. |
 | `prune` | Drop cached nodes the map no longer references. Off by default: pruning against a map that failed to regenerate throws away references the next import has to re-fetch. |
 | `design-map-command` | Only when the map is generated (a Gradle discovery pass). A committed map needs neither Java nor Gradle in the import job. |
+| `placeholder-fill` | What to paint where the kit left an image slot empty. Defaults to `flat`. See below. |
+
+### Empty image slots
+
+A Figma `IMAGE` fill with no image behind it renders as Figma's checkerboard,
+and caching that verbatim makes the reference a bad instrument. A checkerboard
+turns a small geometry error into a large pixel difference and then stops
+responding. Measured over a 236×132 region against the kit's own grid:
+
+| geometry error | checkerboard | flat fill |
+| --- | --- | --- |
+| 1dp shift | 6.8% of pixels differ | 0.8% |
+| 3dp shift | 20.3% | 2.5% |
+| 10dp shift | 67.8% | 8.5% |
+| a 42dp slot against the kit's 64dp | 49.6% | 55.9% |
+
+It amplifies about 8×, and by 10dp it reads the same as a component that is
+entirely wrong. The last row is the real problem: two checkerboards at
+different *pitches* differ in ~50% of pixels however small the underlying
+error, because the grids decorrelate. A consumer whose slot is the wrong height
+scores the same as one drawing nothing at all.
+
+So the import repaints those fills. `placeholder-fill` takes:
+
+- **`flat`** (default) — the mean of the tile's own two colours, `#ececec` for
+  the Wear M3 kit. The only option whose reported difference stays monotonic
+  across the whole error range.
+- **`checkerboard`** — cache Figma's output verbatim, when fidelity matters more
+  than measurement.
+- **`transparent`** — paint `none`. Note this is the mirror failure of the
+  checkerboard: sensitive to a 1dp shift, but flat by 10dp, because once the two
+  outlines separate the difference stops growing.
+- **`#rrggbb`** / `#rrggbbaa` — an explicit colour.
+
+Only the *paint* changes. The path keeps its position, size and corner radius,
+so the slot's geometry is still fully compared and a wrong frame still diffs —
+the opposite of masking the region, which would answer the saturation problem by
+throwing away the measurement.
+
+Detection is structural — a regular, two-colour, alternating grid — not a
+checksum list, so a kit shipping its own placeholder is covered and real artwork
+never is. Every substitution is logged per node with the tile's checksum and
+colours, because the cached reference deliberately stops matching what Figma
+renders for those nodes. The import also reports `placeholders=<n>`.
+
+**Consumers must draw the same placeholder** for the comparison to mean
+anything. That coupling is a documented contract on both sides, not something
+the run can check.
 
 ## What the run does with it
 
