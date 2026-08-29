@@ -23,6 +23,9 @@ const svg = new TextEncoder().encode(
   `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>`,
 );
 
+/** An 8-byte PNG signature is enough: nothing here decodes it. */
+const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
 async function dir(): Promise<string> {
   return mkdtemp(join(tmpdir(), "ref-cache-"));
 }
@@ -177,6 +180,132 @@ describe("ReferenceCacheWriter", () => {
     expect(await exists(join(root, "Other"))).toBe(false);
     expect(Object.keys(writer.doc.files)).toEqual([FILE]);
     expect(await exists(join(root, FILE, "1-1", "image.svg"))).toBe(true);
+  });
+
+  it("removes the superseded render when a node switches format", async () => {
+    // The whole of issue #441: `put` writes `image.<format>`, so a re-import
+    // under a different format left both files on disk in a COMMITTED
+    // directory, only one of them named by the index.
+    const root = await dir();
+    const first = await ReferenceCacheWriter.open(root);
+    first.setFile(FILE, { version: "v1", fetchedAt: "2026-01-01T00:00:00.000Z" });
+    await first.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v1",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: png, format: "png" },
+    });
+    await first.write();
+    expect(await exists(join(root, FILE, "1-42", "image.png"))).toBe(true);
+
+    const second = await ReferenceCacheWriter.open(root);
+    const entry = await second.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v2",
+      fetchedAt: "2026-01-02T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: svg, format: "svg" },
+    });
+    // Still there while only the in-memory manifest knows: a run that dies here
+    // leaves index.json naming a file that still exists.
+    expect(await exists(join(root, FILE, "1-42", "image.png"))).toBe(true);
+
+    await second.write();
+    expect(entry.image).toBe(`${FILE}/1-42/image.svg`);
+    expect(await exists(join(root, FILE, "1-42", "image.svg"))).toBe(true);
+    expect(await exists(join(root, FILE, "1-42", "image.png"))).toBe(false);
+  });
+
+  it("leaves the render alone when a node is re-put at the same format", async () => {
+    const root = await dir();
+    const writer = await ReferenceCacheWriter.open(root);
+    writer.setFile(FILE, { version: "v1", fetchedAt: "2026-01-01T00:00:00.000Z" });
+    for (const version of ["v1", "v2"]) {
+      await writer.put({
+        fileKey: FILE,
+        nodeId: "1:42",
+        fileVersion: version,
+        fetchedAt: "2026-01-01T00:00:00.000Z",
+        node: node("1:42"),
+        image: { bytes: svg, format: "svg" },
+      });
+    }
+    await writer.write();
+    expect(await exists(join(root, FILE, "1-42", "image.svg"))).toBe(true);
+  });
+
+  it("keeps the old render when a re-put carries no image at all", async () => {
+    // A structure fetch that succeeded where the render did not. The entry no
+    // longer names the render, but nothing has replaced it either, and the
+    // import's own retry is what decides its fate — not the writer.
+    const root = await dir();
+    const first = await ReferenceCacheWriter.open(root);
+    first.setFile(FILE, { version: "v1", fetchedAt: "2026-01-01T00:00:00.000Z" });
+    await first.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v1",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: png, format: "png" },
+    });
+    await first.write();
+
+    const second = await ReferenceCacheWriter.open(root);
+    await second.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v2",
+      fetchedAt: "2026-01-02T00:00:00.000Z",
+      node: node("1:42"),
+    });
+    await second.write();
+    expect(await exists(join(root, FILE, "1-42", "image.png"))).toBe(true);
+  });
+
+  it("will not follow a manifest path that points outside the cache", async () => {
+    // A cache directory is committed, so its index.json is editable by anyone.
+    // A traversal path in one is a corrupt cache, not an instruction.
+    const root = await dir();
+    const outside = join(root, "..", `escape-${Date.now()}.png`);
+    await writeFile(outside, "do not delete me");
+
+    const writer = await ReferenceCacheWriter.open(root);
+    writer.setFile(FILE, { version: "v1", fetchedAt: "2026-01-01T00:00:00.000Z" });
+    await writer.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v1",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: png, format: "png" },
+    });
+    await writer.write();
+    // Rewrite the manifest the way a tampered-with cache would carry it, then
+    // reopen and switch format so that path becomes the superseded one.
+    const manifest = JSON.parse(
+      await readFile(join(root, REFERENCE_CACHE_INDEX), "utf8"),
+    );
+    manifest.entries[0].image = `../${outside.split("/").pop()}`;
+    await writeFile(
+      join(root, REFERENCE_CACHE_INDEX),
+      JSON.stringify(manifest, null, 2) + "\n",
+    );
+
+    const second = await ReferenceCacheWriter.open(root);
+    await second.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v2",
+      fetchedAt: "2026-01-02T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: svg, format: "svg" },
+    });
+    await second.write();
+    expect(await exists(outside)).toBe(true);
   });
 
   it("keeps a file's variables path across a refresh of its metadata", async () => {
