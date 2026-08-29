@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { mkdtemp, readFile, writeFile, access } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, access, symlink, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import {
   ReferenceCache,
@@ -289,7 +289,11 @@ describe("ReferenceCacheWriter", () => {
     const manifest = JSON.parse(
       await readFile(join(root, REFERENCE_CACHE_INDEX), "utf8"),
     );
-    manifest.entries[0].image = `../${outside.split("/").pop()}`;
+    // `basename`, not `split("/")`: on Windows `outside` carries backslashes, so
+    // splitting on "/" leaves the whole absolute path and the crafted value
+    // (`../C:\...`) never resolves to `outside` at all — the assertion below
+    // would then pass with the containment guard removed, testing nothing.
+    manifest.entries[0].image = `../${basename(outside)}`;
     await writeFile(
       join(root, REFERENCE_CACHE_INDEX),
       JSON.stringify(manifest, null, 2) + "\n",
@@ -306,6 +310,98 @@ describe("ReferenceCacheWriter", () => {
     });
     await second.write();
     expect(await exists(outside)).toBe(true);
+  });
+
+  it("will not follow an in-cache symlink out of the cache", async () => {
+    // The lexical check above passes for `link/victim.png` when `link` is a
+    // symlink pointing outside: `resolve` never touches the filesystem, so the
+    // path looks contained right up until `rm` follows it. A committed cache is
+    // where a planted link survives review as "a file".
+    const root = await dir();
+    const elsewhere = await dir();
+    const victim = join(elsewhere, "victim.png");
+    await writeFile(victim, "do not delete me");
+    await symlink(elsewhere, join(root, "link"), "dir");
+
+    const writer = await ReferenceCacheWriter.open(root);
+    writer.setFile(FILE, { version: "v1", fetchedAt: "2026-01-01T00:00:00.000Z" });
+    await writer.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v1",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: png, format: "png" },
+    });
+    await writer.write();
+
+    const manifest = JSON.parse(
+      await readFile(join(root, REFERENCE_CACHE_INDEX), "utf8"),
+    );
+    manifest.entries[0].image = "link/victim.png";
+    await writeFile(
+      join(root, REFERENCE_CACHE_INDEX),
+      JSON.stringify(manifest, null, 2) + "\n",
+    );
+
+    const second = await ReferenceCacheWriter.open(root);
+    await second.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v2",
+      fetchedAt: "2026-01-02T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: svg, format: "svg" },
+    });
+    await second.write();
+
+    expect(await exists(victim)).toBe(true);
+  });
+
+  it("will not delete a symlink's target when the render itself is a link", async () => {
+    // A final component that is a link resolves *inside* the cache, so a
+    // realpath check alone would pass and delete the file it points at while
+    // leaving the link dangling. What this wants to remove is a render it
+    // wrote, which is never a link.
+    const root = await dir();
+    const keep = join(root, FILE, "keep.png");
+    await mkdir(join(root, FILE), { recursive: true });
+    await writeFile(keep, "do not delete me");
+
+    const writer = await ReferenceCacheWriter.open(root);
+    writer.setFile(FILE, { version: "v1", fetchedAt: "2026-01-01T00:00:00.000Z" });
+    await writer.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v1",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: png, format: "png" },
+    });
+    await writer.write();
+    await symlink(keep, join(root, FILE, "aliased.png"), "file");
+
+    const manifest = JSON.parse(
+      await readFile(join(root, REFERENCE_CACHE_INDEX), "utf8"),
+    );
+    manifest.entries[0].image = `${FILE}/aliased.png`;
+    await writeFile(
+      join(root, REFERENCE_CACHE_INDEX),
+      JSON.stringify(manifest, null, 2) + "\n",
+    );
+
+    const second = await ReferenceCacheWriter.open(root);
+    await second.put({
+      fileKey: FILE,
+      nodeId: "1:42",
+      fileVersion: "v2",
+      fetchedAt: "2026-01-02T00:00:00.000Z",
+      node: node("1:42"),
+      image: { bytes: svg, format: "svg" },
+    });
+    await second.write();
+
+    expect(await exists(keep)).toBe(true);
   });
 
   it("keeps a file's variables path across a refresh of its metadata", async () => {

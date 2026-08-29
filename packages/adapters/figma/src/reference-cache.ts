@@ -28,8 +28,8 @@
  * Windows and awkward everywhere, so directories use the dashed spelling
  * (`1-42`) — the same one Figma's own URLs use. {@link cacheEntryDir}.
  */
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import type {
   FigmaComponentMeta,
@@ -493,6 +493,16 @@ export class ReferenceCacheWriter {
    * corrupt cache, not an instruction. Anything an entry still names is left
    * alone as well, so a path reused by another node cannot be deleted out from
    * under it.
+   *
+   * Containment is checked against the REAL filesystem, not the path string.
+   * `resolve` is purely lexical, so a cache containing a symlink `link` that
+   * points anywhere would let a manifest naming `link/image.svg` pass a
+   * `relative()` test and then have `rm` follow the link and delete outside the
+   * cache. The same editability that makes a corrupt path plausible makes a
+   * planted symlink plausible, and a committed directory is exactly where one
+   * survives review as "a file". So the parent is resolved through its links
+   * first, and a path whose final component is itself a link is skipped rather
+   * than followed — the render this wants to delete is a file it wrote.
    */
   async #removeSuperseded(): Promise<void> {
     if (this.#superseded.size === 0) return;
@@ -500,6 +510,16 @@ export class ReferenceCacheWriter {
       this.#doc.entries.map((e) => e.image).filter((p): p is string => !!p),
     );
     const root = resolve(this.dir);
+    // The cache dir itself may sit under a link (a macOS temp dir is the usual
+    // way to meet this), so the boundary has to be the real one too or every
+    // comparison below is against the wrong root.
+    let realRoot: string;
+    try {
+      realRoot = await realpath(root);
+    } catch {
+      this.#superseded.clear();
+      return;
+    }
     for (const rel of this.#superseded) {
       if (live.has(rel)) continue;
       const abs = resolve(root, rel);
@@ -507,9 +527,24 @@ export class ReferenceCacheWriter {
       if (within === "" || within.startsWith("..") || isAbsolute(within)) {
         continue;
       }
+      let target: string;
+      try {
+        // Resolve the parent rather than the path: the file is meant to exist,
+        // but realpath on the path itself would also silently follow a final
+        // symlink to its target and delete that instead of the link.
+        const parent = await realpath(dirname(abs));
+        const rp = relative(realRoot, parent);
+        if (rp.startsWith("..") || isAbsolute(rp)) continue;
+        target = join(parent, basename(abs));
+        if ((await lstat(target)).isSymbolicLink()) continue;
+      } catch {
+        // Already gone, or a parent that does not resolve — either way there is
+        // nothing here to delete, which is the state this wanted.
+        continue;
+      }
       // `force`, because the file may already be gone — a half-finished earlier
       // run, or a hand-tidied cache — and that is the state this wanted anyway.
-      await rm(abs, { force: true });
+      await rm(target, { force: true });
     }
     this.#superseded.clear();
   }
