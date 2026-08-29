@@ -225,6 +225,7 @@ export function refreshOrder(
   fileVersion: string,
   force: boolean,
   imageContentsOnly: boolean | ((nodeId: string) => boolean) = true,
+  placeholderFill: PlaceholderFill = "checkerboard",
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
@@ -232,6 +233,12 @@ export function refreshOrder(
     const desired =
       typeof imageContentsOnly === "function" ? imageContentsOnly(id) : imageContentsOnly;
     if ((entry.imageContentsOnly ?? true) !== desired) return true;
+    // A mode change is a reason to refresh, exactly as `contentsOnly` above is:
+    // the paint is applied at download, so without this the new mode reaches
+    // only nodes re-read for some other reason and the cache ends up half
+    // normalised, with nothing on it saying which half is which. An entry
+    // written before the option existed carries a checkerboard.
+    if ((entry.imagePlaceholderFill ?? "checkerboard") !== placeholderFill) return true;
     return force || entry.fileVersion !== fileVersion;
   });
   return due.sort((a, b) => {
@@ -308,6 +315,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       version,
       opts.force === true,
       (id) => contentsOnlyFor(fileKey, id),
+      placeholderFill,
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
@@ -468,7 +476,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes, format, contentsOnly: nodeContentsOnly },
+          image: { bytes, format, contentsOnly: nodeContentsOnly, placeholderFill },
         });
         result.refreshed += 1;
       } catch (err) {

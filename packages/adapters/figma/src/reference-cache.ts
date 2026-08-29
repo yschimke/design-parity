@@ -73,6 +73,18 @@ export interface ReferenceCacheEntry {
    */
   imageContentsOnly?: boolean;
   /**
+   * How an empty image slot was painted when this entry was written — the
+   * import's `--placeholder-fill`. Older entries omit it and therefore mean
+   * `checkerboard`, which is what every entry written before the option
+   * existed contains.
+   *
+   * Recorded so a mode change is a reason to refresh, exactly as
+   * [imageContentsOnly] is. Without it the mode reaches only nodes that happen
+   * to be re-read for some other reason, and a cache ends up half normalised
+   * with nothing on it saying which half is which.
+   */
+  imagePlaceholderFill?: string;
+  /**
    * This entry is a **component set**, cached for its properties and its
    * variant names rather than for a picture of it (issue #296). Rendering a set
    * would produce a grid of every variant at once, which nothing compares
@@ -328,6 +340,7 @@ export class ReferenceCacheWriter {
       bytes: Uint8Array;
       format: "png" | "svg";
       contentsOnly?: boolean;
+      placeholderFill?: string;
     };
     /** Mark a component set, which is cached without a render. */
     structureOnly?: boolean;
@@ -353,6 +366,7 @@ export class ReferenceCacheWriter {
             image: imageRel,
             imageFormat: input.image.format,
             imageContentsOnly: input.image.contentsOnly ?? true,
+            imagePlaceholderFill: input.image.placeholderFill ?? "checkerboard",
           }
         : {}),
       ...(input.structureOnly ? { structureOnly: true } : {}),
