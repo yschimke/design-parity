@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.73](https://github.com/yschimke/design-parity/compare/v0.1.72...v0.1.73) (2026-08-29)
+
+
+### Bug Fixes
+
+* **import:** scope a placeholder-fill switch to the nodes that have one ([#440](https://github.com/yschimke/design-parity/issues/440)) ([38eba0c](https://github.com/yschimke/design-parity/commit/38eba0c284a92918b0b9642960626b0a368daa0b))
+
 ## [0.1.72](https://github.com/yschimke/design-parity/compare/v0.1.71...v0.1.72) (2026-08-29)
 
 
