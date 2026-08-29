@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.72](https://github.com/yschimke/design-parity/compare/v0.1.71...v0.1.72) (2026-08-29)
+
+
+### Bug Fixes
+
+* **import:** make a placeholder-fill change a reason to refresh ([#437](https://github.com/yschimke/design-parity/issues/437)) ([fb3c735](https://github.com/yschimke/design-parity/commit/fb3c735777350c20736c8fec51b678669bcfa0e7))
+
 ## [0.1.71](https://github.com/yschimke/design-parity/compare/v0.1.70...v0.1.71) (2026-08-29)
 
 
