@@ -73,6 +73,15 @@ export interface ReferenceCacheEntry {
    */
   imageContentsOnly?: boolean;
   /**
+   * Figma render scale used for this image. Older entries omit it and therefore
+   * mean 1, the API's default when no `scale` is sent.
+   *
+   * Recorded so a scale change is a reason to refresh. It is passed to Figma at
+   * render time but was never persisted, so nothing could compare it — the same
+   * shape as [imageFormat], which was persisted and compared nowhere.
+   */
+  imageScale?: number;
+  /**
    * What this entry records about the import's `--placeholder-fill`, in three
    * states:
    *
@@ -351,6 +360,7 @@ export class ReferenceCacheWriter {
       format: "png" | "svg";
       contentsOnly?: boolean;
       placeholderFill?: string;
+      scale?: number;
     };
     /** Mark a component set, which is cached without a render. */
     structureOnly?: boolean;
@@ -377,6 +387,7 @@ export class ReferenceCacheWriter {
             imageFormat: input.image.format,
             imageContentsOnly: input.image.contentsOnly ?? true,
             imagePlaceholderFill: input.image.placeholderFill ?? "checkerboard",
+            imageScale: input.image.scale ?? 1,
           }
         : {}),
       ...(input.structureOnly ? { structureOnly: true } : {}),

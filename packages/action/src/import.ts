@@ -227,6 +227,7 @@ export function refreshOrder(
   imageContentsOnly: boolean | ((nodeId: string) => boolean) = true,
   placeholderFill: PlaceholderFill = "checkerboard",
   imageFormat: "png" | "svg" = "svg",
+  imageScale = 1,
 ): string[] {
   const due = nodeIds.filter((id) => {
     const entry = entryOf(id);
@@ -242,6 +243,12 @@ export function refreshOrder(
     // before the placeholder check, because the format decides whether a
     // placeholder can exist at all: a PNG render carries no pattern to rewrite.
     if ((entry.imageFormat ?? "svg") !== imageFormat) return true;
+    // Scale, for the same reason and with the same history: it is sent to Figma
+    // at render time, was never persisted, and so could not be compared. Absent
+    // means 1, the API's default when no `scale` is sent. Also before the
+    // placeholder short-circuit — a `no-placeholder` entry still has pixels, and
+    // they are still the wrong size at the wrong scale.
+    if ((entry.imageScale ?? 1) !== imageScale) return true;
     // A mode change is a reason to refresh, exactly as `contentsOnly` above is:
     // the paint is applied at download, so without this the new mode reaches
     // only nodes re-read for some other reason and the cache ends up half
@@ -340,6 +347,7 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
       (id) => contentsOnlyFor(fileKey, id),
       placeholderFill,
       format,
+      opts.imageScale ?? 1,
     );
     if (due.length === 0) {
       result.unchanged.push(fileKey);
@@ -506,7 +514,13 @@ export async function importReferences(opts: ImportOptions): Promise<ImportResul
           fileVersion: version,
           fetchedAt: now().toISOString(),
           node,
-          image: { bytes, format, contentsOnly: nodeContentsOnly, placeholderFill: placeholderRecord },
+          image: {
+            bytes,
+            format,
+            contentsOnly: nodeContentsOnly,
+            placeholderFill: placeholderRecord,
+            scale: opts.imageScale ?? 1,
+          },
         });
         result.refreshed += 1;
       } catch (err) {

@@ -317,6 +317,24 @@ describe("refreshOrder, placeholder mode", () => {
     expect(refreshOrder(["1:2"], () => png, "v1", false, true, "flat", "png")).toEqual([]);
   });
 
+  it("re-reads an entry rendered at a different scale, whatever the mode says", () => {
+    // Scale is sent to Figma at render time and was never persisted, so nothing
+    // could compare it. Same class as the format gap, and the last member of it:
+    // a no-placeholder entry still has pixels, and they are still the wrong size.
+    const at1: ReferenceCacheEntry = { ...entry(NO_PLACEHOLDER), imageScale: 1 };
+    expect(refreshOrder(["1:2"], () => at1, "v1", false, true, "flat", "svg", 2)).toEqual(["1:2"]);
+    expect(refreshOrder(["1:2"], () => at1, "v1", false, true, "flat", "svg", 1)).toEqual([]);
+  });
+
+  it("treats an entry with no recorded scale as the API default of 1", () => {
+    expect(refreshOrder(["1:2"], () => entry(NO_PLACEHOLDER), "v1", false, true, "flat", "svg", 1)).toEqual(
+      [],
+    );
+    expect(refreshOrder(["1:2"], () => entry(NO_PLACEHOLDER), "v1", false, true, "flat", "svg", 2)).toEqual(
+      ["1:2"],
+    );
+  });
+
   it("does not sweep a cache that is staying on checkerboard", () => {
     // An entry written before normalisation existed is verbatim Figma output,
     // and verbatim IS the checkerboard — so it is already what `checkerboard`
