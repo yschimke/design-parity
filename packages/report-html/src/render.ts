@@ -721,9 +721,16 @@ export function renderHtmlReport(input: ReportInput): string {
   // (overview) and the per-variant reference|candidate|diff detail below.
   const rendered: Rendered[] = variants.map((variant, index) => {
     const refSrc = inlineFromDisk(root, variant.reference);
-    const candSrc = inlineFromDisk(root, variant.candidate);
     const diff = diffByKey.get(variant.key);
-    const diffSrc = diff ? pngDataUri(diff.png) : undefined;
+    // The compared candidate, not the captured one. When the engine cropped a
+    // declared gutter, the file on disk is larger than what was scored, and
+    // showing it here would put a guttered panel beside a component-sized
+    // reference and heatmap — and stretch it to the reference's box under the
+    // overlay slider. See `DiffImage.candidatePng`.
+    const candSrc = diff?.candidatePng
+      ? pngDataUri(diff.candidatePng)
+      : inlineFromDisk(root, variant.candidate);
+    const diffSrc = diff?.png ? pngDataUri(diff.png) : undefined;
     return { variant, index, refSrc, candSrc, diffSrc };
   });
 

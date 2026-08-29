@@ -19,7 +19,23 @@ import type {
  */
 export interface DiffImage {
   key: string;
-  png: Uint8Array;
+  /**
+   * The diff heatmap PNG bytes. Optional because the engine produces none when
+   * a pair has no aligned region to diff — an entry can still be worth carrying
+   * for {@link DiffImage.candidatePng} alone.
+   */
+  png?: Uint8Array;
+  /**
+   * The candidate as actually compared, when that is not the file on disk —
+   * today, a capture whose declared `Image.gutter` the engine cropped off.
+   *
+   * The report has to prefer this over reading `Image.uri`, or it shows a panel
+   * that contradicts the score beside it: the guttered capture sits at its full
+   * size next to a reference and heatmap at the component's, and the overlay
+   * slider stretches it to the reference's box. Absent (the common case) means
+   * the file on disk is what was compared, so read that.
+   */
+  candidatePng?: Uint8Array;
 }
 
 /** Dependency-free view of `@design-parity/diff`'s scoped acceptance result. */

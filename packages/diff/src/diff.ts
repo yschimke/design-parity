@@ -109,6 +109,12 @@ export interface Triptych {
    * report (#50). Absent when there was no aligned region to diff.
    */
   diff?: Buffer;
+  /**
+   * The candidate PNG as compared, with its declared gutter cropped off — see
+   * {@link VisualResult.candidatePng}. Present only when a gutter was really
+   * subtracted; absent means the candidate `uri` on disk is what was compared.
+   */
+  candidate?: Buffer;
 }
 
 export interface DiffResult {
@@ -455,6 +461,7 @@ async function emitTriptychs(
     const safeKey = v.key.replace(/[^a-z0-9]+/gi, "-");
     const triptych: Triptych = { key: v.key, png: v.triptych };
     if (v.diffPng) triptych.diff = v.diffPng;
+    if (v.candidatePng) triptych.candidate = v.candidatePng;
     if (outDir) {
       const path = join(outDir, `triptych-${safeKey}.png`);
       await writeFile(path, v.triptych);

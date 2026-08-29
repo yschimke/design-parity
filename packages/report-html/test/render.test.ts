@@ -469,6 +469,57 @@ describe("renderHtmlReport on the figma button fixtures", () => {
     expect(html).toContain(dataUri);
   });
 
+  it("shows the compared candidate, not the guttered capture on disk", async () => {
+    // The engine crops a declared gutter before scoring, so the file on disk is
+    // not what the score describes. Inlining it anyway puts a guttered panel
+    // beside a component-sized reference and heatmap, and the overlay slider
+    // stretches it to the reference's box — the review surface contradicting
+    // the number printed next to it.
+    const { reference, candidate, verdict } = await loadInputs();
+    const key = "default/dark/compact";
+    const cropped = Buffer.from(
+      // A distinct 1x1 so its data URI cannot be confused with the on-disk file.
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const withCrop = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      repoRoot,
+      diffImages: [{ key, png: ONE_PX_PNG, candidatePng: cropped }],
+    });
+    expect(withCrop).toContain(cropped.toString("base64"));
+
+    // And absence still means "read the file on disk" — the common case, where
+    // no gutter was declared.
+    const withoutCrop = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      repoRoot,
+      diffImages: [{ key, png: ONE_PX_PNG }],
+    });
+    expect(withoutCrop).not.toContain(cropped.toString("base64"));
+  });
+
+  it("renders a pair carrying only a cropped candidate, with no heatmap", async () => {
+    // A pair too dimensionally mismatched to diff produces no heatmap, but still
+    // needs its crop shown — that is exactly when the uncropped panel misleads
+    // most. The entry has to survive without `png`.
+    const { reference, candidate, verdict } = await loadInputs();
+    const cropped = ONE_PX_PNG;
+    const html = renderHtmlReport({
+      reference,
+      candidate,
+      verdict,
+      repoRoot,
+      diffImages: [{ key: "default/dark/compact", candidatePng: cropped }],
+    });
+    expect(html.startsWith("<!doctype html>")).toBe(true);
+    expect(html).toContain(cropped.toString("base64"));
+  });
+
   it("is deterministic: two renders are byte-identical", async () => {
     const { reference, candidate, verdict } = await loadInputs();
     const diffImages: DiffImage[] = [
