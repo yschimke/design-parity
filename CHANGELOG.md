@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.74](https://github.com/yschimke/design-parity/compare/v0.1.73...v0.1.74) (2026-08-29)
+
+
+### Bug Fixes
+
+* **cache:** remove the superseded render when a node switches format ([#443](https://github.com/yschimke/design-parity/issues/443)) ([e40a62b](https://github.com/yschimke/design-parity/commit/e40a62bb59bc2693a40aae394da7ba1935615012))
+
 ## [0.1.73](https://github.com/yschimke/design-parity/compare/v0.1.72...v0.1.73) (2026-08-29)
 
 
