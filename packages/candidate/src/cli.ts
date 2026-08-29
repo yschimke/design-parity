@@ -16,6 +16,7 @@ import { join } from "node:path";
 
 import type {
   DesignTokens,
+  ImageGutter,
   SemanticNode,
   SemanticTree,
   Theme,
@@ -68,6 +69,32 @@ export interface PreviewParams {
    * `themeTokenSetsFromBundle` joins a theme's tokens to it.
    */
   wrapperClassName?: string;
+  /**
+   * Render density (`@Preview(density = …)`, dpi/160). Needed to resolve
+   * {@link captureGutter} from dp to the pixels the PNG is measured in.
+   */
+  density?: number;
+  /**
+   * `@CaptureGutter` — transparent dp the render's bounds were extended by on
+   * each edge, so a shadow or focus ring drawn outside the component is not
+   * cropped at the image edge. `null`/absent means the render is tight to the
+   * component.
+   *
+   * It travels so a consumer can take it back off: the canvas minus the gutter
+   * is the component, and a comparison that keeps it compares the wrong frame.
+   */
+  captureGutter?: CaptureGutterDp | null;
+}
+
+/**
+ * Per-edge dp of a declared capture gutter, mirroring compose-preview's
+ * `CaptureGutterDp`. Every edge defaults to 0 when the producer omits it.
+ */
+export interface CaptureGutterDp {
+  start?: number;
+  top?: number;
+  end?: number;
+  bottom?: number;
 }
 
 /** One entry of `compose-preview show --json`. */
@@ -316,6 +343,84 @@ const BASELINE_DPI = 160;
  * and the caller treats bounds and tokens as already sharing a space rather than
  * inventing a factor.
  */
+/**
+ * Whether a preview's locale is written right-to-left.
+ *
+ * Matched on the language subtag rather than the whole tag, so `ar`, `ar-EG`
+ * and `ar_EG` all resolve; the list is the RTL scripts Android ships locales
+ * for. An unknown or absent locale reads as LTR, which is the layout an
+ * unstated one gets anyway.
+ */
+export function isRtlLocale(locale: string | undefined): boolean {
+  if (!locale) return false;
+  const lang = locale.toLowerCase().split(/[-_]/)[0];
+  return RTL_LANGUAGES.has(lang ?? "");
+}
+
+/** Language subtags Android treats as right-to-left. */
+const RTL_LANGUAGES = new Set([
+  "ar", // Arabic
+  "dv", // Dhivehi
+  "fa", // Persian
+  "he", // Hebrew
+  "iw", // Hebrew (legacy code)
+  "ji", // Yiddish (legacy code)
+  "ps", // Pashto
+  "sd", // Sindhi
+  "ug", // Uyghur
+  "ur", // Urdu
+  "yi", // Yiddish
+]);
+
+/**
+ * Render density from the device string alone (`spec:…,dpi=320,…` → 2).
+ *
+ * Split out of {@link boundsDensityOf} so a caller holding only params — the
+ * gutter resolver — gets the same answer as one holding semantics. `undefined`
+ * when the device names no dpi.
+ */
+export function deviceDensityOf(params: PreviewParams | undefined): number | undefined {
+  const dpi = Number(/(?:^|,)\s*dpi\s*=\s*(\d+(?:\.\d+)?)/.exec(params?.device ?? "")?.[1]);
+  return Number.isFinite(dpi) && dpi > 0 ? dpi / BASELINE_DPI : undefined;
+}
+
+/**
+ * Resolve a declared `@CaptureGutter` from dp to the pixels the PNG is measured
+ * in, or `undefined` when the render is tight to its component.
+ *
+ * Density comes from the explicit `density` param, then the device's own dpi —
+ * a bundle that says `dpi=320` has already told us it is 2×, and reading that
+ * as 1× would crop 8px off a 16px gutter and leave the residual frame this is
+ * meant to remove. Only when neither is stated does it fall back to 1, on the
+ * reading that a producer stating dp with no density means dp = px; guessing
+ * higher would crop away real content.
+ *
+ * Edges round to whole pixels, and an all-zero gutter is dropped — it says the
+ * same thing as no gutter and only invites a no-op crop.
+ */
+export function gutterFor(params: PreviewParams): ImageGutter | undefined {
+  const g = params.captureGutter;
+  if (!g) return undefined;
+  // `start`/`end` are WRITING-DIRECTION names, and the crop that consumes them
+  // works in physical pixels: under an RTL locale `start` is the right-hand
+  // edge, so passing it through unswapped would trim the wrong side — leaving
+  // the real gutter in place and shifting the component under the reference.
+  // Resolve it here, where the locale is still in hand.
+  const [start, end] = isRtlLocale(params.locale) ? [g.end, g.start] : [g.start, g.end];
+  const density =
+    (typeof params.density === "number" && params.density > 0 ? params.density : undefined) ??
+    deviceDensityOf(params) ??
+    1;
+  const px = (dp: number | undefined) => Math.round(Math.max(0, dp ?? 0) * density);
+  const gutter = {
+    start: px(start),
+    top: px(g.top),
+    end: px(end),
+    bottom: px(g.bottom),
+  };
+  return gutter.start || gutter.top || gutter.end || gutter.bottom ? gutter : undefined;
+}
+
 export function boundsDensityOf(
   raw: RawSemantics | undefined,
   params: PreviewParams | undefined,
@@ -553,6 +658,9 @@ function pickParams(raw: Record<string, unknown>): PreviewParams {
   if (typeof src["state"] === "string") p.state = src["state"];
   if (typeof src["wrapperClassName"] === "string")
     p.wrapperClassName = src["wrapperClassName"];
+  if (typeof src["density"] === "number") p.density = src["density"];
+  const gutter = src["captureGutter"];
+  if (gutter && typeof gutter === "object") p.captureGutter = gutter as CaptureGutterDp;
   return p;
 }
 

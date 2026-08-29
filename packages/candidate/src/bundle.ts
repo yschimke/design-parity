@@ -51,6 +51,7 @@ import {
 
 import {
   normalizeSemantics,
+  gutterFor,
   themeForPreview,
   type PreviewParams,
   type RawSemantics,
@@ -260,6 +261,8 @@ function toImage(
   if (theme) image.theme = theme;
   const size = normalizeSize(params.widthDp);
   if (size) image.size = size;
+  const gutter = gutterFor(params);
+  if (gutter) image.gutter = gutter;
   return image;
 }
 

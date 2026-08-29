@@ -12,7 +12,13 @@
  * {@link toCatalogManifest} is **pure** (it only computes paths, no I/O); the
  * {@link writeCatalog} step materializes the bytes those paths point at.
  */
-import type { DesignTokens, Image, ParityDirection, Theme } from "@design-parity/core";
+import type {
+  DesignTokens,
+  Image,
+  ImageGutter,
+  ParityDirection,
+  Theme,
+} from "@design-parity/core";
 
 import type {
   Catalog,
@@ -43,6 +49,14 @@ export interface CatalogManifestImage {
   props?: Record<string, string>;
   width: number;
   height: number;
+  /**
+   * Transparent margin the renderer added outside the component's own bounds,
+   * in pixels (`Image.gutter`). Carried because the published PNG keeps it:
+   * `writeCatalog` writes the render's own bytes, so without this the manifest
+   * states a canvas that is larger than the component and every consumer of the
+   * published catalog treats the frame as content.
+   */
+  gutter?: ImageGutter;
   /**
    * Deep link into a live preview server where this exact variant can be opened
    * and customised — the cross-tool bridge that makes browsing the published
@@ -291,6 +305,7 @@ function manifestImages(
         height: image.height,
       };
       if (image.theme) entry.theme = image.theme;
+      if (image.gutter) entry.gutter = image.gutter;
       if (image.previewId) entry.previewId = image.previewId;
       if (image.size) entry.size = image.size;
       if (image.props && Object.keys(image.props).length > 0) entry.props = image.props;

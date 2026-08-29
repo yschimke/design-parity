@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { normalizeSize, type Image } from "@design-parity/core";
+import { normalizeSize, type Image, type ImageGutter } from "@design-parity/core";
 import { Resvg } from "@resvg/resvg-js";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
@@ -202,6 +202,31 @@ async function readRaster(
   return { width: png.width, height: png.height, data: png.data, sourceSha256 };
 }
 
+/**
+ * Trim a declared capture gutter off a raster, leaving the component's own
+ * bounds.
+ *
+ * This is a crop, not a tolerance. The gutter is stated by the renderer (see
+ * {@link Image.gutter}) rather than detected, so nothing here guesses at
+ * transparent margins: an image with no declared gutter is returned untouched,
+ * and so is one whose gutter would leave nothing behind — a bad declaration
+ * should degrade to the old comparison, never to a zero-sized one.
+ */
+export function cropGutter(img: Raster, gutter?: ImageGutter): Raster {
+  if (!gutter) return img;
+  const { start, top, end, bottom } = gutter;
+  const width = img.width - start - end;
+  const height = img.height - top - bottom;
+  if (width <= 0 || height <= 0) return img;
+  if (width === img.width && height === img.height) return img;
+  const data = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const from = ((y + top) * img.width + start) * 4;
+    img.data.copy(data, y * width * 4, from, from + width * 4);
+  }
+  return { width, height, data, sourceSha256: img.sourceSha256 };
+}
+
 /** Compare one matched pair, returning its score and triptych. */
 export async function diffImagePair(
   repoRoot: string,
@@ -212,7 +237,13 @@ export async function diffImagePair(
 ): Promise<VisualResult> {
   // Candidate first: a vector reference is rasterised to the candidate's width
   // (see `rasterizeSvg`), so the candidate's own size has to be known already.
-  const cand = await readRaster(repoRoot, candidate.uri);
+  //
+  // And it is the GUTTER-FREE width that matters. A declared `Image.gutter` is
+  // transparent frame the renderer added, not content, so it comes off before
+  // the reference is sized against it — otherwise the reference is rasterised
+  // to a canvas wider than the component and every subsequent step compares at
+  // the wrong zoom.
+  const cand = cropGutter(await readRaster(repoRoot, candidate.uri), candidate.gutter);
   const ref = await readRaster(repoRoot, reference.uri, cand.width);
   const key = imageKey(reference);
 
