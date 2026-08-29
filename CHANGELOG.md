@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.76](https://github.com/yschimke/design-parity/compare/v0.1.75...v0.1.76) (2026-08-29)
+
+
+### Bug Fixes
+
+* **report:** restore DiffImage.png as required, carry crops separately ([#449](https://github.com/yschimke/design-parity/issues/449)) ([c52eff7](https://github.com/yschimke/design-parity/commit/c52eff713da5bff363a2b30cad95e80392623578))
+
 ## [0.1.75](https://github.com/yschimke/design-parity/compare/v0.1.74...v0.1.75) (2026-08-29)
 
 
