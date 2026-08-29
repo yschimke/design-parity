@@ -205,6 +205,27 @@ on:
         required: false
         type: boolean
         default: true
+      block-on-verdict:
+        description: >
+          Whether a blocking parity verdict should FAIL the run. Default `true`,
+          which is right wherever the run gates something: on a pull request,
+          red is the gate doing its job.
+
+          Set `false` on a run that gates nothing — a scheduled board refresh,
+          typically. There, a design-led catalog that still diverges makes the
+          run red on every single execution, and a signal that is always red
+          carries no information: nobody can tell "the parity job broke" from
+          "the catalog still diverges" without opening the log, so the genuine
+          breakage — a render crash, a lost cache, an expired token — arrives
+          looking exactly like the steady state and is read as more of the same.
+
+          The verdict is not discarded when this is `false`. It is written to
+          the job summary, annotated as a warning, and exposed as the
+          `blocked` output, so a caller can still gate on it deliberately. What
+          changes is only whether it owns the job's colour.
+        required: false
+        type: boolean
+        default: true
       render-timeout:
         description: "Seconds `bundle pack` may spend rendering, per shard. This is the INNER timeout; keep `timeout-minutes` above it."
         required: false
@@ -244,6 +265,13 @@ on:
         required: false
         type: number
         default: 60
+    outputs:
+      blocked:
+        description: >
+          `true` when the run reached a blocking parity verdict, whether or not
+          it failed the job. Read it to gate deliberately when
+          `block-on-verdict` is `false`.
+        value: ${{ jobs.publish.outputs.blocked }}
     secrets:
       figma-token:
         description: "Read-only Figma PAT with `file_content:read`. Absent ⇒ the parity step is skipped with a warning rather than failing."
@@ -1047,6 +1075,10 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+    outputs:
+      # The verdict, whether or not it failed the job — the seam that lets a
+      # caller gate on parity while leaving red to mean broken.
+      blocked: ${{ steps.merge.outputs.blocked || needs.cache.outputs.blocked }}
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1085,13 +1117,24 @@ jobs:
         if: ${{ needs.cache.outputs.skip == 'true' }}
         env:
           BRANCH: ${{ inputs.artifact-branch }}
+          BLOCK: ${{ inputs.block-on-verdict }}
         run: |
           set -euo pipefail
-          if [ "${{ needs.cache.outputs.blocked }}" = "true" ]; then
-            echo "::error title=Design parity blocked::Inputs unchanged since the last run, which was blocking. See the published report on ${BRANCH}."
+          if [ "${{ needs.cache.outputs.blocked }}" != "true" ]; then
+            echo "::notice::Inputs unchanged since the last run, which passed. Nothing to re-render."
+            exit 0
+          fi
+          note="Inputs unchanged since the last run, which was blocking. See the published report on ${BRANCH}."
+          echo "### Design parity: blocked (carried forward)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$note" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${BLOCK}" = "true" ]; then
+            echo "::error title=Design parity blocked::${note}"
             exit 1
           fi
-          echo "::notice::Inputs unchanged since the last run, which passed. Nothing to re-render."
+          # Reported, not fatal — see `block-on-verdict`. The verdict is on the
+          # summary and in the `blocked` output; red stays available to mean
+          # that this job actually broke.
+          echo "::warning title=Design parity blocked::${note}"
 
       - name: Download the shard runs
         if: ${{ needs.cache.outputs.skip != 'true' }}
@@ -1283,6 +1326,19 @@ jobs:
         if: ${{ steps.merge.outputs.blocked == 'true' }}
         env:
           BRANCH: ${{ inputs.artifact-branch }}
+          BLOCK: ${{ inputs.block-on-verdict }}
         run: |
-          echo "::error title=Design parity blocked::The parity direction blocks on a failing verdict. See the published report on ${BRANCH}."
-          exit 1
+          set -euo pipefail
+          note="The parity direction blocks on a failing verdict. See the published report on ${BRANCH}."
+          echo "### Design parity: blocked" >> "$GITHUB_STEP_SUMMARY"
+          echo "$note" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${BLOCK}" = "true" ]; then
+            echo "::error title=Design parity blocked::${note}"
+            exit 1
+          fi
+          # Reported, not fatal — see `block-on-verdict`. The board is already
+          # published and the verdict is on the summary and in the `blocked`
+          # output; what this does NOT do is spend the job's red on a state the
+          # run cannot change, which is what made red unreadable on a scheduled
+          # refresh (wear-m3-catalog#145).
+          echo "::warning title=Design parity blocked::${note}"
