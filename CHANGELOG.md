@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.75](https://github.com/yschimke/design-parity/compare/v0.1.74...v0.1.75) (2026-08-29)
+
+
+### Bug Fixes
+
+* **cache:** resolve symlinks before deleting a superseded render ([#448](https://github.com/yschimke/design-parity/issues/448)) ([cc2982a](https://github.com/yschimke/design-parity/commit/cc2982a2fb079bbeea5b709ec0f62681ad1e1665))
+* **report:** show the candidate that was compared, not the guttered capture ([#445](https://github.com/yschimke/design-parity/issues/445)) ([4d4f706](https://github.com/yschimke/design-parity/commit/4d4f7067479f74c39c4b0d776804ee7dc2b852b3))
+
 ## [0.1.74](https://github.com/yschimke/design-parity/compare/v0.1.73...v0.1.74) (2026-08-29)
 
 
