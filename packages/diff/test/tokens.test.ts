@@ -1315,6 +1315,24 @@ describe("diffTokens", () => {
     });
   });
 
+  it("does not compare an edge-specific padding token with a uniform measured inset", () => {
+    const findings = diffTokens(
+      { spacing: { paddingTop: 44 } },
+      { spacing: { gap: 8 } },
+      defaultDiffConfig,
+      undefined,
+      undefined,
+      [{ inset: 16, declaresSpacing: false, where: "Button" }],
+    );
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "info",
+      message: "spacing.paddingTop: candidate resolved no value; unverified (spec 44)",
+      detail: { token: "spacing.paddingTop", unverified: true },
+    });
+  });
+
   describe("token alias map (issue #78)", () => {
     it("matches a design-named token to its code counterpart across kinds", () => {
       const designSpec: DesignTokens = {

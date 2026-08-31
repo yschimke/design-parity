@@ -150,7 +150,7 @@ describe("board density converts a capture into the code's units (#375)", () => 
 
   it("divides the captured specs through", () => {
     const ref = at(3);
-    expect(ref.tokens?.spacing).toEqual({ padding: 16 });
+    expect(ref.tokens?.spacing).toEqual({ paddingStart: 16 });
     expect(ref.tokens?.radius).toEqual({ corner: 26 });
     expect(ref.tokens?.typography?.label).toMatchObject({
       fontSize: 14,
@@ -172,7 +172,7 @@ describe("board density converts a capture into the code's units (#375)", () => 
     // The whole point: inert for every project that has not opted in. An
     // unstated scale is "already in the code's units", not a guess at 1×.
     const ref = at();
-    expect(ref.tokens?.spacing).toEqual({ padding: 48 });
+    expect(ref.tokens?.spacing).toEqual({ paddingStart: 48 });
     expect(ref.tokens?.radius).toEqual({ corner: 78 });
     expect(ref.tokens?.typography?.label).toMatchObject({ fontSize: 42, lineHeight: 48 });
     expect(ref.layout?.density).toBeUndefined();
@@ -193,5 +193,46 @@ describe("board density converts a capture into the code's units (#375)", () => 
       density: 3,
     });
     expect(ref.themeTokens?.radius).toMatchObject({ "radius/large": 78 });
+  });
+
+  it("preserves asymmetric padding edges instead of flattening the first one", () => {
+    const ref = normalizeReference({
+      componentId: "c#C",
+      ref: "figma:KEY/1:1",
+      node: {
+        ...scaled,
+        paddingLeft: 12,
+        paddingTop: 44,
+        paddingRight: 16,
+        paddingBottom: 56,
+      },
+      variables: floats("Numbers", {}),
+      referenceImages: [],
+    });
+
+    expect(ref.tokens?.spacing).toEqual({
+      paddingStart: 12,
+      paddingTop: 44,
+      paddingEnd: 16,
+      paddingBottom: 56,
+    });
+  });
+
+  it("keeps the compact padding token for a truly uniform frame", () => {
+    const ref = normalizeReference({
+      componentId: "c#C",
+      ref: "figma:KEY/1:1",
+      node: {
+        ...scaled,
+        paddingLeft: 12,
+        paddingTop: 12,
+        paddingRight: 12,
+        paddingBottom: 12,
+      },
+      variables: floats("Numbers", {}),
+      referenceImages: [],
+    });
+
+    expect(ref.tokens?.spacing).toEqual({ padding: 12 });
   });
 });

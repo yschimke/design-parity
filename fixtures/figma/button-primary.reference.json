@@ -22,7 +22,12 @@
     }
   ],
   "tokens": {
-    "spacing": { "padding": 16 },
+    "spacing": {
+      "paddingStart": 16,
+      "paddingTop": 14,
+      "paddingEnd": 16,
+      "paddingBottom": 14
+    },
     "radius": { "corner": 8 },
     "colors": {
       "container": "#645AFF",
