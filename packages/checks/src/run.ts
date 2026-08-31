@@ -13,6 +13,7 @@ import type {
 } from "@design-parity/core";
 
 import { checkContrast, checkSemantics, checkTouchTargets } from "./a11y.js";
+import { parseColor } from "./color.js";
 import { type ChecksConfig, resolveConfig } from "./config.js";
 import {
   checkHardcodedStrings,
@@ -41,11 +42,18 @@ function contrastFingerprint(finding: Finding): string | undefined {
   }
   return [
     theme.toLowerCase(),
-    foreground.toLowerCase(),
-    background.toLowerCase(),
+    colorFingerprint(foreground),
+    colorFingerprint(background),
     required,
     largeText,
   ].join("|");
+}
+
+function colorFingerprint(value: string): string {
+  const color = parseColor(value);
+  return color
+    ? `${color.r},${color.g},${color.b},${color.a}`
+    : value.trim().toLowerCase();
 }
 
 function markSharedReferenceContrast(

@@ -48,7 +48,13 @@ describe("runChecks ordering", () => {
         },
       },
     } as const;
-    const candidate = candidateOf(semantics.root);
+    const candidate = candidateOf({
+      ...semantics.root,
+      tokens: {
+        ...semantics.root.tokens,
+        colors: { label: "#FEF7FFFF", container: "#79747EFF" },
+      },
+    });
     const reference = { ...goldenFigmaReference(), layout: semantics };
 
     const finding = runChecks(reference, candidate).find((f) => f.kind === "contrast");
@@ -82,12 +88,27 @@ describe("runChecks ordering", () => {
         },
       },
     };
+    const differentAlpha = {
+      ...goldenFigmaReference(),
+      layout: {
+        root: {
+          role: "text",
+          tokens: {
+            colors: { label: "#FEF7FF80", container: "#79747E" },
+            typography: { label: { fontSize: 11 } },
+          },
+        },
+      },
+    };
 
     expect(
       runChecks(noLayout, candidate).find((f) => f.kind === "contrast")!.severity,
     ).toBe("error");
     expect(
       runChecks(differentPair, candidate).find((f) => f.kind === "contrast")!.severity,
+    ).toBe("error");
+    expect(
+      runChecks(differentAlpha, candidate).find((f) => f.kind === "contrast")!.severity,
     ).toBe("error");
   });
 });
