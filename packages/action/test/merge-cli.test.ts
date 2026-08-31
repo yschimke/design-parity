@@ -802,3 +802,39 @@ describe("merge --previous (shards must agree on the map)", () => {
     expect(codes).toContain("d/D.kt#D");
   });
 });
+
+/**
+ * The end an emptied design map is asking for: the board clears.
+ *
+ * A map that declares no components makes every shard report an empty universe,
+ * which the bound reads as "nothing exists any more" — so every previous row is
+ * dropped rather than carried. This is the case `shard-cli` used to make
+ * unreachable by refusing an empty map outright.
+ */
+describe("merge --previous (an emptied design map clears the board)", () => {
+  it("drops every carried row when the map declares none", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const one = await writeShardDir(root, 1, 2, [], { universe: [] });
+    const two = await writeShardDir(root, 2, 2, [], { universe: [] });
+    const previous = await writePreviousDir(root, [
+      { code: "a/A.kt#A" },
+      { code: "b/B.kt#B" },
+    ]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      one,
+      two,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(0);
+    expect(log).toContain("Dropped 2 carried row(s)");
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries).toEqual([]);
+  });
+});

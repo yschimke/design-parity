@@ -182,7 +182,28 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   const components =
     args.components.length > 0 ? args.components : (map?.components ?? []).map((c) => c.code);
 
-  if (components.length === 0) {
+  // An empty list here means one thing, and it is not a mistake. `--components`
+  // was not passed — or it would have been used — so the list came from the map,
+  // and `loadDesignMap` THROWS on a missing, unparseable or schema-invalid file.
+  // Reaching this line therefore means the map loaded cleanly and declares no
+  // components, which the schema allows: `components` carries no `minItems`.
+  //
+  // This used to refuse, and that broke the case it most needed to serve.
+  // Deleting the last mapped component is how a catalog says "there is nothing
+  // to compare" — but a non-zero exit here takes the shard job down, so no
+  // `shard.json` is written, so `merge` never runs, so the previous board keeps
+  // every row it had. The map said those components were gone and the board went
+  // on publishing them, indefinitely.
+  //
+  // An empty slice needs no special handling below: every branch there is
+  // already guarded on a non-empty list, so this prints nothing and exits 0.
+  // That is what lets the shard job succeed, write an empty `shard.json`, and
+  // hand `merge` the empty universe it needs to clear the board.
+  //
+  // The refusal is kept for the one case it is right for: no map to consult at
+  // all. Defensive rather than reachable today, since the branch above loads one
+  // whenever `--components` is absent.
+  if (components.length === 0 && !map) {
     stderr.write(
       "no components: pass --components, or commit a design-map.json with entries\n",
     );
