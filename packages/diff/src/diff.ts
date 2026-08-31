@@ -250,6 +250,11 @@ export async function diff(
       // arriving with confidence that this whole predicate exists to stop.
       { layout: reference.layout, tolerance: config.spacingTolerance },
     ),
+    // A uniform padding can answer an edge-specific reference token only when
+    // it belongs to the candidate root. The flattened bag above preserves
+    // values but has discarded node provenance, so a descendant's padding must
+    // not be mistaken for the component edge.
+    candidate.semantics.root.tokens,
   );
   const designSystem = diffDesignSystem(
     reference.themeTokens,

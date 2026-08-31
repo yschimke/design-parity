@@ -701,6 +701,7 @@ export function diffTokens(
   alias?: TokenAliasMap,
   radiusBoxes?: Map<number, Bounds[]>,
   derivedInsets?: DerivedInset[],
+  candidateRoot?: DesignTokens,
 ): Finding[] {
   const findings: Finding[] = [];
   if (!specInput) return findings;
@@ -720,6 +721,7 @@ export function diffTokens(
       undefined,
       derivedInsets,
       designNames.get(name),
+      candidateRoot?.spacing,
     );
 
   if (unverifiableGroup(spec.spacing, candidate.spacing)) {
@@ -841,16 +843,19 @@ function numericFinding(
   radiusBoxes?: Map<number, Bounds[]>,
   derivedInsets?: DerivedInset[],
   designName?: string,
+  candidateRoot?: Record<string, number>,
 ): void {
   // Prefer an exact name match; otherwise fall back to a value match. The
   // candidate carries resolved spacing/radius values under generic keys, not the
   // reference's token names (compose-ai-tools#1897), so a spec token is satisfied
   // by any candidate value within tolerance before it's reported missing — the
   // numeric analogue of the colour role-match (issue #74).
-  const got =
-    candidate?.[name] ??
-    (isDirectionalInsetToken(group, name, designName) ? candidate?.padding : undefined) ??
-    numericValueMatch(want, tolerance, candidate);
+  const directional = isDirectionalInsetToken(group, name, designName);
+  const got = directional
+    ? candidateRoot?.[name] ??
+      candidateRoot?.padding ??
+      numericValueMatch(want, tolerance, candidate)
+    : candidate?.[name] ?? numericValueMatch(want, tolerance, candidate);
 
   // A padding spec the candidate does not *declare* may still be one it *draws*:
   // a reference frame states its inset as auto-layout padding, while the code
@@ -867,7 +872,6 @@ function numericFinding(
   const declaredMisses = got === undefined || Math.abs(got - want) > tolerance;
   if (
     declaredMisses &&
-    (got === undefined || got === 0) &&
     isInsetToken(group, name, designName)
   ) {
     // A corroborated measurement may acquit but never convict (see
@@ -894,6 +898,11 @@ function numericFinding(
         pool = pool!.filter((i) => i !== drawn);
         continue;
       }
+      // A concrete declaration is still the candidate's strongest statement.
+      // Geometry may acquit it when the drawn inset matches the spec, but an
+      // unrelated measured box must not replace one declared mismatch with
+      // another. Only absence/zero reaches the geometry conviction below.
+      if (got !== undefined && got !== 0) break;
       // The render insets the WRONG amount. Report that, not the declared `0`:
       // "0 vs spec 12" names a modifier the code was never going to have, while
       // "14 vs spec 12" is the miss a designer can act on.
@@ -966,7 +975,7 @@ function isInsetToken(group: "spacing" | "radius", ...names: Array<string | unde
   );
 }
 
-/** A padding claim for one axis or edge, which a uniform declared padding can answer. */
+/** A padding claim for one axis or edge. */
 function isDirectionalInsetToken(
   group: "spacing" | "radius",
   ...names: Array<string | undefined>
@@ -981,6 +990,7 @@ function isDirectionalInsetToken(
     )
   );
 }
+
 
 /**
  * The measurement that best answers a spec of `want`.

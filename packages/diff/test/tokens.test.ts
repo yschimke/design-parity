@@ -249,6 +249,22 @@ describe("diffTokens", () => {
       });
     });
 
+    it("lets matching geometry acquit a nonzero private padding declaration", () => {
+      const findings = diffTokens(
+        { spacing: { padding: 4 } },
+        { spacing: { padding: 2 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [{ inset: 4, declaresSpacing: true, where: "checkbox" }],
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", expected: 4, actual: 4 },
+      });
+    });
+
     it("reports the miss in the measured number, not the declared zero", () => {
       // The same button drawing a 24dp icon instead of the kit's 26dp insets 14,
       // not 13 — past the 1dp allowance. The error must quote THAT: "0 vs spec
@@ -1312,6 +1328,36 @@ describe("diffTokens", () => {
       severity: "info",
       message: "spacing.screenPadding: candidate resolved no value; unverified (spec 16)",
       detail: { token: "spacing.screenPadding", actual: null, unverified: true },
+    });
+  });
+
+  it("does not use a flattened uniform padding to accuse an edge-specific spec", () => {
+    const findings = diffTokens(
+      { spacing: { paddingTop: 44 } },
+      { spacing: { padding: 16 } },
+      defaultDiffConfig,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "info",
+      detail: { token: "spacing.paddingTop", actual: null, unverified: true },
+    });
+  });
+
+  it("lets a root uniform padding answer an edge-specific spec", () => {
+    const findings = diffTokens(
+      { spacing: { paddingTop: 44 } },
+      { spacing: { padding: 16 } },
+      defaultDiffConfig,
+      undefined,
+      undefined,
+      undefined,
+      { spacing: { padding: 16 } },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "error",
+      detail: { token: "spacing.paddingTop", expected: 44, actual: 16 },
     });
   });
 

@@ -283,7 +283,11 @@ faithful reproduction of the library. A repo that wants the old behaviour sets
 An **inset** spec gets one more attempt before that: `collectDerivedInsets`
 measures the gap between a container's bounds and the union of its children's,
 so a candidate that draws the spec'd inset by centring rather than by a padding
-modifier is compared like with like (issue #364). That proxy holds when the
+modifier is compared like with like (issue #364). Matching geometry may also
+acquit a nonzero declaration that a component library keeps private: the drawn
+box is stronger evidence when it achieves the reference inset. It does not
+replace one concrete mismatch with another — geometry convicts only when the
+candidate declares no inset (or zero). That proxy holds when the
 child is a box and breaks when it is **text** — a glyph run's box is as wide as
 the string and as tall as its line height, so the "inset" measured around it is
 font metrics, and quoting it against a declared auto-layout padding invents a
@@ -298,8 +302,11 @@ component-level normalization preserves asymmetric or partially declared edges
 as `paddingStart` / `paddingTop` / `paddingEnd` / `paddingBottom`; a scalar
 measurement whose four edges agree cannot answer one of those directional
 claims. Edge-specific, horizontal, and vertical padding therefore stay
-unverified unless the candidate reports a matching token value, rather than
-being compared to an unrelated inset on another axis.
+unverified unless the candidate root reports a matching token value, rather
+than being compared to an unrelated inset on another axis. This root restriction
+is load-bearing: `collectTokens` has flattened descendant values into the same
+bag, so a nested FAB's uniform `padding` is not evidence about its rail's
+`paddingTop` (issue #465).
 
 That rule, stated only over the candidate's own tree, is wider than the fault it
 names: a container whose single child is its label is the same shape whether the
