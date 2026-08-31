@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/yschimke/design-parity/compare/v0.1.77...v1.0.0) (2026-08-31)
+
+
+### Bug Fixes
+
+* **action:** let an emptied design map clear the board ([#456](https://github.com/yschimke/design-parity/issues/456)) ([165c823](https://github.com/yschimke/design-parity/commit/165c8230e8c740765b6a98cb319b1d2500d7984f))
+
 ## [0.1.77](https://github.com/yschimke/design-parity/compare/v0.1.76...v0.1.77) (2026-08-31)
 
 
