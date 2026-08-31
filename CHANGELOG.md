@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/yschimke/design-parity/compare/v1.0.2...v1.0.3) (2026-08-31)
+
+
+### Bug Fixes
+
+* normalize shared contrast colors ([#469](https://github.com/yschimke/design-parity/issues/469)) ([6b875bf](https://github.com/yschimke/design-parity/commit/6b875bfa717f4c41b5fe788031812711cbaf605c))
+* require directional padding evidence ([#472](https://github.com/yschimke/design-parity/issues/472)) ([9771903](https://github.com/yschimke/design-parity/commit/9771903d35ed8b01dfb03faf7f709d317766c36d))
+
 ## [1.0.2](https://github.com/yschimke/design-parity/compare/v1.0.1...v1.0.2) (2026-08-31)
 
 
