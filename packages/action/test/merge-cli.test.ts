@@ -717,3 +717,77 @@ describe("merge --previous (bounded by the design map)", () => {
     );
   });
 });
+
+/**
+ * Shards must agree on the map before it can bound anything.
+ *
+ * `design-map-command` runs independently in every shard, so `universe` is a
+ * claim each one makes rather than a fact merge is handed. Two shards that
+ * disagree have not established what the map is, and the union of their claims
+ * would let whichever had the stalest map decide a deleted component still
+ * exists — quietly reinstating the behaviour the bound exists to remove.
+ */
+describe("merge --previous (shards must agree on the map)", () => {
+  it("drops on a bound both shards report identically", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const universe = ["a/A.kt#A", "c/C.kt#C"];
+    const one = await writeShardDir(root, 1, 2, ["a/A.kt#A"], { universe });
+    // Same set, different order — agreement is about content, not serialisation.
+    const two = await writeShardDir(root, 2, 2, ["c/C.kt#C"], {
+      universe: [...universe].reverse(),
+    });
+    const previous = await writePreviousDir(root, [{ code: "b/B.kt#B" }]);
+    const out = join(root, "out");
+
+    const { code, out: log, err } = await runMerge([
+      "merge",
+      one,
+      two,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(0);
+    expect(err).not.toContain("do not agree");
+    expect(log).toContain("Dropped 1 carried row(s)");
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).not.toContain(
+      "b/B.kt#B",
+    );
+  });
+
+  it("carries everything, and says so, when shards disagree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    // Shard 2's map is stale: it still lists B, which shard 1 says is gone.
+    const one = await writeShardDir(root, 1, 2, ["a/A.kt#A"], {
+      universe: ["a/A.kt#A", "c/C.kt#C"],
+    });
+    const two = await writeShardDir(root, 2, 2, ["c/C.kt#C"], {
+      universe: ["a/A.kt#A", "b/B.kt#B", "c/C.kt#C"],
+    });
+    const previous = await writePreviousDir(root, [{ code: "b/B.kt#B" }]);
+    const out = join(root, "out");
+
+    const { code, out: log, err } = await runMerge([
+      "merge",
+      one,
+      two,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(0);
+    // Reported, not swallowed: a bound that quietly downgrades looks exactly
+    // like a run with nothing to drop.
+    expect(err).toContain("do not agree on the component universe");
+    expect(log).not.toContain("Dropped");
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).toContain(
+      "b/B.kt#B",
+    );
+  });
+});

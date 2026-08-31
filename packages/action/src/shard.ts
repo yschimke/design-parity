@@ -58,6 +58,12 @@ export interface ShardReport {
    * carry it) or has been renamed, moved or deleted (gone from the map, so let
    * it go) — see `carryForward`.
    *
+   * Every shard of one run must report the SAME set: `design-map-command` runs
+   * independently in each of them, so this is a claim about the map that merge
+   * cross-checks rather than trusts. Shards that disagree have not established
+   * what the map is, and merge falls back to carrying everything forward instead
+   * of letting the stalest shard's map decide what still exists.
+   *
    * Optional because a `shard.json` written before this field existed has none,
    * and merge must keep working against one: absent, it falls back to carrying
    * every unrefreshed row forward, which is the older and safer behaviour.

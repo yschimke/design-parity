@@ -280,16 +280,39 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   // would read every component it deliberately skipped as deleted and wipe the
   // board down to the slice. That is the failure this must not have.
   //
-  // Required from EVERY shard before it is used. A shard that reports no universe
-  // (one written before the field existed) leaves the bound unknown rather than
-  // partial — a union missing one shard's map is indistinguishable from a map
-  // that never had those components, and would drop live rows. Unknown means
-  // carry everything, as before.
+  // Required from EVERY shard, and every shard must report the SAME one. Two
+  // separate ways the bound can be untrustworthy, both landing on "carry
+  // everything":
+  //
+  //   * A shard that reports no universe (a `shard.json` written before the
+  //     field existed) leaves the bound unknown rather than partial. A union
+  //     missing one shard's map cannot be told from a map that never had those
+  //     components, and would drop live rows.
+  //   * Shards that report DIFFERENT universes have not agreed on what the map
+  //     is. `design-map-command` runs independently in every shard — the
+  //     reusable workflow says so in as many words — so a non-deterministic
+  //     projection, or a shard that started either side of a push, can leave
+  //     them measuring different sets. Unioning those would let whichever shard
+  //     had the stalest map decide that a component still exists.
+  //
+  // Disagreement is reported, not swallowed: a bound silently downgrading to
+  // "carry everything" looks exactly like a run with nothing to drop, and the
+  // difference is the whole point of the field.
   const previous = args.previousDir
     ? await readRunManifest(resolvePath(cwd(), args.previousDir))
     : undefined;
-  const universe = reports.every((r) => r.universe)
-    ? reports.flatMap((r) => r.universe ?? [])
+  const universes = reports.map((r) =>
+    r.universe ? JSON.stringify([...new Set(r.universe)].sort()) : undefined,
+  );
+  const agreed = universes.every((u) => u !== undefined && u === universes[0]);
+  if (!agreed && universes.some((u) => u !== undefined)) {
+    stderr.write(
+      "warning: shards do not agree on the component universe — carrying every " +
+        "unrefreshed row forward rather than bounding by a map they disagree on\n",
+    );
+  }
+  const universe = agreed
+    ? (JSON.parse(universes[0] as string) as string[])
     : undefined;
   const { carried, dropped } = carryForward(merged.entries, previous, universe);
 
