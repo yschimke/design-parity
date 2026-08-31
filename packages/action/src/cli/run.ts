@@ -23,7 +23,7 @@
  * workflow could afford) fits inside a job timeout — see `../shard.ts` and
  * `docs/PARALLEL_PARITY.md`.
  */
-import { argv, cwd, env, exit, stdout } from "node:process";
+import { argv, cwd, env, exit, stderr, stdout } from "node:process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -204,7 +204,27 @@ export function indexOptions(args: Args): NonNullable<Parameters<typeof orchestr
 
 export async function main(): Promise<number> {
   const args = parseArgs(argv.slice(2));
-  if (args.components.length === 0) {
+  // `--shard` is the exception, and it is the empty design map that needs it. A
+  // sharded invocation with no components is not a misinvocation: it is what
+  // `design-parity shard` emits once the map declares nothing, and the shard
+  // MUST still write its `shard.json` or the merge reports it missing and
+  // refuses the whole run — which leaves the previous board standing, exactly
+  // the outcome an emptied map is asking to undo. So it falls through to the
+  // empty-slice path below, which writes that no-op report.
+  //
+  // Said out loud rather than passed over in silence: with `--shard` this is
+  // also what a typo in `--components` looks like, and a run that quietly
+  // succeeds having compared nothing is worth a line on stderr either way.
+  //
+  // Without `--shard` there is nothing to fall through to — no report to write,
+  // no merge to feed — so the usage text stands.
+  if (args.components.length === 0 && args.shard) {
+    stderr.write(
+      `no components for shard ${args.shard.index}/${args.shard.total} — ` +
+        `writing an empty shard.json (a design map that declares none compares none)\n`,
+    );
+  }
+  if (args.components.length === 0 && !args.shard) {
     stdout.write(
       "design-parity run --components <code#Member,...> [--repo .] " +
         "[--candidates file.json] [--candidate-bundles <png|dir,...>] [--out dir] " +

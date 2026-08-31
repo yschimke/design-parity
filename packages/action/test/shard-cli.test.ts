@@ -297,3 +297,43 @@ describe("shard --complement --preview-universe", () => {
     expect(lines).toEqual(["stale"]);
   });
 });
+
+/**
+ * A design map that declares no components.
+ *
+ * This used to exit 1, and the refusal broke the case it most needed to serve:
+ * deleting the last mapped component is how a catalog says "compare nothing",
+ * and a failing shard job writes no `shard.json`, so `merge` never runs and the
+ * previous board keeps every row it had. An empty map has to produce an empty
+ * slice, not an error.
+ */
+describe("shard CLI with an empty design map", () => {
+  it("emits an empty slice instead of refusing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-shard-"));
+    await writeFile(
+      join(root, "design-map.json"),
+      JSON.stringify({ components: [] }),
+    );
+
+    const { code, lines, err } = await runShard([
+      "--shard",
+      "1/1",
+      "--repo",
+      root,
+    ]);
+
+    expect(code).toBe(0);
+    expect(lines).toEqual([]);
+    expect(err).not.toContain("no components");
+  });
+
+  it("still refuses when the map cannot be read at all", async () => {
+    // The distinction the fix rests on: `loadDesignMap` throws on a missing,
+    // unparseable or schema-invalid file, so a broken map never reaches the
+    // empty-slice path and stays loud.
+    const root = await mkdtemp(join(tmpdir(), "dp-shard-"));
+    await expect(runShard(["--shard", "1/1", "--repo", root])).rejects.toThrow(
+      /cannot read/,
+    );
+  });
+});
