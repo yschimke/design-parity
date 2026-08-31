@@ -20,6 +20,7 @@ import type {
 } from "@design-parity/core";
 
 import type { FigmaNodeDoc, FigmaStyleMeta } from "./figma-api.js";
+import { solidFill } from "./paint.js";
 import { tokenPath } from "./token-name.js";
 
 /**
@@ -186,6 +187,7 @@ function measuredSpacing(node: FigmaNodeDoc): Record<string, number> | undefined
 function tokensOf(
   node: FigmaNodeDoc,
   styles: StyleMap | undefined,
+  inheritedBackground?: string,
 ): { tokens: DesignTokens; spacingSource?: SemanticNode["spacingSource"] } | undefined {
   const declared: Record<string, number> = {};
   if (node.paddingTop !== undefined) declared.paddingTop = node.paddingTop;
@@ -205,6 +207,16 @@ function tokensOf(
         : "derived";
   if (Object.keys(spacing).length > 0) tokens.spacing = spacing;
   if (node.cornerRadius !== undefined) tokens.radius = { corner: node.cornerRadius };
+
+  const fill = solidFill(node.fills);
+  if (node.type === "TEXT") {
+    const colors: Record<string, string> = {};
+    if (fill) colors.label = fill;
+    if (inheritedBackground) colors.container = inheritedBackground;
+    if (Object.keys(colors).length > 0) tokens.colors = colors;
+  } else if (fill) {
+    tokens.colors = { container: fill };
+  }
 
   const style = node.style;
   if (style && (style.fontSize !== undefined || style.lineHeightPx !== undefined)) {
@@ -273,14 +285,15 @@ export function layoutFromNode(
   const { styles, density } = options;
 
   const children: SemanticNode[] = [];
-  const visit = (n: FigmaNodeDoc): void => {
+  const visit = (n: FigmaNodeDoc, inheritedBackground?: string): void => {
+    const background = solidFill(n.fills) ?? inheritedBackground;
     // The root supplies the frame, not a matchable element.
     if (n !== node) {
       const box = n.absoluteBoundingBox;
       const label = labelOf(n);
       if (box && label) {
         const role = roleOf(n);
-        const read = tokensOf(n, styles);
+        const read = tokensOf(n, styles, inheritedBackground);
         children.push({
           label,
           ...(role ? { role } : {}),
@@ -295,7 +308,7 @@ export function layoutFromNode(
         });
       }
     }
-    for (const child of n.children ?? []) visit(child);
+    for (const child of n.children ?? []) visit(child, background);
   };
   visit(node);
 

@@ -76,6 +76,41 @@ describe("layoutFromNode", () => {
     expect(children.find((c) => c.label === "header")!.role).toBe("frame");
   });
 
+  it("preserves a text fill and its nearest visible container fill for reference contrast", () => {
+    const tree = layoutFromNode({
+      id: "1",
+      name: "root",
+      type: "FRAME",
+      absoluteBoundingBox: { x: 0, y: 0, width: 100, height: 40 },
+      fills: [{ type: "SOLID", color: { r: 1, g: 1, b: 1, a: 1 } }],
+      children: [
+        {
+          id: "2",
+          name: "swatch",
+          type: "FRAME",
+          absoluteBoundingBox: { x: 0, y: 0, width: 100, height: 40 },
+          fills: [{ type: "SOLID", color: { r: 0.47, g: 0.45, b: 0.49, a: 1 } }],
+          children: [
+            {
+              id: "3",
+              name: "label",
+              type: "TEXT",
+              characters: "Outline",
+              absoluteBoundingBox: { x: 8, y: 8, width: 40, height: 16 },
+              fills: [{ type: "SOLID", color: { r: 1, g: 0.97, b: 1, a: 1 } }],
+              style: { fontSize: 11, fontWeight: 500 },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(tree!.root.children!.find((c) => c.label === "Outline")!.tokens).toMatchObject({
+      colors: { label: "#FFF7FF", container: "#78737D" },
+      typography: { text: { fontSize: 11, fontWeight: 500 } },
+    });
+  });
+
   it("returns undefined when the node carries no bounding box", () => {
     expect(layoutFromNode({ id: "1", name: "n", type: "FRAME" })).toBeUndefined();
   });

@@ -7,8 +7,8 @@ findings the verdict leads with (see
 details developers routinely miss and design tools don't enforce.
 
 Every check is a **pure function** that reads committed thresholds and the
-candidate's rendered semantics — **no network call and no model at run time**
-(Principle 1). The same PR always scores the same.
+captured semantics — **no network call and no model at run time** (Principle 1).
+The same PR always scores the same.
 
 ## Checks
 
@@ -25,6 +25,13 @@ candidate's rendered semantics — **no network call and no model at run time**
 `runChecks(reference, candidate, config?)` runs the whole suite and returns
 findings **a11y first, then i18n**, severity-ordered within each group.
 `runA11yChecks` / `runI18nChecks` run one group.
+
+A contrast failure stays an error unless the reference semantic tree contains
+the same foreground/background pair failing the same threshold. That exact
+design-led match is reported as a warning with `sharedWithReference: true`: the
+accessibility debt remains visible, while parity does not ask code to diverge
+from its source. An absent or unassessable reference never suppresses a
+candidate failure.
 
 ## Configuration
 
