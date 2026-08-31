@@ -49,7 +49,7 @@ describe("DesignReference fixtures", () => {
   it("figma reference uses the code-connect link method", async () => {
     const ref = await readJson<DesignReference>(referenceFixtures[0]!);
     expect(ref.linkMethod).toBe("code-connect");
-    expect(ref.tokens?.spacing?.padding).toBe(16);
+    expect(ref.tokens?.spacing?.paddingStart).toBe(16);
   });
 });
 

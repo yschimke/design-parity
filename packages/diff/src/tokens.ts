@@ -847,7 +847,10 @@ function numericFinding(
   // reference's token names (compose-ai-tools#1897), so a spec token is satisfied
   // by any candidate value within tolerance before it's reported missing — the
   // numeric analogue of the colour role-match (issue #74).
-  const got = candidate?.[name] ?? numericValueMatch(want, tolerance, candidate);
+  const got =
+    candidate?.[name] ??
+    (isDirectionalInsetToken(group, name, designName) ? candidate?.padding : undefined) ??
+    numericValueMatch(want, tolerance, candidate);
 
   // A padding spec the candidate does not *declare* may still be one it *draws*:
   // a reference frame states its inset as auto-layout padding, while the code
@@ -952,7 +955,31 @@ function isInsetToken(group: "spacing" | "radius", ...names: Array<string | unde
   // is still an inset, and classifying on the rewritten name alone would
   // silently switch the geometry check off for exactly the projects that
   // configured an alias.
-  return group === "spacing" && names.some((n) => n !== undefined && /padding|inset/i.test(n));
+  return (
+    group === "spacing" &&
+    names.some(
+      (n) =>
+        n !== undefined &&
+        /padding|inset/i.test(n) &&
+        !/(?:top|bottom|start|end|left|right|horizontal|vertical)/i.test(n),
+    )
+  );
+}
+
+/** A padding claim for one axis or edge, which a uniform declared padding can answer. */
+function isDirectionalInsetToken(
+  group: "spacing" | "radius",
+  ...names: Array<string | undefined>
+): boolean {
+  return (
+    group === "spacing" &&
+    names.some(
+      (n) =>
+        n !== undefined &&
+        /padding|inset/i.test(n) &&
+        /(?:top|bottom|start|end|left|right|horizontal|vertical)/i.test(n),
+    )
+  );
 }
 
 /**

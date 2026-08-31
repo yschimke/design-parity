@@ -293,6 +293,14 @@ an inset to be reported at all, so one glyph-set edge calibrates the whole
 number. `tokens.textDerivedInsets: "measure"` restores the unfiltered
 behaviour.
 
+That geometric fallback is deliberately limited to a uniform inset. Figma's
+component-level normalization preserves asymmetric or partially declared edges
+as `paddingStart` / `paddingTop` / `paddingEnd` / `paddingBottom`; a scalar
+measurement whose four edges agree cannot answer one of those directional
+claims. Edge-specific, horizontal, and vertical padding therefore stay
+unverified unless the candidate reports a matching token value, rather than
+being compared to an unrelated inset on another axis.
+
 That rule, stated only over the candidate's own tree, is wider than the fault it
 names: a container whose single child is its label is the same shape whether the
 gap around the glyph is font metrics or the padding the parent chose, so it

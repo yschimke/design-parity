@@ -261,7 +261,7 @@ describe("the adapter acts on the context's density (#375)", () => {
       density: 2,
     });
 
-    expect(reference.tokens?.spacing).toMatchObject({ padding: 8 });
+    expect(reference.tokens?.spacing).toMatchObject({ paddingStart: 8, paddingEnd: 8 });
     expect(reference.tokens?.radius).toMatchObject({ corner: 4 });
 
     // No layout to stamp: `layoutFromNode` needs at least one labelled, bounded
@@ -285,7 +285,7 @@ describe("the adapter acts on the context's density (#375)", () => {
 
     const reference = await adapter.resolve("ui/Button.kt#Primary", REF, ctx);
 
-    expect(reference.tokens?.spacing).toMatchObject({ padding: 16 });
+    expect(reference.tokens?.spacing).toMatchObject({ paddingStart: 16, paddingEnd: 16 });
     expect(reference.tokens?.radius).toMatchObject({ corner: 8 });
   });
 });

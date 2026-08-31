@@ -187,8 +187,26 @@ function typographyFrom(
 function tokensFrom(node: FigmaNodeDoc, density?: number): DesignTokens | undefined {
   const tokens: DesignTokens = {};
 
-  const padding = node.paddingLeft ?? node.paddingTop ?? node.paddingRight ?? node.paddingBottom;
-  if (padding !== undefined) tokens.spacing = { padding: inCodeUnits(padding, density) };
+  const paddingEdges = [
+    ["paddingStart", node.paddingLeft],
+    ["paddingTop", node.paddingTop],
+    ["paddingEnd", node.paddingRight],
+    ["paddingBottom", node.paddingBottom],
+  ] as const;
+  const declaredPadding = paddingEdges.filter(
+    (edge): edge is readonly [typeof edge[0], number] => edge[1] !== undefined,
+  );
+  if (declaredPadding.length > 0) {
+    const first = declaredPadding[0]![1];
+    const uniform =
+      declaredPadding.length === paddingEdges.length &&
+      declaredPadding.every(([, value]) => value === first);
+    tokens.spacing = uniform
+      ? { padding: inCodeUnits(first, density) }
+      : Object.fromEntries(
+          declaredPadding.map(([name, value]) => [name, inCodeUnits(value, density)]),
+        );
+  }
 
   if (node.cornerRadius !== undefined) {
     tokens.radius = { corner: inCodeUnits(node.cornerRadius, density) };

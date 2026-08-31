@@ -37,12 +37,12 @@ describe("diff engine on the figma button fixtures", () => {
     expect(verdict.status).toBe("fail");
   });
 
-  it("reports the padding token violation (12 vs spec 16)", async () => {
+  it("reports the start-padding token violation (12 vs spec 16)", async () => {
     const { reference, candidate } = await loadPair();
     const { verdict } = await diff(reference, candidate, { repoRoot });
 
     const padding = verdict.findings.find(
-      (f) => f.kind === "token" && f.detail?.token === "spacing.padding",
+      (f) => f.kind === "token" && f.detail?.token === "spacing.paddingStart",
     );
     expect(padding).toBeDefined();
     expect(padding!.severity).toBe("error");
