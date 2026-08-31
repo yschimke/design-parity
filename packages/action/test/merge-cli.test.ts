@@ -767,7 +767,18 @@ describe("merge --previous (shards must agree on the map)", () => {
     const two = await writeShardDir(root, 2, 2, ["c/C.kt#C"], {
       universe: ["a/A.kt#A", "b/B.kt#B", "c/C.kt#C"],
     });
-    const previous = await writePreviousDir(root, [{ code: "b/B.kt#B" }]);
+    // TWO carried rows, and D is the one that makes this test mean something.
+    //
+    // B is in shard 2's map, so it survives a union of the two disagreeing maps
+    // just as it survives the fallback — asserting on B alone cannot tell those
+    // apart, and an implementation that emitted the warning while still bounding
+    // by the union would pass. D is in NEITHER map: the union drops it, and only
+    // a genuine fallback to "no bound" carries it. So D is what separates the fix
+    // from a warning bolted onto the old behaviour.
+    const previous = await writePreviousDir(root, [
+      { code: "b/B.kt#B" },
+      { code: "d/D.kt#D" },
+    ]);
     const out = join(root, "out");
 
     const { code, out: log, err } = await runMerge([
@@ -786,8 +797,8 @@ describe("merge --previous (shards must agree on the map)", () => {
     expect(err).toContain("do not agree on the component universe");
     expect(log).not.toContain("Dropped");
     const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
-    expect(manifest.entries.map((e: { code: string }) => e.code)).toContain(
-      "b/B.kt#B",
-    );
+    const codes = manifest.entries.map((e: { code: string }) => e.code);
+    expect(codes).toContain("b/B.kt#B");
+    expect(codes).toContain("d/D.kt#D");
   });
 });
