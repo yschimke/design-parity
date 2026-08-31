@@ -46,6 +46,23 @@ export interface ShardReport {
    * must cover the whole list exactly once.
    */
   components: string[];
+  /**
+   * Every component handle in the run's `design-map.json`, regardless of which
+   * shard took it or whether the run was narrowed with `--components`.
+   *
+   * Distinct from {@link components} on purpose. That field is an ASSIGNMENT —
+   * what this shard was asked to compare — and a deliberately narrowed run
+   * assigns a subset of the map. This one is the MAP: the components that still
+   * exist to be compared at all. `merge` needs the difference to tell whether a
+   * previous row it could not refresh was merely missed (still in the map, so
+   * carry it) or has been renamed, moved or deleted (gone from the map, so let
+   * it go) — see `carryForward`.
+   *
+   * Optional because a `shard.json` written before this field existed has none,
+   * and merge must keep working against one: absent, it falls back to carrying
+   * every unrefreshed row forward, which is the older and safer behaviour.
+   */
+  universe?: string[];
   direction: ResolvedDirection;
   status: VerdictStatus;
   blocked: boolean;
