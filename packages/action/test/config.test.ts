@@ -49,6 +49,25 @@ describe("resolveRunConfig token policy (#367 / #368)", () => {
     const config = await resolveRunConfig(repoRoot);
     expect("diffConfig" in config).toBe(false);
   });
+
+  it("keys exact token acceptances by component and source", async () => {
+    const accepted = {
+      component: "ui/Checkbox.kt#Checkbox",
+      source: "figma",
+      token: "spacing.padding",
+      expected: 4,
+      actual: 2,
+      issue: "https://github.com/example/repo/issues/1",
+    };
+    await writeParityConfig({
+      direction: "design-led",
+      tokens: { acceptedDifferences: [accepted] },
+    });
+    const config = await resolveRunConfig(repoRoot);
+    expect(config.acceptedTokenDifferences?.get("ui/Checkbox.kt#Checkbox figma")).toEqual([
+      accepted,
+    ]);
+  });
 });
 
 describe("resolveRunConfig known differences (#3808)", () => {

@@ -8,6 +8,7 @@ import { join } from "node:path";
 
 import {
   loadDesignMap,
+  type AcceptedTokenDifference,
   type DesignMap,
   type ResolvedDirection,
 } from "@design-parity/core";
@@ -38,6 +39,8 @@ export interface RunConfig {
   diffConfig?: Partial<DiffConfig>;
   /** Per-component exact scopes loaded from committed `design-map.json`. */
   knownDifferences?: ReadonlyMap<string, KnownDifferencesOptions>;
+  /** Exact issue-backed token debts, keyed by component correspondence. */
+  acceptedTokenDifferences?: ReadonlyMap<string, AcceptedTokenDifference[]>;
   warnings: string[];
 }
 
@@ -96,5 +99,14 @@ export async function resolveRunConfig(repoRoot: string): Promise<RunConfig> {
     });
   }
   if (knownDifferences.size > 0) runConfig.knownDifferences = knownDifferences;
+  const acceptedTokenDifferences = new Map<string, AcceptedTokenDifference[]>();
+  for (const acceptance of config.tokens?.acceptedDifferences ?? []) {
+    const key = specTokenKey(acceptance.component, acceptance.source);
+    const existing = acceptedTokenDifferences.get(key) ?? [];
+    existing.push(acceptance);
+    acceptedTokenDifferences.set(key, existing);
+  }
+  if (acceptedTokenDifferences.size > 0)
+    runConfig.acceptedTokenDifferences = acceptedTokenDifferences;
   return runConfig;
 }

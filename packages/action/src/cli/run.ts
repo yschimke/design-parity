@@ -248,9 +248,15 @@ export async function main(): Promise<number> {
         `${new Set(args.components).size} component(s)\n`,
     );
   }
-  const { designMap, direction, cmpCapable, diffConfig, knownDifferences, warnings } = await resolveRunConfig(
-    args.repoRoot,
-  );
+  const {
+    designMap,
+    direction,
+    cmpCapable,
+    diffConfig,
+    knownDifferences,
+    acceptedTokenDifferences,
+    warnings,
+  } = await resolveRunConfig(args.repoRoot);
 
   // The component universe recorded in `shard.json` for `merge`: every component
   // the MAP has, which is deliberately not `components` above — that is this
@@ -333,6 +339,7 @@ export async function main(): Promise<number> {
     direction,
     ...(diffConfig ? { diffConfig } : {}),
     ...(knownDifferences ? { knownDifferences } : {}),
+    ...(acceptedTokenDifferences ? { acceptedTokenDifferences } : {}),
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(spec.byCode.size > 0 ? { referenceTokens: spec.byCode } : {}),
     ...(args.outDir ? { outDir: args.outDir } : {}),

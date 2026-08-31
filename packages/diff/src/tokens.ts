@@ -842,6 +842,21 @@ function numericFinding(
   derivedInsets?: DerivedInset[],
   designName?: string,
 ): void {
+  // The candidate bag is flattened across the semantic tree. An exact
+  // `paddingTop` key therefore says only that *some descendant* declared a top
+  // padding; it carries no evidence that the component edge did. A value under
+  // another directional key is weaker still. Until capture preserves the
+  // declaring node and edge geometry, treating either as the component's own
+  // inset manufactures a precise-looking false error.
+  if (isDirectionalInsetToken(group, name, designName)) {
+    findings.push(
+      missingNumerics === "strict"
+        ? missing(group, name, String(want))
+        : unreported(group, name, String(want)),
+    );
+    return;
+  }
+
   // Prefer an exact name match; otherwise fall back to a value match. The
   // candidate carries resolved spacing/radius values under generic keys, not the
   // reference's token names (compose-ai-tools#1897), so a spec token is satisfied
@@ -866,6 +881,21 @@ function numericFinding(
     declaredMisses &&
     isInsetToken(group, name, designName)
   ) {
+    // A non-zero value in the flattened bag can be a private descendant
+    // declaration (Checkbox reports its internal 2dp here while the component
+    // actually draws the kit's 4dp inset). The rendered geometry is stronger
+    // evidence about the public component: when any measured uniform inset
+    // matches, let it acquit the declaration as an explicit info finding.
+    // Keep zero special: it is commonly the root container's own claim, and an
+    // exact-looking nested decorative inset must not overrule it.
+    if (got !== undefined && got !== 0) {
+      const matching = matchingInset(want, tolerance, derivedInsets);
+      if (matching) {
+        findings.push(satisfiedByGeometry(group, name, want, matching));
+        return;
+      }
+    }
+
     // A corroborated measurement may acquit but never convict (see
     // {@link DerivedInset.corroborated}), and stepping one aside is not the same
     // as picking the runner-up: `nearestInset` answers from the declaring
@@ -967,6 +997,21 @@ function isInsetToken(group: "spacing" | "radius", ...names: Array<string | unde
   );
 }
 
+/** An edge/axis-specific inset whose flattened candidate value has no provenance. */
+function isDirectionalInsetToken(
+  group: "spacing" | "radius",
+  ...names: Array<string | undefined>
+): boolean {
+  return (
+    group === "spacing" &&
+    names.some(
+      (n) =>
+        n !== undefined &&
+        /padding|inset/i.test(n) &&
+        /(?:top|bottom|start|end|left|right|horizontal|vertical)/i.test(n),
+    )
+  );
+}
 
 /**
  * The measurement that best answers a spec of `want`.
@@ -994,6 +1039,21 @@ function nearestInset(want: number, insets: DerivedInset[] | undefined): Derived
     if (best) return best;
   }
   return undefined;
+}
+
+/** The closest measured inset that actually satisfies the spec. */
+function matchingInset(
+  want: number,
+  tolerance: number,
+  insets: DerivedInset[] | undefined,
+): DerivedInset | undefined {
+  return insets
+    ?.filter((candidate) => Math.abs(candidate.inset - want) <= tolerance)
+    .sort(
+      (a, b) =>
+        Math.abs(a.inset - want) - Math.abs(b.inset - want) ||
+        Number(b.declaresSpacing) - Number(a.declaresSpacing),
+    )[0];
 }
 
 /**

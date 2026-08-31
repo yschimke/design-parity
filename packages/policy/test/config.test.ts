@@ -98,6 +98,46 @@ describe("parity-config schema", () => {
     );
   });
 
+  it("accepts exact issue-backed token differences", () => {
+    expect(
+      validateParityConfig({
+        direction: "design-led",
+        tokens: {
+          acceptedDifferences: [
+            {
+              component: "ui/Checkbox.kt#Checkbox",
+              source: "figma",
+              token: "spacing.padding",
+              expected: 4,
+              actual: 2,
+              issue: "https://github.com/example/repo/issues/1",
+            },
+          ],
+        },
+      }).valid,
+    ).toBe(true);
+  });
+
+  it("rejects an unaccountable or incomplete token difference", () => {
+    expect(
+      validateParityConfig({
+        tokens: {
+          acceptedDifferences: [
+            {
+              component: "ui/Checkbox.kt#Checkbox",
+              source: "figma",
+              token: "spacing.padding",
+              expected: 4,
+              actual: 2,
+              issue: "not-an-https-issue",
+            },
+          ],
+        },
+      }).valid,
+    ).toBe(false);
+    expect(validateParityConfig({ tokens: { acceptedDifferences: [{}] } }).valid).toBe(false);
+  });
+
   it("rejects an unknown token knob or value", () => {
     expect(validateParityConfig({ tokens: { spacingTolerance: 2 } }).valid).toBe(false);
     expect(validateParityConfig({ tokens: { missingNumerics: "lenient" } }).valid).toBe(
@@ -147,6 +187,22 @@ describe("loadParityConfig", () => {
     // empty override.
     const empty = await write("emptytokens.json", '{ "tokens": {} }');
     expect("tokens" in (await loadParityConfig(empty))).toBe(false);
+  });
+
+  it("round-trips accepted token differences", async () => {
+    const accepted = {
+      component: "ui/Checkbox.kt#Checkbox",
+      source: "figma",
+      token: "spacing.padding",
+      expected: 4,
+      actual: 2,
+      issue: "https://github.com/example/repo/issues/1",
+    };
+    const path = await write(
+      "accepted-token.json",
+      JSON.stringify({ direction: "design-led", tokens: { acceptedDifferences: [accepted] } }),
+    );
+    expect((await loadParityConfig(path)).tokens?.acceptedDifferences).toEqual([accepted]);
   });
 
   it("throws a readable error for a missing file", async () => {

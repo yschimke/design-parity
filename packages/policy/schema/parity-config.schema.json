@@ -37,6 +37,24 @@
           "enum": ["skip", "measure"],
           "default": "skip",
           "description": "Whether an inset MEASURED off a text child counts as padding. The derived-inset check reads the gap between a container and its children — a sound proxy for padding when the child is a box, and font metrics when it is a glyph. 'skip' (default) drops such a measurement rather than quoting it against a declared padding; 'measure' reports it like any other (issue #367)."
+        },
+        "acceptedDifferences": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "Exact, issue-backed token divergences that cannot currently be expressed by the platform. Every identity and value must still match; drift remains blocking.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["component", "source", "token", "expected", "actual", "issue"],
+            "properties": {
+              "component": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "enum": ["figma", "stitch", "claude-design", "bundle"] },
+              "token": { "type": "string", "minLength": 1 },
+              "expected": { "anyOf": [{ "type": "number" }, { "type": "string" }] },
+              "actual": { "anyOf": [{ "type": "number" }, { "type": "string" }] },
+              "issue": { "type": "string", "pattern": "^https://[^\\s]+$" }
+            }
+          }
         }
       }
     }

@@ -265,6 +265,25 @@ describe("diffTokens", () => {
       });
     });
 
+    it("lets public geometry acquit a different private declaring inset", () => {
+      const findings = diffTokens(
+        { spacing: { padding: 4 } },
+        { spacing: { padding: 2 } },
+        defaultDiffConfig,
+        undefined,
+        undefined,
+        [
+          { inset: 2, declaresSpacing: true, where: "private checkbox" },
+          { inset: 4, declaresSpacing: false, where: "checkbox" },
+        ],
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({
+        severity: "info",
+        detail: { via: "measured-geometry", expected: 4, actual: 4 },
+      });
+    });
+
     it("reports the miss in the measured number, not the declared zero", () => {
       // The same button drawing a 24dp icon instead of the kit's 26dp insets 14,
       // not 13 — past the 1dp allowance. The error must quote THAT: "0 vs spec
@@ -1335,6 +1354,32 @@ describe("diffTokens", () => {
     const findings = diffTokens(
       { spacing: { paddingTop: 44 } },
       { spacing: { padding: 16 } },
+      defaultDiffConfig,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "info",
+      detail: { token: "spacing.paddingTop", actual: null, unverified: true },
+    });
+  });
+
+  it("does not use an exact flattened directional key to accuse the component edge", () => {
+    const findings = diffTokens(
+      { spacing: { paddingTop: 44 } },
+      { spacing: { paddingTop: 4 } },
+      defaultDiffConfig,
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      severity: "info",
+      detail: { token: "spacing.paddingTop", actual: null, unverified: true },
+    });
+  });
+
+  it("does not satisfy one edge with an equal value declared on another edge", () => {
+    const findings = diffTokens(
+      { spacing: { paddingTop: 44 } },
+      { spacing: { paddingBottom: 44 } },
       defaultDiffConfig,
     );
     expect(findings).toHaveLength(1);
