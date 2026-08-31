@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/yschimke/design-parity/compare/v1.0.0...v1.0.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* preserve Figma padding axes ([#461](https://github.com/yschimke/design-parity/issues/461)) ([8fbf797](https://github.com/yschimke/design-parity/commit/8fbf797a3cd9a189ed98fb3bae9501b0e6248d28))
+* recognize shared reference contrast debt ([#464](https://github.com/yschimke/design-parity/issues/464)) ([fdd855c](https://github.com/yschimke/design-parity/commit/fdd855c307fa31b0c61d6f0c2adb14f2f3a5fbda))
+
 ## [1.0.0](https://github.com/yschimke/design-parity/compare/v0.1.77...v1.0.0) (2026-08-31)
 
 
