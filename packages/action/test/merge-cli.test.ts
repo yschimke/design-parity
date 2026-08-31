@@ -566,3 +566,154 @@ describe("merge --previous (partial refresh)", () => {
     expect(manifest.entries).toHaveLength(1);
   });
 });
+
+/**
+ * Carry-forward bounded by the design map.
+ *
+ * Carrying a row the run could not refresh is right for a transient miss and
+ * wrong for a component that no longer exists: the second kind can never be
+ * refreshed, so it is republished verbatim on every future run and never leaves
+ * (yschimke/compose-ai-tools#4878). The bound is the map the shards report,
+ * which is why these fixtures set `universe` — a `shard.json` without it is the
+ * older shape, covered by the last case here.
+ */
+describe("merge --previous (bounded by the design map)", () => {
+  it("drops a carried row whose component is gone from the map", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    // The map holds only A now: B has been renamed, moved or deleted.
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"], {
+      universe: ["a/A.kt#A"],
+    });
+    const previous = await writePreviousDir(root, [
+      { code: "a/A.kt#A" },
+      { code: "b/B.kt#B" },
+    ]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+      "--source-commit",
+      "abc1234",
+    ]);
+
+    expect(code).toBe(0);
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).toEqual([
+      "a/A.kt#A",
+    ]);
+    // Named in the log, not merely counted: a dropped row is the one
+    // carry-forward decision that leaves no trace on the board afterwards.
+    expect(log).toContain("Dropped 1 carried row(s)");
+    expect(log).toContain("b/B.kt#B");
+  });
+
+  it("still carries a row the run missed but the map still has", async () => {
+    // The case carry-forward exists for, and the one the bound must not break:
+    // B is in the map, so failing to produce it this run is a miss, not a
+    // deletion.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"], {
+      universe: ["a/A.kt#A", "b/B.kt#B"],
+    });
+    const previous = await writePreviousDir(root, [
+      { code: "a/A.kt#A" },
+      { code: "b/B.kt#B" },
+    ]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+      "--source-commit",
+      "abc1234",
+    ]);
+
+    expect(code).toBe(0);
+    expect(log).toContain("Carried 1 component(s) forward");
+    expect(log).not.toContain("Dropped");
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).toEqual([
+      "a/A.kt#A",
+      "b/B.kt#B",
+    ]);
+    expect(manifest.entries[1].carriedFrom).toBe("0000000previous");
+    // The report came with it, or the row's link would 404.
+    expect(
+      await readFile(join(out, "b-B-kt-B", "report.html"), "utf8"),
+    ).toContain("old");
+  });
+
+  it("keeps rows a narrowed run deliberately skipped", async () => {
+    // The bound is the MAP, not what the run compared. A run narrowed with
+    // `--components` assigns a subset on purpose; bounding by the assignment
+    // would read every component it skipped as deleted and strip the board down
+    // to the slice.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const shard = await writeShardDir(root, 1, 1, ["a/A.kt#A"], {
+      universe: ["a/A.kt#A", "b/B.kt#B", "c/C.kt#C"],
+    });
+    const previous = await writePreviousDir(root, [
+      { code: "a/A.kt#A" },
+      { code: "b/B.kt#B" },
+      { code: "c/C.kt#C" },
+    ]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      shard,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(0);
+    expect(log).not.toContain("Dropped");
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).toEqual([
+      "a/A.kt#A",
+      "b/B.kt#B",
+      "c/C.kt#C",
+    ]);
+  });
+
+  it("carries everything when a shard reports no map", async () => {
+    // Unknown bound, not a partial one. A union missing a shard's map cannot be
+    // told apart from a map that never had those components, so one silent
+    // shard would drop live rows — the older behaviour is the safe answer.
+    const root = await mkdtemp(join(tmpdir(), "dp-merge-"));
+    const one = await writeShardDir(root, 1, 2, ["a/A.kt#A"], {
+      universe: ["a/A.kt#A"],
+    });
+    const two = await writeShardDir(root, 2, 2, ["c/C.kt#C"]);
+    const previous = await writePreviousDir(root, [{ code: "b/B.kt#B" }]);
+    const out = join(root, "out");
+
+    const { code, out: log } = await runMerge([
+      "merge",
+      one,
+      two,
+      "--out",
+      out,
+      "--previous",
+      previous,
+    ]);
+
+    expect(code).toBe(0);
+    expect(log).not.toContain("Dropped");
+    const manifest = JSON.parse(await readFile(join(out, "run.json"), "utf8"));
+    expect(manifest.entries.map((e: { code: string }) => e.code)).toContain(
+      "b/B.kt#B",
+    );
+  });
+});

@@ -269,10 +269,29 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   // one anybody had. Rolling the previous rows in makes the board complete and
   // its rows individually dated, which is the honest description of a partial
   // refresh (design-parity#289).
+  //
+  // Bounded by the design map the shards reported, so a row whose component has
+  // been renamed, moved or deleted is let go instead of being pinned to the board
+  // forever by a refresh that can never come (yschimke/compose-ai-tools#4878).
+  //
+  // The bound is each shard's `universe` — the whole map — and NOT its
+  // `components`, which is only what that shard was assigned: a run narrowed with
+  // `--components` assigns a subset on purpose, and bounding by the assignment
+  // would read every component it deliberately skipped as deleted and wipe the
+  // board down to the slice. That is the failure this must not have.
+  //
+  // Required from EVERY shard before it is used. A shard that reports no universe
+  // (one written before the field existed) leaves the bound unknown rather than
+  // partial — a union missing one shard's map is indistinguishable from a map
+  // that never had those components, and would drop live rows. Unknown means
+  // carry everything, as before.
   const previous = args.previousDir
     ? await readRunManifest(resolvePath(cwd(), args.previousDir))
     : undefined;
-  const carried = carryForward(merged.entries, previous);
+  const universe = reports.every((r) => r.universe)
+    ? reports.flatMap((r) => r.universe ?? [])
+    : undefined;
+  const { carried, dropped } = carryForward(merged.entries, previous, universe);
 
   // Read and validate the findings HERE, above the first write to `out`, for the same reason
   // `verifyShardReports` refuses above `mkdir`: the wrapper workflow publishes whenever `out/**`
@@ -362,6 +381,16 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
       (carried.length > 0
         ? `Carried ${carried.length} component(s) forward from the previous run ` +
           `(not refreshed here) — ${entries.length} on the board.\n`
+        : "") +
+      // Named, not just counted. A row leaving the board is the one carry-forward
+      // decision nobody can see in the output afterwards: the carried rows are
+      // visible on the board and the fresh ones speak for themselves, but a
+      // dropped row simply is not there. Listing the handles is what lets someone
+      // tell "the map moved on" from "the board lost a component".
+      (dropped.length > 0
+        ? `Dropped ${dropped.length} carried row(s) whose component is no longer ` +
+          `in the design map:\n` +
+          dropped.map((c) => `  - ${c}\n`).join("")
         : "") +
       `Parity ${merged.status} (${merged.direction})${blocked ? " — blocking" : ""}\n`,
   );

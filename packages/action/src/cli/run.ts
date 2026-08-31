@@ -168,12 +168,18 @@ export async function writeShardReport(
     ParityReport,
     "direction" | "status" | "blocked" | "warnings" | "indexEntries"
   >,
+  universe?: readonly string[],
 ): Promise<string> {
   const doc: ShardReport = {
     formatVersion: SHARD_FORMAT_VERSION,
     index: shard.index,
     total: shard.total,
     components,
+    // The whole design map, not this shard's slice — `merge` reads it to tell a
+    // row this run merely missed from one whose component no longer exists.
+    // Omitted when the caller cannot name it, which merge reads as "carry
+    // everything forward", the behaviour that predates the field.
+    ...(universe ? { universe: [...new Set(universe)].sort() } : {}),
     direction: report.direction,
     status: report.status,
     blocked: report.blocked,
@@ -226,18 +232,32 @@ export async function main(): Promise<number> {
     args.repoRoot,
   );
 
+  // The component universe recorded in `shard.json` for `merge`: every component
+  // the MAP has, which is deliberately not `components` above — that is this
+  // shard's slice of a run `--components` may have narrowed on purpose. Merge
+  // uses the map to tell a row it could not refresh from one whose component is
+  // gone; a narrowed run must not make the components it skipped look deleted.
+  // `undefined` when there is no map, which merge reads as "carry everything".
+  const universe = designMap?.components.map((c) => c.code);
+
   // More shards than components leaves the tail shards empty. That is a no-op,
   // not a failure — but it still has to write its `shard.json`, or the merge
   // reports the shard as missing and refuses the whole run.
   if (args.shard && components.length === 0) {
     if (args.outDir) {
-      await writeShardReport(args.outDir, args.shard, components, {
-        status: "pass",
-        blocked: false,
-        direction,
-        warnings: [],
-        indexEntries: [],
-      });
+      await writeShardReport(
+        args.outDir,
+        args.shard,
+        components,
+        {
+          status: "pass",
+          blocked: false,
+          direction,
+          warnings: [],
+          indexEntries: [],
+        },
+        universe,
+      );
     }
     return 0;
   }
@@ -339,7 +359,13 @@ export async function main(): Promise<number> {
   // Emitted before push-back and the page listing so a shard that dies in either
   // still leaves the merge a complete declaration of what it did.
   if (args.shard && args.outDir) {
-    const path = await writeShardReport(args.outDir, args.shard, components, report);
+    const path = await writeShardReport(
+      args.outDir,
+      args.shard,
+      components,
+      report,
+      universe,
+    );
     stdout.write(`\nWrote ${path}\n`);
   }
 
