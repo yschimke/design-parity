@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.77](https://github.com/yschimke/design-parity/compare/v0.1.76...v0.1.77) (2026-08-31)
+
+
+### Bug Fixes
+
+* **action:** bound carry-forward by the design map so a deleted row can leave ([#452](https://github.com/yschimke/design-parity/issues/452)) ([c1d9359](https://github.com/yschimke/design-parity/commit/c1d93597c0963906c92cd9ed57870bdcc43ac766))
+
 ## [0.1.76](https://github.com/yschimke/design-parity/compare/v0.1.75...v0.1.76) (2026-08-29)
 
 
