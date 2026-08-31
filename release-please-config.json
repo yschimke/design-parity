@@ -4,8 +4,7 @@
   "include-component-in-tag": false,
   "packages": {
     ".": {
-      "package-name": "design-parity-monorepo",
-      "release-as": "1.0.0"
+      "package-name": "design-parity-monorepo"
     }
   }
 }
