@@ -37,7 +37,7 @@ describe("diff engine on the figma button fixtures", () => {
     expect(verdict.status).toBe("fail");
   });
 
-  it("reports the start-padding token violation (12 vs spec 16)", async () => {
+  it("does not mistake uniform wrapper padding for the component start edge", async () => {
     const { reference, candidate } = await loadPair();
     const { verdict } = await diff(reference, candidate, { repoRoot });
 
@@ -45,8 +45,8 @@ describe("diff engine on the figma button fixtures", () => {
       (f) => f.kind === "token" && f.detail?.token === "spacing.paddingStart",
     );
     expect(padding).toBeDefined();
-    expect(padding!.severity).toBe("error");
-    expect(padding!.detail).toMatchObject({ expected: 16, actual: 12, delta: 4 });
+    expect(padding!.severity).toBe("info");
+    expect(padding!.detail).toMatchObject({ expected: "16", actual: null, unverified: true });
   });
 
   it("reports the dark-theme contrast failure (WCAG AA), via @design-parity/checks", async () => {

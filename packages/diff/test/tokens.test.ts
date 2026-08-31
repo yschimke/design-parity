@@ -1344,23 +1344,6 @@ describe("diffTokens", () => {
     });
   });
 
-  it("lets a root uniform padding answer an edge-specific spec", () => {
-    const findings = diffTokens(
-      { spacing: { paddingTop: 44 } },
-      { spacing: { padding: 16 } },
-      defaultDiffConfig,
-      undefined,
-      undefined,
-      undefined,
-      { spacing: { padding: 16 } },
-    );
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({
-      severity: "error",
-      detail: { token: "spacing.paddingTop", expected: 44, actual: 16 },
-    });
-  });
-
   it("does not compare an edge-specific padding token with a uniform measured inset", () => {
     const findings = diffTokens(
       { spacing: { paddingTop: 44 } },

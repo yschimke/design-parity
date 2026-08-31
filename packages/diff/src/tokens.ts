@@ -701,7 +701,6 @@ export function diffTokens(
   alias?: TokenAliasMap,
   radiusBoxes?: Map<number, Bounds[]>,
   derivedInsets?: DerivedInset[],
-  candidateRoot?: DesignTokens,
 ): Finding[] {
   const findings: Finding[] = [];
   if (!specInput) return findings;
@@ -721,7 +720,6 @@ export function diffTokens(
       undefined,
       derivedInsets,
       designNames.get(name),
-      candidateRoot?.spacing,
     );
 
   if (unverifiableGroup(spec.spacing, candidate.spacing)) {
@@ -843,19 +841,13 @@ function numericFinding(
   radiusBoxes?: Map<number, Bounds[]>,
   derivedInsets?: DerivedInset[],
   designName?: string,
-  candidateRoot?: Record<string, number>,
 ): void {
   // Prefer an exact name match; otherwise fall back to a value match. The
   // candidate carries resolved spacing/radius values under generic keys, not the
   // reference's token names (compose-ai-tools#1897), so a spec token is satisfied
   // by any candidate value within tolerance before it's reported missing — the
   // numeric analogue of the colour role-match (issue #74).
-  const directional = isDirectionalInsetToken(group, name, designName);
-  const got = directional
-    ? candidateRoot?.[name] ??
-      candidateRoot?.padding ??
-      numericValueMatch(want, tolerance, candidate)
-    : candidate?.[name] ?? numericValueMatch(want, tolerance, candidate);
+  const got = candidate?.[name] ?? numericValueMatch(want, tolerance, candidate);
 
   // A padding spec the candidate does not *declare* may still be one it *draws*:
   // a reference frame states its inset as auto-layout padding, while the code
@@ -971,22 +963,6 @@ function isInsetToken(group: "spacing" | "radius", ...names: Array<string | unde
         n !== undefined &&
         /padding|inset/i.test(n) &&
         !/(?:top|bottom|start|end|left|right|horizontal|vertical)/i.test(n),
-    )
-  );
-}
-
-/** A padding claim for one axis or edge. */
-function isDirectionalInsetToken(
-  group: "spacing" | "radius",
-  ...names: Array<string | undefined>
-): boolean {
-  return (
-    group === "spacing" &&
-    names.some(
-      (n) =>
-        n !== undefined &&
-        /padding|inset/i.test(n) &&
-        /(?:top|bottom|start|end|left|right|horizontal|vertical)/i.test(n),
     )
   );
 }
