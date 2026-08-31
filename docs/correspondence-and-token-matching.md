@@ -302,11 +302,11 @@ component-level normalization preserves asymmetric or partially declared edges
 as `paddingStart` / `paddingTop` / `paddingEnd` / `paddingBottom`; a scalar
 measurement whose four edges agree cannot answer one of those directional
 claims. Edge-specific, horizontal, and vertical padding therefore stay
-unverified unless the candidate root reports a matching token value, rather
-than being compared to an unrelated inset on another axis. This root restriction
-is load-bearing: `collectTokens` has flattened descendant values into the same
-bag, so a nested FAB's uniform `padding` is not evidence about its rail's
-`paddingTop` (issue #465).
+unverified unless the candidate reports the same edge-specific token or an
+exact value match, rather than being compared to an unrelated inset on another
+axis. Uniform `padding` cannot answer a directional claim even when it sits on
+the semantic root: catalogs commonly put a wrapper there, so that still is not
+component correspondence (issue #470).
 
 That rule, stated only over the candidate's own tree, is wider than the fault it
 names: a container whose single child is its label is the same shape whether the
