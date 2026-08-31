@@ -13,29 +13,12 @@ import type {
 import type {
   FigmaColor,
   FigmaNodeDoc,
-  FigmaPaint,
   FigmaStyleMeta,
   VariablesResponse,
 } from "./figma-api.js";
 import { layoutFromNode } from "./layout.js";
+import { hex, solidFill } from "./paint.js";
 import { tokenPath } from "./token-name.js";
-
-function hex(c: FigmaColor): string {
-  const ch = (n: number) =>
-    Math.round(Math.min(1, Math.max(0, n)) * 255)
-      .toString(16)
-      .padStart(2, "0")
-      .toUpperCase();
-  const base = `#${ch(c.r)}${ch(c.g)}${ch(c.b)}`;
-  return c.a < 1 ? `${base}${ch(c.a)}` : base;
-}
-
-function solidFill(fills: FigmaPaint[] | undefined): string | undefined {
-  const paint = fills?.find(
-    (p) => p.type === "SOLID" && p.visible !== false && p.color,
-  );
-  return paint?.color ? hex(paint.color) : undefined;
-}
 
 function firstTextNode(node: FigmaNodeDoc): FigmaNodeDoc | undefined {
   if (node.type === "TEXT") return node;

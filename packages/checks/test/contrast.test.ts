@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { checkContrast, resolveConfig, runChecks } from "../src/index.js";
-import { goldenCandidate, goldenFigmaReference } from "./helpers.js";
+import { candidateOf, goldenCandidate, goldenFigmaReference } from "./helpers.js";
 
 describe("checkContrast on the golden candidate", () => {
   const findings = checkContrast(goldenCandidate(), resolveConfig());
@@ -35,6 +35,60 @@ describe("runChecks ordering", () => {
     const all = runChecks(goldenFigmaReference(), goldenCandidate());
     expect(all[0]?.kind).toBe("contrast");
     expect(all[0]?.severity).toBe("error");
+  });
+
+  it("keeps an identical reference contrast defect visible but non-blocking", () => {
+    const semantics = {
+      root: {
+        role: "text",
+        label: "Outline",
+        tokens: {
+          colors: { label: "#FEF7FF", container: "#79747E" },
+          typography: { label: { fontSize: 11, fontWeight: 500 } },
+        },
+      },
+    } as const;
+    const candidate = candidateOf(semantics.root);
+    const reference = { ...goldenFigmaReference(), layout: semantics };
+
+    const finding = runChecks(reference, candidate).find((f) => f.kind === "contrast");
+    expect(finding).toMatchObject({
+      severity: "warn",
+      detail: { sharedWithReference: true },
+    });
+    expect(finding!.message).toMatch(/shared design debt/);
+  });
+
+  it("does not suppress a candidate-only contrast defect", () => {
+    const candidate = candidateOf({
+      role: "text",
+      label: "Outline",
+      tokens: {
+        colors: { label: "#FEF7FF", container: "#79747E" },
+        typography: { label: { fontSize: 11, fontWeight: 500 } },
+      },
+    });
+    const noLayout = goldenFigmaReference();
+    delete noLayout.layout;
+    const differentPair = {
+      ...goldenFigmaReference(),
+      layout: {
+        root: {
+          role: "text",
+          tokens: {
+            colors: { label: "#777777", container: "#FFFFFF" },
+            typography: { label: { fontSize: 11 } },
+          },
+        },
+      },
+    };
+
+    expect(
+      runChecks(noLayout, candidate).find((f) => f.kind === "contrast")!.severity,
+    ).toBe("error");
+    expect(
+      runChecks(differentPair, candidate).find((f) => f.kind === "contrast")!.severity,
+    ).toBe("error");
   });
 });
 

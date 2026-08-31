@@ -27,6 +27,63 @@ function bySeverity(a: Finding, b: Finding): number {
   return SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
 }
 
+function contrastFingerprint(finding: Finding): string | undefined {
+  if (finding.kind !== "contrast" || finding.severity !== "error") return undefined;
+  const { theme, foreground, background, required, largeText } = finding.detail ?? {};
+  if (
+    typeof theme !== "string" ||
+    typeof foreground !== "string" ||
+    typeof background !== "string" ||
+    typeof required !== "number" ||
+    typeof largeText !== "boolean"
+  ) {
+    return undefined;
+  }
+  return [
+    theme.toLowerCase(),
+    foreground.toLowerCase(),
+    background.toLowerCase(),
+    required,
+    largeText,
+  ].join("|");
+}
+
+function markSharedReferenceContrast(
+  reference: DesignReference,
+  candidateFindings: Finding[],
+  config: ChecksConfig,
+): Finding[] {
+  if (!reference.layout) return candidateFindings;
+  const cfg = resolveConfig(config);
+  const referenceFindings = checkContrast(
+    {
+      componentId: reference.componentId,
+      images: reference.referenceImages,
+      semantics: reference.layout,
+    },
+    cfg,
+  );
+  const shared = new Set(
+    referenceFindings
+      .map(contrastFingerprint)
+      .filter((fingerprint): fingerprint is string => fingerprint !== undefined),
+  );
+  if (shared.size === 0) return candidateFindings;
+
+  return candidateFindings
+    .map((finding) => {
+      const fingerprint = contrastFingerprint(finding);
+      if (!fingerprint || !shared.has(fingerprint)) return finding;
+      return {
+        ...finding,
+        severity: "warn" as const,
+        message: `${finding.message} The design reference has the same contrast failure; track it as shared design debt.`,
+        detail: { ...finding.detail, sharedWithReference: true },
+      };
+    })
+    .sort(bySeverity);
+}
+
 /** All accessibility findings for a candidate, severity-ordered. */
 export function runA11yChecks(
   candidate: CandidateRender,
@@ -55,15 +112,22 @@ export function runI18nChecks(
 }
 
 /**
- * Run every check over the reference/candidate pair. The reference is accepted
- * for parity with the issue's `(DesignReference, CandidateRender)` contract and
- * reserved for reference-aware checks; today's checks evaluate the candidate's
- * own rendered semantics, which is what the WCAG/i18n specs are defined over.
+ * Run every check over the reference/candidate pair. Candidate accessibility
+ * defects remain blocking unless the reference semantics demonstrate the exact
+ * same contrast pair; shared design debt stays visible as a warning without
+ * turning a faithful design-led implementation into a parity failure.
  */
 export function runChecks(
-  _reference: DesignReference,
+  reference: DesignReference,
   candidate: CandidateRender,
   config: ChecksConfig = {},
 ): Finding[] {
-  return [...runA11yChecks(candidate, config), ...runI18nChecks(candidate, config)];
+  return [
+    ...markSharedReferenceContrast(
+      reference,
+      runA11yChecks(candidate, config),
+      config,
+    ),
+    ...runI18nChecks(candidate, config),
+  ];
 }
