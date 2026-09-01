@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/yschimke/design-parity/compare/v1.0.3...v1.0.4) (2026-09-01)
+
+
+### Bug Fixes
+
+* trust rendered uniform inset evidence ([#474](https://github.com/yschimke/design-parity/issues/474)) ([707e996](https://github.com/yschimke/design-parity/commit/707e996ccd3eb246ee4eba78e0a4007f5ece1331))
+
 ## [1.0.3](https://github.com/yschimke/design-parity/compare/v1.0.2...v1.0.3) (2026-08-31)
 
 
