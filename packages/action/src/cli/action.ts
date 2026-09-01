@@ -110,8 +110,15 @@ async function runComment(
   rest: GitHubRest,
   prNumber: number,
 ): Promise<number> {
-  const { designMap, direction, cmpCapable, diffConfig, knownDifferences, warnings } =
-    await resolveRunConfig(repoRoot);
+  const {
+    designMap,
+    direction,
+    cmpCapable,
+    diffConfig,
+    knownDifferences,
+    acceptedTokenDifferences,
+    warnings,
+  } = await resolveRunConfig(repoRoot);
 
   // No committed setup at all: don't guess the design ↔ code mapping at run time
   // (Principle 1). Post a comment pointing at the interactive bootstrap (#11)
@@ -149,6 +156,7 @@ async function runComment(
     direction,
     ...(diffConfig ? { diffConfig } : {}),
     ...(knownDifferences ? { knownDifferences } : {}),
+    ...(acceptedTokenDifferences ? { acceptedTokenDifferences } : {}),
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     ...(env.DESIGN_PARITY_OUT ? { outDir: env.DESIGN_PARITY_OUT } : {}),
   });
@@ -191,8 +199,14 @@ async function runBaseline(
   token: string,
   artifactBranch: string,
 ): Promise<number> {
-  const { designMap, direction, diffConfig, knownDifferences, warnings } =
-    await resolveRunConfig(repoRoot);
+  const {
+    designMap,
+    direction,
+    diffConfig,
+    knownDifferences,
+    acceptedTokenDifferences,
+    warnings,
+  } = await resolveRunConfig(repoRoot);
   const components = designMap?.components.map((c) => c.code) ?? [];
   if (components.length === 0) {
     stdout.write("design-parity: no components in design-map.json — nothing to baseline\n");
@@ -215,6 +229,7 @@ async function runBaseline(
     direction,
     ...(diffConfig ? { diffConfig } : {}),
     ...(knownDifferences ? { knownDifferences } : {}),
+    ...(acceptedTokenDifferences ? { acceptedTokenDifferences } : {}),
     ...(designMap?.tokens ? { tokenAlias: designMap.tokens } : {}),
     outDir,
   });

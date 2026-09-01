@@ -297,16 +297,26 @@ an inset to be reported at all, so one glyph-set edge calibrates the whole
 number. `tokens.textDerivedInsets: "measure"` restores the unfiltered
 behaviour.
 
+A real library divergence may be impossible for an application to express —
+for example, a private component constant with no public parameter. In that
+case `tokens.acceptedDifferences` records the exact component, source, token,
+expected value, actual value, and HTTPS issue. Only that complete match becomes
+a warning. A changed value remains a hard error, and a record whose finding
+disappears is reported as stale, so the committed exception cannot silently
+expand or outlive its debt.
+
 That geometric fallback is deliberately limited to a uniform inset. Figma's
 component-level normalization preserves asymmetric or partially declared edges
 as `paddingStart` / `paddingTop` / `paddingEnd` / `paddingBottom`; a scalar
 measurement whose four edges agree cannot answer one of those directional
-claims. Edge-specific, horizontal, and vertical padding therefore stay
-unverified unless the candidate reports the same edge-specific token or an
-exact value match, rather than being compared to an unrelated inset on another
-axis. Uniform `padding` cannot answer a directional claim even when it sits on
-the semantic root: catalogs commonly put a wrapper there, so that still is not
-component correspondence (issue #470).
+claims. The candidate token bag is also flattened across its semantic tree, so
+even an exact `paddingTop` key has lost the identity of the node that declared
+it; an equal value under another edge is weaker still. Edge-specific,
+horizontal, and vertical padding therefore stay unverified until capture
+preserves directional provenance. Uniform `padding` cannot answer a
+directional claim even when it sits on the semantic root: catalogs commonly
+put a wrapper there, so that still is not component correspondence (issue
+#470).
 
 That rule, stated only over the candidate's own tree, is wider than the fault it
 names: a container whose single child is its label is the same shape whether the

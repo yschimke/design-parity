@@ -11,6 +11,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type {
+  AcceptedTokenDifference,
   CandidateRender,
   DesignReference,
   Finding,
@@ -94,6 +95,8 @@ export interface DiffOptions {
    * are catalog identities and cannot be reconstructed safely from a code handle.
    */
   knownDifferences?: KnownDifferencesOptions;
+  /** Exact token debts accepted by committed, issue-backed policy for this component. */
+  acceptedTokenDifferences?: AcceptedTokenDifference[];
 }
 
 /** A rendered triptych for one image pair. */
@@ -386,15 +389,20 @@ export async function diff(
     }
   }
 
-  const findings = [
-    ...a11y,
-    ...tokens,
-    ...designSystem,
-    ...pairing,
-    ...semantic,
-    ...layout,
-    ...visualFindings,
-  ];
+  const findings = applyAcceptedTokenDifferences(
+    [
+      ...a11y,
+      ...tokens,
+      ...designSystem,
+      ...pairing,
+      ...semantic,
+      ...layout,
+      ...visualFindings,
+    ],
+    options.acceptedTokenDifferences,
+    candidate.componentId,
+    reference.source,
+  );
   const verdict: Verdict = {
     componentId: candidate.componentId,
     status: statusFor(findings),
@@ -418,6 +426,58 @@ export async function diff(
     triptychs,
     ...(Object.keys(acceptances).length > 0 ? { acceptances } : {}),
   };
+}
+
+function applyAcceptedTokenDifferences(
+  findings: Finding[],
+  acceptances: AcceptedTokenDifference[] | undefined,
+  component: string,
+  source: DesignReference["source"],
+): Finding[] {
+  if (!acceptances?.length) return findings;
+  const matched = new Set<AcceptedTokenDifference>();
+  const accepted = findings.map((finding) => {
+    if (finding.kind !== "token" || finding.severity !== "error") return finding;
+    const acceptance = acceptances.find(
+      (item) =>
+        item.component === component &&
+        item.source === source &&
+        item.token === finding.detail?.token &&
+        Object.is(item.expected, finding.detail?.expected) &&
+        Object.is(item.actual, finding.detail?.actual),
+    );
+    if (!acceptance) return finding;
+    matched.add(acceptance);
+    return {
+      ...finding,
+      severity: "warn" as const,
+      message: `${finding.message} — accepted known difference (${acceptance.issue})`,
+      detail: {
+        ...finding.detail,
+        acceptedKnownDifference: true,
+        issue: acceptance.issue,
+      },
+    };
+  });
+  for (const acceptance of acceptances) {
+    if (matched.has(acceptance)) continue;
+    accepted.push({
+      kind: "token",
+      severity: "info",
+      message:
+        `${acceptance.token}: accepted difference ` +
+        `${String(acceptance.actual)} vs spec ${String(acceptance.expected)} was not observed; ` +
+        `review ${acceptance.issue}`,
+      detail: {
+        token: acceptance.token,
+        expected: acceptance.expected,
+        actual: acceptance.actual,
+        staleAcceptance: true,
+        issue: acceptance.issue,
+      },
+    });
+  }
+  return accepted;
 }
 
 export function renderAcceptanceSummary(

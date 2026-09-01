@@ -9,6 +9,7 @@
  * status to `fail` — only real verdicts do.
  */
 import type {
+  AcceptedTokenDifference,
   AdapterContext,
   CandidateRender,
   Correspondence,
@@ -90,6 +91,8 @@ export interface OrchestrateOptions {
    * from colliding across a multi-component run.
    */
   knownDifferences?: ReadonlyMap<string, KnownDifferencesOptions>;
+  /** Exact issue-backed token debts keyed by component correspondence. */
+  acceptedTokenDifferences?: ReadonlyMap<string, AcceptedTokenDifference[]>;
   /**
    * The repo's `design-map.json` `tokens` section — design-name ↔ code-name
    * token aliases, passed to the diff so token-compliance matches differing
@@ -467,11 +470,15 @@ export async function orchestrate(
       const knownDifferences = options.knownDifferences?.get(
         specTokenKey(corr.code, corr.source),
       );
+      const acceptedTokenDifferences = options.acceptedTokenDifferences?.get(
+        specTokenKey(corr.code, corr.source),
+      );
       const diffOptions = {
         repoRoot: options.repoRoot,
         ...(componentOutDir ? { outDir: componentOutDir } : {}),
         ...(options.diffConfig ? { config: options.diffConfig } : {}),
         ...(knownDifferences ? { knownDifferences } : {}),
+        ...(acceptedTokenDifferences ? { acceptedTokenDifferences } : {}),
         ...(options.tokenAlias ? { tokenAlias: options.tokenAlias } : {}),
         ...(native ? { checks: nativeChecksProvider(native) } : {}),
       };

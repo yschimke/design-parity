@@ -86,6 +86,8 @@ function normalize(parsed: ParsedConfig): ParityConfig {
   if (parsed.tokens?.missingNumerics) tokens.missingNumerics = parsed.tokens.missingNumerics;
   if (parsed.tokens?.textDerivedInsets)
     tokens.textDerivedInsets = parsed.tokens.textDerivedInsets;
+  if (parsed.tokens?.acceptedDifferences)
+    tokens.acceptedDifferences = parsed.tokens.acceptedDifferences;
   if (Object.keys(tokens).length > 0) config.tokens = tokens;
   return config;
 }

@@ -644,7 +644,6 @@ export interface ParityConfig {
    * an omitted `tokens` — take the engine's committed defaults, so a repo that
    * says nothing gets the same verdict it always did for that setting.
    *
-   * These are deliberately the only two diff knobs the config file exposes.
    * Tolerances stay committed defaults (docs/PRINCIPLES.md, Principle 1); what a
    * *platform* can report about itself is not a tolerance, and a design-led repo
    * previously had no way to say it at all short of flipping to `code-led`,
@@ -668,4 +667,16 @@ export interface ParityTokenPolicy {
    * `"measure"` reports it like any other derived inset.
    */
   textDerivedInsets?: "skip" | "measure";
+  /** Exact, reviewed token debts that remain blocking if any identity or value drifts. */
+  acceptedDifferences?: AcceptedTokenDifference[];
+}
+
+/** One exact, issue-backed token difference accepted by committed policy. */
+export interface AcceptedTokenDifference {
+  component: string;
+  source: DesignSource;
+  token: string;
+  expected: number | string;
+  actual: number | string;
+  issue: string;
 }

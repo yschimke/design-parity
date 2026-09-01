@@ -243,6 +243,59 @@ describe("diff engine corroborates a glyph-set inset against the reference (#371
       }),
     );
   });
+
+  it("downgrades only an exact issue-backed token difference", async () => {
+    const noLayout: DesignReference = { ...reference, layout: undefined };
+    const acceptance = {
+      component: reference.componentId,
+      source: reference.source,
+      token: "spacing.padding",
+      expected: 12,
+      actual: 0,
+      issue: "https://github.com/example/repo/issues/1",
+    };
+    const { verdict } = await diff(noLayout, candidate, {
+      repoRoot,
+      acceptedTokenDifferences: [acceptance],
+    });
+    expect(padding(verdict.findings)).toContainEqual(
+      expect.objectContaining({
+        severity: "warn",
+        detail: expect.objectContaining({
+          acceptedKnownDifference: true,
+          issue: acceptance.issue,
+        }),
+      }),
+    );
+    expect(verdict.status).toBe("warn");
+  });
+
+  it("keeps drift from an accepted token difference blocking", async () => {
+    const noLayout: DesignReference = { ...reference, layout: undefined };
+    const { verdict } = await diff(noLayout, candidate, {
+      repoRoot,
+      acceptedTokenDifferences: [
+        {
+          component: reference.componentId,
+          source: reference.source,
+          token: "spacing.padding",
+          expected: 12,
+          actual: 2,
+          issue: "https://github.com/example/repo/issues/1",
+        },
+      ],
+    });
+    expect(padding(verdict.findings)).toContainEqual(
+      expect.objectContaining({ severity: "error", detail: expect.objectContaining({ actual: 0 }) }),
+    );
+    expect(verdict.findings).toContainEqual(
+      expect.objectContaining({
+        severity: "info",
+        detail: expect.objectContaining({ staleAcceptance: true }),
+      }),
+    );
+    expect(verdict.status).toBe("fail");
+  });
 });
 
 describe("diff engine reads a scaled reference capture in the unit it states", () => {
