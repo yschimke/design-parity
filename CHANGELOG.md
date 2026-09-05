@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/yschimke/design-parity/compare/v1.0.4...v1.1.0) (2026-09-05)
+
+
+### Features
+
+* **figma-plugin:** carry a catalog's alternate themes into the import ([#479](https://github.com/yschimke/design-parity/issues/479)) ([b61ebda](https://github.com/yschimke/design-parity/commit/b61ebdac1990216870a18ea0542a89969d1a9863))
+
+
+### Bug Fixes
+
+* **diff:** re-vendor the known-differences engine at 2ee93ec ([#480](https://github.com/yschimke/design-parity/issues/480)) ([e91de62](https://github.com/yschimke/design-parity/commit/e91de62d9eda487d65373741143635ca8b8a9ff5))
+
 ## [1.0.4](https://github.com/yschimke/design-parity/compare/v1.0.3...v1.0.4) (2026-09-01)
 
 
