@@ -45,7 +45,7 @@ import {
   type StoredRegistry,
 } from "../src/catalogs.js";
 import { resolveDirection, type ParityDirection } from "../src/direction.js";
-import { readDtcgTokensLite } from "../src/dtcg.js";
+import { readDtcgTokensLite, resolveThemeTokens } from "../src/dtcg.js";
 import { rewriteManifestAssets, stripLocalRoot } from "../src/localCatalog.js";
 import {
   buildFrameSpec,
@@ -120,6 +120,8 @@ let catalog:
       base: string;
       manifest: CatalogManifest;
       themeTokens?: ReturnType<typeof readDtcgTokensLite>;
+      /** The system's alternate themes, each already resolved to its tokens. */
+      themes?: Awaited<ReturnType<typeof resolveThemeTokens>>;
       index: CatalogIndex;
     }
   | undefined;
@@ -249,6 +251,14 @@ form.addEventListener("submit", async (event) => {
       themeTokens = readDtcgTokensLite(doc);
     }
 
+    let themes;
+    if (themeTokens && manifest.themes?.length) {
+      say(`Fetching ${manifest.themes.length} alternate theme(s)…`);
+      themes = await resolveThemeTokens(manifest.themes, (path) =>
+        fetchJson<unknown>(`${base}/${path}`),
+      );
+    }
+
     const index = indexCatalog(manifest);
     if (index.components.length === 0) {
       say("Catalog has no importable renders.");
@@ -257,7 +267,7 @@ form.addEventListener("submit", async (event) => {
       return;
     }
 
-    catalog = { base, manifest, themeTokens, index };
+    catalog = { base, manifest, themeTokens, themes, index };
     revealLoadedCatalog(
       index,
       `Loaded ${index.title} — ${index.components.length} component${index.components.length === 1 ? "" : "s"}. Pick one to insert, or import the whole catalog.`,
@@ -311,13 +321,21 @@ folderInput.addEventListener("change", async () => {
       if (tokenFile) themeTokens = readDtcgTokensLite(JSON.parse(await tokenFile.text()));
     }
 
+    let themes;
+    if (themeTokens && raw.themes?.length) {
+      themes = await resolveThemeTokens(raw.themes, async (path) => {
+        const file = byPath.get(path);
+        return file ? (JSON.parse(await file.text()) as unknown) : undefined;
+      });
+    }
+
     const index = indexCatalog(manifest);
     if (index.components.length === 0) {
       say("That folder's catalog has no importable renders.");
       return;
     }
 
-    catalog = { base: "", manifest, themeTokens, index };
+    catalog = { base: "", manifest, themeTokens, themes, index };
     revealLoadedCatalog(
       index,
       `Loaded ${index.title} from folder — ${index.components.length} component${index.components.length === 1 ? "" : "s"}, fully offline. Pick one to insert.`,
@@ -353,7 +371,7 @@ insertButton.addEventListener("click", async () => {
             name,
             componentId: component.componentId,
             collection: catalog.themeTokens
-              ? toFigmaVariables(catalog.themeTokens, catalog.index.title)
+              ? toFigmaVariables(catalog.themeTokens, catalog.index.title, catalog.themes ?? [])
               : undefined,
             textStyles: catalog.themeTokens ? toFigmaTextStyles(catalog.themeTokens) : undefined,
             metadata: catalogMetadata(component.componentId, selection),
@@ -411,7 +429,7 @@ insertSetButton.addEventListener("click", async () => {
           name: component.componentId,
           cells: fetched,
           collection: catalog.themeTokens
-            ? toFigmaVariables(catalog.themeTokens, catalog.index.title)
+            ? toFigmaVariables(catalog.themeTokens, catalog.index.title, catalog.themes ?? [])
             : undefined,
           textStyles: catalog.themeTokens ? toFigmaTextStyles(catalog.themeTokens) : undefined,
           metadata: catalogMetadata(component.componentId),
@@ -459,11 +477,11 @@ upgradeMappedButton.addEventListener("click", async () => {
 
 async function importWholeCatalog(): Promise<void> {
   if (!catalog) return;
-  const { base, manifest, themeTokens } = catalog;
+  const { base, manifest, themeTokens, themes } = catalog;
 
   try {
     const variant = variantInput.value === "layout" ? "layout" : "ideal";
-    const plan = buildImportPlan(manifest, { baseUrl: base, themeTokens, variant });
+    const plan = buildImportPlan(manifest, { baseUrl: base, themeTokens, themes, variant });
     if (plan.imageCount === 0) {
       say("Catalog has no importable renders.");
       return;

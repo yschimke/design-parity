@@ -16,6 +16,8 @@
  * catalog's own `tokens.dtcg.json` is trusted input; the authoritative,
  * schema-validating reader remains core's `readDtcgTokens` (Node only).
  */
+import type { CatalogManifestTheme } from "@design-parity/catalog-export";
+import type { FigmaThemeTokens } from "@design-parity/catalog-export/figma";
 import type { DesignTokens } from "@design-parity/core";
 
 interface DtcgNode {
@@ -72,4 +74,43 @@ export function readDtcgTokensLite(doc: unknown): DesignTokens {
   if (Object.keys(spacing).length > 0) tokens.spacing = spacing;
 
   return tokens;
+}
+
+/**
+ * Resolve `CatalogManifest.themes` into the projection's {@link FigmaThemeTokens}.
+ *
+ * The manifest carries each alternate theme's tokens as a **sibling file**
+ * rather than inline, so this needs a reader: `readJson` fetches over the base
+ * URL for a published catalog, or reads out of the picked directory for a local
+ * one. Both load paths share this function so they cannot resolve themes
+ * differently.
+ *
+ * A theme whose file will not read is **skipped, not fatal**. The catalog's
+ * renders are the import's point and they are already in hand; failing the
+ * whole import over one missing palette would trade the thing the designer
+ * asked for against a mode they may not have noticed. The caller reports how
+ * many resolved so a short count is visible rather than silent.
+ */
+export async function resolveThemeTokens(
+  themes: readonly CatalogManifestTheme[] | undefined,
+  readJson: (path: string) => Promise<unknown | undefined>,
+): Promise<FigmaThemeTokens[]> {
+  const resolved: FigmaThemeTokens[] = [];
+  for (const theme of themes ?? []) {
+    if (!theme?.id || !theme.tokensFile) continue;
+    let doc: unknown | undefined;
+    try {
+      doc = await readJson(theme.tokensFile);
+    } catch {
+      continue;
+    }
+    if (doc === undefined) continue;
+    resolved.push({
+      id: theme.id,
+      ...(theme.name !== undefined ? { name: theme.name } : {}),
+      ...(theme.dark !== undefined ? { dark: theme.dark } : {}),
+      tokens: readDtcgTokensLite(doc),
+    });
+  }
+  return resolved;
 }

@@ -28,6 +28,7 @@ import type {
 // `./figma` subpath, not the package barrel: the barrel re-exports the on-disk
 // catalog writer (`node:fs`), which can't be bundled into a Figma plugin.
 import {
+  type FigmaThemeTokens,
   type FigmaVariableCollection,
   toFigmaVariables,
 } from "@design-parity/catalog-export/figma";
@@ -136,6 +137,15 @@ export interface PlanOptions {
    * The UI supplies it; the planner just projects it.
    */
   themeTokens?: DesignTokens;
+  /**
+   * The system's **alternate** themes, each with its token file already
+   * fetched and parsed — the UI resolves `manifest.themes[].tokensFile`, the
+   * planner just projects them. Each becomes one further mode on the variable
+   * collection. Ignored without {@link themeTokens}: the alternates are
+   * expressed relative to the system set, and a collection whose only modes
+   * were alternates would claim the system has no palette of its own.
+   */
+  themes?: readonly FigmaThemeTokens[];
   /**
    * Which sticker variant to place: the authoritative `ideal` render (default)
    * or the `layout` wireframe. Greenlines anchor to `ideal` pixel space, so
@@ -277,7 +287,7 @@ export function buildImportPlan(
     redlineCount,
   };
   if (opts.themeTokens) {
-    plan.collection = toFigmaVariables(opts.themeTokens, manifest.title);
+    plan.collection = toFigmaVariables(opts.themeTokens, manifest.title, opts.themes ?? []);
   }
   if (manifest.screens && manifest.screens.length > 0) plan.screens = manifest.screens;
   return plan;

@@ -2,7 +2,7 @@
   "schema": "design-parity-ui-preview/v1",
   "inputs": {
     "figma/ui.html": "a07ec228ec6410d95475ab9bc2a33f4cfb4b68345dcf7903e14fcc7ec457dd95",
-    "figma/ui.ts": "0b4a3cec70aa7856a04ab343a6d07846257c5f8ae1844813a791160e9a561ccb",
+    "figma/ui.ts": "876d02330479d48c6f1825835e1976af1be086ced48332e5844455cb595d9d24",
     "figma/code.ts": "7b18e5201f7d836eadbd82909224a8f661b37285844fac983049ba0e1c8b8a0a",
     "docs/ui-preview.mjs": "f673715f6cafcf2efc3eafad7e83ddb2a1c2fb63853e5102d45fcd2796e509d6",
     "docs/sample-catalog.json": "8d76a32bc53c70b3fa81f1608a111996dfa1bd2666bde2258040c20c2d2d259e"

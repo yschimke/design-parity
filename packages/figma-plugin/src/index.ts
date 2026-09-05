@@ -14,7 +14,7 @@ export {
   resolveImageUrl,
   imageKey,
 } from "./plan.js";
-export { readDtcgTokensLite } from "./dtcg.js";
+export { readDtcgTokensLite, resolveThemeTokens } from "./dtcg.js";
 export {
   buildFrameSpec,
   defaultComponentId,
