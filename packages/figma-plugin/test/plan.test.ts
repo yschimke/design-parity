@@ -276,3 +276,32 @@ describe("buildImportPlan — redlines", () => {
     expect(plan.redlineCount).toBe(0);
   });
 });
+
+describe("buildImportPlan with alternate themes", () => {
+  const tokens: DesignTokens = { colors: { "surface.light": "#fff", "surface.dark": "#000" } };
+  const themes = [
+    { id: "a.Electric", name: "Electric", dark: true, tokens: { colors: { surface: "#0ff" } } },
+  ];
+
+  it("gives each alternate theme a mode on the variable collection", () => {
+    const plan = buildImportPlan(manifest, {
+      baseUrl: "https://x",
+      themeTokens: tokens,
+      themes,
+    });
+    expect(Object.keys(plan.collection!.modes).sort()).toEqual(["a.Electric", "dark", "light"]);
+    const surface = plan.collection!.variables.find((v) => v.name === "color/surface")!;
+    expect(surface.valuesByMode["a.Electric"]).toBe("#0ff");
+  });
+
+  it("plans exactly as before when the catalog declares no themes", () => {
+    const withThemes = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens, themes: [] });
+    const without = buildImportPlan(manifest, { baseUrl: "https://x", themeTokens: tokens });
+    expect(withThemes).toEqual(without);
+  });
+
+  it("ignores themes when the system set is absent, rather than inventing a collection", () => {
+    const plan = buildImportPlan(manifest, { baseUrl: "https://x", themes });
+    expect(plan.collection).toBeUndefined();
+  });
+});

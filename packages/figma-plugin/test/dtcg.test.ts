@@ -2,7 +2,7 @@ import { tokensToDtcg } from "@design-parity/core";
 import type { DesignTokens } from "@design-parity/core";
 import { describe, expect, it } from "vitest";
 
-import { readDtcgTokensLite } from "../src/dtcg.js";
+import { readDtcgTokensLite, resolveThemeTokens } from "../src/dtcg.js";
 
 describe("readDtcgTokensLite", () => {
   it("reads color, radius, and spacing groups from a DTCG document", () => {
@@ -54,5 +54,44 @@ describe("readDtcgTokensLite", () => {
     expect(readDtcgTokensLite(null)).toEqual({});
     expect(readDtcgTokensLite({ color: { note: "not a token node" } })).toEqual({});
     expect(readDtcgTokensLite({})).toEqual({});
+  });
+});
+
+describe("resolveThemeTokens", () => {
+  const themes = [
+    { id: "a.Dracula", name: "Dracula", dark: true, tokensFile: "themes/dracula.dtcg.json" },
+    { id: "a.Solarized", tokensFile: "themes/solarized.dtcg.json" },
+  ];
+  const doc = (hex: string) => ({ color: { surface: { $type: "color", $value: hex } } });
+
+  it("reads each theme's sibling token file and keeps its label and stance", async () => {
+    const resolved = await resolveThemeTokens(themes, async (path) =>
+      path === "themes/dracula.dtcg.json" ? doc("#282a36") : doc("#fdf6e3"),
+    );
+    expect(resolved).toEqual([
+      { id: "a.Dracula", name: "Dracula", dark: true, tokens: { colors: { surface: "#282a36" } } },
+      { id: "a.Solarized", tokens: { colors: { surface: "#fdf6e3" } } },
+    ]);
+  });
+
+  it("skips a theme whose file will not read rather than failing the import", async () => {
+    const resolved = await resolveThemeTokens(themes, async (path) => {
+      if (path === "themes/dracula.dtcg.json") throw new Error("404");
+      return doc("#fdf6e3");
+    });
+    expect(resolved.map((t) => t.id)).toEqual(["a.Solarized"]);
+  });
+
+  it("skips a theme the reader has nothing for", async () => {
+    expect(await resolveThemeTokens(themes, async () => undefined)).toEqual([]);
+  });
+
+  it("skips an entry with no id or no token file, and handles no themes at all", async () => {
+    const resolved = await resolveThemeTokens(
+      [{ id: "", tokensFile: "a.json" }, { id: "b", tokensFile: "" }],
+      async () => doc("#fff"),
+    );
+    expect(resolved).toEqual([]);
+    expect(await resolveThemeTokens(undefined, async () => doc("#fff"))).toEqual([]);
   });
 });

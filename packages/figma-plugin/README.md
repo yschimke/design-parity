@@ -483,6 +483,24 @@ refreshes each page in place independently:
 A catalog with neither themes nor `screens` — and any design-led import — stays a
 single flat page as before.
 
+## What the manifest carries, and what this plugin reads
+
+A published catalog's `catalog.json` carries more than the import consumes. The
+list is short and deliberate, so a field left on the floor is a decision rather
+than drift:
+
+| Manifest field | Read here? | |
+| --- | --- | --- |
+| `components`, `groups`, `images` | ✅ | The renders — the whole point. |
+| `tokensFile` | ✅ | Becomes the variable collection. |
+| `themes[]` | ✅ | Each alternate theme becomes one further **mode** on that collection, resolved from its own sibling token file. A theme is one mode, not a light/dark pair, because the catalog model already enumerates each palette separately and flags which are dark. A theme file that will not read is skipped rather than failing the import. |
+| `screens[]` | ✅ | Drives the per-screen page layout. |
+| `direction` | ✅ | Decides code-led vs design-led handling. |
+| `display` (`hero`, `surface`) | ❌ | Presentation hints for a *viewer's* front door — which preview to stage and on what surface. A Figma canvas has neither a hero slot nor a staged surface; the equivalent choice there is where the designer puts the frame. Nothing to project. |
+| `parity/findings.json` | ❌ | The a11y / i18n / token / layout verdicts from a parity run, anchored to the regions they are about. These are for the **preview server's** comparison panels, where a finding sits beside the comparison that produced it. The canvas already carries the a11y layer that belongs here — the greenlines — and re-drawing run verdicts on top would put a snapshot of one CI run into a file people keep, with nothing to invalidate it when the run is superseded. |
+| known-difference acceptances | ❌ | Same reason, and a stronger one: an acceptance is a claim about a *comparison*, and accepting one from inside Figma would make the design tool the authority on parity. Figma is a view of the code here, never the source of truth. |
+
+
 ## Correspondence export
 
 Because the plugin *creates* the frames, it knows each imported component's
