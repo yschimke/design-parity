@@ -46,6 +46,13 @@ on:
         required: false
         type: string
         default: "design-parity/reference"
+      publication-repository:
+        description: >
+          Optional owner/name repository holding the reference cache. Empty publishes to the
+          calling repository. Set this with publication-token for an output repository.
+        required: false
+        type: string
+        default: ""
       design-map-command:
         description: >
           Shell run before the import, to regenerate `design-map.json` (e.g. a
@@ -142,6 +149,9 @@ on:
       figma-token:
         description: "Read-only Figma PAT with `file_content:read`. Required — an import with no credentials has nothing to do."
         required: true
+      publication-token:
+        description: "Optional Contents-write token for publication-repository. Empty uses the calling workflow token."
+        required: false
     outputs:
       refreshed:
         description: "Nodes re-read from Figma this run."
@@ -234,9 +244,11 @@ jobs:
         env:
           BRANCH: ${{ inputs.cache-branch }}
           CACHE_DIR: ${{ runner.temp }}/reference-cache
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_TOKEN: ${{ secrets.publication-token || github.token }}
         run: |
           set -euo pipefail
-          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          repo="https://x-access-token:${PUBLISH_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
           if git clone -q --depth 1 --branch "$BRANCH" "$repo" "$CACHE_DIR" 2>/dev/null; then
             echo "Existing cache: $(du -sh "$CACHE_DIR" | cut -f1)."
           else
@@ -302,7 +314,8 @@ jobs:
       # commit: an empty one per schedule tick is noise, not history.
       - name: Publish to ${{ inputs.cache-branch }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.publication-token || github.token }}
+          GITHUB_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
           BRANCH: ${{ inputs.cache-branch }}
           CACHE_DIR: ${{ steps.cache.outputs.dir }}
         run: |

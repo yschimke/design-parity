@@ -160,6 +160,14 @@ on:
         required: false
         type: string
         default: "design-parity/main"
+      publication-repository:
+        description: >
+          Optional owner/name repository holding generated parity boards and reference caches.
+          Empty publishes to the calling repository. Set this with publication-token when generated
+          history is isolated in a separate output repository.
+        required: false
+        type: string
+        default: ""
       reference-cache-branch:
         description: >
           Branch holding the committed reference cache that
@@ -276,6 +284,9 @@ on:
       figma-token:
         description: "Read-only Figma PAT with `file_content:read`. Absent ⇒ the parity step is skipped with a warning rather than failing."
         required: false
+      publication-token:
+        description: "Optional Contents-write token for publication-repository. Empty uses the calling workflow token."
+        required: false
 
 permissions: {}
 
@@ -340,9 +351,11 @@ jobs:
         id: previous
         env:
           BRANCH: ${{ inputs.artifact-branch }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_TOKEN: ${{ secrets.publication-token || github.token }}
         run: |
           set -euo pipefail
-          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          repo="https://x-access-token:${PUBLISH_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
           if git clone -q --depth 1 --branch "$BRANCH" "$repo" previous 2>/dev/null; then
             rm -rf previous/.git
             echo "found=true" >> "$GITHUB_OUTPUT"
@@ -360,9 +373,11 @@ jobs:
           FORCE: ${{ inputs.force-refresh }}
           REFERENCE_CACHE_BRANCH: ${{ inputs.reference-cache-branch }}
           REQUIRE_REFERENCE_CACHE: ${{ inputs.require-reference-cache }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_TOKEN: ${{ secrets.publication-token || github.token }}
         run: |
           set -euo pipefail
-          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          repo="https://x-access-token:${PUBLISH_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
           parts=()
 
           # The code side: a git tree hash per named path. Exact — it moves iff a
@@ -730,9 +745,11 @@ jobs:
           BRANCH: ${{ inputs.reference-cache-branch }}
           CACHE_DIR: ${{ runner.temp }}/reference-cache
           REQUIRE: ${{ inputs.require-reference-cache }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_TOKEN: ${{ secrets.publication-token || github.token }}
         run: |
           set -euo pipefail
-          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          repo="https://x-access-token:${PUBLISH_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
           if git clone -q --depth 1 --branch "$BRANCH" "$repo" "$CACHE_DIR" 2>/dev/null; then
             rm -rf "$CACHE_DIR/.git"
             echo "dir=${CACHE_DIR}" >> "$GITHUB_OUTPUT"
@@ -991,6 +1008,7 @@ jobs:
           BRANCH: ${{ inputs.artifact-branch }}
           REFERENCE_CACHE_BRANCH: ${{ inputs.reference-cache-branch }}
           REFERENCE_CACHE: ${{ steps.refcache.outputs.dir }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
         run: |
           set -euo pipefail
           # A token is only required when the run has to fetch references. With
@@ -1038,7 +1056,7 @@ jobs:
             --shard "${SHARD}/${SHARDS}" \
             --candidate-bundles build/design-parity/candidates.bundle.png \
             --out build/design-parity/out \
-            --repo-slug "${GITHUB_REPOSITORY}" \
+            --repo-slug "${PUBLISH_REPOSITORY}" \
             --branch "${BRANCH}" \
             --source-commit "${GITHUB_SHA}"
           echo "ran=true" >> "$GITHUB_OUTPUT"
@@ -1154,9 +1172,11 @@ jobs:
         if: ${{ inputs.artifact-branch != '' && needs.cache.outputs.skip != 'true' }}
         env:
           BRANCH: ${{ inputs.artifact-branch }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_TOKEN: ${{ secrets.publication-token || github.token }}
         run: |
           set -euo pipefail
-          repo="https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git"
+          repo="https://x-access-token:${PUBLISH_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
           if git clone -q --depth 1 --branch "$BRANCH" "$repo" previous 2>/dev/null; then
             rm -rf previous/.git
             echo "found=true" >> "$GITHUB_OUTPUT"
@@ -1197,6 +1217,7 @@ jobs:
           BRANCH: ${{ inputs.artifact-branch }}
           PREVIOUS_FOUND: ${{ steps.previous.outputs.found }}
           CACHE_KEY: ${{ needs.cache.outputs.key }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
         run: |
           set -euo pipefail
           mapfile -t dirs < <(find shards -name shard.json | sort -V)
@@ -1224,7 +1245,7 @@ jobs:
           if "${dp[@]}" merge "${dirs[@]}" \
             --out out \
             "${prev[@]}" \
-            --repo-slug "${GITHUB_REPOSITORY}" \
+            --repo-slug "${PUBLISH_REPOSITORY}" \
             --branch "${BRANCH}" \
             --source-commit "${GITHUB_SHA}" \
             ${CACHE_KEY:+--cache-key "$CACHE_KEY"}; then
@@ -1236,7 +1257,8 @@ jobs:
       - name: Publish to ${{ inputs.artifact-branch }}
         if: ${{ steps.check.outputs.found == 'true' && inputs.artifact-branch != '' && hashFiles('out/**') != '' }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.publication-token || github.token }}
+          GITHUB_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
           BRANCH: ${{ inputs.artifact-branch }}
           DP_VERSION: ${{ needs.cache.outputs.tool-version || inputs.design-parity-version }}
           DP_REF: ${{ inputs.design-parity-ref }}
