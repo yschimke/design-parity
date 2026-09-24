@@ -82,6 +82,7 @@ core and the two runtime files stay thin:
 | [`src/preview.ts`](src/preview.ts) | pure (tested) | `planToSvg(plan)` → the offline SVG layout proof used for review evidence. |
 | [`src/designMap.ts`](src/designMap.ts) | pure (tested) | `buildDesignMap(plan, {fileKey, nodeIds})` → the `design-map.json` correspondence, validated against `@design-parity/core`'s schema. |
 | [`src/annotations.ts`](src/annotations.ts) | pure (tested) | Shared colour + label helpers for the greenline (severity) and redline (spacing spec) layers — one place so the SVG preview and Figma paints match. |
+| [`src/uiBuilder.ts`](src/uiBuilder.ts) | main-thread logic (tested) | `buildUiBuilderScene(figma, scene, opts)` / `readUiBuilderSnapshot(figma, node)` — the Compose UI builder bridge: build a `compose-ui-builder-figma-scene/v1` as auto-layout frames, kit instances (or labelled stand-ins) and text with bound variables and styles, stamped under `composeUiBuilder`; read any frame back as a `compose-ui-builder-figma-snapshot/v1` for the builder to import or reconcile. Injected `UiFigmaApi`, so it runs headlessly. |
 | [`src/reconcile.ts`](src/reconcile.ts) | pure (tested) | `reconcile(existing, plannedIds)` → the update/add/stale decision for a re-import, keyed by `componentId`. No `figma`. The decision half of non-destructive re-import; `scene.ts` executes it. |
 | [`src/direction.ts`](src/direction.ts) | pure (tested) | `resolveDirection(raw)` → `code-led` \| `design-led` (unresolved ⇒ design-led, the safe default). The mode gate: design-led routes renders to a reference page and requires confirm-before-write. |
 | [`src/scene.ts`](src/scene.ts) | main-thread logic (tested) | `applyImport(figma, plan, images)` — **stamps** every node with its identity and either builds a fresh page or **reconciles** an existing stamped board in place; image fills, greenline/redline overlays, variable collection; emits the `design-map.json`. Takes an **injected** `FigmaApi`, so it runs headlessly against a fake (see [Testing before Figma](#testing-before-figma)). |
@@ -370,6 +371,38 @@ current width/height and re-fetches, so the `compose-preview serve` host
 **re-lays-out** the component for that size — not just rescales the old pixels —
 and the node remembers the size for later refreshes. (For a *catalog* render that
 should scale losslessly, insert it as **SVG** instead.)
+
+## Compose UI builder bridge
+
+[`src/uiBuilder.ts`](src/uiBuilder.ts) is the Figma half of the
+[compose-ui-builder Figma integration](https://github.com/yschimke/compose-ui-builder/blob/main/docs/design/UI_BUILDER_FIGMA_INTEGRATION.md).
+The builder owns the contracts and the logic that maps a frame to a design.
+This module only turns a scene into Figma nodes and turns Figma nodes back into
+a snapshot.
+
+- **Build.** `buildUiBuilderScene(figma, scene, { resolveComponent })` builds:
+  - Row and Column as auto-layout frames (spacing, padding, alignment,
+    FILL/HUG/FIXED sizing — each only where Figma accepts it);
+  - text with the scene's text styles;
+  - fills bound to the file's colour variables.
+
+  An instance whose kit component `resolveComponent` finds (`componentsByName`
+  over the file's component sets) is a real instance, with its properties set
+  by their own `#12:0`-suffixed keys. One it cannot find becomes a labelled
+  stand-in frame that records the instance it stands for. Every node is stamped
+  under shared plugin data `composeUiBuilder`.
+- **Read.** `readUiBuilderSnapshot(figma, node)` reads a frame back: layout,
+  sizing, bound variable names, text-style names, instance sets, variants and
+  properties, and the stamps. A stand-in reads back as its instance, with the
+  label from its text layer. Text the scene left unfilled does not report
+  Figma's default black.
+
+Both have been run in a real Figma file through the Figma MCP's `use_figma`
+with an esbuild IIFE of this module. The frame read back untouched reconciles
+to no command in the builder; the edited frame reconciles to exactly the
+designer's edits. That evidence is committed in compose-ui-builder. Wiring the
+two operations into a plugin task (paste a scene, copy a snapshot) is the next
+step.
 
 ## Handoff to code (design → code)
 
