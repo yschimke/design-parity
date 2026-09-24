@@ -31,6 +31,14 @@ import { withRenderSize, type RenderSource } from "../src/render.js";
 import type { PreviewSlots } from "../src/slots.js";
 import { planMappedUpgrades, rewriteMappedNodeIds } from "../src/upgrade.js";
 import { fillSlot, placeSlots } from "../src/structure.js";
+import {
+  buildUiBuilderScene,
+  componentsByName,
+  readUiBuilderSnapshot,
+  type UiFigmaApi,
+  type UiFigmaNode,
+  type UiScene,
+} from "../src/uiBuilder.js";
 import type {
   FigmaTextStyleSpec,
   FigmaVariableCollection,
@@ -149,6 +157,17 @@ interface ProposeReadSelectionMessage {
   type: "proposeReadSelection";
 }
 
+/** Build a compose-ui-builder scene on the current page (UI builder task). */
+interface UiBuilderBuildMessage {
+  type: "uiBuilderBuild";
+  scene: UiScene;
+}
+
+/** Read the selected frame back as a compose-ui-builder snapshot (UI builder task). */
+interface UiBuilderReadMessage {
+  type: "uiBuilderRead";
+}
+
 /** The UI asks to refresh every live render in the current selection. */
 interface RefreshMessage {
   type: "refresh";
@@ -204,6 +223,8 @@ type UiMessage =
   | RequestRegistryMessage
   | SaveRegistryMessage
   | ProposeReadSelectionMessage
+  | UiBuilderBuildMessage
+  | UiBuilderReadMessage
   | PlaceLiveMessage
   | PlaceLiveSvgMessage
   | RefreshMessage
@@ -452,6 +473,44 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
     } catch {
       // See requestRegistry: persistence becomes available once the plugin has
       // a Figma-assigned ID, while the in-memory registry still works without it.
+    }
+    return;
+  }
+  if (msg.type === "uiBuilderBuild") {
+    try {
+      // Kit components already in this page stand behind the scene's instances; anything else
+      // is built as a labelled stand-in that reads back as the instance it stands for.
+      const kit = figma.currentPage.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] });
+      const result = await buildUiBuilderScene(figma as unknown as UiFigmaApi, msg.scene, {
+        resolveComponent: componentsByName(kit as unknown as UiFigmaNode[]),
+      });
+      const root = await figma.getNodeByIdAsync(result.rootId);
+      if (root && "type" in root && root.type !== "DOCUMENT" && root.type !== "PAGE") {
+        figma.currentPage.selection = [root as SceneNode];
+        figma.viewport.scrollAndZoomIntoView([root as SceneNode]);
+      }
+      figma.ui.postMessage({ type: "uiBuilderBuilt", result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "uiBuilderError", message });
+    }
+    return;
+  }
+  if (msg.type === "uiBuilderRead") {
+    const node = figma.currentPage.selection[0];
+    if (!node) {
+      figma.ui.postMessage({ type: "uiBuilderError", message: "Select a frame, then Read selection." });
+      return;
+    }
+    try {
+      const snapshot = await readUiBuilderSnapshot(
+        figma as unknown as UiFigmaApi,
+        node as unknown as UiFigmaNode,
+      );
+      figma.ui.postMessage({ type: "uiBuilderSnapshot", snapshot });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      figma.ui.postMessage({ type: "uiBuilderError", message });
     }
     return;
   }

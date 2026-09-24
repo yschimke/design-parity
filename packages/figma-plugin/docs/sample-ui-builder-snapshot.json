@@ -1,0 +1,408 @@
+{
+  "schema": "compose-ui-builder-figma-snapshot/v1",
+  "source": {
+    "fileKey": "F86TqxNU5a5nU9JTTtZWwR",
+    "nodeId": "4:2"
+  },
+  "root": {
+    "id": "4:2",
+    "type": "FRAME",
+    "name": "Checkout",
+    "x": 100,
+    "y": 100,
+    "width": 412,
+    "height": 915,
+    "stamp": {
+      "designId": "checkout",
+      "nodeId": "figma-10-1",
+      "revision": 14,
+      "componentId": "layout/column"
+    },
+    "sizing": {
+      "horizontal": "FIXED",
+      "vertical": "FIXED"
+    },
+    "layout": {
+      "mode": "VERTICAL",
+      "itemSpacing": 16,
+      "padding": {
+        "left": 24,
+        "top": 24,
+        "right": 24,
+        "bottom": 24
+      },
+      "primaryAxisAlign": "MIN",
+      "counterAxisAlign": "MIN"
+    },
+    "fill": {
+      "color": "#FFFEF7FF",
+      "variable": "Schemes/Surface"
+    },
+    "children": [
+      {
+        "id": "4:3",
+        "type": "TEXT",
+        "name": "Your order",
+        "x": 24,
+        "y": 24,
+        "width": 364,
+        "height": 36,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-2",
+          "revision": 14,
+          "componentId": "m3/text",
+          "slot": "children"
+        },
+        "sizing": {
+          "horizontal": "FILL",
+          "vertical": "HUG"
+        },
+        "text": {
+          "characters": "Your order",
+          "style": "M3/headline/medium",
+          "fontSize": 28,
+          "fontWeight": 400,
+          "italic": false
+        },
+        "fill": {
+          "color": "#FF1D1B20",
+          "variable": "Schemes/On Surface"
+        }
+      },
+      {
+        "id": "4:16",
+        "type": "TEXT",
+        "name": "Footnote",
+        "x": 24,
+        "y": 76,
+        "width": 101,
+        "height": 16,
+        "sizing": {
+          "horizontal": "HUG",
+          "vertical": "HUG"
+        },
+        "text": {
+          "characters": "Prices include tax",
+          "style": "M3/body/small",
+          "fontSize": 12,
+          "fontWeight": 400,
+          "italic": false
+        },
+        "fill": {
+          "color": "#FF000000"
+        }
+      },
+      {
+        "id": "4:4",
+        "type": "FRAME",
+        "name": "figma-10-3",
+        "x": 24,
+        "y": 108,
+        "width": 364,
+        "height": 24,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-3",
+          "revision": 14,
+          "componentId": "layout/row",
+          "slot": "children"
+        },
+        "sizing": {
+          "horizontal": "FILL",
+          "vertical": "HUG"
+        },
+        "layout": {
+          "mode": "HORIZONTAL",
+          "itemSpacing": 24,
+          "padding": {
+            "left": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "primaryAxisAlign": "SPACE_BETWEEN",
+          "counterAxisAlign": "CENTER"
+        },
+        "children": [
+          {
+            "id": "4:5",
+            "type": "TEXT",
+            "name": "Subtotal",
+            "x": 0,
+            "y": 0,
+            "width": 64,
+            "height": 24,
+            "stamp": {
+              "designId": "checkout",
+              "nodeId": "figma-10-4",
+              "revision": 14,
+              "componentId": "m3/text",
+              "slot": "children"
+            },
+            "sizing": {
+              "horizontal": "HUG",
+              "vertical": "HUG"
+            },
+            "text": {
+              "characters": "Subtotal",
+              "style": "M3/body/large",
+              "fontSize": 16,
+              "fontWeight": 400,
+              "italic": false
+            }
+          },
+          {
+            "id": "4:6",
+            "type": "TEXT",
+            "name": "$42.00",
+            "x": 307,
+            "y": 2.5,
+            "width": 57,
+            "height": 19,
+            "stamp": {
+              "designId": "checkout",
+              "nodeId": "figma-10-5",
+              "revision": 14,
+              "componentId": "m3/text",
+              "slot": "children"
+            },
+            "sizing": {
+              "horizontal": "HUG",
+              "vertical": "HUG"
+            },
+            "text": {
+              "characters": "$42.00",
+              "fontSize": 16,
+              "fontWeight": 600,
+              "italic": false,
+              "textAlign": "RIGHT"
+            }
+          }
+        ]
+      },
+      {
+        "id": "4:8",
+        "type": "FRAME",
+        "name": "figma-10-7",
+        "x": 24,
+        "y": 148,
+        "width": 364,
+        "height": 48,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-7",
+          "revision": 14,
+          "componentId": "layout/row",
+          "slot": "children"
+        },
+        "sizing": {
+          "horizontal": "FILL",
+          "vertical": "HUG"
+        },
+        "layout": {
+          "mode": "HORIZONTAL",
+          "itemSpacing": 12,
+          "padding": {
+            "left": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "primaryAxisAlign": "MIN",
+          "counterAxisAlign": "CENTER"
+        },
+        "children": [
+          {
+            "id": "4:9",
+            "type": "INSTANCE",
+            "name": "figma-10-8",
+            "x": 0,
+            "y": 0,
+            "width": 48,
+            "height": 48,
+            "stamp": {
+              "designId": "checkout",
+              "nodeId": "figma-10-8",
+              "revision": 14,
+              "componentId": "m3/checkbox",
+              "slot": "children"
+            },
+            "sizing": {
+              "horizontal": "HUG",
+              "vertical": "HUG"
+            },
+            "instance": {
+              "componentSet": "Checkboxes",
+              "component": "Type=Selected, State=Enabled",
+              "properties": {
+                "Type": "Selected",
+                "State": "Enabled"
+              }
+            }
+          },
+          {
+            "id": "4:10",
+            "type": "TEXT",
+            "name": "This is a gift",
+            "x": 60,
+            "y": 12,
+            "width": 304,
+            "height": 24,
+            "stamp": {
+              "designId": "checkout",
+              "nodeId": "figma-10-9",
+              "revision": 14,
+              "componentId": "m3/text",
+              "slot": "children"
+            },
+            "sizing": {
+              "horizontal": "FILL",
+              "vertical": "HUG"
+            },
+            "text": {
+              "characters": "This is a gift",
+              "style": "M3/body/large",
+              "fontSize": 16,
+              "fontWeight": 400,
+              "italic": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "4:12",
+        "type": "FRAME",
+        "name": "figma-10-11",
+        "x": 24,
+        "y": 212,
+        "width": 48,
+        "height": 48,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-11",
+          "revision": 14,
+          "componentId": "layout/box",
+          "slot": "children"
+        },
+        "sizing": {
+          "horizontal": "FIXED",
+          "vertical": "FIXED"
+        },
+        "layout": {
+          "mode": "NONE",
+          "itemSpacing": 0,
+          "padding": {
+            "left": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "primaryAxisAlign": "MIN",
+          "counterAxisAlign": "MIN"
+        },
+        "children": []
+      },
+      {
+        "id": "4:13",
+        "type": "FRAME",
+        "name": "figma-10-12",
+        "x": 24,
+        "y": 276,
+        "width": 120,
+        "height": 24,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-12",
+          "revision": 14,
+          "componentId": "layout/box",
+          "slot": "children"
+        },
+        "sizing": {
+          "horizontal": "FIXED",
+          "vertical": "FIXED"
+        },
+        "layout": {
+          "mode": "NONE",
+          "itemSpacing": 0,
+          "padding": {
+            "left": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "primaryAxisAlign": "MIN",
+          "counterAxisAlign": "MIN"
+        },
+        "children": []
+      },
+      {
+        "id": "4:14",
+        "type": "INSTANCE",
+        "name": "figma-10-13",
+        "x": 24,
+        "y": 316,
+        "width": 364,
+        "height": 33,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-13",
+          "revision": 14,
+          "componentId": "m3/button",
+          "slot": "children",
+          "labelNodeId": "figma-10-13-label"
+        },
+        "sizing": {
+          "horizontal": "FILL",
+          "vertical": "HUG"
+        },
+        "instance": {
+          "componentSet": "Button",
+          "component": "State=Enabled, Label text=Pay $42.00",
+          "properties": {
+            "State": "Enabled",
+            "Label text": "Pay now"
+          }
+        }
+      },
+      {
+        "id": "4:11",
+        "type": "FRAME",
+        "name": "figma-10-10",
+        "x": 24,
+        "y": 365,
+        "width": 364,
+        "height": 120,
+        "stamp": {
+          "designId": "checkout",
+          "nodeId": "figma-10-10",
+          "revision": 14,
+          "componentId": "layout/box",
+          "slot": "children"
+        },
+        "sizing": {
+          "horizontal": "FILL",
+          "vertical": "FIXED"
+        },
+        "layout": {
+          "mode": "NONE",
+          "itemSpacing": 0,
+          "padding": {
+            "left": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "primaryAxisAlign": "MIN",
+          "counterAxisAlign": "MIN"
+        },
+        "fill": {
+          "color": "#FFF7F2FA",
+          "variable": "Schemes/Surface Container Low"
+        },
+        "cornerRadius": 16,
+        "children": []
+      }
+    ]
+  }
+}

@@ -35,7 +35,12 @@ const EVIDENCE_INPUTS = {
   "figma/code.ts": new URL("../figma/code.ts", import.meta.url),
   "docs/ui-preview.mjs": new URL("./ui-preview.mjs", import.meta.url),
   "docs/sample-catalog.json": new URL("./sample-catalog.json", import.meta.url),
+  "docs/sample-ui-builder-scene.json": new URL("./sample-ui-builder-scene.json", import.meta.url),
+  "docs/sample-ui-builder-snapshot.json": new URL("./sample-ui-builder-snapshot.json", import.meta.url),
 };
+// compose-ui-builder's checkout scene, and the same frame read back from real Figma after edits.
+const UI_BUILDER_SCENE = readFileSync(new URL("./sample-ui-builder-scene.json", import.meta.url), "utf8");
+const UI_BUILDER_SNAPSHOT = JSON.parse(readFileSync(new URL("./sample-ui-builder-snapshot.json", import.meta.url), "utf8"));
 // setContent/goto both need a real document for the inlined <script> + our stub;
 // a temp file gives a stable file:// URL that evaluateOnNewDocument applies to.
 const tmp = join(tmpdir(), "design-parity-ui-preview.html");
@@ -130,6 +135,17 @@ try {
   await page.waitForSelector("#propose-out:not([hidden])");
   await page.screenshot({ path: fileURLToPath(new URL("./ui-task-handoff.png", docs)), fullPage: true });
 
+  // Task 5: a pasted scene, the main thread's build report, then the read-back snapshot.
+  await page.click("#tab-uibuilder");
+  await page.$eval("#ui-builder-scene", (area, scene) => { area.value = scene; }, UI_BUILDER_SCENE);
+  await page.evaluate((snapshot) => {
+    const post = (pluginMessage) => window.dispatchEvent(new MessageEvent("message", { data: { pluginMessage } }));
+    post({ type: "uiBuilderBuilt", result: { rootId: "4:2", created: 13, standIns: ["figma-10-6", "figma-10-8", "figma-10-13"], unresolvedTokens: [] } });
+    post({ type: "uiBuilderSnapshot", snapshot });
+  }, UI_BUILDER_SNAPSHOT);
+  await page.waitForSelector("#ui-builder-out:not([hidden])");
+  await page.screenshot({ path: fileURLToPath(new URL("./ui-task-uibuilder.png", docs)), fullPage: true });
+
   const inputs = Object.fromEntries(Object.entries(EVIDENCE_INPUTS).map(([name, url]) => [
     name,
     createHash("sha256").update(readFileSync(url)).digest("hex"),
@@ -139,7 +155,7 @@ try {
     `${JSON.stringify({ schema: "design-parity-ui-preview/v1", inputs }, null, 2)}\n`,
   );
 
-  console.log("wrote docs/ui-task-{add,library,customize,handoff}.png and docs/ui-preview.manifest.json");
+  console.log("wrote docs/ui-task-{add,library,customize,handoff,uibuilder}.png and docs/ui-preview.manifest.json");
 } finally {
   await browser.close();
 }

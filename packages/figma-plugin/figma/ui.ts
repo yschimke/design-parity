@@ -839,6 +839,9 @@ window.onmessage = (event: MessageEvent) => {
   if (msg.type === "selectionRead") {
     onSelectionRead(msg.read as FrameRead, msg.png as Uint8Array | undefined);
   }
+  if (msg.type === "uiBuilderBuilt") onUiBuilderBuilt(msg.result as UiBuilderBuildResult);
+  if (msg.type === "uiBuilderSnapshot") onUiBuilderSnapshot(msg.snapshot);
+  if (msg.type === "uiBuilderError") uiBuilderSay(msg.message as string);
   if (msg.type === "selectionEmpty") {
     proposeSay("Select a frame in Figma, then Read selection.");
   }
@@ -951,6 +954,7 @@ const views: Record<string, HTMLElement> = {
   library: document.getElementById("view-library") as HTMLElement,
   editor: document.getElementById("view-editor") as HTMLElement,
   propose: document.getElementById("view-propose") as HTMLElement,
+  uibuilder: document.getElementById("view-uibuilder") as HTMLElement,
 };
 const catalogSource = document.getElementById("catalog-source") as HTMLElement;
 const taskTabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
@@ -1438,3 +1442,65 @@ downloadPngButton.addEventListener("click", () => {
   anchor.click();
   URL.revokeObjectURL(url);
 });
+
+// ── UI builder ───────────────────────────────────────────────────────────────
+
+/** What the main thread reports after building a scene (`BuildResult` in src/uiBuilder.ts). */
+interface UiBuilderBuildResult {
+  rootId: string;
+  created: number;
+  standIns: string[];
+  unresolvedTokens: string[];
+}
+
+const uiBuilderSceneArea = document.getElementById("ui-builder-scene") as HTMLTextAreaElement;
+const uiBuilderBuildButton = document.getElementById("ui-builder-build") as HTMLButtonElement;
+const uiBuilderReadButton = document.getElementById("ui-builder-read") as HTMLButtonElement;
+const uiBuilderStatus = document.getElementById("uibuilder-status") as HTMLParagraphElement;
+const uiBuilderOut = document.getElementById("ui-builder-out") as HTMLElement;
+const uiBuilderSnapshotArea = document.getElementById("ui-builder-snapshot") as HTMLTextAreaElement;
+const copyUiBuilderSnapshotButton = document.getElementById(
+  "copy-ui-builder-snapshot",
+) as HTMLButtonElement;
+
+function uiBuilderSay(text: string): void {
+  uiBuilderStatus.textContent = text;
+}
+
+uiBuilderBuildButton.addEventListener("click", () => {
+  let scene: unknown;
+  try {
+    scene = JSON.parse(uiBuilderSceneArea.value);
+  } catch (err) {
+    uiBuilderSay(`That is not JSON: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  uiBuilderSay("Building the scene…");
+  parent.postMessage({ pluginMessage: { type: "uiBuilderBuild", scene } }, "*");
+});
+
+uiBuilderReadButton.addEventListener("click", () => {
+  uiBuilderSay("Reading the selection…");
+  parent.postMessage({ pluginMessage: { type: "uiBuilderRead" } }, "*");
+});
+
+function onUiBuilderBuilt(result: UiBuilderBuildResult): void {
+  const parts = [`Built ${result.created} node${result.created === 1 ? "" : "s"}.`];
+  if (result.standIns.length > 0) {
+    parts.push(`${result.standIns.length} instance${result.standIns.length === 1 ? " has" : "s have"} no kit component on this page and ${result.standIns.length === 1 ? "is a stand-in" : "are stand-ins"}.`);
+  }
+  if (result.unresolvedTokens.length > 0) {
+    parts.push(`Missing in this file: ${result.unresolvedTokens.join(", ")}.`);
+  }
+  uiBuilderSay(parts.join(" "));
+}
+
+function onUiBuilderSnapshot(snapshot: unknown): void {
+  uiBuilderSnapshotArea.value = JSON.stringify(snapshot, null, 2);
+  uiBuilderOut.hidden = false;
+  uiBuilderSay("Snapshot ready. Copy it to figmaTool reconcile, or hand it to an agent session.");
+}
+
+copyUiBuilderSnapshotButton.addEventListener("click", () =>
+  copyArea(uiBuilderSnapshotArea, copyUiBuilderSnapshotButton),
+);

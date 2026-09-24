@@ -1,10 +1,12 @@
 {
   "schema": "design-parity-ui-preview/v1",
   "inputs": {
-    "figma/ui.html": "a07ec228ec6410d95475ab9bc2a33f4cfb4b68345dcf7903e14fcc7ec457dd95",
-    "figma/ui.ts": "876d02330479d48c6f1825835e1976af1be086ced48332e5844455cb595d9d24",
-    "figma/code.ts": "7b18e5201f7d836eadbd82909224a8f661b37285844fac983049ba0e1c8b8a0a",
-    "docs/ui-preview.mjs": "f673715f6cafcf2efc3eafad7e83ddb2a1c2fb63853e5102d45fcd2796e509d6",
-    "docs/sample-catalog.json": "8d76a32bc53c70b3fa81f1608a111996dfa1bd2666bde2258040c20c2d2d259e"
+    "figma/ui.html": "9b8ce179912b0207a583938fc366917755e8721bfbae1cba672a454fe057a8e1",
+    "figma/ui.ts": "64f3f15e1575f347156d58861fe782f80a1cfbe96119a6dbea47bf8fbbcac1e0",
+    "figma/code.ts": "b974ac6a0c0322513a3ac24b54e25a218f29c7140bd9d6cac42b33d824623128",
+    "docs/ui-preview.mjs": "435fc1a182f9673227618efeb47f2382ceb2a409914dbe09a63a6a970cab3b34",
+    "docs/sample-catalog.json": "8d76a32bc53c70b3fa81f1608a111996dfa1bd2666bde2258040c20c2d2d259e",
+    "docs/sample-ui-builder-scene.json": "6583a38025fa140343cd461e3284d1bd079e53d97396d2c62cf9fdeec0f55488",
+    "docs/sample-ui-builder-snapshot.json": "d1184d1ca4741b8b8bbe49a94a2130962d1ddb398dac8fcc649e9a51c3585ecf"
   }
 }

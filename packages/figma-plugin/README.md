@@ -397,12 +397,32 @@ a snapshot.
   label from its text layer. Text the scene left unfilled does not report
   Figma's default black.
 
-Both have been run in a real Figma file through the Figma MCP's `use_figma`
-with an esbuild IIFE of this module. The frame read back untouched reconciles
-to no command in the builder; the edited frame reconciles to exactly the
-designer's edits. That evidence is committed in compose-ui-builder. Wiring the
-two operations into a plugin task (paste a scene, copy a snapshot) is the next
-step.
+### Using the UI builder task
+
+The plugin's fifth task, **UI builder**, runs both operations:
+
+1. Export the design in compose-ui-builder:
+   `./gradlew :ui-builder:figmaTool -PfigmaArgs="export <operations.json> <scene.json>"`.
+2. Paste the scene into **Scene JSON** and press **Build**. The plugin looks for
+   the kit's component sets and components on the current page and uses them
+   where their names match. Anything else becomes a labelled stand-in frame.
+   The status line reports how many nodes were built, which instances are
+   stand-ins, and any colour variables or text styles this file doesn't have.
+3. Edit the frame in Figma: retitle, relabel, restyle, reorder, add or delete
+   layers.
+4. Select the frame, press **Read selection**, and **Copy** the snapshot.
+5. Back in compose-ui-builder:
+   `./gradlew :ui-builder:figmaTool -PfigmaArgs="reconcile <operations.json> <scene.json> <snapshot.json> <command.json>"`
+   writes the designer's edits as a command at the exported revision.
+
+![The UI builder task, after building a scene and reading it back](docs/ui-task-uibuilder.png)
+
+Both operations have also been run in a real Figma file through the Figma
+MCP's `use_figma`, using an esbuild IIFE of this module:
+- the frame read back untouched reconciles to no command in the builder;
+- the edited frame reconciles to exactly the designer's edits.
+
+That evidence is committed in compose-ui-builder.
 
 ## Handoff to code (design → code)
 
