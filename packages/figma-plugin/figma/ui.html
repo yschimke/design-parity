@@ -29,7 +29,7 @@
   .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
   #result label, .head label { margin: 0; }
   #copy, #copy-issue, #copy-spec { flex: 0 0 auto; padding: 4px 10px; font-size: 11px; background: rgba(128,128,128,0.2); color: inherit; }
-  #designmap, #issue-body, #spec-json { width: 100%; box-sizing: border-box; height: 132px; font-family: ui-monospace, monospace;
+  #designmap, #issue-body, #spec-json, #ui-builder-scene, #ui-builder-snapshot { width: 100%; box-sizing: border-box; height: 132px; font-family: ui-monospace, monospace;
                font-size: 11px; padding: 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.4);
                background: transparent; color: inherit; resize: vertical; }
   #issue-body { height: 220px; }
@@ -98,6 +98,7 @@
   <button class="tab" id="tab-library" data-view="library" role="tab" aria-selected="false" aria-controls="view-library"><span class="tab-title">Manage library</span><span class="tab-detail">Import or upgrade</span></button>
   <button class="tab" id="tab-editor" data-view="editor" role="tab" aria-selected="false" aria-controls="view-editor"><span class="tab-title">Customize live</span><span class="tab-detail">Overrides and slots</span></button>
   <button class="tab" id="tab-propose" data-view="propose" role="tab" aria-selected="false" aria-controls="view-propose"><span class="tab-title">Handoff to code</span><span class="tab-detail">Spec and issue</span></button>
+  <button class="tab" id="tab-uibuilder" data-view="uibuilder" role="tab" aria-selected="false" aria-controls="view-uibuilder"><span class="tab-title">UI builder</span><span class="tab-detail">Build a scene, read it back</span></button>
 </div>
 
 <!-- Shared source setup for catalog-backed tasks. -->
@@ -280,4 +281,30 @@
       <p class="hint" style="margin:4px 0 0">Open a new issue with the body above (attach the PNG), or hand both to an agent session to file. Once implemented and the catalog regenerates, the render lands beside this frame.</p>
     </section>
   </div>
+</section>
+
+<!-- Task 5: the Compose UI builder bridge. -->
+<section id="view-uibuilder" class="view" role="tabpanel" aria-labelledby="tab-uibuilder" hidden>
+  <div class="task-intro"><p class="eyebrow">Task 5</p><h1>Round-trip a UI builder design</h1><p class="hint">Build a design exported from the Compose UI builder as auto-layout frames, then read the edited frame back for the builder to apply.</p></div>
+
+  <div class="card">
+    <div class="card-header"><div><h2>Build a scene</h2><p>Paste a <code>compose-ui-builder-figma-scene/v1</code>, from <code>figmaTool export</code>. Kit components on this page are used where their names match; the rest become labelled stand-ins.</p></div></div>
+    <label for="ui-builder-scene">Scene JSON</label>
+    <textarea id="ui-builder-scene" spellcheck="false" placeholder='{"schema":"compose-ui-builder-figma-scene/v1", …}'></textarea>
+    <div class="row"><button id="ui-builder-build" type="button" class="primary">Build</button></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div><h2>Read it back</h2><p>Select the built frame after editing it, and copy the snapshot to <code>figmaTool reconcile</code> or an agent session.</p></div></div>
+    <button id="ui-builder-read" type="button" class="secondary">Read selection</button>
+  </div>
+  <p id="uibuilder-status" role="status" aria-live="polite"></p>
+
+  <section id="ui-builder-out" class="card" hidden>
+    <div class="head">
+      <label for="ui-builder-snapshot"><code>compose-ui-builder-figma-snapshot/v1</code></label>
+      <button id="copy-ui-builder-snapshot" type="button">Copy</button>
+    </div>
+    <textarea id="ui-builder-snapshot" readonly spellcheck="false"></textarea>
+  </section>
 </section>

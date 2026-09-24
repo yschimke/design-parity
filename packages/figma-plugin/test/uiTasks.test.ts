@@ -14,12 +14,13 @@ const mainThread = readFileSync(
 );
 
 describe("task-oriented plugin dialog", () => {
-  it("offers four explicit tasks with matching accessible panels", () => {
+  it("offers five explicit tasks with matching accessible panels", () => {
     const tasks = [
       ["add", "Add components"],
       ["library", "Manage library"],
       ["editor", "Customize live"],
       ["propose", "Handoff to code"],
+      ["uibuilder", "UI builder"],
     ] as const;
 
     for (const [id, label] of tasks) {
@@ -30,8 +31,8 @@ describe("task-oriented plugin dialog", () => {
       expect(html).toContain(`aria-labelledby="tab-${id}"`);
       expect(html).toContain(`<span class="tab-title">${label}</span>`);
     }
-    expect((html.match(/class="tab"/g) ?? [])).toHaveLength(4);
-    expect((html.match(/role="tabpanel"/g) ?? [])).toHaveLength(4);
+    expect((html.match(/class="tab"/g) ?? [])).toHaveLength(5);
+    expect((html.match(/role="tabpanel"/g) ?? [])).toHaveLength(5);
   });
 
   it("keeps one shared catalog source and one dominant action per task", () => {
@@ -41,6 +42,7 @@ describe("task-oriented plugin dialog", () => {
     expect(html).toContain('id="upgrade-mapped" type="button" class="primary"');
     expect(html).toContain('id="place" type="button" class="primary"');
     expect(html).toContain('id="read-selection" type="button" class="primary"');
+    expect(html).toContain('id="ui-builder-build" type="button" class="primary"');
   });
 
   it("uses progressive disclosure and announced status regions", () => {
@@ -48,6 +50,9 @@ describe("task-oriented plugin dialog", () => {
     expect(html).toContain('id="status" role="status" aria-live="polite"');
     expect(html).toContain('id="editor-status" role="status" aria-live="polite"');
     expect(html).toContain('id="propose-status" role="status" aria-live="polite"');
+    expect(html).toContain('id="uibuilder-status" role="status" aria-live="polite"');
+    expect(mainThread).toContain('msg.type === "uiBuilderBuild"');
+    expect(mainThread).toContain('msg.type === "uiBuilderRead"');
     expect(mainThread).toContain("figma.showUI(__html__, { width: 440, height: 640, themeColors: true })");
   });
 
@@ -57,7 +62,7 @@ describe("task-oriented plugin dialog", () => {
   });
 
   it("commits a rendered screenshot for every task view", () => {
-    for (const task of ["add", "library", "customize", "handoff"]) {
+    for (const task of ["add", "library", "customize", "handoff", "uibuilder"]) {
       const png = readFileSync(fileURLToPath(new URL(`../docs/ui-task-${task}.png`, import.meta.url)));
       expect(png.subarray(0, 8), `${task} preview is not a PNG`).toEqual(
         Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -76,6 +81,8 @@ describe("task-oriented plugin dialog", () => {
       "figma/code.ts": new URL("../figma/code.ts", import.meta.url),
       "docs/ui-preview.mjs": new URL("../docs/ui-preview.mjs", import.meta.url),
       "docs/sample-catalog.json": new URL("../docs/sample-catalog.json", import.meta.url),
+      "docs/sample-ui-builder-scene.json": new URL("../docs/sample-ui-builder-scene.json", import.meta.url),
+      "docs/sample-ui-builder-snapshot.json": new URL("../docs/sample-ui-builder-snapshot.json", import.meta.url),
     };
     const current = Object.fromEntries(Object.entries(sources).map(([name, url]) => [
       name,

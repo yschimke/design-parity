@@ -209,3 +209,28 @@ export type {
   PlannedComponent,
   PlannedImage,
 } from "./plan.js";
+export {
+  buildUiBuilderScene,
+  readUiBuilderSnapshot,
+  componentsByName,
+  parseHexColour,
+  formatHexColour,
+  fontStyleFor,
+  weightForStyle,
+  propertyName,
+  UI_BUILDER_NAMESPACE,
+  SCENE_SCHEMA,
+  SNAPSHOT_SCHEMA,
+} from "./uiBuilder.js";
+export type {
+  UiScene,
+  UiSnapshot,
+  UiSceneNode,
+  UiStamp,
+  UiInstance,
+  UiFigmaApi,
+  UiFigmaNode,
+  BuildOptions,
+  BuildResult,
+  ComponentResolver,
+} from "./uiBuilder.js";
