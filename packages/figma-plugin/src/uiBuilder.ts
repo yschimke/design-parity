@@ -23,6 +23,8 @@
 export const UI_BUILDER_NAMESPACE = "composeUiBuilder";
 export const SCENE_SCHEMA = "compose-ui-builder-figma-scene/v1";
 export const SNAPSHOT_SCHEMA = "compose-ui-builder-figma-snapshot/v1";
+/** The shared-plugin-data role on a stand-in's label layer. */
+const LABEL_ROLE = "label";
 /** What Figma fills a text node with when nothing else does. */
 const DEFAULT_TEXT_FILL = "#FF000000";
 
@@ -381,7 +383,12 @@ export async function buildUiBuilderScene(
         result.standIns.push(n.id);
         node = standInFrame(figma, n.instance);
         const label = labelOf(n.instance);
-        if (label !== undefined) node.appendChild(await text({ id: `${n.id}-label`, type: "TEXT" }, { characters: label }));
+        if (label !== undefined) {
+          const layer = await text({ id: `${n.id}-label`, type: "TEXT" }, { characters: label });
+          // Marked, so a designer's own text added beside it is never read back as the label.
+          layer.setSharedPluginData(UI_BUILDER_NAMESPACE, "role", LABEL_ROLE);
+          node.appendChild(layer);
+        }
       }
     } else {
       node = figma.createFrame();
@@ -622,7 +629,10 @@ export async function readUiBuilderSnapshot(
     const standIn = node.getSharedPluginData(UI_BUILDER_NAMESPACE, "instance");
     if (standIn) {
       const instance = JSON.parse(standIn) as UiInstance;
-      const labelLayer = (node.children ?? []).find((c) => c.type === "TEXT");
+      const texts = (node.children ?? []).filter((c) => c.type === "TEXT");
+      const labelLayer =
+        texts.find((c) => c.getSharedPluginData(UI_BUILDER_NAMESPACE, "role") === LABEL_ROLE) ??
+        (texts.length === 1 ? texts[0] : undefined);
       const key = labelKey(instance);
       if (labelLayer && key) {
         instance.properties = { ...instance.properties, [key]: labelLayer.characters ?? "" };
@@ -696,7 +706,48 @@ export function componentsByName(candidates: readonly UiFigmaNode[]): ComponentR
   return (instance) => {
     const found = byName.get((instance.componentSet ?? instance.component ?? "").toLowerCase());
     if (!found) return null;
-    if (found.type === "COMPONENT_SET") return found.defaultVariant ?? null;
+    if (found.type === "COMPONENT_SET") return variantFor(found, instance);
     return found;
   };
+}
+
+/** `State=Enabled, Size=Small` → `{state: "enabled", size: "small"}`, case-blind. */
+function variantAxes(name: string): Map<string, string> {
+  const axes = new Map<string, string>();
+  for (const part of name.split(",")) {
+    const [axis, value] = part.split("=").map((x) => x.trim().toLowerCase());
+    if (axis && value !== undefined) axes.set(axis, value);
+  }
+  return axes;
+}
+
+/**
+ * The variant of [set] the instance names. Its `component` (`State=Disabled, …`) and its
+ * properties both state axis values; the variant that agrees with every one it has, and matches
+ * the most, wins. Only when nothing is named does the set's default stand in.
+ */
+function variantFor(set: UiFigmaNode, instance: UiInstance): UiFigmaNode | null {
+  const wanted = variantAxes(instance.component ?? "");
+  for (const [key, value] of Object.entries(instance.properties ?? {})) {
+    const axis = propertyName(key).toLowerCase();
+    if (!wanted.has(axis)) wanted.set(axis, String(value).toLowerCase());
+  }
+  let best: UiFigmaNode | undefined;
+  let bestScore = 0;
+  for (const variant of set.children ?? []) {
+    if (variant.type !== "COMPONENT") continue;
+    let score = 0;
+    let conflict = false;
+    for (const [axis, value] of variantAxes(variant.name)) {
+      const asked = wanted.get(axis);
+      if (asked === undefined) continue;
+      if (asked === value) score++;
+      else conflict = true;
+    }
+    if (!conflict && score > bestScore) {
+      best = variant;
+      bestScore = score;
+    }
+  }
+  return best ?? set.defaultVariant ?? null;
 }

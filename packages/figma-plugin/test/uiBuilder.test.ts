@@ -419,4 +419,36 @@ describe("review fixes", () => {
     );
     expect(result.unappliedProperties).toEqual(["p: Label text"]);
   });
+
+  it("builds the variant the instance names, not the set's default", async () => {
+    const { figma, node } = fakeFigma();
+    const make = (name: string) =>
+      node("COMPONENT", { name, createInstance: () => node("INSTANCE", { name, setProperties: () => {} }) });
+    const enabled = make("State=Enabled, Size=Small");
+    const disabled = make("State=Disabled, Size=Small");
+    const set = node("COMPONENT_SET", { name: "Button", defaultVariant: enabled });
+    set.appendChild(enabled);
+    set.appendChild(disabled);
+    const resolve = componentsByName([set]);
+    expect(resolve({ componentSet: "Button", component: "State=Disabled" })).toBe(disabled);
+    expect(resolve({ componentSet: "Button", properties: { State: "Disabled" } })).toBe(disabled);
+    expect(resolve({ componentSet: "Button" })).toBe(enabled);
+    expect(resolve({ componentSet: "Button", component: "State=Pressed" })).toBe(enabled);
+  });
+
+  it("reads a stand-in's label from its marked layer, not a designer's added text", async () => {
+    const { figma, node } = fakeFigma();
+    const page = node("FRAME");
+    await buildUiBuilderScene(
+      figma,
+      one({ id: "b", type: "INSTANCE", instance: { componentSet: "Button", properties: { "Label text": "Pay" } } }),
+      { parent: page },
+    );
+    const pay = page.children![0];
+    const note = figma.createText();
+    note.characters = "note to self";
+    (pay.children as UiFigmaNode[]).unshift(note);
+    const read = (await readUiBuilderSnapshot(figma, pay)).root;
+    expect(read.instance?.properties).toEqual({ "Label text": "Pay" });
+  });
 });

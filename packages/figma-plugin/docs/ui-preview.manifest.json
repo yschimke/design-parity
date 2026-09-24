@@ -3,7 +3,7 @@
   "inputs": {
     "figma/ui.html": "9b8ce179912b0207a583938fc366917755e8721bfbae1cba672a454fe057a8e1",
     "figma/ui.ts": "4e8f720ecdc453e5e495efd0d47e5cc5c6b7a59e186f38eaa7ceb191dedffaef",
-    "figma/code.ts": "b974ac6a0c0322513a3ac24b54e25a218f29c7140bd9d6cac42b33d824623128",
+    "figma/code.ts": "28aa6f11136cdf7c41fdc9b5be27ca46a9c4d688dbfaa94eee288d2e029dad51",
     "docs/ui-preview.mjs": "435fc1a182f9673227618efeb47f2382ceb2a409914dbe09a63a6a970cab3b34",
     "docs/sample-catalog.json": "8d76a32bc53c70b3fa81f1608a111996dfa1bd2666bde2258040c20c2d2d259e",
     "docs/sample-ui-builder-scene.json": "6583a38025fa140343cd461e3284d1bd079e53d97396d2c62cf9fdeec0f55488",

@@ -482,6 +482,8 @@ figma.ui.onmessage = async (msg: UiMessage): Promise<void> => {
       // is built as a labelled stand-in that reads back as the instance it stands for.
       const kit = figma.currentPage.findAllWithCriteria({ types: ["COMPONENT_SET", "COMPONENT"] });
       const result = await buildUiBuilderScene(figma as unknown as UiFigmaApi, msg.scene, {
+        // The page as parent, so the scene root keeps the coordinates it was exported at.
+        parent: figma.currentPage as unknown as UiFigmaNode,
         resolveComponent: componentsByName(kit as unknown as UiFigmaNode[]),
       });
       const root = await figma.getNodeByIdAsync(result.rootId);
