@@ -8,6 +8,7 @@ import {
   parseHexColour,
   readUiBuilderSnapshot,
   SCENE_SCHEMA,
+  weightForStyle,
   UI_BUILDER_NAMESPACE,
   type UiFigmaApi,
   type UiFigmaNode,
@@ -311,5 +312,111 @@ describe("colour and font helpers", () => {
     expect(fontStyleFor(600)).toBe("Semi Bold");
     expect(fontStyleFor(400, true)).toBe("Italic");
     expect(fontStyleFor(700, true)).toBe("Bold Italic");
+  });
+});
+
+describe("review fixes", () => {
+  const one = (node: UiSceneNode): UiScene => ({ ...scene, root: node });
+  const stampOf = (id: string) => stamp(id);
+
+  it("keeps a hidden layer hidden", async () => {
+    const { figma, node } = fakeFigma();
+    const page = node("FRAME");
+    await buildUiBuilderScene(figma, one({ id: "r", type: "FRAME", visible: false, stamp: stampOf("r") }), {
+      parent: page,
+    });
+    expect(page.children![0].visible).toBe(false);
+  });
+
+  it("lets a text style own the typography rather than overriding it", async () => {
+    const { figma, node } = fakeFigma();
+    const page = node("FRAME");
+    await buildUiBuilderScene(
+      figma,
+      one({ id: "t", type: "TEXT", text: { characters: "Hi", style: "M3/body/large", fontSize: 40 } }),
+      { parent: page },
+    );
+    const text = page.children![0];
+    expect(text.textStyleId).toBe("S:1");
+    expect(text.fontSize).toBeUndefined();
+  });
+
+  it("places a root on a parent without auto layout, such as a page", async () => {
+    const { figma, node } = fakeFigma();
+    const page = node("PAGE", { layoutMode: undefined });
+    await buildUiBuilderScene(figma, one({ id: "r", type: "FRAME", x: 120, y: 80 }), { parent: page });
+    expect([page.children![0].x, page.children![0].y]).toEqual([120, 80]);
+  });
+
+  it("round-trips every weight a family names", () => {
+    for (const weight of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
+      expect(weightForStyle(fontStyleFor(weight))).toBe(weight);
+      expect(weightForStyle(fontStyleFor(weight, true))).toBe(weight);
+    }
+  });
+
+  it("takes a stand-in's label from a text property, never a boolean", async () => {
+    const { figma, node } = fakeFigma();
+    const page = node("FRAME");
+    await buildUiBuilderScene(
+      figma,
+      one({
+        id: "b",
+        type: "INSTANCE",
+        instance: { componentSet: "Chip", properties: { "Show label": true, "Label text": "Filter" } },
+      }),
+      { parent: page },
+    );
+    const chip = page.children![0];
+    expect(chip.children![0].characters).toBe("Filter");
+    chip.children![0].characters = "Sort";
+    const read = (await readUiBuilderSnapshot(figma, chip)).root;
+    expect(read.instance?.properties).toEqual({ "Show label": true, "Label text": "Sort" });
+  });
+
+  it("keeps a fixed text box at its size", async () => {
+    const { figma, node } = fakeFigma();
+    const page = node("FRAME", { layoutMode: "VERTICAL" });
+    await buildUiBuilderScene(
+      figma,
+      one({
+        id: "t",
+        type: "TEXT",
+        width: 120,
+        height: 48,
+        sizing: { horizontal: "FIXED", vertical: "FIXED" },
+        text: { characters: "Clipped" },
+      }),
+      { parent: page },
+    );
+    const text = page.children![0];
+    expect([text.width, text.height, text.textAutoResize]).toEqual([120, 48, "NONE"]);
+  });
+
+  it("reads a standalone component without inventing a set", async () => {
+    const { figma, node } = fakeFigma();
+    const avatar = node("COMPONENT", { name: "Avatar", parent: node("PAGE") });
+    const instance = node("INSTANCE", { getMainComponentAsync: async () => avatar });
+    const read = (await readUiBuilderSnapshot(figma, instance)).root;
+    expect(read.instance?.componentSet).toBeUndefined();
+    expect(read.instance?.component).toBe("Avatar");
+  });
+
+  it("says which requested properties a kit component does not have", async () => {
+    const { figma, node } = fakeFigma();
+    const kit = node("COMPONENT", {
+      name: "Button",
+      createInstance: () =>
+        node("INSTANCE", {
+          componentProperties: { State: { type: "VARIANT", value: "Enabled" } },
+          setProperties: () => {},
+        }),
+    });
+    const result = await buildUiBuilderScene(
+      figma,
+      one({ id: "p", type: "INSTANCE", instance: { componentSet: "Button", properties: { State: "Enabled", "Label text": "Pay" } } }),
+      { parent: node("FRAME"), resolveComponent: componentsByName([kit]) },
+    );
+    expect(result.unappliedProperties).toEqual(["p: Label text"]);
   });
 });

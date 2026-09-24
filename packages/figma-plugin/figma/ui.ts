@@ -1451,6 +1451,7 @@ interface UiBuilderBuildResult {
   created: number;
   standIns: string[];
   unresolvedTokens: string[];
+  unappliedProperties?: string[];
 }
 
 const uiBuilderSceneArea = document.getElementById("ui-builder-scene") as HTMLTextAreaElement;
@@ -1491,6 +1492,9 @@ function onUiBuilderBuilt(result: UiBuilderBuildResult): void {
   }
   if (result.unresolvedTokens.length > 0) {
     parts.push(`Missing in this file: ${result.unresolvedTokens.join(", ")}.`);
+  }
+  if (result.unappliedProperties && result.unappliedProperties.length > 0) {
+    parts.push(`Properties the kit component does not have: ${result.unappliedProperties.join(", ")}.`);
   }
   uiBuilderSay(parts.join(" "));
 }

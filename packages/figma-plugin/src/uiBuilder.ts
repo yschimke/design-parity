@@ -175,6 +175,8 @@ export interface UiVariable {
 export interface UiStyle {
   id: string;
   name: string;
+  /** A text style's font, which has to be loaded before the style can be applied. */
+  fontName?: { family: string; style: string };
 }
 
 /** The subset of Figma's `PluginAPI` the builder bridge uses. */
@@ -218,6 +220,11 @@ export interface BuildResult {
   standIns: string[];
   /** Variables and text styles the scene named that this file does not have. */
   unresolvedTokens: string[];
+  /**
+   * Instance properties the resolved kit component does not have, as `<node id>: <property>` —
+   * a library that renamed a property builds with its default, and says so here.
+   */
+  unappliedProperties?: string[];
 }
 
 // ------------------------------------------------------------------- colour
@@ -246,11 +253,17 @@ export function formatHexColour(color: UiRgb, opacity = 1): string {
 
 // -------------------------------------------------------------------- fonts
 
+/** Figma's style names for each weight, as Inter and most variable families spell them. */
 const WEIGHT_STYLES: [number, string][] = [
+  [100, "Thin"],
+  [200, "Extra Light"],
+  [300, "Light"],
   [400, "Regular"],
   [500, "Medium"],
   [600, "Semi Bold"],
   [700, "Bold"],
+  [800, "Extra Bold"],
+  [900, "Black"],
 ];
 
 export function fontStyleFor(weight = 400, italic = false): string {
@@ -261,13 +274,17 @@ export function fontStyleFor(weight = 400, italic = false): string {
   return nearest === "Regular" ? "Italic" : `${nearest} Italic`;
 }
 
+/** The inverse of {@link fontStyleFor}: every weight it writes reads back as itself. */
 export function weightForStyle(style: string): number {
-  const s = style.toLowerCase().replace(/italic/, "").trim();
+  const s = style.toLowerCase().replace(/italic/, "").replace(/[\s-]+/g, " ").trim();
+  if (s.includes("thin") || s.includes("hairline")) return 100;
+  if ((s.includes("extra") || s.includes("ultra")) && s.includes("light")) return 200;
+  if (s.includes("light")) return 300;
   if (s.includes("semi") || s.includes("demi")) return 600;
-  if (s.includes("extra") && s.includes("bold")) return 800;
+  if ((s.includes("extra") || s.includes("ultra")) && s.includes("bold")) return 800;
+  if (s.includes("black") || s.includes("heavy")) return 900;
   if (s.includes("bold")) return 700;
   if (s.includes("medium")) return 500;
-  if (s.includes("light")) return 300;
   return 400;
 }
 
@@ -324,17 +341,21 @@ export async function buildUiBuilderScene(
 
   const text = async (n: UiSceneNode, t: UiText): Promise<UiFigmaNode> => {
     const node = figma.createText();
+    const style = t.style ? textStyles.get(t.style) : undefined;
+    if (t.style && !(style && node.setTextStyleIdAsync)) unresolved.add(`text style ${t.style}`);
     const font = { family, style: fontStyleFor(t.fontWeight ?? 400, t.italic ?? false) };
     await figma.loadFontAsync(font);
     node.fontName = font;
     node.characters = t.characters;
-    if (t.fontSize) node.fontSize = t.fontSize;
-    if (t.textAlign) node.textAlignHorizontal = t.textAlign;
-    if (t.style) {
-      const style = textStyles.get(t.style);
-      if (style && node.setTextStyleIdAsync) await node.setTextStyleIdAsync(style.id);
-      else unresolved.add(`text style ${t.style}`);
+    if (style && node.setTextStyleIdAsync) {
+      // A style owns the layer's typography, as the builder's importer reads it: an explicit size
+      // or weight set over it would detach the style, and one set before it is overwritten.
+      if (style.fontName) await figma.loadFontAsync(style.fontName);
+      await node.setTextStyleIdAsync(style.id);
+    } else if (t.fontSize) {
+      node.fontSize = t.fontSize;
     }
+    if (t.textAlign) node.textAlignHorizontal = t.textAlign;
     const fills = paint(n.fill);
     if (fills) node.fills = fills;
     // Figma paints unfilled text black; the builder's text takes the theme's content colour.
@@ -352,7 +373,9 @@ export async function buildUiBuilderScene(
       const component = await opts.resolveComponent?.(n.instance);
       if (component?.createInstance) {
         node = component.createInstance();
-        applyInstanceProperties(node, n.instance.properties ?? {});
+        for (const missing of applyInstanceProperties(node, n.instance.properties ?? {})) {
+          (result.unappliedProperties ??= []).push(`${n.id}: ${missing}`);
+        }
       } else {
         requested = n.instance;
         result.standIns.push(n.id);
@@ -382,6 +405,7 @@ export async function buildUiBuilderScene(
       if (n.cornerRadius) node.cornerRadius = n.cornerRadius;
     }
     node.name = n.stamp && n.type !== "INSTANCE" && n.name ? n.name : n.name ?? n.id;
+    if (n.visible === false) node.visible = false;
     stamp(node, n.stamp, requested);
 
     // Size first: resize() resets sizing modes, so they are set after parenting.
@@ -389,12 +413,19 @@ export async function buildUiBuilderScene(
     const h = n.height && n.height > 0 ? n.height : undefined;
     if (n.type !== "TEXT" && (w || h)) node.resize(w ?? node.width ?? 1, h ?? node.height ?? 1);
     if (n.type === "TEXT" && n.sizing?.horizontal === "FIXED" && w) {
-      node.resize(w, node.height);
-      node.textAutoResize = "HEIGHT";
+      if (n.sizing?.vertical === "FIXED" && h) {
+        // A fixed box: both dimensions, and no growing to fit the text.
+        node.resize(w, h);
+        node.textAutoResize = "NONE";
+      } else {
+        node.resize(w, node.height);
+        node.textAutoResize = "HEIGHT";
+      }
     }
     if (parent) {
       parent.appendChild(node);
-      if (parent.layoutMode === "NONE") {
+      // A page, or any parent without auto layout, places its children by their coordinates.
+      if (parent.layoutMode !== "HORIZONTAL" && parent.layoutMode !== "VERTICAL") {
         node.x = n.x ?? 0;
         node.y = n.y ?? 0;
       }
@@ -436,17 +467,22 @@ function applySizing(node: UiFigmaNode, n: UiSceneNode, parent: UiFigmaNode | un
 function applyInstanceProperties(
   node: UiFigmaNode,
   requested: Record<string, string | number | boolean>,
-) {
+): string[] {
+  const missing: string[] = [];
   const own = node.componentProperties ?? {};
   const byName = new Map(Object.keys(own).map((k) => [propertyName(k).toLowerCase(), k]));
   const next: Record<string, string | boolean> = {};
   for (const [key, value] of Object.entries(requested)) {
     const target = byName.get(key.toLowerCase());
-    if (!target) continue;
+    if (!target) {
+      missing.push(key);
+      continue;
+    }
     next[target] =
       own[target]?.type === "BOOLEAN" ? value === true || value === "true" : String(value);
   }
   if (Object.keys(next).length > 0) node.setProperties?.(next);
+  return missing;
 }
 
 /** A frame standing in for a kit component this file does not have. */
@@ -469,8 +505,21 @@ function standInFrame(figma: UiFigmaApi, instance: UiInstance): UiFigmaNode {
 
 /** The label text a kit instance carries as a property, if it carries one. */
 function labelOf(instance: UiInstance): string | undefined {
-  const entry = Object.entries(instance.properties ?? {}).find(([k]) => /label|text/i.test(k));
-  return entry ? String(entry[1]) : undefined;
+  const key = labelKey(instance);
+  return key === undefined ? undefined : String(instance.properties![key]);
+}
+
+/**
+ * The property holding an instance's label: a text value whose name says label or text — `Label
+ * text` before a bare `Text`, and never a boolean such as `Show label`.
+ */
+export function labelKey(instance: UiInstance): string | undefined {
+  const textual = Object.entries(instance.properties ?? {}).filter(
+    ([, value]) => typeof value === "string",
+  );
+  return (
+    textual.find(([k]) => /label/i.test(k))?.[0] ?? textual.find(([k]) => /text/i.test(k))?.[0]
+  );
 }
 
 /** `Label text#12:0` → `Label text`. */
@@ -574,9 +623,9 @@ export async function readUiBuilderSnapshot(
     if (standIn) {
       const instance = JSON.parse(standIn) as UiInstance;
       const labelLayer = (node.children ?? []).find((c) => c.type === "TEXT");
-      const labelKey = Object.keys(instance.properties ?? {}).find((k) => /label|text/i.test(k));
-      if (labelLayer && labelKey) {
-        instance.properties = { ...instance.properties, [labelKey]: labelLayer.characters ?? "" };
+      const key = labelKey(instance);
+      if (labelLayer && key) {
+        instance.properties = { ...instance.properties, [key]: labelLayer.characters ?? "" };
       }
       out.type = "INSTANCE";
       out.instance = instance;
@@ -591,7 +640,8 @@ export async function readUiBuilderSnapshot(
         properties[propertyName(key)] = prop.value;
       }
       out.instance = {
-        componentSet: set?.name ?? main?.name,
+        // A standalone component has no set; its name is the component's alone.
+        componentSet: set?.name,
         component: main?.name ?? "",
         properties,
       };
