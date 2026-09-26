@@ -3,6 +3,7 @@
  * `design-parity publish` — put a staged artifact directory on its branch.
  *
  *   design-parity publish --dir out --branch design-parity/main \
+ *     --repo owner/generated-artifacts \
  *     --message "design-parity artifacts for <sha>" [--allow-unchanged]
  *
  * A thin CLI over {@link publishBaseline}, which re-parents the staged tree on
@@ -16,9 +17,9 @@
  * (`commits/<branch>/<component>/report.html`), so it advertised a trend it
  * destroyed each time. One publisher, one history.
  *
- * Reads `GITHUB_TOKEN`, `GITHUB_REPOSITORY` and (optionally) `GITHUB_SERVER_URL`
- * from the environment rather than the command line, so a token never lands in
- * a workflow log or a process listing.
+ * Reads `GITHUB_TOKEN` and (optionally) `GITHUB_SERVER_URL` from the environment, so a token never
+ * lands in a workflow log or process listing. The destination is `--repo`, falling back to the
+ * runner-owned `GITHUB_REPOSITORY` for same-repository publication.
  */
 import { argv, cwd, env, exit, stderr, stdout } from "node:process";
 import { resolve as resolvePath } from "node:path";
@@ -29,6 +30,7 @@ import { publishBaseline } from "../github/publish.js";
 interface Args {
   dir?: string;
   branch?: string;
+  repo?: string;
   message?: string;
   /**
    * Commit even when the staged tree matches the branch tip. Off by default:
@@ -51,6 +53,9 @@ export function parseArgs(args: string[]): Args {
         break;
       case "--branch":
         out.branch = next();
+        break;
+      case "--repo":
+        out.repo = next();
         break;
       case "--message":
         out.message = next();
@@ -80,7 +85,7 @@ export async function main(rawArgs: string[] = argv.slice(2)): Promise<number> {
   }
 
   const token = env["GITHUB_TOKEN"];
-  const repo = env["GITHUB_REPOSITORY"];
+  const repo = args.repo ?? env["GITHUB_REPOSITORY"];
   if (!token || !repo) {
     stderr.write(
       "design-parity publish: GITHUB_TOKEN and GITHUB_REPOSITORY are required\n",

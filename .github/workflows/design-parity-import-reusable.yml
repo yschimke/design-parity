@@ -315,7 +315,7 @@ jobs:
       - name: Publish to ${{ inputs.cache-branch }}
         env:
           GITHUB_TOKEN: ${{ secrets.publication-token || github.token }}
-          GITHUB_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
           BRANCH: ${{ inputs.cache-branch }}
           CACHE_DIR: ${{ steps.cache.outputs.dir }}
         run: |
@@ -332,7 +332,7 @@ jobs:
             -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -q -m "design-parity reference cache: ${{ steps.import.outputs.refreshed }} node(s) refreshed from ${GITHUB_SHA}"
           git push \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git" \
             "HEAD:refs/heads/${BRANCH}"
           echo "::notice::Published ${BRANCH} — ${summary}."
 
