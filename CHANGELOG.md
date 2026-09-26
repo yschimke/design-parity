@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/yschimke/design-parity/compare/v1.1.0...v1.2.0) (2026-09-26)
+
+
+### Features
+
+* **figma-plugin:** build and read compose-ui-builder scenes on the canvas ([#493](https://github.com/yschimke/design-parity/issues/493)) ([4a6e391](https://github.com/yschimke/design-parity/commit/4a6e39109d61e763c84e999f6b33e30dfb783b46))
+
+
+### Bug Fixes
+
+* honor external parity publication repositories ([#497](https://github.com/yschimke/design-parity/issues/497)) ([c160874](https://github.com/yschimke/design-parity/commit/c160874951c42424a721e0acbadbe8d316d62586))
+
 ## [1.1.0](https://github.com/yschimke/design-parity/compare/v1.0.4...v1.1.0) (2026-09-23)
 
 
