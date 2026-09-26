@@ -1258,7 +1258,7 @@ jobs:
         if: ${{ steps.check.outputs.found == 'true' && inputs.artifact-branch != '' && hashFiles('out/**') != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.publication-token || github.token }}
-          GITHUB_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
+          PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
           BRANCH: ${{ inputs.artifact-branch }}
           DP_VERSION: ${{ needs.cache.outputs.tool-version || inputs.design-parity-version }}
           DP_REF: ${{ inputs.design-parity-ref }}
@@ -1300,7 +1300,10 @@ jobs:
           esac
 
           if [ "$has_publish" = true ]; then
-            "${dp[@]}" publish --dir out --branch "$BRANCH"
+            "${dp[@]}" publish \
+              --dir out \
+              --branch "$BRANCH" \
+              --repo "$PUBLISH_REPOSITORY"
             exit 0
           fi
 
@@ -1310,7 +1313,7 @@ jobs:
           # carries `publish`. Deliberately the same *shape* as `publishBaseline`
           # — append on the tip, never force — so a consumer on either path gets
           # a branch that is a history rather than a snapshot.
-          repo="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          repo="https://x-access-token:${GITHUB_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
           publish_append() {
             art="$1"
             if git clone -q --depth 1 --branch "$BRANCH" "$repo" "$art" 2>/dev/null; then

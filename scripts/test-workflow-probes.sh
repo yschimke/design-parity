@@ -440,6 +440,28 @@ else
   bad "the sync script's refusal code no longer matches the workflow's dispatch"
 fi
 
+# ── 8. External publication repositories survive GitHub's reserved env ──────
+# GitHub Actions owns GITHUB_REPOSITORY and does not let a step replace it. A
+# workflow that assigns the output repo to that name looks plausible in YAML,
+# but the process still receives the calling/source repository and publishes to
+# the wrong remote. The parity publisher must pass the destination explicitly,
+# and the import workflow must build its remote from an unreserved name.
+import="$root/.github/workflows/design-parity-import-reusable.yml"
+if ! grep -qE '^\s+GITHUB_REPOSITORY:.*publication-repository' "$parity" \
+   && grep -q -- '--repo "$PUBLISH_REPOSITORY"' "$parity" \
+   && grep -q 'github.com/${PUBLISH_REPOSITORY}.git' "$parity"; then
+  ok "parity publication passes the external repository without overriding GITHUB_REPOSITORY"
+else
+  bad "parity publication can still fall back to GitHub's immutable source-repository value"
+fi
+
+if ! grep -qE '^\s+GITHUB_REPOSITORY:.*publication-repository' "$import" \
+   && grep -q 'github.com/${PUBLISH_REPOSITORY}.git' "$import"; then
+  ok "reference-cache publication uses the external repository explicitly"
+else
+  bad "reference-cache publication can still target the source repository"
+fi
+
 if [ "$fail" -eq 0 ]; then
   printf '\nAll workflow probe checks passed.\n'
 else

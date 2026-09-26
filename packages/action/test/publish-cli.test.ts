@@ -10,15 +10,34 @@ describe("publish CLI args", () => {
       "out",
       "--branch",
       "design-parity/main",
+      "--repo",
+      "owner/generated-artifacts",
       "--message",
       "design-parity artifacts for abc123",
     ]);
     expect(args).toEqual({
       dir: "out",
       branch: "design-parity/main",
+      repo: "owner/generated-artifacts",
       message: "design-parity artifacts for abc123",
       allowUnchanged: false,
     });
+  });
+
+  it("accepts an explicit publication repository", () => {
+    // GITHUB_REPOSITORY is runner-owned and cannot be overridden by a workflow
+    // step. An explicit destination is therefore required for output repos.
+    expect(
+      parseArgs([
+        "publish",
+        "--dir",
+        "out",
+        "--branch",
+        "design-parity/main",
+        "--repo",
+        "owner/catalog-out",
+      ]).repo,
+    ).toBe("owner/catalog-out");
   });
 
   it("defaults to skipping an unchanged board", () => {
