@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/yschimke/design-parity/compare/v1.2.0...v1.2.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **workflow:** pass design-map-command as a value and read list-shaped refs ([#502](https://github.com/yschimke/design-parity/issues/502)) ([0708284](https://github.com/yschimke/design-parity/commit/07082844198211b15fa445805050aefa380718f8))
+
 ## [1.2.0](https://github.com/yschimke/design-parity/compare/v1.1.0...v1.2.0) (2026-09-26)
 
 
