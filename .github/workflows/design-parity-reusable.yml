@@ -375,6 +375,9 @@ jobs:
           REQUIRE_REFERENCE_CACHE: ${{ inputs.require-reference-cache }}
           PUBLISH_REPOSITORY: ${{ inputs.publication-repository || github.repository }}
           PUBLISH_TOKEN: ${{ secrets.publication-token || github.token }}
+          # Passed as a value, never spliced into this script: a `$name` in the caller's command
+          # would otherwise be expanded here, under `set -u`, against this job's environment.
+          DESIGN_MAP_COMMAND: ${{ inputs.design-map-command }}
         run: |
           set -euo pipefail
           repo="https://x-access-token:${PUBLISH_TOKEN}@github.com/${PUBLISH_REPOSITORY}.git"
@@ -418,7 +421,7 @@ jobs:
               echo "::warning title=No reference cache::'${REFERENCE_CACHE_BRANCH}' does not exist yet; fetching references live because require-reference-cache is false. Run the import workflow to build it."
             fi
           elif [ -n "${FIGMA_TOKEN:-}" ] && [ -f design-map.json ]; then
-            for key in $(jq -r '[.components[].ref | select(startswith("figma:")) | split(":")[1] | split("/")[0]] | unique[]' design-map.json); do
+            for key in $(jq -r '[.components[].ref | if type == "string" then . else .[].ref end | select(startswith("figma:")) | split(":")[1] | split("/")[0]] | unique[]' design-map.json); do
               version="$(curl -sS -H "X-Figma-Token: ${FIGMA_TOKEN}" \
                 "https://api.figma.com/v1/files/${key}?depth=1" | jq -r '.version // ""')"
               parts+=(--part "figma:${key}=${version}")
@@ -497,7 +500,7 @@ jobs:
           parts+=(--part "runner=${{ inputs.runs-on }}")
           parts+=(--part "module=${{ inputs.module }}")
           parts+=(--part "shards=${{ inputs.shards }}")
-          parts+=(--part "map-command=${{ inputs.design-map-command }}")
+          parts+=(--part "map-command=${DESIGN_MAP_COMMAND}")
 
           if [ -n "${DP_REF:-}" ]; then
             dp=(node "${GITHUB_WORKSPACE}/.design-parity-src/packages/cli/bin/design-parity.mjs")
