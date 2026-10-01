@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/yschimke/design-parity/compare/v1.2.1...v1.3.0) (2026-10-01)
+
+
+### Features
+
+* **diff:** opt-in crop of a candidate's transparent frame against a tight reference ([#504](https://github.com/yschimke/design-parity/issues/504)) ([9c83d2a](https://github.com/yschimke/design-parity/commit/9c83d2a42725ec23f0bc66367d9158dade7b967b))
+
+
+### Bug Fixes
+
+* **diff:** translate semantic bounds with a cropped candidate frame, keep visualCandidateFrame optional ([#506](https://github.com/yschimke/design-parity/issues/506)) ([40bbf9f](https://github.com/yschimke/design-parity/commit/40bbf9fb4c40288414ab2292a91af21c7f96f927))
+
 ## [1.2.1](https://github.com/yschimke/design-parity/compare/v1.2.0...v1.2.1) (2026-09-30)
 
 
