@@ -106,8 +106,11 @@ export interface DiffConfig {
    * `"crop-to-content"` crops the candidate to its drawn content before the
    * reference is sized against it. Set from `.design-parity.json`'s
    * `visual.candidateFrame`; see `ParityVisualPolicy` for when it applies.
+   *
+   * Optional, and absent means `"keep"`, so a caller that builds a whole
+   * `DiffConfig` itself still compiles.
    */
-  visualCandidateFrame: "keep" | "crop-to-content";
+  visualCandidateFrame?: "keep" | "crop-to-content";
 }
 
 /**

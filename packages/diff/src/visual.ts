@@ -285,17 +285,18 @@ async function cropFrameAgainstTightReference(
   reference: Image,
   cand: Raster,
   config: DiffConfig,
-): Promise<Raster> {
+): Promise<{ raster: Raster; dx: number; dy: number }> {
+  const untouched = { raster: cand, dx: 0, dy: 0 };
   const transparentAlpha = Math.round(config.visualAlphaTransparentThreshold * 0xff);
   const content = contentBounds(cand, transparentAlpha);
-  if (!content) return cand;
+  if (!content) return untouched;
   if (
     content.left === 0 &&
     content.top === 0 &&
     content.right === cand.width &&
     content.bottom === cand.height
   ) {
-    return cand;
+    return untouched;
   }
   const refNatural = await readRaster(repoRoot, reference.uri);
   const refContent = contentBounds(refNatural, transparentAlpha);
@@ -305,13 +306,32 @@ async function cropFrameAgainstTightReference(
     refContent.top === 0 &&
     refContent.right === refNatural.width &&
     refContent.bottom === refNatural.height;
-  if (!refTight) return cand;
-  return cropGutter(cand, {
+  if (!refTight) return untouched;
+  const raster = cropGutter(cand, {
     start: content.left,
     top: content.top,
     end: cand.width - content.right,
     bottom: cand.height - content.bottom,
   });
+  return raster === cand ? untouched : { raster, dx: content.left, dy: content.top };
+}
+
+/**
+ * Shift every tag's bounds by (-`dx`, -`dy`), for a candidate whose origin a crop moved.
+ *
+ * The index is in the coordinates of the capture as rendered; once the frame is cropped off, the
+ * compared raster starts `dx`, `dy` further in, and an unshifted box would read as an element that
+ * moved by exactly the frame. Null-prototype for the same reason as `projectTagIndex`: the keys are
+ * producer-controlled tag names.
+ */
+function translateTagIndex(tagIndex: TagIndex, dx: number, dy: number): TagIndex {
+  const shifted: TagIndex = Object.create(null);
+  for (const [tag, entry] of Object.entries(tagIndex)) {
+    shifted[tag] = entry.bounds
+      ? { ...entry, bounds: { ...entry.bounds, x: entry.bounds.x - dx, y: entry.bounds.y - dy } }
+      : entry;
+  }
+  return shifted;
 }
 
 /** Re-encode a raster as PNG bytes, for handing a compared image to a consumer. */
@@ -342,10 +362,11 @@ export async function diffImagePair(
   // A repo whose renderer captures on a fixed canvas can ask for the
   // candidate's transparent frame to come off too — but only against a tight
   // reference, which is read at its own size to find out.
-  const cand =
+  const framed =
     config.visualCandidateFrame === "crop-to-content"
       ? await cropFrameAgainstTightReference(repoRoot, reference, unguttered, config)
-      : unguttered;
+      : { raster: unguttered, dx: 0, dy: 0 };
+  const cand = framed.raster;
   const ref = await readRaster(repoRoot, reference.uri, cand.width);
   const key = imageKey(reference);
 
@@ -417,7 +438,10 @@ export async function diffImagePair(
       },
       reference: { width: ref.width, height: ref.height, pixels: ref.data },
       candidate: { width: cand.width, height: cand.height, pixels: cand.data },
-      tagIndex: acceptance.tagIndex,
+      tagIndex:
+        acceptance.tagIndex && (framed.dx !== 0 || framed.dy !== 0)
+          ? translateTagIndex(acceptance.tagIndex, framed.dx, framed.dy)
+          : acceptance.tagIndex,
       ...(acceptance.documentPath ? { documentPath: acceptance.documentPath } : {}),
       ...(acceptance.artifactRoot ? { artifactRoot: acceptance.artifactRoot } : {}),
     });
