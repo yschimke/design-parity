@@ -6,14 +6,20 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
     "$comment": {
       "type": "string",
       "description": "Free-text rationale for the settings below, ignored by the bot. JSON has no comment syntax and `$comment` is the JSON Schema annotation keyword for exactly this; rejecting it pushed repos into deleting the reasoning for their own direction (yschimke/m3-catalog#11)."
     },
     "direction": {
       "type": "string",
-      "enum": ["auto", "design-led", "code-led"],
+      "enum": [
+        "auto",
+        "design-led",
+        "code-led"
+      ],
       "default": "auto",
       "description": "Who is canonical when design and code disagree. 'design-led' blocks the PR on a violation (fix is in code); 'code-led' makes violations advisory and allows pushing drift back to the design tool; 'auto' is a transitional default that setup materializes — and the Action resolves as a late fallback — into a concrete direction from the repo's maturity rung."
     },
@@ -28,13 +34,19 @@
       "properties": {
         "missingNumerics": {
           "type": "string",
-          "enum": ["advisory", "strict"],
+          "enum": [
+            "advisory",
+            "strict"
+          ],
           "default": "advisory",
           "description": "What a numeric spec token the candidate resolves NO value for is worth. 'advisory' (default) reports it as a non-blocking note, on the same 'we can't verify, so we don't accuse' reasoning already applied when a candidate resolves a whole token group of nothing; 'strict' restores the hard error that forces a Fail. A value the candidate does report is compared strictly either way. Wear is the worked example: a component inset by touchTargetAwareSize plus a sized child declares no padding modifier, and adding one to clear the check would misrepresent how the library composes (issue #368)."
         },
         "textDerivedInsets": {
           "type": "string",
-          "enum": ["skip", "measure"],
+          "enum": [
+            "skip",
+            "measure"
+          ],
           "default": "skip",
           "description": "Whether an inset MEASURED off a text child counts as padding. The derived-inset check reads the gap between a container and its children — a sound proxy for padding when the child is a box, and font metrics when it is a glyph. 'skip' (default) drops such a measurement rather than quoting it against a declared padding; 'measure' reports it like any other (issue #367)."
         },
@@ -45,16 +57,74 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["component", "source", "token", "expected", "actual", "issue"],
+            "required": [
+              "component",
+              "source",
+              "token",
+              "expected",
+              "actual",
+              "issue"
+            ],
             "properties": {
-              "component": { "type": "string", "minLength": 1 },
-              "source": { "type": "string", "enum": ["figma", "stitch", "claude-design", "bundle"] },
-              "token": { "type": "string", "minLength": 1 },
-              "expected": { "anyOf": [{ "type": "number" }, { "type": "string" }] },
-              "actual": { "anyOf": [{ "type": "number" }, { "type": "string" }] },
-              "issue": { "type": "string", "pattern": "^https://[^\\s]+$" }
+              "component": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "figma",
+                  "stitch",
+                  "claude-design",
+                  "bundle"
+                ]
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expected": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "actual": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "issue": {
+                "type": "string",
+                "pattern": "^https://[^\\s]+$"
+              }
             }
           }
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Visual-comparison policy. Omitted fields take the engine's committed defaults.",
+      "properties": {
+        "candidateFrame": {
+          "type": "string",
+          "enum": [
+            "keep",
+            "crop-to-content"
+          ],
+          "default": "keep",
+          "description": "What a candidate's transparent frame is worth when the reference cell is tight. 'keep' compares the capture as rendered; 'crop-to-content' crops the candidate to its drawn content first, for renderers that capture a component on a fixed canvas (Remote Compose rasterises a whole preview frame). Applied only when the reference's own content reaches every edge, so a reference with a specified transparent margin is compared whole."
         }
       }
     }

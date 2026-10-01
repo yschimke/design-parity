@@ -100,6 +100,14 @@ export interface DiffConfig {
    * (issue #367).
    */
   textDerivedInsets: "skip" | "measure";
+  /**
+   * What a candidate's transparent frame is worth when the reference cell is
+   * tight. `"keep"` (the default) compares the capture as rendered;
+   * `"crop-to-content"` crops the candidate to its drawn content before the
+   * reference is sized against it. Set from `.design-parity.json`'s
+   * `visual.candidateFrame`; see `ParityVisualPolicy` for when it applies.
+   */
+  visualCandidateFrame: "keep" | "crop-to-content";
 }
 
 /**
@@ -124,6 +132,7 @@ export const defaultDiffConfig: DiffConfig = {
   layoutTolerance: 4,
   missingNumerics: "advisory",
   textDerivedInsets: "skip",
+  visualCandidateFrame: "keep",
 };
 
 /** Merge a partial override over the committed defaults. */

@@ -89,6 +89,9 @@ export async function resolveRunConfig(repoRoot: string): Promise<RunConfig> {
     ...(config.tokens?.textDerivedInsets
       ? { textDerivedInsets: config.tokens.textDerivedInsets }
       : {}),
+    ...(config.visual?.candidateFrame
+      ? { visualCandidateFrame: config.visual.candidateFrame }
+      : {}),
   };
   if (Object.keys(diffConfig).length > 0) runConfig.diffConfig = diffConfig;
   const knownDifferences = new Map<string, KnownDifferencesOptions>();
