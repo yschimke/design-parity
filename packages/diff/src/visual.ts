@@ -240,6 +240,80 @@ export function cropGutter(img: Raster, gutter?: ImageGutter): Raster {
   return { width, height, data, sourceSha256: img.sourceSha256 };
 }
 
+/**
+ * The box (inclusive-exclusive) holding every pixel whose alpha exceeds
+ * `transparentAlpha`, or null when nothing is drawn.
+ */
+export function contentBounds(
+  img: Raster,
+  transparentAlpha: number,
+): { left: number; top: number; right: number; bottom: number } | null {
+  let left = img.width;
+  let top = img.height;
+  let right = -1;
+  let bottom = -1;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      if (img.data[(y * img.width + x) * 4 + 3]! > transparentAlpha) {
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+      }
+    }
+  }
+  return right < 0 ? null : { left, top, right: right + 1, bottom: bottom + 1 };
+}
+
+/**
+ * The candidate cropped to its drawn content, when the reference is tight;
+ * otherwise the candidate untouched.
+ *
+ * "Tight" means the reference's own drawn content reaches all four edges, so
+ * the reference cell is the component and nothing else. Then any transparent
+ * margin around the candidate's content is canvas the renderer imposed, and
+ * comparing with it rescales the reference (rasterised to the candidate's
+ * width) and offsets it (aligned top-left). A reference with a transparent
+ * margin of its own is a frame the design specifies, so it is compared whole.
+ *
+ * Like {@link cropGutter}, a crop rather than a tolerance, and it degrades to
+ * the plain comparison: an empty candidate, or one with no margin, comes back
+ * as-is (the same object, which is how the caller knows nothing was cropped).
+ */
+async function cropFrameAgainstTightReference(
+  repoRoot: string,
+  reference: Image,
+  cand: Raster,
+  config: DiffConfig,
+): Promise<Raster> {
+  const transparentAlpha = Math.round(config.visualAlphaTransparentThreshold * 0xff);
+  const content = contentBounds(cand, transparentAlpha);
+  if (!content) return cand;
+  if (
+    content.left === 0 &&
+    content.top === 0 &&
+    content.right === cand.width &&
+    content.bottom === cand.height
+  ) {
+    return cand;
+  }
+  const refNatural = await readRaster(repoRoot, reference.uri);
+  const refContent = contentBounds(refNatural, transparentAlpha);
+  const refTight =
+    refContent !== null &&
+    refContent.left === 0 &&
+    refContent.top === 0 &&
+    refContent.right === refNatural.width &&
+    refContent.bottom === refNatural.height;
+  if (!refTight) return cand;
+  return cropGutter(cand, {
+    start: content.left,
+    top: content.top,
+    end: cand.width - content.right,
+    bottom: cand.height - content.bottom,
+  });
+}
+
 /** Re-encode a raster as PNG bytes, for handing a compared image to a consumer. */
 function rasterToPng(img: Raster): Buffer {
   const png = new PNG({ width: img.width, height: img.height });
@@ -264,7 +338,14 @@ export async function diffImagePair(
   // to a canvas wider than the component and every subsequent step compares at
   // the wrong zoom.
   const candRaw = await readRaster(repoRoot, candidate.uri);
-  const cand = cropGutter(candRaw, candidate.gutter);
+  const unguttered = cropGutter(candRaw, candidate.gutter);
+  // A repo whose renderer captures on a fixed canvas can ask for the
+  // candidate's transparent frame to come off too — but only against a tight
+  // reference, which is read at its own size to find out.
+  const cand =
+    config.visualCandidateFrame === "crop-to-content"
+      ? await cropFrameAgainstTightReference(repoRoot, reference, unguttered, config)
+      : unguttered;
   const ref = await readRaster(repoRoot, reference.uri, cand.width);
   const key = imageKey(reference);
 

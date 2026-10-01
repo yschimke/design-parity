@@ -16,6 +16,7 @@ import type {
   ParityConfig,
   ParityDirection,
   ParityTokenPolicy,
+  ParityVisualPolicy,
 } from "@design-parity/core";
 import schema from "../schema/parity-config.schema.json" with { type: "json" };
 
@@ -70,6 +71,7 @@ interface ParsedConfig {
   direction?: ParityDirection;
   cmpCapable?: boolean;
   tokens?: ParityTokenPolicy;
+  visual?: ParityVisualPolicy;
 }
 
 /** Fill omitted fields so callers always get a complete {@link ParityConfig}. */
@@ -89,6 +91,10 @@ function normalize(parsed: ParsedConfig): ParityConfig {
   if (parsed.tokens?.acceptedDifferences)
     tokens.acceptedDifferences = parsed.tokens.acceptedDifferences;
   if (Object.keys(tokens).length > 0) config.tokens = tokens;
+  // Same rule for the visual policy: carried only when it says something.
+  if (parsed.visual?.candidateFrame) {
+    config.visual = { candidateFrame: parsed.visual.candidateFrame };
+  }
   return config;
 }
 

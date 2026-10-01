@@ -651,6 +651,33 @@ export interface ParityConfig {
    * reach for.
    */
   tokens?: ParityTokenPolicy;
+  /**
+   * Per-repo visual-comparison policy. Omitted fields take the engine's committed
+   * defaults, so a repo that says nothing is compared exactly as before.
+   */
+  visual?: ParityVisualPolicy;
+}
+
+/** The `visual` section of `.design-parity.json`. See {@link ParityConfig.visual}. */
+export interface ParityVisualPolicy {
+  /**
+   * What a candidate's transparent frame is worth when the reference cell is
+   * tight. `"keep"` (the default) compares the capture as rendered;
+   * `"crop-to-content"` crops the candidate to its drawn content first.
+   *
+   * For a renderer that cannot capture a component at its own size — Remote
+   * Compose rasterises a whole fixed preview canvas, so a 52dp button arrives on
+   * a 227×100dp frame — the frame is not divergence, yet the reference is
+   * rasterised to the candidate's width, so it rescales and offsets the whole
+   * comparison (yschimke/wear-m3-catalog#138). A declared `Image.gutter` cannot
+   * describe it, because the frame is fixed while the content inside varies.
+   *
+   * Applied only when the reference is itself tight (its drawn content reaches
+   * every edge). A reference cell with its own transparent margin — a page
+   * indicator on a transparent display cell — is a frame the design specifies,
+   * and is compared whole.
+   */
+  candidateFrame?: "keep" | "crop-to-content";
 }
 
 /** The `tokens` section of `.design-parity.json`. See {@link ParityConfig.tokens}. */

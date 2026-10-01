@@ -35,6 +35,7 @@ export type {
   MaturityRung,
   ParityConfig,
   ParityTokenPolicy,
+  ParityVisualPolicy,
   AcceptedTokenDifference,
   CanvasTarget,
   CanvasWriteResult,

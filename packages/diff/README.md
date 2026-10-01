@@ -51,7 +51,14 @@ are ordered a11y → token → semantic → visual; `verdict.visualScores` maps 
   carry `detail.scope: "design-system"` so the orchestrator reports each drift
   once per run, not once per screen.
 - **Semantics** — theme-coverage and structural (role/label) deltas.
-- **Visual** — per-pixel diff via `pixelmatch`, plus the triptych.
+- **Visual** — per-pixel diff via `pixelmatch`, plus the triptych. A vector
+  reference is rasterised at the candidate's width and the pair is aligned
+  top-left, so a candidate's frame matters: a declared `Image.gutter` is cropped
+  off first, and a repo whose renderer captures on a fixed canvas can set
+  `.design-parity.json`'s `visual.candidateFrame: "crop-to-content"` to crop the
+  candidate to its drawn content — only against a reference whose own content
+  reaches every edge, so a reference with a specified transparent margin is
+  still compared whole (`DiffConfig.visualCandidateFrame`).
 
 Everything is committed config (see [`config.ts`](./src/config.ts)); the same
 pair always yields the same verdict.
