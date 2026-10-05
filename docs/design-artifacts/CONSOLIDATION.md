@@ -1,6 +1,6 @@
 # Consolidating the design-artifacts code
 
-*Plan. Phase 1 is merged and phase 2 is in progress; see [Phases](#phases).*
+*Plan. Phases 1 and 2 are done and phase 3 is in progress; see [Phases](#phases).*
 
 The design-artifacts export driver turns a rendered `@Preview` module and a `catalog.spec.json`
 into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves and the Figma
@@ -15,7 +15,7 @@ Counts are from `main` on 2026-10-05.
 | --- | --- | --- |
 | compose-ai-tools `scripts/design-artifacts/` | 1,386 | **The live copy.** `design-artifacts-reusable.yml` runs it for every catalog repository, at the commit in `.github/design-artifacts-driver-pin.txt`. |
 | compose-preview-server `scripts/design-artifacts/` | 1,344, now ~1,160 | A copy that had fallen 43 files behind. yschimke/compose-preview-server#1378 cut it to what the server uses. |
-| design-parity `packages/known-differences/src/` (was `packages/diff/src/acceptance/vendor/`) | 9 modules plus a fixture archive | The known-differences engine, translated to TypeScript, with a provenance test that hashes it against a pinned compose-ai-tools commit. |
+| design-parity `packages/known-differences/` (was `packages/diff/src/acceptance/vendor/`) | 9 modules, their tests, the fixture generator and corpus | The known-differences engine, published as `@design-parity/known-differences` since 1.4.0. It became the one copy in phase 3. |
 
 ### What each repository actually uses
 
@@ -49,14 +49,12 @@ design-parity/packages/
 
 - **`@design-parity/known-differences`** holds the nine engine modules and the
   known-differences cases as its conformance suite.
-  - The modules keep the form `packages/diff` already vendored: the upstream `.mjs` bytes with
-    one mechanical transform (a `// @ts-nocheck` line, and `.mjs` → `.js` specifiers), compiled
-    to `.js` and `.d.ts`. The published JavaScript is the upstream code, and the provenance
-    test can still prove it.
-  - `packages/diff` imports it in place of `src/acceptance/vendor/`.
-  - `serve-web` and the driver import it from npm.
-  - Once they do, the vendoring script and provenance test go away and `src/` becomes the
-    source of truth: there is nothing left to drift.
+  - The modules keep the form `packages/diff` vendored them in: the upstream `.mjs` source
+    with a `// @ts-nocheck` line and `.js` specifiers, compiled to `.js` and `.d.ts`.
+  - `packages/diff` and compose-preview-server's `serve-web` import it from npm.
+  - It is the source of truth: the engine's `node --test` suites, the fixture generator and
+    the corpus live beside it, and the vendoring sync, provenance test and drift workflow are
+    gone.
 - **`@design-parity/export-driver`** holds the rest of `scripts/design-artifacts/`, with its
   `node --test` suites. It stays JavaScript: rewriting 117 tested scripts in TypeScript is
   risk with no payoff. It runs its own tests (`node --test`), next to the repository's
@@ -73,7 +71,8 @@ Each phase is one PR per repository and leaves every caller working.
 
 1. **Trim compose-preview-server's copy.** Delete what the server does not use. Done in
    yschimke/compose-preview-server#1378.
-2. **Publish `@design-parity/known-differences`.**
+2. **Publish `@design-parity/known-differences`.** Done in yschimke/design-parity#512, released
+   in 1.4.0.
    - Move the nine modules and the cases into design-parity from the compose-ai-tools commit
      the provenance file names, after checking that those hashes still match compose-ai-tools'
      `main`.
@@ -81,9 +80,13 @@ Each phase is one PR per repository and leaves every caller working.
    - Before the first release, claim the npm name with one manual publish and register its
      trusted publisher (AGENTS.md § Releasing). Until then the release loop skips it and
      `@design-parity/diff` cannot install.
-3. **Point the engine's consumers at the package.**
-   - compose-ai-tools' driver and compose-preview-server's `serve-web` import
-     `@design-parity/known-differences` and delete their copies of the nine modules.
+3. **Make the package the one copy of the engine.**
+   - compose-preview-server's `serve-web` imports the package and deletes its copy of the nine
+     modules: yschimke/compose-preview-server#1391.
+   - compose-ai-tools' driver turned out not to import the engine at all. Its copy was the
+     upstream that design-parity synced from: the modules, their `node --test` suites, the
+     fixture generator, the schema and the corpus. design-parity takes all of that over and
+     retires the sync, then compose-ai-tools deletes its copy.
    - Both repositories already take `@design-parity/*` updates through Renovate.
 4. **Publish `@design-parity/export-driver`.** Move the remaining scripts and their tests, and
    release it. compose-ai-tools keeps running its own copy during this phase. A CI job in

@@ -16,8 +16,6 @@ import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { afterAll } from "vitest";
-import { unzipSync } from "fflate";
 import { PNG } from "pngjs";
 
 import { diff, renderAcceptanceSummary } from "../src/diff.js";
@@ -45,20 +43,9 @@ import {
 } from "@design-parity/known-differences/png-lite";
 
 const KNOWN_DIFFERENCES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "known-differences");
-const FIXTURE_ARCHIVE = join(KNOWN_DIFFERENCES, "test", "fixtures", "known-differences.zip");
-// Read from the provenance record rather than restated here. Two copies of a pin is the same
-// defect this suite's provenance test exists to catch, one level up: a corpus regenerated at a new
-// commit while a hand-written constant still names the old digest looks exactly like a corpus that
-// never moved. `PROVENANCE.json` is written by the sync that produced both, so it cannot disagree
-// with what it snapshotted — and the assertions below then check the committed archive *is* that.
-const FIXTURE_PROVENANCE = JSON.parse(
-  readFileSync(
-    join(KNOWN_DIFFERENCES, "src", "PROVENANCE.json"),
-    "utf8",
-  ),
-).fixtures;
-const FIXTURE_ARCHIVE_SHA256: string = FIXTURE_PROVENANCE.archiveSha256;
-const FIXTURE_FILE_COUNT: number = FIXTURE_PROVENANCE.fileCount;
+// The corpus `build-known-difference-fixtures.mjs` generates, committed beside the engine it pins.
+// `test/conformance/known-differences.test.mjs` regenerates it and fails on any difference, so
+// this suite can read it as it is.
 const FIXTURE_CASE_COUNTS = {
   cases: 190,
   plane: 6,
@@ -67,17 +54,7 @@ const FIXTURE_CASE_COUNTS = {
   scoring: 8,
   tagProjection: 7,
 };
-const fixtureArchiveBytes = new Uint8Array(readFileSync(FIXTURE_ARCHIVE));
-const fixtureEntries = unzipSync(fixtureArchiveBytes);
-const EXTRACTED = mkdtempSync(join(tmpdir(), "design-parity-conformance-"));
-for (const [relative, bytes] of Object.entries(fixtureEntries)) {
-  if (relative.endsWith("/")) continue;
-  const target = join(EXTRACTED, relative);
-  mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, bytes);
-}
-const ROOT = EXTRACTED;
-afterAll(() => rmSync(EXTRACTED, { recursive: true, force: true }));
+const ROOT = join(KNOWN_DIFFERENCES, "test", "conformance", "fixtures", "known-differences");
 
 const readJson = (path: string): any => JSON.parse(readFileSync(path, "utf8"));
 const raster = (path: string): any => decodePng(new Uint8Array(readFileSync(path)));
@@ -131,13 +108,6 @@ function comparison(_dir: string, value: any): any {
 
 describe("compose-preview-known-differences/v1 conformance", () => {
   it("pins the complete canonical fixture corpus", () => {
-    expect(createHash("sha256").update(fixtureArchiveBytes).digest("hex")).toBe(
-      FIXTURE_ARCHIVE_SHA256,
-    );
-    expect(Object.keys(fixtureEntries).filter((path) => !path.endsWith("/"))).toHaveLength(
-      FIXTURE_FILE_COUNT,
-    );
-
     const index = readJson(join(ROOT, "index.json"));
     expect(index.schema).toBe("compose-preview-known-differences/v1");
     expect(Object.fromEntries(
