@@ -79,6 +79,11 @@ jobs:
           node-version: 24.21.0
           cache: npm
       - run: npm ci
+      # The driver imports the scope's own packages (catalog-export, candidate, adapter-figma),
+      # which `npm ci` links to their workspaces; their exports point at `dist/`, which only the
+      # build writes. `build-test`'s build does not reach this job's runner.
+      - name: Build the workspaces
+        run: npm run build
       # Maven Central publishes a .sha1 beside each file; checking it catches a truncated or
       # substituted download before a guard reports on the wrong bytes.
       - name: Fetch the published Remote Compose players
@@ -137,11 +142,12 @@ jobs:
           set -euo pipefail
           out=$(npm test --workspace @design-parity/export-driver 2>&1) || { echo "$out"; exit 1; }
           echo "$out"
-          # The mirrors self-skip without a server checkout, and the font fixtures without
-          # RC_FONTS_DIR. Both are supplied above, so either skip means a fetch did not resolve.
-          # Matched on the skip reasons rather than a skip count: the suite has other, legitimate
-          # skips, so a count would either never fire or always fire.
-          for reason in "no compose-preview-server checkout" "is not vendored"; do
+          # The mirrors self-skip without a server checkout, and the font-dependent browser tests
+          # without their face in RC_FONTS_DIR (`... is not vendored`, `missing <face>.ttf`). Both
+          # are supplied above, so any of these skips means a fetch did not resolve. Matched on the
+          # skip reasons rather than a skip count: the suite has other, legitimate skips, so a count
+          # would either never fire or always fire.
+          for reason in "no compose-preview-server checkout" "is not vendored" "missing RobotoFlex.ttf"; do
             if grep -q "$reason" <<<"$out"; then
               echo "::error::a test skipped with '$reason' although its input was supplied"
               exit 1

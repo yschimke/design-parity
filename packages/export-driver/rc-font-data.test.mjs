@@ -11,13 +11,15 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { DEFAULT_FONTS_DIR } from "./rc-fonts.mjs";
 import { RC_PLAYER_JS_BUNDLE, rcPlayerBundleIssue } from "./rc-player-bundle.mjs";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "../..");
 const BUNDLE = RC_PLAYER_JS_BUNDLE;
-const FONT = path.join(ROOT, "samples/design-catalog-m3/src/main/resources/fonts/orbitron-400.ttf");
+/**
+ * The catalog's Orbitron face, from the vendored font directory (`RC_FONTS_DIR` overrides it, as
+ * design-parity's CI does). compose-ai-tools vendors the same bytes in both catalogs' font folders.
+ */
+const FONT = path.join(DEFAULT_FONTS_DIR, "orbitron-400.ttf");
 const FAMILY_ID = 42;
 const TEXT_ID = 43;
 const SPECIMEN = "FONTDATA 0123456789";
