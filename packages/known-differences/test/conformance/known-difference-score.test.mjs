@@ -14,14 +14,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { decodePng } from "../../dist/png-lite.js";
 import { SCORE_TUNING } from "../../dist/known-difference-tuning.js";
 import {
-  PLANE_TUNING,
   contentBox,
   projectTagIndex,
   resolvePlane,
@@ -175,83 +174,10 @@ function scoredCount(result, region) {
 // any comparison.
 // -----------------------------------------------------------------------------------------------
 
-// The browser half of the mirror moved to yschimke/compose-preview-server with the server (#4732),
-// so this reads an optional sibling checkout (`COMPOSE_PREVIEW_SERVER_ROOT`, else a
-// `compose-preview-server` sibling) and SKIPS with a reason when there is none. Skipping is the
-// honest outcome: the divergence this guards is now cross-repo, and it is residual item 1 on #4732
-// — until a real cross-repo gate exists, a run without the other checkout genuinely cannot answer.
-const TUNING_TS = join(
-  (process.env.COMPOSE_PREVIEW_SERVER_ROOT ?? "").trim() ||
-    join(HERE, "..", "..", "..", "compose-preview-server"),
-  "serve-web/src/scorer/tuning.ts",
-);
-const NO_SERVER = {
-  skip: existsSync(TUNING_TS)
-    ? false
-    : "no compose-preview-server checkout (set COMPOSE_PREVIEW_SERVER_ROOT) — the browser scorer's " +
-      "tuning.ts lives there since #4732",
-};
-
-test("the offline tuning constants mirror the browser's", NO_SERVER, () => {
-  // `serve-web/src/scorer/tuning.ts` (in the server's repository) is what the live scorer imports
-  // and where each number's rationale is written down; `known-difference-tuning.mjs` is what the
-  // offline engines read. Every one of them is load-bearing to the number that comes out, so a value
-  // changed on one side and not the other is a silent divergence between the browser and the offline
-  // run — the exact failure "two engines, one semantics" exists to prevent, and one no fixture can
-  // catch, since both engines would be measured against expectations generated with their own
-  // constants.
-  const source = readFileSync(TUNING_TS, "utf8");
-  const numberOf = (name) => {
-    const match = new RegExp(`export const ${name}\\s*=\\s*(-?[0-9.]+)`).exec(source);
-    assert.ok(match, `tuning.ts no longer exports ${name}`);
-    return Number(match[1]);
-  };
-  for (const name of [
-    "SCORE_VERSION",
-    "MAX_SIDE",
-    "EDGE_SEARCH_RADIUS",
-    "EDGE_POSITION_COST",
-    "EDGE_GRADIENT_THRESHOLD",
-    "LUMA_TOLERANCE",
-    "FULL_DIFFERENCE_DELTA",
-    "CONTENT_DILATION",
-  ]) {
-    assert.equal(numberOf(name), SCORE_TUNING[name], `${name} disagrees with tuning.ts`);
-  }
-
-  // The grounds are CSS strings there and RGB triples here, so they are compared by colour rather
-  // than by spelling — the offline engine has no canvas to hand a string to.
-  for (const name of ["BOX_SAMPLE_SIDE", "BOX_COLOUR_TOLERANCE", "MIN_BOX_COVERAGE", "SHEET_TOLERANCE"]) {
-    assert.equal(numberOf(name), PLANE_TUNING[name], `${name} disagrees with tuning.ts`);
-  }
-  // `SCAFFOLD_SHEETS` decides whether an opaque capture is cropped at all, so a sheet added on one
-  // side alone is a content box measured two ways — the plane gate's version of a drifted constant.
-  const sheets = /SCAFFOLD_SHEETS[^=]*=\s*\n?\s*\[([\s\S]*?)\n\s*\];/.exec(source);
-  assert.ok(sheets, "tuning.ts no longer exports SCAFFOLD_SHEETS");
-  const triples = [...sheets[1].matchAll(/\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]/g)].map(
-    ([, r, g, b]) => [Number(r), Number(g), Number(b)],
-  );
-  assert.deepEqual(triples, PLANE_TUNING.SCAFFOLD_SHEETS);
-
-  const grounds = /COMPARISON_GROUNDS[^=]*=\s*\[([^\]]*)\]/.exec(source);
-  assert.ok(grounds, "tuning.ts no longer exports COMPARISON_GROUNDS");
-  const hexes = [...grounds[1].matchAll(/#([0-9a-fA-F]{6})/g)].map(([, hex]) => [
-    Number.parseInt(hex.slice(0, 2), 16),
-    Number.parseInt(hex.slice(2, 4), 16),
-    Number.parseInt(hex.slice(4, 6), 16),
-  ]);
-  assert.deepEqual(hexes, SCORE_TUNING.COMPARISON_GROUNDS);
-
-  // …and the browser now carries the same two grounds a second time, as triples, for the path that
-  // composites in arithmetic rather than through `fillRect`. A ground added to one spelling and not
-  // the other would score the design-reference lane and the SVG lane on different ground sets.
-  const rgb = /COMPARISON_GROUND_RGB[\s\S]*?=\s*\[([\s\S]*?)\n\];/.exec(source);
-  assert.ok(rgb, "tuning.ts no longer exports COMPARISON_GROUND_RGB");
-  const browserTriples = [...rgb[1].matchAll(/\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]/g)].map(
-    ([, r, g, b]) => [Number(r), Number(g), Number(b)],
-  );
-  assert.deepEqual(browserTriples, SCORE_TUNING.COMPARISON_GROUNDS);
-});
+// The browser half of the mirror, `serve-web/src/scorer/tuning.ts`, lives in
+// yschimke/compose-preview-server. Its `test/scorerTuningMirror.test.ts` compares those constants
+// with this package's `SCORE_TUNING` and `PLANE_TUNING` directly, since serve-web depends on the
+// published engine; a cross-repository checkout here would only ever skip.
 
 test("the engine imports nothing a browser lacks", () => {
   // The property `format-compare.js` depends on, and one that regresses in a single line. The

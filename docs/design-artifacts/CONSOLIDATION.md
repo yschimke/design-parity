@@ -82,7 +82,8 @@ Each phase is one PR per repository and leaves every caller working.
      `@design-parity/diff` cannot install.
 3. **Make the package the one copy of the engine.**
    - compose-preview-server's `serve-web` imports the package and deletes its copy of the nine
-     modules: yschimke/compose-preview-server#1391.
+     modules: yschimke/compose-preview-server#1391. It also takes over the check that its
+     browser scorer's tuning matches the engine's, which used to need a cross-repository checkout.
    - compose-ai-tools' driver turned out not to import the engine at all. Its copy was the
      upstream that design-parity synced from: the modules, their `node --test` suites, the
      fixture generator, the schema and the corpus. design-parity takes all of that over and
