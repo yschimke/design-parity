@@ -11,15 +11,15 @@ import type {
 import {
   BUDGET,
   evaluateKnownDifferences as evaluateJs,
-} from "./vendor/known-differences.js";
+} from "@design-parity/known-differences/known-differences";
 import {
   canonicalRaster,
   projectTagIndex,
   resolvePlane,
-} from "./vendor/known-difference-plane.js";
-import { scoreComparison as scoreJs } from "./vendor/known-difference-score.js";
-import { normaliseAlpha } from "./vendor/png-lite.js";
-import { SCORE_TUNING } from "./vendor/known-difference-tuning.js";
+} from "@design-parity/known-differences/known-difference-plane";
+import { scoreComparison as scoreJs } from "@design-parity/known-differences/known-difference-score";
+import { normaliseAlpha } from "@design-parity/known-differences/png-lite";
+import { SCORE_TUNING } from "@design-parity/known-differences/known-difference-tuning";
 
 /**
  * One incoming raster on the contract's straight-alpha grid, without touching the caller's buffer.

@@ -14,8 +14,6 @@ const VENDOR_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "src",
-  "acceptance",
-  "vendor",
 );
 const PROVENANCE = join(VENDOR_DIR, "PROVENANCE.json");
 
@@ -45,7 +43,7 @@ const onDisk = readdirSync(VENDOR_DIR)
 /**
  * The vendored engine is a *copy*, and until now nothing said so out loud.
  *
- * `src/acceptance/vendor/*.ts` are `compose-ai-tools`' `scripts/design-artifacts/*.mjs` with one
+ * `src/*.ts` are `compose-ai-tools`' `scripts/design-artifacts/*.mjs` with one
  * declared mechanical transform applied. Two copies of a scoring engine that can drift apart is
  * the exact failure the contract exists to prevent — a fix ported into one and not the other means
  * the two report different numbers for the same pixels, which is worse than either being wrong,
@@ -151,7 +149,7 @@ describe("vendored known-differences engine provenance", () => {
     expect(
       sha256(recovered),
       `${name} is not ${provenance.commit}:${record.upstream}. Land the change upstream, then ` +
-        `re-run: node packages/diff/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>`,
+        `re-run: node packages/known-differences/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>`,
     ).toBe(record.upstreamSha256);
 
     // And the vendored digest, so a change to the transform itself cannot pass unnoticed by

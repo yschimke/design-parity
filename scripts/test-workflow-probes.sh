@@ -433,7 +433,7 @@ fi
 
 # The script's own refusal code has to match what the workflow tests for. Two
 # numbers in two files is exactly the drift this whole subsystem is about.
-sync="$root/packages/diff/test/sync-known-differences-vendor.mjs"
+sync="$root/packages/known-differences/test/sync-known-differences-vendor.mjs"
 if grep -q '^const REFUSED = 3;$' "$sync"; then
   ok "the sync script refuses with the status the workflow expects"
 else

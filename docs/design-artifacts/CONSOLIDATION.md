@@ -1,6 +1,6 @@
 # Consolidating the design-artifacts code
 
-*Plan. Nothing here has moved yet.*
+*Plan. Phase 1 is merged and phase 2 is in progress; see [Phases](#phases).*
 
 The design-artifacts export driver turns a rendered `@Preview` module and a `catalog.spec.json`
 into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves and the Figma
@@ -14,8 +14,8 @@ Counts are from `main` on 2026-10-05.
 | Copy | Files | Status |
 | --- | --- | --- |
 | compose-ai-tools `scripts/design-artifacts/` | 1,386 | **The live copy.** `design-artifacts-reusable.yml` runs it for every catalog repository, at the commit in `.github/design-artifacts-driver-pin.txt`. |
-| compose-preview-server `scripts/design-artifacts/` | 1,344, falling to ~1,160 | A copy that had fallen 43 files behind. yschimke/compose-preview-server#1378 cuts it to what the server uses. |
-| design-parity `packages/diff/src/acceptance/vendor/` | 8 modules plus a fixture archive | The known-differences engine, translated to TypeScript, with a provenance test that hashes it against a pinned compose-ai-tools commit. |
+| compose-preview-server `scripts/design-artifacts/` | 1,344, now ~1,160 | A copy that had fallen 43 files behind. yschimke/compose-preview-server#1378 cut it to what the server uses. |
+| design-parity `packages/known-differences/src/` (was `packages/diff/src/acceptance/vendor/`) | 9 modules plus a fixture archive | The known-differences engine, translated to TypeScript, with a provenance test that hashes it against a pinned compose-ai-tools commit. |
 
 ### What each repository actually uses
 
@@ -47,12 +47,16 @@ design-parity/packages/
   export-driver/       @design-parity/export-driver      (application, bin: design-artifacts)
 ```
 
-- **`@design-parity/known-differences`** holds the nine engine modules exactly as they are
-  (plain `.mjs`, with `.d.ts` beside them for TypeScript callers) and the known-differences
-  cases as its conformance suite.
+- **`@design-parity/known-differences`** holds the nine engine modules and the
+  known-differences cases as its conformance suite.
+  - The modules keep the form `packages/diff` already vendored: the upstream `.mjs` bytes with
+    one mechanical transform (a `// @ts-nocheck` line, and `.mjs` → `.js` specifiers), compiled
+    to `.js` and `.d.ts`. The published JavaScript is the upstream code, and the provenance
+    test can still prove it.
   - `packages/diff` imports it in place of `src/acceptance/vendor/`.
   - `serve-web` and the driver import it from npm.
-  - The vendoring script and provenance test go away: there is nothing left to drift.
+  - Once they do, the vendoring script and provenance test go away and `src/` becomes the
+    source of truth: there is nothing left to drift.
 - **`@design-parity/export-driver`** holds the rest of `scripts/design-artifacts/`, with its
   `node --test` suites. It stays JavaScript: rewriting 117 tested scripts in TypeScript is
   risk with no payoff. It runs its own tests (`node --test`), next to the repository's
@@ -67,13 +71,16 @@ design-parity/packages/
 
 Each phase is one PR per repository and leaves every caller working.
 
-1. **Trim compose-preview-server's copy.** Delete what the server does not use. This is
-   yschimke/compose-preview-server#1378, open.
+1. **Trim compose-preview-server's copy.** Delete what the server does not use. Done in
+   yschimke/compose-preview-server#1378.
 2. **Publish `@design-parity/known-differences`.**
    - Move the nine modules and the cases into design-parity from the compose-ai-tools commit
      the provenance file names, after checking that those hashes still match compose-ai-tools'
      `main`.
    - Switch `packages/diff` to import the package, and release it.
+   - Before the first release, claim the npm name with one manual publish and register its
+     trusted publisher (AGENTS.md § Releasing). Until then the release loop skips it and
+     `@design-parity/diff` cannot install.
 3. **Point the engine's consumers at the package.**
    - compose-ai-tools' driver and compose-preview-server's `serve-web` import
      `@design-parity/known-differences` and delete their copies of the nine modules.

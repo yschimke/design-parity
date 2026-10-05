@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { join, sep } from "node:path";
 
-import { BUDGET } from "./vendor/known-differences.js";
+import { BUDGET } from "@design-parity/known-differences/known-differences";
 
 type ReadOptions = { prefix?: number };
 type ArtifactAnswer =

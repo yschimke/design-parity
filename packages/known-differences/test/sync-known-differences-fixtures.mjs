@@ -6,7 +6,7 @@
  * the corpus and the engine cannot be snapshotted from different revisions. Prefer running
  * `sync-known-differences-vendor.mjs` — it does both at one verified commit and records it.
  *
- *   node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout> [ref]
+ *   node packages/known-differences/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout> [ref]
  */
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -18,7 +18,7 @@ const checkout = process.argv[2];
 const ref = process.argv[3] ?? "origin/main";
 if (!checkout) {
   process.stderr.write(
-    "usage: node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout> [ref]\n",
+    "usage: node packages/known-differences/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout> [ref]\n",
   );
   process.exit(2);
 }

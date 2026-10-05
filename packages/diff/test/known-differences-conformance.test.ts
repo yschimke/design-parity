@@ -26,29 +26,26 @@ import {
   refuseElementAcceptancesWithoutSemantics,
   tagIndexFromSemantics,
 } from "../src/acceptance/evaluate.js";
-import { scoreComparison } from "../src/acceptance/vendor/known-difference-score.js";
-import { SCORE_TUNING } from "../src/acceptance/vendor/known-difference-tuning.js";
+import { scoreComparison } from "@design-parity/known-differences/known-difference-score";
+import { SCORE_TUNING } from "@design-parity/known-differences/known-difference-tuning";
 import {
   enclosingBox,
   evaluateKnownDifferences,
   locallyResolvedIssues,
   resampleArea,
-} from "../src/acceptance/vendor/known-differences.js";
+} from "@design-parity/known-differences/known-differences";
 import {
   contentBox,
   projectTagIndex,
   resolvePlane,
-} from "../src/acceptance/vendor/known-difference-plane.js";
+} from "@design-parity/known-differences/known-difference-plane";
 import {
   decodePng,
   padPngTo,
-} from "../src/acceptance/vendor/png-lite.js";
+} from "@design-parity/known-differences/png-lite";
 
-const FIXTURE_ARCHIVE = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "fixtures",
-  "known-differences.zip",
-);
+const KNOWN_DIFFERENCES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "known-differences");
+const FIXTURE_ARCHIVE = join(KNOWN_DIFFERENCES, "test", "fixtures", "known-differences.zip");
 // Read from the provenance record rather than restated here. Two copies of a pin is the same
 // defect this suite's provenance test exists to catch, one level up: a corpus regenerated at a new
 // commit while a hand-written constant still names the old digest looks exactly like a corpus that
@@ -56,7 +53,7 @@ const FIXTURE_ARCHIVE = join(
 // with what it snapshotted — and the assertions below then check the committed archive *is* that.
 const FIXTURE_PROVENANCE = JSON.parse(
   readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "acceptance", "vendor", "PROVENANCE.json"),
+    join(KNOWN_DIFFERENCES, "src", "PROVENANCE.json"),
     "utf8",
   ),
 ).fixtures;
@@ -622,13 +619,13 @@ describe("compose-preview-known-differences/v1 conformance", () => {
     );
   });
 
-  it("keeps the score kernel version in one place — the vendored tuning", () => {
+  it("keeps the score kernel version in one place — the engine's tuning", () => {
     // `version` on a report is only worth trusting if exactly one file decides it. A second copy of
     // the constant drifts silently the next time the kernel changes upstream, and then a number
     // carries a version it does not implement — worse than no version at all, because a wrong one
-    // gets believed. So the value may appear only in the vendored tuning; everywhere else reads it.
+    // gets believed. So the value may appear only in the engine's tuning module; everywhere else reads it.
     const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-    const owner = join("acceptance", "vendor", "known-difference-tuning.ts");
+    const owner = join("packages", "known-differences", "src", "known-difference-tuning.ts");
     const literal = /SCORE_VERSION\s*[:=]\s*\d/;
     const offenders: string[] = [];
 
@@ -649,7 +646,7 @@ describe("compose-preview-known-differences/v1 conformance", () => {
 
     expect(offenders).toEqual([]);
     // And the one place that does define it agrees with what the engine hands out.
-    expect(literal.test(readFileSync(join(repoRoot, "packages", "diff", "src", owner), "utf8"))).toBe(true);
+    expect(literal.test(readFileSync(join(repoRoot, owner), "utf8"))).toBe(true);
     expect(typeof SCORE_TUNING.SCORE_VERSION).toBe("number");
   });
 });

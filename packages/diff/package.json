@@ -1,7 +1,7 @@
 {
   "name": "@design-parity/diff",
   "version": "0.1.24",
-  "description": "Source-agnostic diff engine: consume a (DesignReference, CandidateRender) pair and emit a deterministic Verdict — a11y + i18n first, then token compliance, then visual diff.",
+  "description": "Source-agnostic diff engine: consume a (DesignReference, CandidateRender) pair and emit a deterministic Verdict \u2014 a11y + i18n first, then token compliance, then visual diff.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +19,7 @@
   "dependencies": {
     "@design-parity/checks": "^0.1.24",
     "@design-parity/core": "^0.1.24",
+    "@design-parity/known-differences": "^0.1.24",
     "@resvg/resvg-js": "2.6.2",
     "pixelmatch": "7.2.0",
     "pngjs": "7.0.0"

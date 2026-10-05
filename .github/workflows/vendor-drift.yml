@@ -45,7 +45,7 @@ jobs:
           # longer reachable. Letting the step die here would fail the job before `behind` is set,
           # so the one case that most needs a report would produce silence instead.
           set +e
-          node packages/diff/test/sync-known-differences-vendor.mjs \
+          node packages/known-differences/test/sync-known-differences-vendor.mjs \
             /tmp/compose-ai-tools origin/main > /tmp/sync.log 2>&1
           status=$?
           set -e
@@ -76,16 +76,16 @@ jobs:
           # report nobody reads. The vendored modules and the corpus archive are the pin that
           # actually matters.
           if git diff --quiet -- \
-              packages/diff/src/acceptance/vendor/'*.ts' \
-              packages/diff/test/fixtures/known-differences.zip; then
+              packages/known-differences/src/'*.ts' \
+              packages/known-differences/test/fixtures/known-differences.zip; then
             echo "behind=false" >> "$GITHUB_OUTPUT"
           else
             echo "behind=true" >> "$GITHUB_OUTPUT"
             {
               echo 'diff<<DRIFT'
               git diff --stat -- \
-                packages/diff/src/acceptance/vendor/'*.ts' \
-                packages/diff/test/fixtures/known-differences.zip
+                packages/known-differences/src/'*.ts' \
+                packages/known-differences/test/fixtures/known-differences.zip
               echo DRIFT
             } >> "$GITHUB_OUTPUT"
           fi
@@ -109,7 +109,7 @@ jobs:
         run: |
           title='chore(diff): the vendored known-differences engine is behind upstream'
           {
-            printf '%s\n' 'The scheduled check re-vendored `packages/diff/src/acceptance/vendor` from'
+            printf '%s\n' 'The scheduled check re-vendored `packages/known-differences/src` from'
             printf '%s\n' '[`compose-ai-tools@main`](https://github.com/yschimke/compose-ai-tools/tree/main/scripts/design-artifacts)'
             printf '%s\n\n' 'and the result differs from what is committed here.'
             printf '%s\n' '```'
@@ -117,8 +117,8 @@ jobs:
             printf '%s\n\n' '```'
             printf '%s\n\n' 'To bring it forward, against a checkout of `compose-ai-tools`:'
             printf '%s\n' '```sh'
-            printf '%s\n' 'node packages/diff/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>'
-            printf '%s\n' 'node packages/diff/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout>'
+            printf '%s\n' 'node packages/known-differences/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>'
+            printf '%s\n' 'node packages/known-differences/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout>'
             printf '%s\n' 'npm test'
             printf '%s\n\n' '```'
             printf '%s\n' 'Re-vendor the fixtures alongside the engine: a kernel change moves the expected scores in'
