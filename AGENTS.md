@@ -131,14 +131,13 @@ generic advice.
   PR. The modules keep their `// @ts-nocheck` line and `.js` specifiers; they
   are plain JavaScript typed only by declaration emit, which
   `scripts/widen-declarations.mjs` corrects.
-- **`packages/export-driver` is a byte-for-byte copy of compose-ai-tools'
-  `scripts/design-artifacts/`** until compose-ai-tools' workflow runs the
-  published package (phase 5 of `docs/design-artifacts/CONSOLIDATION.md`).
-  Don't edit the driver's files here: land the change in compose-ai-tools,
-  copy it across, and run
-  `node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout>`.
-  Only `package.json`, `bin/`, `package-scripts/` and its README are this
-  package's own.
+- **`packages/export-driver` is the source of the design-artifacts export
+  driver.** Change the driver here. compose-ai-tools' `scripts/design-artifacts/`
+  is the older copy its workflow still runs until phase 5 of
+  `docs/design-artifacts/CONSOLIDATION.md`; it is frozen, and a fix it needs
+  before then is copied there from here, not written there first.
+  `node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout>`
+  lists how that copy differs from this one.
 - **Watch for drift in code vendored from here.** `compose-ai-tools`'
   `scripts/design-artifacts/generate-design-catalog.mjs` carries an inline copy
   of `packages/catalog-export/src/spec.ts`'s join, because the published package

@@ -94,9 +94,10 @@ Each phase is one PR per repository and leaves every caller working.
    as `packages/export-driver`, with a `design-artifacts <script>` command to run any script from
    the published package, and release it. compose-ai-tools keeps running its own copy during this
    phase.
-   - `package-scripts/check-upstream.mjs` fails on any byte difference between the two copies. A
-     compose-ai-tools CI job runs it against the published package, so a driver change there has
-     to be released here too before phase 5 makes this the only copy.
+   - Done in yschimke/design-parity#517. From then on the package is the driver's source: changes
+     land here, and compose-ai-tools' copy is frozen until phase 5 replaces it. A fix that copy
+     needs sooner is copied there from here. `package-scripts/check-upstream.mjs` lists how the two
+     differ.
    - Eight driver tests check the driver against compose-ai-tools itself (its workflow, Kotlin
      sources, samples and lockfile). They stay in compose-ai-tools and are left out of this
      package's run.

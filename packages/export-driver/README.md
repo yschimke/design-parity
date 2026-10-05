@@ -20,27 +20,33 @@ npx -p @design-parity/export-driver@<version> design-artifacts generate-design-c
 The name may carry its `.mjs` or `.sh` extension or not. Pin an exact version: the reusable
 workflow that runs this driver treats the version as the code it executes.
 
-Two inputs default to paths inside a compose-ai-tools checkout. Pass them explicitly when running
-from the package:
+Three inputs default to paths beside or inside a compose-ai-tools checkout, which an installed
+package does not have. Pass them explicitly when running from the package:
 
 - `rc-compare --fonts <dir>`: the typeface directory the Remote Compose lanes render with.
 - `RC_PLAYER_JS_BUNDLE=<bundle.js>`: the Remote Compose player bundle the browser lanes and tests
   load.
+- `COMPOSE_PREVIEW_SERVER_ROOT=<dir>`: a compose-preview-server checkout (or just its
+  `server/src/main/resources/ee/schimke/composeai/cli/serve/assets/format-compare.js`), which
+  `emit-design-references` drives to bake each reference's `match` score. Without it the references
+  publish unscored and the log says why.
 
 ## Where the source is
 
-The driver was written in compose-ai-tools' `scripts/design-artifacts/`, and its workflow still runs
-that copy. Until it runs this package instead (phase 5 of
-[`docs/design-artifacts/CONSOLIDATION.md`](../../docs/design-artifacts/CONSOLIDATION.md)), the two
-must hold the same bytes:
+This package is the driver's source: change it here. It started as a copy of compose-ai-tools'
+`scripts/design-artifacts/` at `4986e21`. compose-ai-tools' workflow still runs that older copy
+until it runs this package instead (phase 5 of
+[`docs/design-artifacts/CONSOLIDATION.md`](../../docs/design-artifacts/CONSOLIDATION.md)). That
+copy is frozen; a fix it needs before then is copied there from here.
+
+To see how compose-ai-tools' copy differs from this one:
 
 ```sh
 node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout> [ref]
 ```
 
-It compares every file except `package.json` and `package-lock.json`, and fails on any difference.
-Land a change in compose-ai-tools first, then copy it here. `bin/`, `package-scripts/` and this
-README are this package's own.
+It compares every file except `package.json` and `package-lock.json`, lists each difference and
+exits 1 if there are any. `bin/`, `package-scripts/` and this README exist only here.
 
 ## Tests
 

@@ -4,11 +4,11 @@
  *
  *   node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout> [ref]
  *
- * Until compose-ai-tools' workflow runs this package instead of its own copy, the two must hold the
- * same bytes. Every file under `scripts/design-artifacts/` at `ref` (default `origin/main`) must
- * be here unchanged, except `package.json` and `package-lock.json`, which are this package's own,
- * and nothing may be here that is not there, apart from the package's own `bin/`,
- * `package-scripts/` and `README.md`. Exits 1 and lists every difference otherwise.
+ * This package is the driver's source; compose-ai-tools keeps an older, frozen copy that its
+ * workflow runs until it switches to this package. This lists how that copy differs: files changed
+ * since, files only on one side. `package.json` and `package-lock.json` are each side's own and are
+ * not compared, and the package's own `bin/`, `package-scripts/` and `README.md` are expected here
+ * only. Exits 1 if there is any difference, so a caller can tell an identical copy from a stale one.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
