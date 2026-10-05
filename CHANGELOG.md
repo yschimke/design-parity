@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/yschimke/design-parity/compare/v1.3.0...v1.4.0) (2026-10-05)
+
+
+### Features
+
+* **known-differences:** publish the acceptance engine as its own package ([#512](https://github.com/yschimke/design-parity/issues/512)) ([594f3b7](https://github.com/yschimke/design-parity/commit/594f3b72222f546e3d4e8a6860ad08a08b1e607d))
+
 ## [1.3.0](https://github.com/yschimke/design-parity/compare/v1.2.1...v1.3.0) (2026-10-01)
 
 
