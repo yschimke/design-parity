@@ -1,6 +1,6 @@
 # Consolidating the design-artifacts code
 
-*Plan. Phases 1–3 are done and phase 4 is in progress; see [Phases](#phases).*
+*Plan. Phases 1–5 are done and phase 6 is in progress; see [Phases](#phases).*
 
 The design-artifacts export driver turns a rendered `@Preview` module and a `catalog.spec.json`
 into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves and the Figma
@@ -101,16 +101,22 @@ Each phase is one PR per repository and leaves every caller working.
    - Eight driver tests check the driver against compose-ai-tools itself (its workflow, Kotlin
      sources, samples and lockfile). They stay in compose-ai-tools and are left out of this
      package's run.
-5. **Run the published driver from the reusable workflow.**
-   - `design-artifacts-reusable.yml` runs `npx @design-parity/export-driver@<version>` instead
-     of checking out compose-ai-tools at the pinned commit.
-   - `design-artifacts-driver-pin.txt` then holds a package version instead of a commit, and
-     `refresh-driver-pin.yml` bumps it on each release.
-   - The security property the pin exists for still holds: the privileged job runs a published,
-     immutable artifact that no caller can choose. npm provenance attestation links each version
-     to the design-parity workflow run that built it.
-6. **Delete compose-ai-tools' copy.** It now holds only what its own Gradle and Kotlin tests
-   read, as compose-preview-server's does after phase 1.
+5. **Run the published driver from the reusable workflow.** Done in yschimke/compose-ai-tools#5713.
+   - compose-ai-tools commits a lockfile, `.github/design-artifacts-driver/package-lock.json`,
+     naming `@design-parity/export-driver` at an exact version with its whole dependency tree.
+     Every workflow that runs the driver installs from it (`.github/scripts/install-export-driver.sh`),
+     and Renovate moves it.
+   - The workflow still checks compose-ai-tools out at the pinned commit for its actions and
+     version catalog, and reads the lock from that checkout. So the security property the pin
+     exists for still holds: the privileged job runs a reviewed tree that no caller can choose,
+     and npm provenance links each driver version to the design-parity run that built it.
+6. **Delete compose-ai-tools' copy.** It keeps only what that repository itself reads: the two
+   schemas behind public `$schema` URLs, and the scope scripts its own workflow runs. Before it
+   goes, the tests that only it ran move:
+   - the browser guards against the published Remote Compose players, and the
+     compose-preview-server mirrors, to this repository's `export-driver-browser` CI job;
+   - the checks that the driver agrees with compose-ai-tools' own files (its workflow, Kotlin,
+     samples and fonts), to a compose-ai-tools test that runs against the installed package.
 7. **Optionally, move the reusable workflow.** Every catalog repository calls
    `yschimke/compose-ai-tools/.github/workflows/design-artifacts-reusable.yml@main`.
    - Moving the workflow to design-parity changes every one of those `uses:` lines.

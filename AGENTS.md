@@ -132,12 +132,12 @@ generic advice.
   are plain JavaScript typed only by declaration emit, which
   `scripts/widen-declarations.mjs` corrects.
 - **`packages/export-driver` is the source of the design-artifacts export
-  driver.** Change the driver here. compose-ai-tools' `scripts/design-artifacts/`
-  is the older copy its workflow still runs until phase 5 of
-  `docs/design-artifacts/CONSOLIDATION.md`; it is frozen, and a fix it needs
-  before then is copied there from here, not written there first.
-  `node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout>`
-  lists how that copy differs from this one.
+  driver.** Change the driver here. compose-ai-tools runs the published package,
+  at the version its `.github/design-artifacts-driver/` lockfile names, so a
+  driver change reaches it with the next release and a Renovate bump. Its old
+  `scripts/design-artifacts/` copy is frozen and being deleted (phase 6 of
+  `docs/design-artifacts/CONSOLIDATION.md`). The driver's browser guards and
+  compose-preview-server mirrors run in CI's `export-driver-browser` job.
 - **Watch for drift in code vendored from here.** `compose-ai-tools`'
   `scripts/design-artifacts/generate-design-catalog.mjs` carries an inline copy
   of `packages/catalog-export/src/spec.ts`'s join, because the published package

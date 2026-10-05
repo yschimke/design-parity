@@ -56,3 +56,100 @@ jobs:
       # so this script decides what every consumer's install resolves to.
       - name: Test the published dependency ranges
         run: scripts/test-set-version.sh
+
+  # The export driver's browser guards and its compose-preview-server mirrors. They self-skip in
+  # `build-test` above, which has no browser, no player and no server sources, and a skip reports
+  # the same green as a pass. Here all three are supplied and the skips are made failures, so this
+  # job is where those tests actually assert. They ran in compose-ai-tools' CI while the driver's
+  # source lived there; the driver's source is this repository now, so its guards run here.
+  export-driver-browser:
+    name: Export driver browser guards
+    runs-on: ubuntu-latest
+    env:
+      # The rc-players release whose published players the guards drive: the CMP/Wasm player
+      # distribution and the TypeScript player's bundle, both from Maven Central. Renovate moves
+      # it (renovate.json). Its `fonts/` also carries the faces the parity page registers.
+      RC_PLAYERS_VERSION: "2.1.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci
+      # The driver imports the scope's own packages (catalog-export, candidate, adapter-figma),
+      # which `npm ci` links to their workspaces; their exports point at `dist/`, which only the
+      # build writes. `build-test`'s build does not reach this job's runner.
+      - name: Build the workspaces
+        run: npm run build
+      # Maven Central publishes a .sha1 beside each file; checking it catches a truncated or
+      # substituted download before a guard reports on the wrong bytes.
+      - name: Fetch the published Remote Compose players
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/rc-players"
+          base="https://repo1.maven.org/maven2/ee/schimke/composeai"
+          for artifact in rc-player-wasm-dist remote-compose-player-js-dist; do
+            url="$base/$artifact/$RC_PLAYERS_VERSION/$artifact-$RC_PLAYERS_VERSION-dist.zip"
+            curl -fsSL --retry 3 -o "$root-$artifact.zip" --create-dirs "$url"
+            want=$(curl -fsSL --retry 3 "$url.sha1" | cut -c1-40)
+            echo "$want  $root-$artifact.zip" | sha1sum -c -
+            mkdir -p "$root/$artifact"
+            unzip -q "$root-$artifact.zip" -d "$root/$artifact"
+          done
+          {
+            echo "RC_CMP_WASM_DIST=$root/rc-player-wasm-dist"
+            echo "RC_PLAYER_JS_BUNDLE=$root/remote-compose-player-js-dist/bundle.js"
+            echo "RC_FONTS_DIR=$root/rc-player-wasm-dist/fonts"
+          } >> "$GITHUB_ENV"
+      # Downloaded rather than checked out, so nothing from that repository is executed in this job:
+      # the mirror tests only `readFileSync` these three files. Each is the other half of a table
+      # the driver keeps in step with compose-preview-server; adding a mirror means adding its file
+      # here, or the test self-skips and the guard below fires.
+      - name: Fetch the compose-preview-server mirror sources
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/yschimke/compose-preview-server/releases/latest \
+            | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)
+          if [ -z "$tag" ]; then
+            echo "::error::could not read the newest compose-preview-server release tag"
+            exit 1
+          fi
+          echo "mirroring against compose-preview-server $tag"
+          base="https://raw.githubusercontent.com/yschimke/compose-preview-server/$tag"
+          dest="$RUNNER_TEMP/compose-preview-server"
+          for rel in \
+            "server/src/main/kotlin/ee/schimke/composeai/cli/serve/ServeRcFonts.kt" \
+            "server/build.gradle.kts" \
+            "server/src/main/resources/ee/schimke/composeai/cli/serve/assets/format-compare.js"; do
+            mkdir -p "$dest/$(dirname "$rel")"
+            curl -fsSL --retry 3 -o "$dest/$rel" "$base/$rel"
+          done
+          echo "COMPOSE_PREVIEW_SERVER_ROOT=$dest" >> "$GITHUB_ENV"
+      # The playwright the lockfile pins, so the browser matches it.
+      - name: Install Chromium
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run the export driver's tests
+        env:
+          RC_CMP_WASM_REQUIRE: "1"
+          RC_PLAYER_JS_BUNDLE_REQUIRE: "1"
+        run: |
+          set -euo pipefail
+          out=$(npm test --workspace @design-parity/export-driver 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          # The mirrors self-skip without a server checkout, and the font-dependent browser tests
+          # without their face in RC_FONTS_DIR (`... is not vendored`, `missing <face>.ttf`). Both
+          # are supplied above, so any of these skips means a fetch did not resolve. Matched on the
+          # skip reasons rather than a skip count: the suite has other, legitimate skips, so a count
+          # would either never fire or always fire.
+          for reason in "no compose-preview-server checkout" "is not vendored" "missing RobotoFlex.ttf"; do
+            if grep -q "$reason" <<<"$out"; then
+              echo "::error::a test skipped with '$reason' although its input was supplied"
+              exit 1
+            fi
+          done

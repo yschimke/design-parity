@@ -32,17 +32,18 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import { DEFAULT_FONTS_DIR } from "./rc-fonts.mjs";
 import { RC_PLAYER_JS_BUNDLE } from "./rc-player-bundle.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE = RC_PLAYER_JS_BUNDLE;
 const WEIGHT_FIXTURE = path.join(HERE, "fixtures", "typeface-variable-weight.rc");
 const WIDTH_FIXTURE = path.join(HERE, "fixtures", "typeface-variable-width.rc");
-/** The catalog's own variable face — an `fvar` table is what makes the ramp possible at all. */
-const VARIABLE_FONT = path.resolve(
-  HERE,
-  "../../samples/cmp-wasm-catalog/src/wasmJsMain/resources/fonts/RobotoFlex.ttf",
-);
+/**
+ * The catalog's own variable face — an `fvar` table is what makes the ramp possible at all. Read
+ * from the vendored font directory (`RC_FONTS_DIR` overrides it, as design-parity's CI does).
+ */
+const VARIABLE_FONT = path.join(DEFAULT_FONTS_DIR, "RobotoFlex.ttf");
 const FAMILY = "Roboto Flex";
 /** Both specimens are captured 320×240 dp at dpi 320. */
 const WIDTH = 640;
