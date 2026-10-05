@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "bin": {
-    "design-artifacts": "./bin/design-artifacts.mjs"
+    "design-artifacts": "bin/design-artifacts.mjs"
   },
   "files": [
     "*.mjs",
