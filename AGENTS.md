@@ -88,6 +88,16 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
   `packages/<name>/` files; `package-lock.json` updates from `npm install` are
   expected and regenerate cleanly.
 
+## Review guidelines
+
+- **Do not report commit author, committer or `Co-authored-by:` findings.** Your review sandbox
+  applies the pull request as a new commit under your own identity (`Codex <codex@openai.com>`),
+  so any identity you read from a local `git log` is yours, not the author's. Every such finding
+  on these repositories has named a commit that exists only in the sandbox. Attribution is a
+  human and CI concern (the `No Agent Attribution` gate checks the real commits); leave it out of
+  reviews entirely. This overrides the attribution items elsewhere in this file for automated
+  reviewers.
+
 ## Code Review Rules
 
 Read by Codex code review as well as by humans. Keep it to things a reviewer
@@ -152,7 +162,8 @@ generic advice.
 - Mechanical gates, all CI-enforced and all cheap to check on a diff:
   conventional-commit PR title; `agent/...` branch name; no agent identity or
   `Co-authored-by` trailer in **either** the commits or the PR description
-  (squash merge takes the description onto `main`); no package registered in a
+  (squash merge takes the description onto `main`; automated reviewers leave this one to the
+  gate, see [Review guidelines](#review-guidelines)); no package registered in a
   root `tsconfig.json` `references` array (there isn't one).
 
 ## Releasing

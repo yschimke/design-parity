@@ -16,7 +16,7 @@
     "src/PROVENANCE.json"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && node scripts/widen-declarations.mjs",
     "test": "vitest run --root ../.. packages/known-differences/test"
   },
   "repository": {
