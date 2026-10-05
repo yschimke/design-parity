@@ -25,8 +25,7 @@
     "pngjs": "7.0.0"
   },
   "devDependencies": {
-    "@types/pngjs": "6.0.5",
-    "fflate": "0.8.3"
+    "@types/pngjs": "6.0.5"
   },
   "repository": {
     "type": "git",

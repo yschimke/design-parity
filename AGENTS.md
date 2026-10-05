@@ -112,28 +112,25 @@ generic advice.
   three of them and missed in the fourth is dropped **in silence** — no type
   error, no test failure, just an absent key in the published catalog. Flag any
   new optional field that doesn't appear at every hop, with a test at each.
-- **Never hand-edit `packages/known-differences/src/`.** Those nine modules
-  are `compose-ai-tools`' `scripts/design-artifacts/*.mjs` byte-for-byte, with
-  one declared mechanical transform (a `// @ts-nocheck` line, and `./x.mjs` →
-  `./x.js`). Two copies of a scoring engine that drift apart is the exact
-  failure the contract exists to prevent: each looks self-consistent while the
-  two report different numbers for the same pixels. Land the change **upstream
-  first**, then re-vendor:
+- **`packages/known-differences` is the one copy of the acceptance engine.**
+  compose-ai-tools, compose-preview-server and `packages/diff` all depend on
+  the published package; none keeps its own copy any more. A change to a
+  module, a kernel constant or the document rules lands here, with the cases
+  that pin it:
 
   ```sh
-  node packages/known-differences/test/sync-known-differences-vendor.mjs <compose-ai-tools-checkout>
-  node packages/known-differences/test/sync-known-differences-fixtures.mjs <compose-ai-tools-checkout>
+  npm run build --workspace @design-parity/known-differences
+  node packages/known-differences/test/conformance/build-known-difference-fixtures.mjs
+  npm run test:conformance --workspace @design-parity/known-differences
   ```
 
-  Re-vendor the fixtures alongside the engine — a kernel change moves the
-  expected scores in the conformance corpus, and the two are only meaningful
-  pinned to the same commit. `src/PROVENANCE.json` records the upstream
-  commit and both digests; `packages/known-differences/test/vendor-provenance.test.ts`
-  recovers the upstream bytes from each copy and checks them, so an in-place
-  edit fails the suite offline. A separate scheduled workflow
-  (`.github/workflows/vendor-drift.yml`) reports when the pin has gone stale —
-  it never fails a PR, because re-vendoring changes published scores and is a
-  decision rather than routine maintenance.
+  The fixture tree under `test/conformance/fixtures/known-differences/` is
+  generated: edit `build-known-difference-fixtures.mjs`, never the tree, and
+  commit both. `known-differences.test.mjs` regenerates it and fails on any
+  difference. A kernel change moves published scores, so call it out in the
+  PR. The modules keep their `// @ts-nocheck` line and `.js` specifiers; they
+  are plain JavaScript typed only by declaration emit, which
+  `scripts/widen-declarations.mjs` corrects.
 - **Watch for drift in code vendored from here.** `compose-ai-tools`'
   `scripts/design-artifacts/generate-design-catalog.mjs` carries an inline copy
   of `packages/catalog-export/src/spec.ts`'s join, because the published package

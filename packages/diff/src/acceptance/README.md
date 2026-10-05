@@ -1,10 +1,10 @@
 # Scoped acceptance engine
 
 The normative `compose-preview-known-differences/v1` modules come from
-[`@design-parity/known-differences`](../../../known-differences), which records the
-`yschimke/compose-ai-tools` commit they match in its `src/PROVENANCE.json`. Behavior is pinned by the
-language-neutral fixture tree in `packages/known-differences/test/fixtures/known-differences.zip`,
-which `test/known-differences-conformance.test.ts` runs through this adapter.
+[`@design-parity/known-differences`](../../../known-differences). Behavior is pinned by its
+generated, language-neutral fixture tree in
+`packages/known-differences/test/conformance/fixtures/known-differences/`, which
+`test/known-differences-conformance.test.ts` runs through this adapter.
 
 Host work stays outside the engine:
 

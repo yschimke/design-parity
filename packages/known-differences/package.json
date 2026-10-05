@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    "./PROVENANCE.json": "./src/PROVENANCE.json",
+    "./schema/known-differences.schema.json": "./schema/known-differences.schema.json",
     "./*": {
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"
@@ -13,11 +13,12 @@
   },
   "files": [
     "dist",
-    "src/PROVENANCE.json"
+    "schema"
   ],
   "scripts": {
     "build": "tsc --build && node scripts/widen-declarations.mjs",
-    "test": "vitest run --root ../.. packages/known-differences/test"
+    "test": "vitest run --root ../.. packages/known-differences/test && npm run test:conformance",
+    "test:conformance": "node --test \"test/conformance/*.test.mjs\""
   },
   "repository": {
     "type": "git",
