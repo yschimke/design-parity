@@ -5,7 +5,7 @@
 `yschimke/compose-ai-tools`.
 
 **The pin is not written here.** It lives in
-[`../../src/acceptance/vendor/PROVENANCE.json`](../../src/acceptance/vendor/PROVENANCE.json),
+[`../../src/PROVENANCE.json`](../../src/PROVENANCE.json),
 under `fixtures`, alongside the commit the vendored engine came from — because
 they are the same commit, and must stay so. A kernel change moves the expected
 scores in this corpus, so an engine and a corpus snapshotted from different
@@ -21,7 +21,7 @@ temporary directory and runs every declared case and every declared pin.
 Refresh it together with the engine — one commit, one command:
 
 ```sh
-node packages/diff/test/sync-known-differences-vendor.mjs PATH_TO_CHECKOUT
+node packages/known-differences/test/sync-known-differences-vendor.mjs PATH_TO_CHECKOUT
 ```
 
 `sync-known-differences-fixtures.mjs` still snapshots the corpus alone, for the

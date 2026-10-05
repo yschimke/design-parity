@@ -1,0 +1,29 @@
+{
+  "name": "@design-parity/known-differences",
+  "version": "0.1.24",
+  "description": "The compose-preview-known-differences/v1 acceptance engine: document ladder, gates, separated-plane scorer and a dependency-free PNG reader. One module per entry point, with no dependencies.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./PROVENANCE.json": "./src/PROVENANCE.json",
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/PROVENANCE.json"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run --root ../.. packages/known-differences/test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/known-differences"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/known-differences#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
+}
