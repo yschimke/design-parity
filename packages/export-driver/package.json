@@ -1,0 +1,44 @@
+{
+  "name": "@design-parity/export-driver",
+  "version": "0.1.24",
+  "description": "The design-artifacts export driver: turns a compose-preview render and a catalog.spec.json into the importable design-artifacts/<system> delivery branch. Run as `design-artifacts <script> [args]`.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "design-artifacts": "./bin/design-artifacts.mjs"
+  },
+  "files": [
+    "*.mjs",
+    "*.sh",
+    "*.json",
+    "!*.test.mjs",
+    "!test-*.sh",
+    "!package-lock.json",
+    "bin",
+    "fixtures",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node package-scripts/run-tests.mjs"
+  },
+  "dependencies": {
+    "@design-parity/adapter-figma": "^0.1.24",
+    "@design-parity/candidate": "^0.1.24",
+    "@design-parity/catalog-export": "^0.1.24",
+    "fflate": "0.8.3",
+    "pixelmatch": "7.2.0",
+    "playwright": "1.63.0",
+    "pngjs": "7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yschimke/design-parity.git",
+    "directory": "packages/export-driver"
+  },
+  "homepage": "https://github.com/yschimke/design-parity/tree/main/packages/export-driver#readme",
+  "bugs": "https://github.com/yschimke/design-parity/issues"
+}

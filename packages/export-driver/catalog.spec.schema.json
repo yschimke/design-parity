@@ -1,0 +1,414 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/yschimke/compose-ai-tools/main/scripts/design-artifacts/catalog.spec.schema.json",
+  "title": "Design catalog spec",
+  "description": "Code-led design-catalog spec: declares which @Preview composables (by function name) make up a published sticker sheet, their grouping, sections, captions, and per-component variants. Consumed by scripts/design-artifacts/generate-design-catalog.mjs over a `compose-preview bundle pack` render. Each `preview` MUST equal an exact @Preview function name in the rendered module; validate before rendering with `node scripts/design-artifacts/validate-catalog-spec.mjs`.",
+  "type": "object",
+  "required": ["system", "title"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "$comment": { "type": "string" },
+    "system": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable slug identifying the system; the delivery branch is design-artifacts/<system> and the preview server serves it at /<system>/."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable catalog name shown in the preview server."
+    },
+    "library": {
+      "type": "array",
+      "description": "Informational: the design-system libraries this catalog covers.",
+      "items": { "type": "string" }
+    },
+    "module": {
+      "type": "string",
+      "description": "Gradle module path whose @Preview functions this spec references (e.g. \":app\", \"samples:design-catalog-m3\"). Used by validate-catalog-spec.mjs to locate the Kotlin sources; the render is driven separately by the workflow."
+    },
+    "modes": {
+      "type": "array",
+      "description": "Informational: the theme modes the sticker sheet covers (e.g. [\"light\", \"dark\"]).",
+      "items": { "type": "string" }
+    },
+    "themeModules": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Gradle project paths the `themes` providers are generated into, for an import that renders every module (no `module`). Each listed module gets the same providers, so every rendered module offers the same Theme control. List only modules whose classpath sees the theme composable — a provider compiles in the module it is written into. Omit it when the spec names a single `module`; that module is used.",
+      "items": { "type": "string", "pattern": "^:[A-Za-z0-9_.-]+(:[A-Za-z0-9_.-]+)*$" }
+    },
+    "themes": {
+      "type": "array",
+      "description": "Themes an IMPORTED project has but cannot declare for itself. A first-party catalog annotates its own `PreviewWrapperProvider` classes with @ThemeCatalog / @WearThemeCatalog beside the code and omits this entirely; a project imported without its maintainers' involvement has no dependency on those annotations, so its palettes are described HERE and the providers are generated into the throwaway checkout before discovery runs (scripts/design-artifacts/generate-theme-catalogs.mjs). Each entry expands to one or more providers, which is what puts chips in the served catalog's Theme control, makes `?theme=theme:<providerFqn>` re-render under them, and publishes a `themes/<fqn>.dtcg.json` token set each. Same bargain as `groups`: the inventory is our description of somebody else's code, and it stays in our repository.",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "additionalProperties": false,
+        "description": "One theme shape. `kind` picks how the theme is called: the four structured kinds cover what upstreams actually do, and `wrapper` is the escape hatch for a call none of them spells.",
+        "properties": {
+          "kind": {
+            "enum": ["enum", "functions", "modes", "arguments", "wrapper"],
+            "description": "`enum`: one theme composable over an enum's constants, `AppThemeWithBackground(LIGHT) { }` — Pocket Casts' nine palettes, Twine's twelve. `functions`: a whole composable per theme, `ThunderbirdBoltTheme { }` — Bolt's two brands. `modes`: one composable with a boolean dark parameter, `ElementTheme(darkTheme = true) { }` — the single-brand light/dark pair, and the shape that gives a Theme control its two chips when the upstream bakes both into one stacked image. `arguments`: one composable and a named-argument list per theme; the general form the other three are shorthands for. `wrapper`: a raw Kotlin body."
+          },
+          "group": {
+            "type": "string",
+            "description": "Default @ThemeCatalog group for every theme this entry expands to; themes sharing a group are catalogued together. Overridable per theme."
+          },
+          "wear": {
+            "type": "boolean",
+            "default": false,
+            "description": "Emit @WearThemeCatalog instead of @ThemeCatalog for every provider this entry expands to. Required for a Wear theme: the annotation selects the Wear specimen and prevents a plausible-looking mobile Material 3 palette (or a missing androidx.compose.material3 class) from being rendered in its place."
+          },
+          "composable": {
+            "type": "string",
+            "description": "FQN of the theme composable to call. Required by `enum`, `modes` and `arguments`. It may be `internal` to the module — the generated file compiles inside that same module, which is what makes an unexported theme (Twine's `AppTheme`) reachable at all."
+          },
+          "enum": {
+            "type": "string",
+            "description": "`kind: enum` only. FQN of the enum whose constants name the themes, nested names included (e.g. \"…ui.theme.Theme.ThemeType\")."
+          },
+          "values": {
+            "type": "array",
+            "description": "`kind: enum` only. The constants to expand, each a name or a { value, name, group } object. Listed rather than reflected off the enum: generation runs before the upstream compiles, so there is nothing to reflect against — and a constant that does not exist fails the module's compile by name, which beats a silently thinner catalog.",
+            "items": { "type": ["string", "object"] }
+          },
+          "parameter": {
+            "type": "string",
+            "description": "`kind: enum` — pass the constant as this named argument rather than positionally. `kind: modes` — the boolean dark-theme parameter's name (default \"darkTheme\")."
+          },
+          "modes": {
+            "type": "array",
+            "description": "`kind: modes` only. Which of the pair to generate; both by default.",
+            "items": { "enum": ["light", "dark"] }
+          },
+          "composables": {
+            "type": "array",
+            "description": "`kind: functions` only. One FQN — or { composable, name, group } — per theme.",
+            "items": { "type": ["string", "object"] }
+          },
+          "variants": {
+            "type": "array",
+            "description": "`kind: arguments` only. One { name, args, imports, group } per theme; `args` maps a parameter name to the Kotlin expression to pass it.",
+            "items": { "type": "object" }
+          },
+          "name": {
+            "type": "string",
+            "description": "`kind: wrapper` only. The theme's label, and the stem of its generated provider class."
+          },
+          "wrapper": {
+            "type": "string",
+            "description": "`kind: wrapper` only. The Kotlin body of the provider's `Wrap`, which must call `content()` — e.g. `AppTheme(overriddenColorScheme = solarizedColorScheme(false)) { content() }`."
+          },
+          "imports": {
+            "type": "array",
+            "description": "Extra FQNs to import into the generated file, for names a `wrapper` body or an `arguments` expression uses.",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "locales": {
+      "type": "array",
+      "description": "The locales the sticker sheet covers (e.g. [\"en\", \"ja\"]). Unlike `modes` this is not informational: a preview id ending in a declared locale is tagged with a `locale` props axis, so the arms of a locale multipreview fan-out (`Foo_en` / `Foo_ja`) are distinct renders instead of two images folding onto one output key. Match is case-insensitive and only at a segment boundary, as for `modes`. An id naming no declared locale stays untagged and remains the component's primary sticker. Omit for a single-locale catalog.",
+      "items": { "type": "string" }
+    },
+    "modePriority": {
+      "type": "object",
+      "description": "Per-axis render priority for the theme modes: which palettes must be baked into the published bundle and which the preview server produces on demand. Keys are mode names from `modes` plus the `*` wildcard; values are \"required\" (default) or \"deferred\". e.g. { \"light\": \"required\", \"*\": \"deferred\" } bakes one sticker per component and leaves the rest to the serve host's theme switcher. Only stickers that NAME a theme can be deferred, so a component always keeps its primary render. Requires a live path (publish-live-bundle or a buildable `source`) — the export refuses to publish deferred coverage a serve host could not re-render.",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": { "$ref": "#/definitions/priority" }
+    },
+    "breakpoints": {
+      "type": "array",
+      "description": "The named breakpoints the sticker sheet documents and uses as image size axes. Each entry names the breakpoint (`size`) and identifies the renders that belong to it by `device` (the @Preview(device = …) id, matched first — a multipreview expansion's own identity) and/or `widthDp` (matched as a fallback, and used by the live-preview lane to score which annotation produced a sticker), so declaring both is the most robust. When omitted, a catalog whose library includes androidx.wear.compose defaults to the standard Wear round devices (smallRound / largeRound / xlRound / smallSquare, by device id and width). An explicit array, including an empty array, overrides that Wear default. A device id no breakpoint names keeps the generic Material width class, which collapses two distinct renders onto one axis — the export warns when it sees one.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "size": { "type": "string" },
+          "widthDp": { "type": "number" },
+          "device": {
+            "type": "string",
+            "description": "The @Preview(device = …) id this breakpoint names, e.g. \"id:wearos_small_round\"."
+          }
+        }
+      }
+    },
+    "referenceKits": {
+      "type": "array",
+      "description": "Informational: published design-kit URLs a component seeds from for the one-off import (the render stays authoritative).",
+      "items": { "type": "string" }
+    },
+    "compareWith": {
+      "description": "Optional sibling system to pair against on the cross-system compare page; components carry `parallel` handles into it. A bare slug means a sibling module of this project (spec read from `../design-catalog-<slug>/`, renders from this repo's `design-artifacts/<slug>` branch). Use the object form when the sibling is a catalog of ANOTHER repository, or to tune the design column.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["system"],
+          "properties": {
+            "system": { "type": "string", "minLength": 1, "description": "The sibling system slug." },
+            "repo": {
+              "type": "string",
+              "description": "`<owner>/<repo>` publishing the sibling's `design-artifacts/<system>` branch, when it is not this repository."
+            },
+            "spec": {
+              "type": "string",
+              "description": "Path to the sibling's catalog.spec.json, relative to this spec. Only for an in-checkout sibling that doesn't follow the `../design-catalog-<slug>/` convention; a cross-repo sibling has none and takes its title from its published catalog.json."
+            },
+            "designTitle": {
+              "type": "string",
+              "description": "Heading for the design-reference column (default \"Design kit\")."
+            },
+            "design": {
+              "type": "boolean",
+              "description": "Set false to suppress the design-reference column even where the branches publish references."
+            }
+          }
+        }
+      ]
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional presentation hints carried onto catalog.json so the preview server reads them instead of inferring — the stage surface and the hero preview to feature on the index.",
+      "properties": {
+        "surface": {
+          "enum": ["light", "dark"],
+          "description": "The stage background this system's stickers are drawn for. `dark` for a dark-first platform (Wear OS), so a light-on-transparent sticker isn't washed out on a white stage. Absent ⇒ light."
+        },
+        "hero": {
+          "type": "string",
+          "description": "The representative preview to feature as the system's hero — a componentId (e.g. \"Template/TimeText\") or a flattened preview id. Absent ⇒ the server picks one (prefer a screen, else a canonical component)."
+        },
+        "role": {
+          "type": "string",
+          "description": "What KIND of catalog this is, and through that what shape its component pages take. `samples` is a catalog of CALL SITES rather than of a design system's own components: the preview server drops every comparison lane (there is no reference a sample is meant to match, so a difference is not a defect) and stands the source beside the render instead of behind a chip. It also names the catalog in a reader's back-links — a component points at \"Samples\" rather than at a catalog title. Declared by the catalog because only it knows; a server that inferred this from a system name would be holding catalog knowledge it must not. Deliberately an open string rather than an enum: a consumer that does not recognise a role must degrade to the ordinary page, and an enum here would instead fail a newer producer's spec at validation."
+        }
+      }
+    },
+    "groupOrder": {
+      "type": "array",
+      "description": "Optional display order for the groups, by name (e.g. [\"Buttons\", \"Selection\", \"Containment\", …]). Presentation config, like `display`: when the inventory is annotation-supplied, the annotation-derived order follows source declaration order, which may not match the intended catalog order — this pins it. Groups not named keep their relative order after the named ones. Ignored groups (no such group) are harmless.",
+      "items": { "type": "string" }
+    },
+    "completeness": {
+      "type": "object",
+      "description": "Escape hatches for the publish-time completeness gate, per entry rather than the wholesale `--allow-incomplete`.",
+      "additionalProperties": false,
+      "properties": {
+        "$comment": { "type": "string" },
+        "exemptSemantics": {
+          "type": "array",
+          "description": "componentIds whose render is expected to capture NO semantics tree, so their absence must not fail the publish (e.g. the synthetic Activity renders repository-wide discovery sweeps in: a cold-started app with no data and no network renders a near-empty frame). Matched against the whole componentId as the \"no semantics for: …\" report prints it, with `*` standing for any run of characters including `/` — e.g. [\"*Activity\", \"app/getting-started\"]. Exempt entries stay in catalog.json with their pixels and are reported separately; every other entry keeps the strict gate. Semantics only — a MISSING render still fails (declare `capture: \"none\"` for an entry that cannot rasterise). A pattern matching nothing is reported on every run so a stale exemption is visible.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "description": "The component inventory, grouped. Group order is the display order (or `groupOrder`, when set). OPTIONAL: a catalog can instead declare its inventory with `@CatalogComponent` / `@CatalogVariant` annotations next to the `@Preview`s (the design-artifacts export builds the inventory from them, layering any groups declared here on top as an override). Absent ⇒ the inventory is wholly annotation-supplied.",
+      "items": { "$ref": "#/definitions/group" }
+    }
+  },
+  "definitions": {
+    "priority": {
+      "enum": ["required", "deferred"],
+      "description": "Whether this entry must be baked into the published bundle (\"required\", the default — rendered, joined, and subject to the strict completeness gate) or may be produced on demand by the preview server (\"deferred\"). NOTE: entry- and variant-level \"deferred\" is currently RECORDED BUT NOT ACTED ON — the preview server does not yet read catalog.json's `deferred[]`, so honouring it would drop the entry from `serve --catalogs` instead of rendering it on demand. Until compose-ai-tools#2965 lands, such an entry renders and bakes exactly as \"required\" (the export and the pre-flight both say so), and it imposes no live-path requirement. It is safe to author ahead of the server. For deferral that takes effect today, use the axis form `modePriority`, which keeps every component present with its primary sticker. When entry deferral does activate: it needs a live path (publish-live-bundle or a buildable `source`), and static consumers (images/, figma/*.svg, the Figma import) will carry required entries only — which is why the default stays \"required\"."
+    },
+    "group": {
+      "type": "object",
+      "required": ["name", "components"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sub-heading for this group of components."
+        },
+        "section": {
+          "type": "string",
+          "description": "Optional top-level TAB the preview server buckets this group under (Themes / Components / Screens / Animations / …). Sits one level above `name`. Absent ⇒ a flat, untabbed catalog."
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/component" }
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "required": ["componentId", "preview"],
+      "additionalProperties": false,
+      "properties": {
+        "componentId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable id for the component/state, e.g. \"Button/Filled\". Unique across the whole spec."
+        },
+        "preview": {
+          "type": "string",
+          "minLength": 1,
+          "description": "EXACT @Preview function name that renders this component. Must match a discovered @Preview (or multipreview) function in `module`."
+        },
+        "motionPreview": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional exact @Preview function name that supplies this component's animated or interaction capture when motion must live on a separate function from the static `preview`."
+        },
+        "select": { "$ref": "#/definitions/select" },
+        "caption": {
+          "type": "string",
+          "description": "One-line description shown under the sticker."
+        },
+        "capture": {
+          "enum": ["static", "none"],
+          "default": "static",
+          "description": "What this component exports. `static` (the default) expects a `previews/<id>.png` sticker; a spec entry that renders none is a missing render and the strict publish gate refuses the whole system. `none` DECLARES that this preview exports no sticker — an AndroidView-hosted composable, a horologist ScalingLazyColumn screen, or a GIF-only capture — so it is excluded from the candidate join without counting as missing, and the entry stays in the spec as the record that the coverage is sticker-less (if the content is animated, put its group under `section: \"Animations\"` to keep it out of the component tabs). Use it only when the render genuinely produces no PNG; deleting the entry instead hides the gap."
+        },
+        "reference": {
+          "type": "string",
+          "description": "Optional seed-kit handle (Figma node etc.) for the one-off import."
+        },
+        "referenceSet": {
+          "type": "string",
+          "description": "Optional handle of the component family `reference` is one variant of (a Figma component set). `reference` names the single node a parity run diffs this sticker against; `referenceSet` names the family, so an instance found on a whole screen — which reports its own variant, rarely the one the catalog pictured — still matches back to this component."
+        },
+        "noReference": {
+          "type": "string",
+          "description": "Optional REASON there is no `reference`, for when the absence is a finding rather than a gap — the kit retired the pattern, never published it, or publishes something close enough to mislead. An absent `reference` otherwise means only \"nobody has looked yet\", and a consumer cannot tell an audited component with no counterpart from an unaudited one."
+        },
+        "parallel": {
+          "type": "string",
+          "description": "Optional componentId of the counterpart in the `compareWith` sibling system, paired side-by-side on the cross-system compare page."
+        },
+        "related": {
+          "type": "array",
+          "description": "Optional links to this component's counterparts in OTHER catalogs — a samples catalog demonstrating how it is called, a sibling platform's rendition. Unlike `parallel` this is a LIST and carries no parity semantics: `parallel` says two renders are pictures of one cell and should be diffed, `related` says only that another catalog is worth looking at from here. A list because a component can have more than one such neighbour and `compareWith` names exactly one sibling system — `remote-m3` spends its `compareWith` on the Wear kit catalog, so a second pairwise handle could never reach the samples. Presentation only: nothing scores, diffs or gates on it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["system"],
+            "properties": {
+              "system": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The other catalog's system slug, as it is served (e.g. \"m3-samples\"). Resolution is the consumer's: a preview server serving both catalogs already knows where it is, and one that does not serve it simply renders no link."
+              },
+              "componentId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The counterpart's componentId in that system. Omit when it is the same as this component's — the id-parity case, which is most of them."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Display text for the link (e.g. \"Samples\"). Omit to let the consumer fall back to the other catalog's own title."
+              }
+            }
+          }
+        },
+        "component": {
+          "type": "string",
+          "description": "Optional Code Connect override: the production composable name the sticker maps to (takes priority over the inferred target when building code-connect.json)."
+        },
+        "import": {
+          "type": "string",
+          "description": "Optional Code Connect override: the import line for `component`."
+        },
+        "source": {
+          "type": "string",
+          "description": "Optional Code Connect override: the source location (path or URL) for `component`."
+        },
+        "sourceFile": {
+          "type": "string",
+          "description": "Optional override for where a reader should be sent for this component's source, as a module-relative path. Takes precedence over the path discovery recorded for the `preview` function. For a catalog of call sites whose previews are generated wrappers, the wrapper is where the @Preview is and the thing it delegates to is what a reader came for — and only the catalog knows which. Leave it out on an ordinary catalog, where the two are the same file."
+        },
+        "bodyLine": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Optional line inside `sourceFile` to anchor the source panel on, meaningful only alongside `sourceFile`. Without it the whole file is shown, which is right for a file holding one declaration and poor for a file holding several."
+        },
+        "priority": { "$ref": "#/definitions/priority" },
+        "variants": {
+          "type": "array",
+          "description": "Extra state/content renders folded onto this sticker; each is its own @Preview.",
+          "items": { "$ref": "#/definitions/variant" }
+        }
+      }
+    },
+    "select": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "Pick ONE value of a multipreview's fan-out for this entry, instead of folding every render of `preview` onto it. Lets two entries share a @Preview function and stay separate cards with their own componentId and caption — the alternative being to split the function in the module into per-breakpoint siblings (which also drops the multipreview's other axes, e.g. @WearPreviewFontScales). A selection that matches no render is reported as a missing render, naming the values the function did produce.",
+      "properties": {
+        "size": {
+          "type": "string",
+          "description": "The breakpoint name (from `breakpoints`) this entry renders at, e.g. \"largeRound\"."
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "required": ["preview"],
+      "additionalProperties": false,
+      "description": "A secondary render of the parent component, tagged by `state` (pressed/focused/disabled/…), named `props` content axes, or a `theme` (light/dark, for a screen whose two themes are separate @Preview functions), and optionally narrowed to one breakpoint with `select`. Give at least one so it's distinguishable from the default.",
+      "properties": {
+        "preview": {
+          "type": "string",
+          "minLength": 1,
+          "description": "EXACT @Preview function name for this variant render."
+        },
+        "select": { "$ref": "#/definitions/select" },
+        "caption": { "type": "string" },
+        "capture": {
+          "enum": ["static", "none"],
+          "default": "static",
+          "description": "As on a component: `none` declares that this variant render exports no static PNG, so it is skipped in the fold without counting as a missing render."
+        },
+        "priority": { "$ref": "#/definitions/priority" },
+        "state": {
+          "type": "string",
+          "description": "The interaction/state this variant shows (pressed, keyboard-focus, disabled, off, …)."
+        },
+        "props": {
+          "type": "object",
+          "description": "Named content axes distinguishing this variant (e.g. { \"content\": \"icon+label\" } or { \"locale\": \"de\" }).",
+          "additionalProperties": true
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark"],
+          "description": "Pairs a separate-function theme render onto this component so it folds into one …__light/…__dark swap card — use when a screen's light and dark renders are two @Preview functions (e.g. FooScreen + FooScreenDark) rather than one multipreview. The dark render must set uiMode = UI_MODE_NIGHT_YES so its pixels are actually dark; this tag makes the pairing authoritative."
+        },
+        "parallel": {
+          "type": "string",
+          "description": "Optional componentId of the counterpart in the `compareWith` sibling system, paired side-by-side on the cross-system compare page. A variant is compared in its own right rather than through its parent, so folding a render under one does not cost it its pairing. Several variants of one parent may name the same counterpart: the sibling system often draws one component where this one draws a family."
+        },
+        "reference": {
+          "type": "string",
+          "description": "Optional seed-kit handle (Figma node etc.) for this variant's own cell."
+        },
+        "referenceSet": {
+          "type": "string",
+          "description": "Optional handle of the component family `reference` is one variant of; as on a component."
+        },
+        "noReference": {
+          "type": "string",
+          "description": "Optional REASON there is no `reference`, for when the absence is a finding rather than a gap. This carries more weight on a variant than on a component: mapping a variant onto its parent's base kit cell would score it against the wrong picture, so the kit exporting no such cell is a statement a reader needs and cannot infer from a blank field."
+        },
+        "referenceContentsOnly": {
+          "type": "boolean",
+          "default": true,
+          "description": "As on a component: whether a Figma export contains only `reference`'s own content."
+        }
+      }
+    }
+  }
+}
