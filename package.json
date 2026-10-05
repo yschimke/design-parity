@@ -12,7 +12,7 @@
   "scripts": {
     "build": "npm run build --workspace @design-parity/core && npm run build --workspaces --if-present",
     "typecheck": "npm run build",
-    "test": "vitest run && npm run test:conformance --workspace @design-parity/known-differences",
+    "test": "vitest run && npm run test:conformance --workspace @design-parity/known-differences && npm test --workspace @design-parity/export-driver",
     "set-version": "node scripts/set-version.mjs",
     "validate": "npm run build --workspace @design-parity/core && node packages/core/dist/cli/validate-design-map.js"
   },

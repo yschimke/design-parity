@@ -1,6 +1,6 @@
 # Consolidating the design-artifacts code
 
-*Plan. Phases 1 and 2 are done and phase 3 is in progress; see [Phases](#phases).*
+*Plan. Phases 1–3 are done and phase 4 is in progress; see [Phases](#phases).*
 
 The design-artifacts export driver turns a rendered `@Preview` module and a `catalog.spec.json`
 into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves and the Figma
@@ -80,7 +80,8 @@ Each phase is one PR per repository and leaves every caller working.
    - Before the first release, claim the npm name with one manual publish and register its
      trusted publisher (AGENTS.md § Releasing). Until then the release loop skips it and
      `@design-parity/diff` cannot install.
-3. **Make the package the one copy of the engine.**
+3. **Make the package the one copy of the engine.** Done in yschimke/design-parity#514 and
+   yschimke/design-parity#516, yschimke/compose-preview-server#1391 and yschimke/compose-ai-tools#5711.
    - compose-preview-server's `serve-web` imports the package and deletes its copy of the nine
      modules: yschimke/compose-preview-server#1391. It also takes over the check that its
      browser scorer's tuning matches the engine's, which used to need a cross-repository checkout.
@@ -89,9 +90,16 @@ Each phase is one PR per repository and leaves every caller working.
      fixture generator, the schema and the corpus. design-parity takes all of that over and
      retires the sync, then compose-ai-tools deletes its copy.
    - Both repositories already take `@design-parity/*` updates through Renovate.
-4. **Publish `@design-parity/export-driver`.** Move the remaining scripts and their tests, and
-   release it. compose-ai-tools keeps running its own copy during this phase. A CI job in
-   compose-ai-tools runs both against the same fixtures and fails if they disagree.
+4. **Publish `@design-parity/export-driver`.** Copy `scripts/design-artifacts/` here unchanged
+   as `packages/export-driver`, with a `design-artifacts <script>` command to run any script from
+   the published package, and release it. compose-ai-tools keeps running its own copy during this
+   phase.
+   - `package-scripts/check-upstream.mjs` fails on any byte difference between the two copies. A
+     compose-ai-tools CI job runs it against the published package, so a driver change there has
+     to be released here too before phase 5 makes this the only copy.
+   - Eight driver tests check the driver against compose-ai-tools itself (its workflow, Kotlin
+     sources, samples and lockfile). They stay in compose-ai-tools and are left out of this
+     package's run.
 5. **Run the published driver from the reusable workflow.**
    - `design-artifacts-reusable.yml` runs `npx @design-parity/export-driver@<version>` instead
      of checking out compose-ai-tools at the pinned commit.
