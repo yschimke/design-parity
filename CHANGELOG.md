@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/yschimke/design-parity/compare/v1.4.0...v1.5.0) (2026-10-05)
+
+
+### Features
+
+* **export-driver:** publish the design-artifacts export driver ([#517](https://github.com/yschimke/design-parity/issues/517)) ([7fda01b](https://github.com/yschimke/design-parity/commit/7fda01bf2a251ed3952350f04258c83fcee06deb))
+* **known-differences:** own the engine's tests, generator and corpus ([#514](https://github.com/yschimke/design-parity/issues/514)) ([620deb1](https://github.com/yschimke/design-parity/commit/620deb1ca94cd7b7d582cadc005547ebd795dabb))
+
+
+### Bug Fixes
+
+* **export-driver:** run scripts from any install path; own the driver here ([#518](https://github.com/yschimke/design-parity/issues/518)) ([85d16d4](https://github.com/yschimke/design-parity/commit/85d16d4ea3ea9ece3794dc46dc6bed3299d02245))
+
 ## [1.4.0](https://github.com/yschimke/design-parity/compare/v1.3.0...v1.4.0) (2026-10-05)
 
 
