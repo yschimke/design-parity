@@ -6,9 +6,28 @@
   "packageRules": [
     {
       "description": "`engines.node` states the range this repo supports, not a version to track. Pinning it to a single release makes `npm ci --engine-strict` reject every runtime the workflows actually use (Node 24) and every future patch of the pinned line.",
-      "matchDepTypes": ["engines"],
-      "matchPackageNames": ["node"],
+      "matchDepTypes": [
+        "engines"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
       "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The published Remote Compose players the export driver's browser guards run against (`RC_PLAYERS_VERSION` in ci.yml). Both zips come from the rc-players release this BOM names.",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": [
+        "RC_PLAYERS_VERSION: \"?(?<currentValue>\\d+\\.\\d+\\.\\d+)\"?"
+      ],
+      "depNameTemplate": "ee.schimke.composeai:rc-players-bom",
+      "datasourceTemplate": "maven",
+      "registryUrlTemplate": "https://repo1.maven.org/maven2"
     }
   ]
 }

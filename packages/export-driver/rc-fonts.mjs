@@ -40,11 +40,14 @@ export const FONT_FACES = [
 /**
  * Where those files live. The wasm catalog's dist is the repo's vendored copy of the renderer's
  * own faces — the same directory `render-fonts-manifest.mjs` validates its manifest against.
+ *
+ * The default is that directory in a compose-ai-tools checkout, where this script was written.
+ * `RC_FONTS_DIR` overrides it: design-parity's CI points it at the `fonts/` of the published CMP/Wasm
+ * player distribution, which ships the same faces.
  */
-export const DEFAULT_FONTS_DIR = path.resolve(
-  HERE,
-  "../../samples/cmp-wasm-catalog/src/wasmJsMain/resources/fonts",
-);
+export const DEFAULT_FONTS_DIR =
+  process.env.RC_FONTS_DIR ||
+  path.resolve(HERE, "../../samples/cmp-wasm-catalog/src/wasmJsMain/resources/fonts");
 
 /**
  * Build a `<style>` registering [FONT_FACES] from [dir], inlined as data: URIs so the page needs

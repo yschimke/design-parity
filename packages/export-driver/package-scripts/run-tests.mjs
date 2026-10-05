@@ -23,11 +23,23 @@ const EXCLUDED_FILES = {
   "package-version.test.mjs": "reads the folder's package-lock.json; a workspace package has none",
 };
 
+/**
+ * The two tests that read the vendored font faces. They need compose-ai-tools'
+ * samples/cmp-wasm-catalog fonts unless `RC_FONTS_DIR` names another copy, as CI's browser job does
+ * with the published player's `fonts/`. With it set they run.
+ */
+const FONT_TESTS = process.env.RC_FONTS_DIR
+  ? {}
+  : {
+      "every declared face has a vendored file":
+        "compose-ai-tools' samples/cmp-wasm-catalog fonts (set RC_FONTS_DIR to run it)",
+      "fontFaceCss inlines one @font-face per file and needs no network":
+        "compose-ai-tools' samples/cmp-wasm-catalog fonts (set RC_FONTS_DIR to run it)",
+    };
+
 /** Individual tests, by exact name, that read compose-ai-tools' own files. */
 const EXCLUDED_TESTS = {
-  "every declared face has a vendored file": "compose-ai-tools' samples/cmp-wasm-catalog fonts",
-  "fontFaceCss inlines one @font-face per file and needs no network":
-    "compose-ai-tools' samples/cmp-wasm-catalog fonts",
+  ...FONT_TESTS,
   "the reusable workflow passes shard exclusions by file, not through argv":
     "compose-ai-tools' .github/workflows/design-artifacts-reusable.yml",
   "the role vocabulary matches the Kotlin the generator actually reads":

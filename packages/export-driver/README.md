@@ -20,10 +20,12 @@ npx -p @design-parity/export-driver@<version> design-artifacts generate-design-c
 The name may carry its `.mjs` or `.sh` extension or not. Pin an exact version: the reusable
 workflow that runs this driver treats the version as the code it executes.
 
-Three inputs default to paths beside or inside a compose-ai-tools checkout, which an installed
+Four inputs default to paths beside or inside a compose-ai-tools checkout, which an installed
 package does not have. Pass them explicitly when running from the package:
 
 - `rc-compare --fonts <dir>`: the typeface directory the Remote Compose lanes render with.
+  `RC_FONTS_DIR=<dir>` sets the same default for every script and test; the published CMP/Wasm
+  player distribution's `fonts/` carries these faces.
 - `RC_PLAYER_JS_BUNDLE=<bundle.js>`: the Remote Compose player bundle the browser lanes and tests
   load.
 - `COMPOSE_PREVIEW_SERVER_ROOT=<dir>`: a compose-preview-server checkout (or just its
@@ -34,12 +36,12 @@ package does not have. Pass them explicitly when running from the package:
 ## Where the source is
 
 This package is the driver's source: change it here. It started as a copy of compose-ai-tools'
-`scripts/design-artifacts/` at `4986e21`. compose-ai-tools' workflow still runs that older copy
-until it runs this package instead (phase 5 of
-[`docs/design-artifacts/CONSOLIDATION.md`](../../docs/design-artifacts/CONSOLIDATION.md)). That
-copy is frozen; a fix it needs before then is copied there from here.
+`scripts/design-artifacts/` at `4986e21`. compose-ai-tools' workflows run this package now,
+installed from a lockfile in `.github/design-artifacts-driver/` that Renovate moves (phase 5 of
+[`docs/design-artifacts/CONSOLIDATION.md`](../../docs/design-artifacts/CONSOLIDATION.md)), and its
+old copy is being deleted (phase 6).
 
-To see how compose-ai-tools' copy differs from this one:
+Until it is, this lists how compose-ai-tools' copy differs from this one:
 
 ```sh
 node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout> [ref]
@@ -51,8 +53,13 @@ exits 1 if there are any. `bin/`, `package-scripts/` and this README exist only 
 ## Tests
 
 `npm test` runs the driver's `node --test` suites through `package-scripts/run-tests.mjs`. That
-leaves out eight checks that assert the driver agrees with compose-ai-tools itself (its workflow
-file, Kotlin sources, sample specs, fonts and lockfile), which compose-ai-tools keeps running; the
-runner lists each with its reason. Browser lanes skip without Playwright's Chromium and the player
-bundle, and the cross-repository mirrors skip without a compose-preview-server checkout
-(`COMPOSE_PREVIEW_SERVER_ROOT`), as they do in compose-ai-tools.
+leaves out the checks that assert the driver agrees with compose-ai-tools itself (its workflow file,
+Kotlin sources, sample specs and lockfile), which compose-ai-tools runs against the installed
+package; the runner lists each with its reason. Without their inputs, the browser lanes skip (no
+Playwright Chromium or player bundle), the font checks are left out (no `RC_FONTS_DIR`) and the
+cross-repository mirrors skip (no `COMPOSE_PREVIEW_SERVER_ROOT`).
+
+CI's `export-driver-browser` job supplies all of them: the published Remote Compose players from
+Maven Central at `RC_PLAYERS_VERSION`, their `fonts/`, three compose-preview-server sources from
+its latest release, and Chromium. It sets `RC_CMP_WASM_REQUIRE` and `RC_PLAYER_JS_BUNDLE_REQUIRE`,
+so there a missing input fails rather than skips.
