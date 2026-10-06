@@ -26,7 +26,7 @@ import { selectImages, selectLabel, selectOf } from "./catalog-select.mjs";
  * that the single-component view can surface as secondary previews.
  *
  * Pure and dependency-free (no `@design-parity/*`, no I/O) so it unit-tests
- * without an `npm ci`. Consumed by the vendored `catalogFromCandidates` join in
+ * without an `npm ci`. Consumed by the forked `catalogFromCandidates` join in
  * `generate-design-catalog.mjs`. Mirrors the `@design-parity/catalog-export`
  * fold so the workflow render matches the parity flow.
  *

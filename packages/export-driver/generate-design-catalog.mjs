@@ -13,16 +13,17 @@
  * The export engine lives in the (private) design-parity repo, but its building
  * blocks are published to npm: this driver depends only on the public package
  * APIs `@design-parity/candidate` (`loadPreviewBundle`) and
- * `@design-parity/catalog-export` (`buildCatalog`, `writeCatalog`). Both are
- * installed from `scripts/design-artifacts/package.json` (pinned), so the weekly
- * workflow needs no checkout of the private repo and no cross-repo secret.
+ * `@design-parity/catalog-export` (`buildCatalog`, `writeCatalog`), both sibling
+ * packages of this one, at the same version.
  *
- * `catalogFromCandidates` (the spec→candidate join) is vendored inline below
- * rather than imported, because the published `@design-parity/catalog-export`
- * (0.1.20) predates that export — it's a thin, pure wrapper over the published
- * `buildCatalog`. Keep it in sync with design-parity's
- * `packages/catalog-export/src/spec.ts`; once a catalog-export release exports
- * `catalogFromCandidates`, this inline copy can be dropped for the import.
+ * `catalogFromCandidates` (the spec→candidate join) is defined below rather than
+ * imported. It began as a copy of `packages/catalog-export/src/spec.ts`'s, from
+ * when that package did not export one, and has since grown well past it:
+ * motion and variant-axis folding, deferred stickers, design-token merging. So
+ * it is a fork, not a stand-in, and the package's version cannot replace it as
+ * it stands. A change to the shared core (matching a spec component to its
+ * function's renders, carrying `reference` / `referenceSet` / `noReference`)
+ * usually belongs in both.
  *
  * It reads the static preview bundle with `@design-parity/candidate`
  * (`loadPreviewBundle` → `CandidateRender[]`), joins it to the committed spec
@@ -269,7 +270,7 @@ async function listFilesRecursive(dir) {
 /**
  * Read a preview bundle into CandidateRenders, resolving each candidate's
  * componentId to its `@Preview` functionName so the join folds theme/size
- * variants (see the vendored join below).
+ * variants (see the forked join below).
  *
  * Split out of `loadPreviewBundle` to sanitize params first: the published
  * `@design-parity/core` normalizeSize (≤ 0.1.21) throws on a `null` `widthDp`,
@@ -475,9 +476,9 @@ function sanitizeNullSizes(params) {
   if (params.heightDp == null) delete params.heightDp;
 }
 
-// --- vendored from design-parity packages/catalog-export/src/spec.ts ----------
-// Pure join of rendered CandidateRenders to a catalog spec, wrapping the
-// published `buildCatalog`. See the file header for why it's inlined.
+// --- the spec→candidate join, forked from packages/catalog-export/src/spec.ts --
+// Pure join of rendered CandidateRenders to a catalog spec, wrapping
+// `buildCatalog`. See the file header for why it is a fork.
 //
 // The bundle reader emits one candidate per multipreview variant — its id
 // carries a `_<mode>` suffix (`FilledButton_Light`, `FilledButton_Dark`) that
@@ -485,9 +486,7 @@ function sanitizeNullSizes(params) {
 // resolves each candidate's componentId to its `functionName` (see the
 // `loadPreviewBundle(..., resolver)` call below), so `functionOf` keys on the
 // stable function name and a function's theme/size variants fold onto one
-// sticker. The published `@design-parity/catalog-export` (0.1.20) predates the
-// `functionName`-aware `catalogFromCandidates`; once a release ships it, this
-// inline copy + the resolver can be dropped for the import.
+// sticker.
 
 /** The function name a spec component matches on. With the resolver below,
  *  `componentId` is the function name; `functionName` is preferred when a
@@ -904,7 +903,7 @@ function catalogFromCandidates(candidates, spec, opts = {}) {
       : {}),
   };
 
-  // `opts.themes` is forwarded explicitly: this join is a VENDORED copy of the published
+  // `opts.themes` is forwarded explicitly: this join is a FORK of the published
   // `catalogFromCandidates` (see the file header), so an option the package's version understands
   // is silently dropped here unless it is threaded through by hand. Missing it published a catalog
   // with no `themes[]` while the run logged that it was publishing them.
@@ -918,7 +917,7 @@ function catalogFromCandidates(candidates, spec, opts = {}) {
     motionByComponentId,
   };
 }
-// --- end vendored join --------------------------------------------------------
+// --- end of the forked join ----------------------------------------------------
 
 const { values } = parseArgs({
   options: {
@@ -1061,7 +1060,7 @@ if (effectiveBreakpoints !== undefined) spec.breakpoints = effectiveBreakpoints;
 // Read candidates with componentId resolved to the `@Preview` function name so
 // the join folds a function's theme/size multipreview variants (whose ids differ
 // only by an appended `_<mode>`) onto one component. See `loadCandidates` (which
-// also works around the published null-widthDp crash) and the vendored join.
+// also works around the published null-widthDp crash) and the forked join.
 const primaryRecord = {
   ...(await loadCandidates(rendersPath, spec.breakpoints, spec.locales)),
   renderPath: rendersPath,
@@ -1131,7 +1130,7 @@ const allBundles = [bundle, extraBundle, ...additionalBundles].filter(Boolean);
 // each preview's `catalog` field in `previews.json`. Build the inventory from them
 // and layer the committed `catalog.spec.json` on top as the override, so the spec
 // only has to carry the cover-sheet fields plus any per-component tweak. The result
-// is written back onto `spec.groups`, so the vendored join and every downstream
+// is written back onto `spec.groups`, so the forked join and every downstream
 // consumer (section stamping, wireframes, code-connect) see one effective spec.
 //
 // A catalog whose module doesn't use the annotations yet (every catalog today —

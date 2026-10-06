@@ -140,12 +140,14 @@ generic advice.
   `catalog.spec.schema.json` and `ui-builder.policy.schema.json` at their public
   `$schema` URLs from copies its contract test holds byte-identical to the
   installed driver's, so a schema change reaches it in the PR that bumps its lock.
-- **Watch for drift between the join and its inline copy.**
-  `packages/export-driver/generate-design-catalog.mjs` carries an inline copy of
-  `packages/catalog-export/src/spec.ts`'s join, from when the published package
-  did not export it. A change to the join that isn't mirrored there silently
-  stops working for the driver — `referenceSet` shipped broken that way. If a PR
-  touches the join, say in the description whether the copy needs the same edit.
+- **There are two spec→candidate joins.** `catalogFromCandidates` in
+  `packages/catalog-export/src/spec.ts` is the exported one;
+  `packages/export-driver/generate-design-catalog.mjs` has its own, forked from it
+  and since grown well past it (motion and variant-axis folding, deferred
+  stickers, design-token merging), and that fork is what published catalogs run.
+  A change to the shared core that lands in only one silently stops working for
+  the other's consumers — `referenceSet` shipped broken that way. If a PR touches
+  either join, say in the description whether the other needs the same edit.
 - **A release is not the same as a version bump downstream.** Consumers install
   with `npm ci`, which is a frozen install: a caret range like `^0.1.38` does
   **not** pick up a newer release. A PR adding behaviour behind a new option is
