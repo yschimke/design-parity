@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://github.com/yschimke/design-parity/compare/v1.5.1...v1.6.0) (2026-10-06)
+
+
+### Features
+
+* **catalog-export:** one spec→candidate join, shared with the export driver ([#524](https://github.com/yschimke/design-parity/issues/524)) ([08b208b](https://github.com/yschimke/design-parity/commit/08b208b5bbbe60d1b9a806784d6a82012e25f264))
+* **kit-index:** let an explicit kitProps variant claim its cell ([#527](https://github.com/yschimke/design-parity/issues/527)) ([535c35b](https://github.com/yschimke/design-parity/commit/535c35be5e6bf0f5d430204594d7042921eda4a1))
+
 ## [1.5.1](https://github.com/yschimke/design-parity/compare/v1.5.0...v1.5.1) (2026-10-05)
 
 
