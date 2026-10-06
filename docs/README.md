@@ -42,7 +42,7 @@ design artifacts.
 | [design-artifacts/REFERENCE_KITS.md](./design-artifacts/REFERENCE_KITS.md) | Why published Figma kits are **seed only** in a code-led pipeline, and what that means in practice. |
 | [design-artifacts/FIGMA_IMPORT.md](./design-artifacts/FIGMA_IMPORT.md) | The last hop: turning a published `design-artifacts/<system>` delivery branch into an importable Figma sticker sheet, one file per system, and keeping it fresh. |
 | [design-artifacts/FIGMA_IMPORT_V2.md](./design-artifacts/FIGMA_IMPORT_V2.md) | *Design spec / proposal.* Where the importer is going: structured pages, non-destructive reconcile keyed on identity rather than position, and mode-aware placement. |
-| [design-artifacts/CONSOLIDATION.md](./design-artifacts/CONSOLIDATION.md) | *Plan.* Moving the design-artifacts engine and export driver out of compose-ai-tools and compose-preview-server into packages here, so there is one copy. |
+| [design-artifacts/CONSOLIDATION.md](./design-artifacts/CONSOLIDATION.md) | *Done (phases 1–6).* How the design-artifacts engine and export driver moved out of compose-ai-tools and compose-preview-server into packages here, so there is one copy. |
 
 ## Research and verdicts
 

@@ -1,15 +1,16 @@
 # Consolidating the design-artifacts code
 
-*Plan. Phases 1–5 are done and phase 6 is in progress; see [Phases](#phases).*
+*Plan. Phases 1–6 are done; phase 7 is optional and not started. See [Phases](#phases).*
 
 The design-artifacts export driver turns a rendered `@Preview` module and a `catalog.spec.json`
 into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves and the Figma
 importer reads. Its code exists in three places, and this plan makes design-parity the one
 home for it.
 
-## Where the code is today
+## Where the code was
 
-Counts are from `main` on 2026-10-05.
+Counts are from `main` on 2026-10-05, before phase 1. Since phase 6, design-parity holds the only
+copy of both the engine and the driver.
 
 | Copy | Files | Status |
 | --- | --- | --- |
@@ -95,9 +96,8 @@ Each phase is one PR per repository and leaves every caller working.
    the published package, and release it. compose-ai-tools keeps running its own copy during this
    phase.
    - Done in yschimke/design-parity#517. From then on the package is the driver's source: changes
-     land here, and compose-ai-tools' copy is frozen until phase 5 replaces it. A fix that copy
-     needs sooner is copied there from here. `package-scripts/check-upstream.mjs` lists how the two
-     differ.
+     land here, and compose-ai-tools' copy was frozen until phase 6 deleted it. Until then,
+     `package-scripts/check-upstream.mjs` listed how the two differed; it went with the copy.
    - Eight driver tests check the driver against compose-ai-tools itself (its workflow, Kotlin
      sources, samples and lockfile). They stay in compose-ai-tools and are left out of this
      package's run.
@@ -110,13 +110,17 @@ Each phase is one PR per repository and leaves every caller working.
      version catalog, and reads the lock from that checkout. So the security property the pin
      exists for still holds: the privileged job runs a reviewed tree that no caller can choose,
      and npm provenance links each driver version to the design-parity run that built it.
-6. **Delete compose-ai-tools' copy.** It keeps only what that repository itself reads: the two
-   schemas behind public `$schema` URLs, and the scope scripts its own workflow runs. Before it
-   goes, the tests that only it ran move:
-   - the browser guards against the published Remote Compose players, and the
-     compose-preview-server mirrors, to this repository's `export-driver-browser` CI job;
-   - the checks that the driver agrees with compose-ai-tools' own files (its workflow, Kotlin,
-     samples and fonts), to a compose-ai-tools test that runs against the installed package.
+6. **Delete compose-ai-tools' copy.** Done in yschimke/compose-ai-tools#5714, after
+   yschimke/design-parity#520 moved the tests that only it ran.
+   - compose-ai-tools keeps only what it reads itself: the two schemas behind public `$schema`
+     URLs, and the scope scripts its own workflow runs.
+   - The browser guards against the published Remote Compose players, and the
+     compose-preview-server mirrors, run in this repository's `export-driver-browser` CI job.
+   - The checks that the driver agrees with compose-ai-tools' own files (its workflow, Kotlin,
+     samples, fonts and lock) are compose-ai-tools' `driver-contract.test.mjs`, run against the
+     installed package. It also holds the two served schemas byte-identical to the driver's, so
+     a schema change is made here and reaches compose-ai-tools with its lock bump: the first one
+     went through yschimke/design-parity#521, 1.5.1 and yschimke/compose-ai-tools#5716.
 7. **Optionally, move the reusable workflow.** Every catalog repository calls
    `yschimke/compose-ai-tools/.github/workflows/design-artifacts-reusable.yml@main`.
    - Moving the workflow to design-parity changes every one of those `uses:` lines.
@@ -128,12 +132,13 @@ provenance test records two silent reverts). Phases 4–6 remove the driver dupl
 
 ## Open questions
 
-- **Release cadence.** compose-ai-tools releases often, and a driver fix currently reaches
-  callers with the next pin bump. After phase 5 it ships with the next design-parity release
-  instead. design-parity's release-please already releases on every merged `feat:` or `fix:`,
-  so this should be no slower. It is worth confirming before phase 5.
+- **Release cadence.** Answered by phase 5. A driver fix ships with the next design-parity
+  release, which release-please cuts on every merged `feat:` or `fix:`. compose-ai-tools' own
+  catalogs run it once Renovate's lock bump merges there. A repository calling the reusable
+  workflow waits one hop more: it runs the lock at the compose-ai-tools release the driver pin
+  names, so the fix reaches it with the first compose-ai-tools release after that bump.
 - **The `.rc` fixtures** belong to the Remote Compose comparison lanes. They are served by
   compose-preview-server and produced by rc-players. They may belong in rc-players rather than
   in either package here.
-- **Phase 4's tests.** The driver has 103 test files. Running them in design-parity's
-  CI adds a few minutes, which seems fine but should be measured.
+- **Phase 4's tests.** Measured: `export-driver-browser`, which installs Chromium and runs the
+  whole driver suite including the browser lanes, takes about two minutes.

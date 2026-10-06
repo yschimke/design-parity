@@ -132,19 +132,20 @@ generic advice.
   are plain JavaScript typed only by declaration emit, which
   `scripts/widen-declarations.mjs` corrects.
 - **`packages/export-driver` is the source of the design-artifacts export
-  driver.** Change the driver here. compose-ai-tools runs the published package,
-  at the version its `.github/design-artifacts-driver/` lockfile names, so a
-  driver change reaches it with the next release and a Renovate bump. Its old
-  `scripts/design-artifacts/` copy is frozen and being deleted (phase 6 of
-  `docs/design-artifacts/CONSOLIDATION.md`). The driver's browser guards and
-  compose-preview-server mirrors run in CI's `export-driver-browser` job.
-- **Watch for drift in code vendored from here.** `compose-ai-tools`'
-  `scripts/design-artifacts/generate-design-catalog.mjs` carries an inline copy
-  of `packages/catalog-export/src/spec.ts`'s join, because the published package
-  predates exporting it. A change to the join here that isn't mirrored there
-  silently stops working for the main consumer — `referenceSet` shipped broken
-  that way. If a PR touches the join, say in the description whether the copy
-  needs the same edit.
+  driver.** Change the driver here; there is no other copy. compose-ai-tools
+  runs the published package, at the version its `.github/design-artifacts-driver/`
+  lockfile names, so a driver change reaches it with the next release and a
+  Renovate bump. The driver's browser guards and compose-preview-server mirrors
+  run in CI's `export-driver-browser` job. compose-ai-tools serves
+  `catalog.spec.schema.json` and `ui-builder.policy.schema.json` at their public
+  `$schema` URLs from copies its contract test holds byte-identical to the
+  installed driver's, so a schema change reaches it in the PR that bumps its lock.
+- **Watch for drift between the join and its inline copy.**
+  `packages/export-driver/generate-design-catalog.mjs` carries an inline copy of
+  `packages/catalog-export/src/spec.ts`'s join, from when the published package
+  did not export it. A change to the join that isn't mirrored there silently
+  stops working for the driver — `referenceSet` shipped broken that way. If a PR
+  touches the join, say in the description whether the copy needs the same edit.
 - **A release is not the same as a version bump downstream.** Consumers install
   with `npm ci`, which is a frozen install: a caret range like `^0.1.38` does
   **not** pick up a newer release. A PR adding behaviour behind a new option is
