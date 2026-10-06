@@ -333,6 +333,13 @@ async function resolve(): Promise<void> {
     );
   }
 
+  if (diagnostics.claims.length) {
+    log(`\n${diagnostics.claims.length} variant(s) claim a cell explicitly:`);
+    for (const c of diagnostics.claims) {
+      log(`  - ${c.componentId}: '${c.variant}' pairs with ${c.ref} in place of ${c.replaced}`);
+    }
+  }
+
   if (diagnostics.propertyVariants.length) {
     log(
       `\n${diagnostics.propertyVariants.length} variant(s) are a component ` +

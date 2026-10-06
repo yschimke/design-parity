@@ -106,6 +106,21 @@ export interface DefaultedContentReport {
 }
 
 /**
+ * A variant that named a cell's kit properties outright and so took the pairing
+ * over from a preview that only reached the cell by translation — the base
+ * preview, or an implicit variant. See {@link resolveDesignMapVariants}.
+ */
+export interface CellClaimReport {
+  code: string;
+  componentId: string;
+  ref: string;
+  /** The variant whose render now pairs with the cell. */
+  variant: string;
+  /** The preview it replaced for that pairing. */
+  replaced: string;
+}
+
+/**
  * Two distinct previews resolving to the same kit node.
  *
  * A contradiction rather than a near-miss: the same node cannot be both
@@ -135,10 +150,19 @@ export interface ResolveDesignMapResult {
     propertyVariants: PropertyVariantReport[];
     defaulted: DefaultedContentReport[];
     collisions: VariantCollisionReport[];
+    /** Variants that explicitly claimed a cell, replacing an implicit owner's preview. */
+    claims: CellClaimReport[];
     /** Declarations naming a `code` the map has no entry for. */
     orphaned: string[];
   };
 }
+
+/**
+ * Whether every seed names its kit property outright (`kitAxis` + `kitValue`, which
+ * `@OverrideVariant(kitProps = …)` writes) rather than leaving it to translation.
+ */
+const isExplicitClaim = (seeds: VariantSeed[]): boolean =>
+  seeds.length > 0 && seeds.every((seed) => seed.kitAxis !== undefined && seed.kitValue !== undefined);
 
 const vectorOf = (seeds: VariantSeed[]): string =>
   seeds.map((seed) => `${seed.key}=${seed.raw}`).join(", ");
@@ -181,6 +205,7 @@ export function resolveDesignMapVariants(
   const propertyVariants: PropertyVariantReport[] = [];
   const defaulted: DefaultedContentReport[] = [];
   const collisions: VariantCollisionReport[] = [];
+  const claims: CellClaimReport[] = [];
   let resolvedCount = 0;
   let componentCount = 0;
 
@@ -203,6 +228,37 @@ export function resolveDesignMapVariants(
       { previewId: declaration.basePreviewId },
     ];
     const owners = new Map<string, string>([[baseRef, "default"]]);
+    // Where each owned ref sits in `refs` / `previewIds`, and whether its owner
+    // named its kit properties outright. Only an implicit owner can be displaced.
+    const slots = new Map<string, { index: number; explicit: boolean }>([
+      [baseRef, { index: 0, explicit: false }],
+    ]);
+
+    // A kit cell can draw a state its owning preview cannot be captured in: a base
+    // cell with its first item focused, say. A variant that names that cell's
+    // properties outright is the author saying which render is its counterpart,
+    // so it takes the pairing over from an owner that only reached the cell by
+    // translation (the base preview, or an implicit variant) instead of colliding.
+    // The slot keeps its ref and tag; only the preview changes. A seed that merely
+    // translates onto an owned cell is still the mistake the collision catches,
+    // and so is a second explicit claim.
+    const claim = (ref: string, render: VariantRenderDeclaration): boolean => {
+      const slot = slots.get(ref);
+      if (!slot || slot.explicit || !isExplicitClaim(render.seeds)) return false;
+      const replaced = previewIds[slot.index]!.previewId;
+      previewIds[slot.index] = { ...previewIds[slot.index]!, previewId: render.previewId };
+      slots.set(ref, { index: slot.index, explicit: true });
+      owners.set(ref, render.name);
+      claims.push({
+        code: entry.code,
+        componentId: declaration.componentId,
+        ref,
+        variant: render.name,
+        replaced,
+      });
+      resolvedCount += 1;
+      return true;
+    };
 
     for (const render of declaration.renders) {
       const hit = resolver.resolveVariant(declaration.reference, render.seeds);
@@ -214,6 +270,20 @@ export function resolveDesignMapVariants(
         // declaration, and classifying it as merely property-shaped buries the
         // one message whose fix is a line of catalog source.
         const reason = resolver.explainUnresolved(declaration.reference, render.seeds);
+        if (reason.kind === "base") {
+          if (claim(baseRef, render)) continue;
+          // Already claimed: a second render naming the base cell is a collision.
+          if (isExplicitClaim(render.seeds)) {
+            collisions.push({
+              code: entry.code,
+              componentId: declaration.componentId,
+              ref: baseRef,
+              owner: owners.get(baseRef)!,
+              duplicate: render.name,
+            });
+            continue;
+          }
+        }
         const property =
           reason.kind === "declared"
             ? undefined
@@ -248,6 +318,7 @@ export function resolveDesignMapVariants(
 
       const resolvedRef = `figma:${resolver.fileKey}/${hit.nodeId}`;
       const owner = owners.get(resolvedRef);
+      if (owner !== undefined && claim(resolvedRef, render)) continue;
       if (owner !== undefined) {
         collisions.push({
           code: entry.code,
@@ -259,6 +330,7 @@ export function resolveDesignMapVariants(
         continue;
       }
       owners.set(resolvedRef, render.name);
+      slots.set(resolvedRef, { index: refs.length, explicit: isExplicitClaim(render.seeds) });
 
       const slot = slotFor(render.seeds, render.name);
       refs.push({ ref: resolvedRef, ...slot });
@@ -280,7 +352,7 @@ export function resolveDesignMapVariants(
     // nothing the string does not, and it would churn every entry in the
     // committed map the first time a kit lost a variant.
     if (refs.length === 1) {
-      return { ...entry, ref: baseRef, previewId: declaration.basePreviewId };
+      return { ...entry, ref: baseRef, previewId: previewIds[0]!.previewId };
     }
     componentCount += 1;
     return { ...entry, ref: refs, previewId: previewIds };
@@ -297,6 +369,7 @@ export function resolveDesignMapVariants(
       propertyVariants,
       defaulted,
       collisions,
+      claims,
       orphaned,
     },
   };

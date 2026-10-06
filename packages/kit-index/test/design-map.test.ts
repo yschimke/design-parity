@@ -214,6 +214,111 @@ describe("collisions", () => {
   });
 });
 
+describe("explicit claims on a cell", () => {
+  const SMALL = { key: "Size", raw: "Small", kitAxis: "Size", kitValue: "Small" };
+
+  it("lets a variant that names the base cell's properties replace the base preview", () => {
+    // A kit whose base cell draws a state the base preview cannot be captured in
+    // (a focused first item) pairs that cell with the variant that can.
+    const { map, diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        { previewId: "p:focused", name: "focused", seeds: [SMALL] },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.collisions).toEqual([]);
+    expect(diagnostics.claims).toEqual([
+      {
+        code: CODE,
+        componentId: "Button/Filled",
+        ref: ref("57994:2324"),
+        variant: "focused",
+        replaced: "c.CatalogKt.FilledButton_Light",
+      },
+    ]);
+    expect(map.components[0]!.ref).toBe(ref("57994:2324"));
+    expect(map.components[0]!.previewId).toBe("p:focused");
+    expect(validateDesignMap(map).valid).toBe(true);
+  });
+
+  it("keeps the claim on the base pair when other variants resolve too", () => {
+    const { map } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        { previewId: "p:focused", name: "focused", seeds: [SMALL] },
+        { previewId: "p:large", name: "large", seeds: [{ key: "size", raw: "large" }] },
+      ]),
+      resolver,
+    });
+    expect(map.components[0]!.ref).toEqual([
+      { ref: ref("57994:2324") },
+      expect.objectContaining({ ref: ref("57994:2320") }),
+    ]);
+    expect((map.components[0]!.previewId as { previewId: string }[])[0]).toEqual({
+      previewId: "p:focused",
+    });
+  });
+
+  it("does not let a translated seed claim the base cell", () => {
+    // Without explicit kit properties, landing on the base is a no-op duplicate of
+    // the base preview, reported as such, never a claim.
+    const { map, diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        { previewId: "p:small", name: "small", seeds: [{ key: "size", raw: "s" }] },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.claims).toEqual([]);
+    expect(diagnostics.unresolved).toEqual([
+      expect.objectContaining({ variant: "small", reason: expect.objectContaining({ kind: "base" }) }),
+    ]);
+    expect(map.components[0]!.previewId).toBe("c.CatalogKt.FilledButton_Light");
+  });
+
+  it("takes a cell over from a variant that only reached it by translation", () => {
+    // A catalog variant (`size=large`) owns its cell; a focused render that names
+    // the same cell's properties outright is the one the cell should pair with.
+    const { map, diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        { previewId: "p:large", name: "large", seeds: [{ key: "size", raw: "large" }] },
+        {
+          previewId: "p:large-focused",
+          name: "large-focused",
+          seeds: [{ key: "Size", raw: "Large", kitAxis: "Size", kitValue: "Large" }],
+        },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.collisions).toEqual([]);
+    expect(diagnostics.claims).toEqual([
+      expect.objectContaining({ ref: ref("57994:2320"), variant: "large-focused", replaced: "p:large" }),
+    ]);
+    const previewIds = map.components[0]!.previewId as { previewId: string }[];
+    expect(previewIds.map((p) => p.previewId)).toEqual([
+      "c.CatalogKt.FilledButton_Light",
+      "p:large-focused",
+    ]);
+  });
+
+  it("lets only one variant claim the base cell", () => {
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        { previewId: "p:a", name: "a", seeds: [SMALL] },
+        { previewId: "p:b", name: "b", seeds: [SMALL] },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.claims.map((c) => c.variant)).toEqual(["a"]);
+    expect(diagnostics.collisions).toEqual([
+      expect.objectContaining({ owner: "a", duplicate: "b", ref: ref("57994:2324") }),
+    ]);
+  });
+});
+
 describe("hidden component sets", () => {
   it("uses the renderable alias for the base ref, not the definition", () => {
     // A hidden set's definition exports as a placeholder. The original
