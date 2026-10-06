@@ -4,8 +4,9 @@
 
 The design-artifacts export driver turns a rendered `@Preview` module and a `catalog.spec.json`
 into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves and the Figma
-importer reads. Its code exists in three places, and this plan makes design-parity the one
-home for it.
+importer reads. Its code used to exist in three places, in compose-ai-tools,
+compose-preview-server and design-parity. This plan made design-parity its one home, and since
+phase 6 it is: see [Where the code is now](#where-the-code-is-now).
 
 ## Where the code is now
 
