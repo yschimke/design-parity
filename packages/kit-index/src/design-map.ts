@@ -230,8 +230,10 @@ export function resolveDesignMapVariants(
     const owners = new Map<string, string>([[baseRef, "default"]]);
     // Where each owned ref sits in `refs` / `previewIds`, and whether its owner
     // named its kit properties outright. Only an implicit owner can be displaced.
-    const slots = new Map<string, { index: number; explicit: boolean }>([
-      [baseRef, { index: 0, explicit: false }],
+    // `yielded` records that an implicit render already gave the cell up, so a
+    // second implicit render on it is still the plain collision.
+    const slots = new Map<string, { index: number; explicit: boolean; yielded: boolean }>([
+      [baseRef, { index: 0, explicit: false, yielded: false }],
     ]);
 
     // A kit cell can draw a state its owning preview cannot be captured in: a base
@@ -247,7 +249,7 @@ export function resolveDesignMapVariants(
       if (!slot || slot.explicit || !isExplicitClaim(render.seeds)) return false;
       const replaced = previewIds[slot.index]!.previewId;
       previewIds[slot.index] = { ...previewIds[slot.index]!, previewId: render.previewId };
-      slots.set(ref, { index: slot.index, explicit: true });
+      slots.set(ref, { index: slot.index, explicit: true, yielded: slot.index !== 0 });
       owners.set(ref, render.name);
       claims.push({
         code: entry.code,
@@ -256,7 +258,29 @@ export function resolveDesignMapVariants(
         variant: render.name,
         replaced,
       });
-      resolvedCount += 1;
+      // A base claim folds a new render in; any other claim replaces one already counted.
+      if (slot.index === 0) resolvedCount += 1;
+      return true;
+    };
+    // The same claim met the other way round: an explicit render already owns the
+    // cell and an implicit one arrives. The implicit render yields, and the slot
+    // takes its tag, so the map is identical whichever order the sidecar lists
+    // the two renders in.
+    const yieldTo = (ref: string, render: VariantRenderDeclaration): boolean => {
+      const slot = slots.get(ref);
+      if (!slot || !slot.explicit || slot.yielded || slot.index === 0) return false;
+      if (isExplicitClaim(render.seeds)) return false;
+      const tag = slotFor(render.seeds, render.name);
+      refs[slot.index] = { ref, ...tag };
+      previewIds[slot.index] = { previewId: previewIds[slot.index]!.previewId, ...tag };
+      slots.set(ref, { ...slot, yielded: true });
+      claims.push({
+        code: entry.code,
+        componentId: declaration.componentId,
+        ref,
+        variant: owners.get(ref)!,
+        replaced: render.previewId,
+      });
       return true;
     };
 
@@ -318,7 +342,9 @@ export function resolveDesignMapVariants(
 
       const resolvedRef = `figma:${resolver.fileKey}/${hit.nodeId}`;
       const owner = owners.get(resolvedRef);
-      if (owner !== undefined && claim(resolvedRef, render)) continue;
+      if (owner !== undefined && (claim(resolvedRef, render) || yieldTo(resolvedRef, render))) {
+        continue;
+      }
       if (owner !== undefined) {
         collisions.push({
           code: entry.code,
@@ -330,7 +356,11 @@ export function resolveDesignMapVariants(
         continue;
       }
       owners.set(resolvedRef, render.name);
-      slots.set(resolvedRef, { index: refs.length, explicit: isExplicitClaim(render.seeds) });
+      slots.set(resolvedRef, {
+        index: refs.length,
+        explicit: isExplicitClaim(render.seeds),
+        yielded: false,
+      });
 
       const slot = slotFor(render.seeds, render.name);
       refs.push({ ref: resolvedRef, ...slot });

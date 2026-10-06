@@ -303,6 +303,47 @@ describe("explicit claims on a cell", () => {
     ]);
   });
 
+  it("gives the same map whichever order the claimant and the implicit owner come in", () => {
+    const large = { previewId: "p:large", name: "large", seeds: [{ key: "size", raw: "large" }] };
+    const focused = {
+      previewId: "p:large-focused",
+      name: "large-focused",
+      seeds: [{ key: "Size", raw: "Large", kitAxis: "Size", kitValue: "Large" }],
+    };
+    const run = (renders: (typeof large)[]) =>
+      resolveDesignMapVariants({
+        map: mapWith(ref("57994:2324")),
+        variants: sidecar(ref("57994:2324"), renders),
+        resolver,
+      });
+    const forward = run([large, focused]);
+    const reverse = run([focused, large]);
+    expect(reverse.diagnostics.collisions).toEqual([]);
+    expect(reverse.map).toEqual(forward.map);
+    expect(reverse.diagnostics.claims).toEqual(forward.diagnostics.claims);
+    expect(reverse.diagnostics.resolved).toBe(forward.diagnostics.resolved);
+  });
+
+  it("is a collision when two implicit renders reach a claimed cell", () => {
+    const { diagnostics } = resolveDesignMapVariants({
+      map: mapWith(ref("57994:2324")),
+      variants: sidecar(ref("57994:2324"), [
+        {
+          previewId: "p:large-focused",
+          name: "large-focused",
+          seeds: [{ key: "Size", raw: "Large", kitAxis: "Size", kitValue: "Large" }],
+        },
+        { previewId: "p:l", name: "l", seeds: [{ key: "size", raw: "l" }] },
+        { previewId: "p:large", name: "large", seeds: [{ key: "size", raw: "large" }] },
+      ]),
+      resolver,
+    });
+    expect(diagnostics.claims).toHaveLength(1);
+    expect(diagnostics.collisions).toEqual([
+      expect.objectContaining({ owner: "large-focused", duplicate: "large" }),
+    ]);
+  });
+
   it("lets only one variant claim the base cell", () => {
     const { diagnostics } = resolveDesignMapVariants({
       map: mapWith(ref("57994:2324")),
