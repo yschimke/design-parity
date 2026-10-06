@@ -140,14 +140,15 @@ generic advice.
   `catalog.spec.schema.json` and `ui-builder.policy.schema.json` at their public
   `$schema` URLs from copies its contract test holds byte-identical to the
   installed driver's, so a schema change reaches it in the PR that bumps its lock.
-- **There are two spec→candidate joins.** `catalogFromCandidates` in
-  `packages/catalog-export/src/spec.ts` is the exported one;
-  `packages/export-driver/generate-design-catalog.mjs` has its own, forked from it
-  and since grown well past it (motion and variant-axis folding, deferred
-  stickers, design-token merging), and that fork is what published catalogs run.
-  A change to the shared core that lands in only one silently stops working for
-  the other's consumers — `referenceSet` shipped broken that way. If a PR touches
-  either join, say in the description whether the other needs the same edit.
+- **There is one spec→candidate join.** It lives in `packages/catalog-export/src/join/`
+  (`catalog-join.ts`, with the helpers it folds through). The export driver imports it
+  directly, and `catalogFromCandidates` in `spec.ts` delegates to it after deriving
+  each candidate's function name and projecting its images. The six helper modules
+  the driver's other scripts import (`catalog-variants`, `catalog-motion`,
+  `catalog-priority`, `cross-system-compare`, `capture-mode`, `catalog-select`) are
+  re-exports of these in `packages/export-driver/`; change them in catalog-export.
+  The join's sources are plain JavaScript under `// @ts-nocheck`, like
+  known-differences.
 - **A release is not the same as a version bump downstream.** Consumers install
   with `npm ci`, which is a frozen install: a caret range like `^0.1.38` does
   **not** pick up a newer release. A PR adding behaviour behind a new option is
