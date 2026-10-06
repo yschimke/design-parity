@@ -35,27 +35,19 @@ package does not have. Pass them explicitly when running from the package:
 
 ## Where the source is
 
-This package is the driver's source: change it here. It started as a copy of compose-ai-tools'
-`scripts/design-artifacts/` at `4986e21`. compose-ai-tools' workflows run this package now,
-installed from a lockfile in `.github/design-artifacts-driver/` that Renovate moves (phase 5 of
-[`docs/design-artifacts/CONSOLIDATION.md`](../../docs/design-artifacts/CONSOLIDATION.md)), and its
-old copy is being deleted (phase 6).
-
-Until it is, this lists how compose-ai-tools' copy differs from this one:
-
-```sh
-node packages/export-driver/package-scripts/check-upstream.mjs <compose-ai-tools-checkout> [ref]
-```
-
-It compares every file except `package.json` and `package-lock.json`, lists each difference and
-exits 1 if there are any. `bin/`, `package-scripts/` and this README exist only here.
+This package is the driver's source, and its only copy: change it here. It started as a copy of
+compose-ai-tools' `scripts/design-artifacts/` at `4986e21`, which compose-ai-tools has since
+deleted. compose-ai-tools' workflows run this package, installed from a lockfile in
+`.github/design-artifacts-driver/` that Renovate moves
+([`docs/design-artifacts/CONSOLIDATION.md`](../../docs/design-artifacts/CONSOLIDATION.md)).
+`bin/` and `package-scripts/` exist only here.
 
 ## Tests
 
 `npm test` runs the driver's `node --test` suites through `package-scripts/run-tests.mjs`. That
 leaves out the checks that assert the driver agrees with compose-ai-tools itself (its workflow file,
 Kotlin sources, sample specs and lockfile), which compose-ai-tools runs against the installed
-package; the runner lists each with its reason. Without their inputs, the browser lanes skip (no
+package (its `scripts/design-artifacts/driver-contract.test.mjs`); the runner lists each with its reason. Without their inputs, the browser lanes skip (no
 Playwright Chromium or player bundle), the font checks are left out (no `RC_FONTS_DIR`) and the
 cross-repository mirrors skip (no `COMPOSE_PREVIEW_SERVER_ROOT`).
 

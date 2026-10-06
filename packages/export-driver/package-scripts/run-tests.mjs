@@ -3,11 +3,12 @@
  * Run the driver's `node --test` suites as this package, minus the checks that are about
  * compose-ai-tools rather than the driver.
  *
- * The driver's files are copied from compose-ai-tools' `scripts/design-artifacts/` unchanged (see
- * README.md), tests included. A few tests there assert the driver agrees with *that repository*:
- * its workflow file, its Kotlin sources, its sample specs and fonts, its lockfile. They resolve
- * those paths against the repository root, which here is design-parity, so they cannot pass here
- * and are not this package's to check. compose-ai-tools keeps running them. Everything else runs.
+ * The driver came from compose-ai-tools' `scripts/design-artifacts/` (see README.md), tests
+ * included. A few tests assert the driver agrees with *that repository*: its workflow file, its
+ * Kotlin sources, its sample specs and fonts, its lockfile. They resolve those paths against the
+ * repository root, which here is design-parity, so they cannot pass here and are not this
+ * package's to check. compose-ai-tools runs the same checks against the installed package, in its
+ * `scripts/design-artifacts/driver-contract.test.mjs`. Everything else runs.
  *
  * Each exclusion is listed with its reason, so the list cannot quietly grow.
  */
