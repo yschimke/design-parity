@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1](https://github.com/yschimke/design-parity/compare/v1.5.0...v1.5.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **export-driver:** give the bin path in the form npm publishes ([#519](https://github.com/yschimke/design-parity/issues/519)) ([b2afd1c](https://github.com/yschimke/design-parity/commit/b2afd1cafe6e44acc11ab6cd909f69d230981c3d))
+* **export-driver:** point the catalog spec schema at the published CLI ([#521](https://github.com/yschimke/design-parity/issues/521)) ([ee401ba](https://github.com/yschimke/design-parity/commit/ee401ba935aa9be8d2d10a5f5b38e5794d22ec1b))
+
 ## [1.5.0](https://github.com/yschimke/design-parity/compare/v1.4.0...v1.5.0) (2026-10-05)
 
 
