@@ -94,6 +94,15 @@ previews resolving to one node — is refused outright (exit 2, nothing written)
 the same node cannot be both previews' counterpart, and a map that said so would
 have the diff report one of the two renders as wrong.
 
+One case is not a collision: an **explicit claim**. A variant whose seeds all name
+their kit property outright (`kitAxis` + `kitValue`, which
+`@OverrideVariant(kitProps = …)` writes) takes a cell over from a preview that only
+reached it by translation, whether that is the base preview or an implicit variant.
+That is how a kit cell drawn in a state the base preview cannot be captured in (a
+focused first item, say) pairs with the variant that drives it. The slot keeps its
+ref and tag and only its preview changes. Each claim is reported, and a second
+explicit claim on the same cell still collides.
+
 ## Three kinds of variation — and only two are addressable
 
 |  | What it is | Addressable? |

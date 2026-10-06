@@ -105,6 +105,7 @@ export type {
   ResolveDesignMapResult,
   UnresolvedVariantReport,
   VariantCollisionReport,
+  CellClaimReport,
   VariantRenderDeclaration,
 } from "./design-map.js";
 
