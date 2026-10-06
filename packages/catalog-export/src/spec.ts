@@ -15,7 +15,7 @@
  */
 import type { CandidateRender, DesignTokens } from "@design-parity/core";
 
-import { buildCatalog } from "./ingest.js";
+import { catalogFromCandidates as joinCatalogFromCandidates } from "./join/catalog-join.js";
 import type { ComponentSource } from "./ingest.js";
 import type { CatalogImage } from "./types.js";
 import type {
@@ -46,15 +46,6 @@ export interface CatalogSpecVariant {
   /** The `@Preview` **function name** that renders this variant. */
   preview: string;
   caption?: string;
-}
-
-/** A short label for a variant, for coverage reports: its state and/or props. */
-function variantLabel(variant: CatalogSpecVariant): string {
-  const parts = [
-    ...(variant.state ? [variant.state] : []),
-    ...Object.entries(variant.props ?? {}).map(([k, v]) => `${k}=${v}`),
-  ];
-  return parts.join(", ") || variant.preview;
 }
 
 /** One component slot in a {@link CatalogSpec} group. */
@@ -141,31 +132,6 @@ function functionOf(candidate: CandidateRender): string {
   return id.split(".").pop() ?? id;
 }
 
-/** Fold a function's theme/size variants into one render: concatenate every
- *  variant's images and keep a light-themed semantics tree (the token/greenline
- *  reader keys off one). Mirrors `mergeCandidateRenders` but stays core-only so
- *  catalog-export keeps its single `@design-parity/core` dependency. */
-function mergeByFunction(
-  a: CandidateRender,
-  b: CandidateRender,
-): CandidateRender {
-  const semantics =
-    a.semantics.theme === "light"
-      ? a.semantics
-      : b.semantics.theme === "light"
-        ? b.semantics
-        : a.semantics;
-  const merged: CandidateRender = {
-    componentId: a.componentId,
-    images: [...catalogImages(a), ...catalogImages(b)],
-    semantics,
-  };
-  if (a.previewId ?? b.previewId) merged.previewId = a.previewId ?? b.previewId;
-  if (a.functionName ?? b.functionName)
-    merged.functionName = a.functionName ?? b.functionName;
-  return merged;
-}
-
 /**
  * Project candidate images into the published catalog image model.
  *
@@ -214,18 +180,6 @@ export interface FromCandidatesResult {
   withoutSemantics: string[];
 }
 
-/** A semantics tree carries real signal (not the empty `{ root: {} }` fallback). */
-function hasSemantics(candidate: CandidateRender): boolean {
-  const tree = candidate.semantics;
-  if (!tree) return false;
-  if (tree.themeTokens) return true;
-  const r = tree.root;
-  return Boolean(
-    r &&
-      ((r.children && r.children.length > 0) || r.role || r.label || r.bounds || r.tokens),
-  );
-}
-
 /**
  * Join rendered {@link CandidateRender}s to a {@link CatalogSpec} into a
  * {@link Catalog}. Each spec component is matched to the candidate whose preview
@@ -243,70 +197,13 @@ export function catalogFromCandidates(
   spec: CatalogSpec,
   opts: FromCandidatesOptions = {},
 ): FromCandidatesResult {
-  // Fold each function's theme/size multipreview variants into one render, so a
-  // spec component picks up every variant's image (light + dark, small + large)
-  // as captures of the same sticker rather than the last one winning.
-  const byFunction = new Map<string, CandidateRender>();
-  for (const candidate of candidates) {
-    const fn = functionOf(candidate);
-    const existing = byFunction.get(fn);
-    byFunction.set(fn, existing ? mergeByFunction(existing, candidate) : candidate);
-  }
-
-  const sources: ComponentSource[] = [];
-  const missing: string[] = [];
-  const withoutSemantics: string[] = [];
-  for (const group of spec.groups) {
-    for (const component of group.components) {
-      const candidate = byFunction.get(component.preview);
-      if (!candidate || candidate.images.length === 0) {
-        missing.push(component.componentId);
-        continue;
-      }
-      if (!hasSemantics(candidate)) withoutSemantics.push(component.componentId);
-      // Fold the component's state `variants` (pressed / focused / disabled / …)
-      // onto the default render: the default images stay first (the grid hero),
-      // each variant's images are appended re-tagged with its `state` so the
-      // single-component view can show them as secondary previews. A variant
-      // preview that didn't render is reported as missing, keyed by state.
-      const ideal = catalogImages(candidate);
-      for (const variant of component.variants ?? []) {
-        const variantCandidate = byFunction.get(variant.preview);
-        if (!variantCandidate || variantCandidate.images.length === 0) {
-          missing.push(`${component.componentId} [${variantLabel(variant)}]`);
-          continue;
-        }
-        for (const image of catalogImages(variantCandidate)) {
-          const tagged = { ...image };
-          if (variant.state !== undefined) tagged.state = variant.state;
-          if (variant.props) tagged.props = { ...image.props, ...variant.props };
-          ideal.push(tagged);
-        }
-      }
-      const source: ComponentSource = {
-        componentId: component.componentId,
-        group: group.name,
-        ideal,
-      };
-      if (component.caption !== undefined) source.caption = component.caption;
-      if (component.reference !== undefined) source.reference = component.reference;
-      if (component.referenceSet !== undefined) source.referenceSet = component.referenceSet;
-      if (component.noReference !== undefined) source.noReference = component.noReference;
-      if (candidate.semantics) source.semantics = candidate.semantics;
-      sources.push(source);
-    }
-  }
-
-  const meta = {
-    system: spec.system,
-    title: spec.title,
-    ...(spec.library ? { library: spec.library } : {}),
-    ...(opts.renderer ? { renderer: opts.renderer } : {}),
-    generatedAt: opts.generatedAt ?? new Date().toISOString(),
-    ...(spec.screens ? { screens: spec.screens } : {}),
-    ...(spec.display ? { display: spec.display } : {}),
-  };
-
-  const catalog = buildCatalog(meta, sources, opts.themeTokens, opts.themes);
-  return { catalog, missing, withoutSemantics };
+  // The join matches on `functionName ?? componentId`, because the export driver's resolver sets
+  // `componentId` to the function name. A caller without that resolver names the function by the
+  // preview id's last segment, so derive it here when the candidate does not carry one.
+  const prepared = candidates.map((candidate) => ({
+    ...candidate,
+    functionName: candidate.functionName ?? functionOf(candidate),
+    images: catalogImages(candidate),
+  }));
+  return joinCatalogFromCandidates(prepared, spec, opts) as FromCandidatesResult;
 }
