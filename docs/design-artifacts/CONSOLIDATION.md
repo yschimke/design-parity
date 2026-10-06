@@ -7,37 +7,47 @@ into the `design-artifacts/<system>` delivery branch that preview.coo.ee serves 
 importer reads. Its code exists in three places, and this plan makes design-parity the one
 home for it.
 
+## Where the code is now
+
+- **design-parity** holds the only copy of both: `packages/known-differences` (the engine) and
+  `packages/export-driver` (the driver), with their tests. CI's `export-driver-browser` job runs
+  the driver's browser guards and compose-preview-server mirrors.
+- **compose-ai-tools** runs `@design-parity/export-driver` from the lock in
+  `.github/design-artifacts-driver/`. Its `scripts/design-artifacts/` keeps the two schemas served
+  at public `$schema` URLs, the scope scripts its own workflow runs, and `driver-contract.test.mjs`,
+  which checks the installed driver against that repository's own files.
+- **compose-preview-server**'s `serve-web` imports `@design-parity/known-differences`.
+
 ## Where the code was
 
-Counts are from `main` on 2026-10-05, before phase 1. Since phase 6, design-parity holds the only
-copy of both the engine and the driver.
+Counts are from `main` on 2026-10-05, before phase 1.
 
 | Copy | Files | Status |
 | --- | --- | --- |
-| compose-ai-tools `scripts/design-artifacts/` | 1,386 | **The live copy.** `design-artifacts-reusable.yml` runs it for every catalog repository, at the commit in `.github/design-artifacts-driver-pin.txt`. |
+| compose-ai-tools `scripts/design-artifacts/` | 1,386 | **The live copy.** `design-artifacts-reusable.yml` ran it for every catalog repository, at the commit in `.github/design-artifacts-driver-pin.txt`. |
 | compose-preview-server `scripts/design-artifacts/` | 1,344, now ~1,160 | A copy that had fallen 43 files behind. yschimke/compose-preview-server#1378 cut it to what the server uses. |
 | design-parity `packages/known-differences/` (was `packages/diff/src/acceptance/vendor/`) | 9 modules, their tests, the fixture generator and corpus | The known-differences engine, published as `@design-parity/known-differences` since 1.4.0. It became the one copy in phase 3. |
 
-### What each repository actually uses
+### What each repository used, before phase 1
 
-- **compose-ai-tools** runs the whole driver: 117 scripts and 103 `node --test` files.
+- **compose-ai-tools** ran the whole driver: 117 scripts and 103 `node --test` files.
   Twelve of the scripts import npm packages (`playwright`, `pngjs`, `pixelmatch`, `fflate` and
-  `@design-parity/{candidate,catalog-export,adapter-figma}`). The rest use only Node built-ins,
-  which is why the workflow's partition and spec steps run without `npm ci`.
-- **compose-preview-server** uses two things.
+  `@design-parity/{candidate,catalog-export,adapter-figma}`). The rest used only Node built-ins,
+  which is why the workflow's partition and spec steps ran without `npm ci`.
+- **compose-preview-server** used two things.
   - **The known-differences engine**, nine dependency-free modules: `known-differences.mjs`,
     `known-difference-{plane,resample,score,tuning}.mjs`, `png-lite.mjs`, `png-write.mjs`,
-    `inflate-lite.mjs` and `sha256-lite.mjs`. `serve-web` bundles it so the viewer and the
-    driver agree on what an acceptance means.
+    `inflate-lite.mjs` and `sha256-lite.mjs`. `serve-web` bundled it so the viewer and the
+    driver agreed on what an acceptance means.
   - **`fixtures/`**:
     - 1,141 known-differences cases;
     - three wire fixtures (`parity-issues.json`, `parity-locators.json`,
       `parity-activity.json`), which pin a format the driver writes and the server reads;
     - a few `.rc` documents.
-- **design-parity** uses the same engine and the same 1,141 cases, through the vendored
+- **design-parity** used the same engine and the same 1,141 cases, through a vendored
   TypeScript copy.
 
-So there are two distinct things to consolidate: a **library** (the engine, needed by all three)
+So there were two distinct things to consolidate: a **library** (the engine, needed by all three)
 and an **application** (the driver, run only by compose-ai-tools' workflow).
 
 ## Target
