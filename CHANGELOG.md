@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/yschimke/design-parity/compare/v1.6.0...v1.7.0) (2026-10-08)
+
+
+### Features
+
+* **export-driver:** allow insertContent in ui-builder.policy.json ([#528](https://github.com/yschimke/design-parity/issues/528)) ([b376364](https://github.com/yschimke/design-parity/commit/b376364291102285b0f821e8b74ce56887099837))
+
 ## [1.6.0](https://github.com/yschimke/design-parity/compare/v1.5.1...v1.6.0) (2026-10-06)
 
 
