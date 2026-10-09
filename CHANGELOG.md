@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/yschimke/design-parity/compare/v1.7.0...v1.8.0) (2026-10-09)
+
+
+### Features
+
+* **export-driver:** let a catalog state its New design chooser copy and widget host footprints ([#532](https://github.com/yschimke/design-parity/issues/532)) ([1679fa8](https://github.com/yschimke/design-parity/commit/1679fa8d852698ed39fbcbae496a06708b958c43))
+* **export-driver:** publish a catalog's ui-builder.guidelines.json beside its ui-builder.json ([#530](https://github.com/yschimke/design-parity/issues/530)) ([6e38f00](https://github.com/yschimke/design-parity/commit/6e38f00a98a6e86c19065adfac68927732c4e438))
+
 ## [1.7.0](https://github.com/yschimke/design-parity/compare/v1.6.0...v1.7.0) (2026-10-08)
 
 
