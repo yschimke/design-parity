@@ -128,8 +128,12 @@ export async function publishUiBuilderCatalog(entries, outPath) {
   // whoever clicks it. Copied when the bundle carries the file; reported when it does not, because
   // a catalog naming a template it does not ship is a mistake somebody has to be told about rather
   // than a reason to refuse the whole catalog.
+  // An entry is a path, or an object naming one (`{ "path": …, "label": … }`): a generator that
+  // carries the chooser's copy beside the path must not make the design itself go uncopied.
   const templates = Array.isArray(catalog.statusSemantics.templates)
-    ? catalog.statusSemantics.templates.filter((path) => typeof path === "string" && path.length > 0)
+    ? catalog.statusSemantics.templates
+        .map((entry) => (entry !== null && typeof entry === "object" ? entry.path : entry))
+        .filter((path) => typeof path === "string" && path.length > 0)
     : [];
   const publishedTemplates = [];
   const missingTemplates = [];

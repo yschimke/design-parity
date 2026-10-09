@@ -121,9 +121,21 @@ export function validatePolicy(policy) {
     if (!Array.isArray(policy.templates)) {
       errors.push('"templates" is a list of branch-relative design paths');
     } else {
-      for (const entry of policy.templates) {
+      // An entry is a path, or an object naming one with what the New design chooser says about
+      // it. Both carry the same path, held to the same rules below.
+      const ids = [];
+      let defaults = 0;
+      for (const raw of policy.templates) {
+        let entry = raw;
+        if (isObject(raw)) {
+          entry = raw.path;
+          if (raw.default === true) defaults += 1;
+          ids.push(typeof raw.id === "string" ? raw.id : templateIdOf(raw.path));
+        } else if (typeof raw === "string") {
+          ids.push(templateIdOf(raw));
+        }
         if (typeof entry !== "string") {
-          errors.push(`"templates" contains ${JSON.stringify(entry)}, which is not a path`);
+          errors.push(`"templates" contains ${JSON.stringify(raw)}, which is not a path`);
         } else if (entry.startsWith("/") || entry.includes("..")) {
           errors.push(`"templates" entry ${JSON.stringify(entry)} is not branch-relative`);
         } else if (!entry.startsWith(`${TEMPLATE_DIR}/`) || entry === `${TEMPLATE_DIR}/`) {
@@ -143,6 +155,14 @@ export function validatePolicy(policy) {
           );
         }
       }
+      // A design URL names a template by id, so two with one id leave the second unreachable, and
+      // "the one a URL naming none opens" has one answer or none.
+      const seen = new Set();
+      for (const id of ids) {
+        if (id && seen.has(id)) errors.push(`"templates" names the template id ${JSON.stringify(id)} twice`);
+        if (id) seen.add(id);
+      }
+      if (defaults > 1) errors.push(`"templates" marks ${defaults} templates as the default; at most one is`);
     }
   }
 
@@ -528,6 +548,12 @@ function validateCode(code, errors, warnings) {
   }
 }
 
+/** A template's id when its entry names none: the file name without `.json`. */
+function templateIdOf(path) {
+  if (typeof path !== "string") return undefined;
+  return path.split("/").pop().replace(/\.json$/, "");
+}
+
 function validateFrame(frame, errors, warnings) {
   if (frame === undefined) return;
   if (!isObject(frame)) {
@@ -578,6 +604,34 @@ function validateFrame(frame, errors, warnings) {
       }
       if (new Set(sizes).size !== sizes.length) {
         errors.push('"frame.geometry.contentPadding" has two rows for one screenDp');
+      }
+    }
+  }
+  if (geometry.hostShapes !== undefined) {
+    if (!Array.isArray(geometry.hostShapes)) {
+      errors.push('"frame.geometry.hostShapes" is a list of per-shape, per-size footprints');
+    } else {
+      // Each footprint is for one of the sizes the frame declares: a reader looks it up by the
+      // size it is drawing, and a footprint for a size nothing draws is a number nobody reads.
+      const sizeLabels = new Set(
+        (Array.isArray(geometry.sizesDp) ? geometry.sizesDp : [])
+          .map((size) => (isObject(size) ? size.label : undefined))
+          .filter((label) => typeof label === "string"),
+      );
+      const keys = new Set();
+      for (const row of geometry.hostShapes) {
+        if (!isObject(row) || typeof row.shape !== "string" || typeof row.size !== "string") {
+          errors.push(`"frame.geometry.hostShapes" row ${JSON.stringify(row)} names no shape and size`);
+          continue;
+        }
+        const key = `${row.shape}/${row.size}`;
+        if (keys.has(key)) errors.push(`"frame.geometry.hostShapes" has two rows for ${key}`);
+        keys.add(key);
+        if (!sizeLabels.has(row.size)) {
+          errors.push(
+            `"frame.geometry.hostShapes" row ${key} names the size ${JSON.stringify(row.size)}, which no "sizesDp" entry is labelled`,
+          );
+        }
       }
     }
   }

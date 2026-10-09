@@ -504,3 +504,70 @@ test("the sweep covers non-string typed fields too", async () => {
   absent.builtins = { "wear-m3/screen": { role: STRUCTURAL_ROLES[0] } };
   assert.deepEqual(validatePolicy(absent).errors, []);
 });
+
+test("a template entry may be an object carrying the chooser's copy, held to the same path rules", () => {
+  const policy = wellFormed();
+  policy.templates = [
+    `${TEMPLATE_DIR}/designs/wear-screen.json`,
+    {
+      id: "wear-list",
+      path: `${TEMPLATE_DIR}/designs/wear-list.json`,
+      label: "Activity list",
+      supportingText: "Six title cards under a list header.",
+      default: true,
+      order: 2,
+    },
+  ];
+  policy.newDesign = { label: "Wear app", order: 2 };
+  assert.deepEqual(validatePolicy(policy).errors, []);
+
+  const outside = wellFormed();
+  outside.templates = [{ path: "designs/wear-list.json", label: "Activity list" }];
+  assert.match(validatePolicy(outside).errors.join("\n"), /is not a file under ui-builder\//);
+
+  const noPath = wellFormed();
+  noPath.templates = [{ label: "Activity list" }];
+  assert.match(validatePolicy(noPath).errors.join("\n"), /which is not a path/);
+});
+
+test("template ids are unique and at most one template is the default", () => {
+  const twice = wellFormed();
+  // The bare path's id is its file name, so the object naming `wear-list` collides with it.
+  twice.templates = [
+    `${TEMPLATE_DIR}/designs/wear-list.json`,
+    { id: "wear-list", path: `${TEMPLATE_DIR}/designs/other.json` },
+  ];
+  assert.match(validatePolicy(twice).errors.join("\n"), /names the template id "wear-list" twice/);
+
+  const defaults = wellFormed();
+  defaults.templates = [
+    { path: `${TEMPLATE_DIR}/designs/a.json`, default: true },
+    { path: `${TEMPLATE_DIR}/designs/b.json`, default: true },
+  ];
+  assert.match(validatePolicy(defaults).errors.join("\n"), /marks 2 templates as the default/);
+});
+
+test("a host-shape footprint is for a size the frame declares, once per shape and size", () => {
+  const policy = wellFormed();
+  policy.frame = {
+    adapter: "frame/widget-host",
+    geometry: {
+      $comment: "written by WearWidgetHostGeometryTest",
+      sizesDp: [
+        { widthDp: 216, heightDp: 76, label: "small" },
+        { widthDp: 216, heightDp: 124, label: "large" },
+      ],
+      hostShapes: [
+        { shape: "round", size: "small", contentWidthDp: 168, contentHeightDp: 60, horizontalPaddingDp: 24, verticalPaddingDp: 8, cornerRadiusDp: 999 },
+        { shape: "round", size: "large", contentWidthDp: 176, contentHeightDp: 100, horizontalPaddingDp: 20, verticalPaddingDp: 12, cornerRadiusDp: 999 },
+      ],
+    },
+  };
+  assert.deepEqual(validatePolicy(policy).errors, []);
+
+  policy.frame.geometry.hostShapes.push({ shape: "round", size: "small", contentWidthDp: 1, contentHeightDp: 1 });
+  policy.frame.geometry.hostShapes.push({ shape: "squircle", size: "medium", contentWidthDp: 1, contentHeightDp: 1 });
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /two rows for round\/small/);
+  assert.match(errors, /names the size "medium", which no "sizesDp" entry is labelled/);
+});
