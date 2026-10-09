@@ -504,3 +504,110 @@ test("the sweep covers non-string typed fields too", async () => {
   absent.builtins = { "wear-m3/screen": { role: STRUCTURAL_ROLES[0] } };
   assert.deepEqual(validatePolicy(absent).errors, []);
 });
+
+test("a template entry may be an object carrying the chooser's copy, held to the same path rules", () => {
+  const policy = wellFormed();
+  policy.templates = [
+    `${TEMPLATE_DIR}/designs/wear-screen.json`,
+    {
+      id: "wear-list",
+      path: `${TEMPLATE_DIR}/designs/wear-list.json`,
+      label: "Activity list",
+      supportingText: "Six title cards under a list header.",
+      default: true,
+      order: 2,
+    },
+  ];
+  policy.newDesign = { label: "Wear app", order: 2 };
+  assert.deepEqual(validatePolicy(policy).errors, []);
+
+  const outside = wellFormed();
+  outside.templates = [{ path: "designs/wear-list.json", label: "Activity list" }];
+  assert.match(validatePolicy(outside).errors.join("\n"), /is not a file under ui-builder\//);
+
+  const noPath = wellFormed();
+  noPath.templates = [{ label: "Activity list" }];
+  assert.match(validatePolicy(noPath).errors.join("\n"), /which is not a path/);
+});
+
+test("template ids are unique and at most one template is the default", () => {
+  const twice = wellFormed();
+  // The bare path's id is its file name, so the object naming `wear-list` collides with it.
+  twice.templates = [
+    `${TEMPLATE_DIR}/designs/wear-list.json`,
+    { id: "wear-list", path: `${TEMPLATE_DIR}/designs/other.json` },
+  ];
+  assert.match(validatePolicy(twice).errors.join("\n"), /names the template id "wear-list" twice/);
+
+  const defaults = wellFormed();
+  defaults.templates = [
+    { path: `${TEMPLATE_DIR}/designs/a.json`, default: true },
+    { path: `${TEMPLATE_DIR}/designs/b.json`, default: true },
+  ];
+  assert.match(validatePolicy(defaults).errors.join("\n"), /marks 2 templates as the default/);
+});
+
+test("a host-shape footprint is for a size the frame declares, once per shape and size", () => {
+  const policy = wellFormed();
+  policy.frame = {
+    adapter: "frame/widget-host",
+    geometry: {
+      $comment: "written by WearWidgetHostGeometryTest",
+      sizesDp: [
+        { widthDp: 216, heightDp: 76, label: "small" },
+        { widthDp: 216, heightDp: 124, label: "large" },
+      ],
+      hostShapes: [
+        { shape: "round", size: "small", contentWidthDp: 168, contentHeightDp: 60, horizontalPaddingDp: 24, verticalPaddingDp: 8, cornerRadiusDp: 999 },
+        { shape: "round", size: "large", contentWidthDp: 176, contentHeightDp: 100, horizontalPaddingDp: 20, verticalPaddingDp: 12, cornerRadiusDp: 999 },
+      ],
+    },
+  };
+  assert.deepEqual(validatePolicy(policy).errors, []);
+
+  policy.frame.geometry.hostShapes.push({ shape: "round", size: "small", contentWidthDp: 1, contentHeightDp: 1 });
+  policy.frame.geometry.hostShapes.push({ shape: "squircle", size: "medium", contentWidthDp: 1, contentHeightDp: 1 });
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /two rows for round\/small/);
+  assert.match(errors, /names the size "medium", which no "sizesDp" entry is labelled/);
+});
+
+test("the chooser's fields are typed in the pre-flight, as the reader decoding them expects", () => {
+  const policy = wellFormed();
+  policy.newDesign = { label: 7, order: 1.5 };
+  policy.templates = [
+    { path: `${TEMPLATE_DIR}/designs/a.json`, default: "yes", order: 1.5, label: 7 },
+  ];
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /"newDesign.label" is a string/);
+  assert.match(errors, /"newDesign.order" is an integer/);
+  assert.match(errors, /non-boolean "default"/);
+  assert.match(errors, /non-integer "order"/);
+  assert.match(errors, /non-string "label"/);
+
+  const notObject = wellFormed();
+  notObject.newDesign = "x";
+  assert.match(validatePolicy(notObject).errors.join("\n"), /"newDesign" is an object/);
+});
+
+test("a footprint states every measure, and the sizes it names are labelled once", () => {
+  const policy = wellFormed();
+  policy.frame = {
+    adapter: "frame/widget-host",
+    geometry: {
+      $comment: "written by WearWidgetHostGeometryTest",
+      sizesDp: [
+        { widthDp: 216, heightDp: 76, label: "small" },
+        { widthDp: 216, heightDp: 124, label: "small" },
+      ],
+      hostShapes: [{ shape: "round", size: "small", contentWidthDp: 200, contentHeightDp: 60 }],
+    },
+  };
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /labels two sizes alike/);
+  assert.match(errors, /round\/small has no numeric "horizontalPaddingDp"/);
+  assert.match(errors, /round\/small has no numeric "cornerRadiusDp"/);
+
+  policy.frame.geometry.hostShapes[0].label = 7;
+  assert.match(validatePolicy(policy).errors.join("\n"), /round\/small has a non-string "label"/);
+});

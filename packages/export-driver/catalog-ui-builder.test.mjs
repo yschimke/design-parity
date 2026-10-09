@@ -107,6 +107,30 @@ test("template designs the catalog names are carried out with it", async () => {
   });
 });
 
+test("a template entry carrying the chooser's copy is copied by its path", async () => {
+  await withOutDir(async (out) => {
+    const design = '{"schema":"compose-ui-builder-design/v1","nodes":[]}';
+    const withTemplate = JSON.stringify({
+      ...JSON.parse(catalog),
+      statusSemantics: {
+        ...JSON.parse(catalog).statusSemantics,
+        templates: [{ path: "ui-builder/designs/wear-list.json", label: "Activity list" }],
+      },
+    });
+
+    const published = await publishUiBuilderCatalog(
+      {
+        [UI_BUILDER_FILE]: bytes(withTemplate),
+        "ui-builder/designs/wear-list.json": bytes(design),
+      },
+      out,
+    );
+
+    assert.deepEqual(published.templates, ["ui-builder/designs/wear-list.json"]);
+    assert.equal(await readFile(join(out, "ui-builder/designs/wear-list.json"), "utf8"), design);
+  });
+});
+
 test("a template path escaping the output directory is refused, not written", async () => {
   await withOutDir(async (out) => {
     // A bundle is not a trusted document. `ui-builder/../../catalog.json` joined to the output
