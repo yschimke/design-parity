@@ -571,3 +571,40 @@ test("a host-shape footprint is for a size the frame declares, once per shape an
   assert.match(errors, /two rows for round\/small/);
   assert.match(errors, /names the size "medium", which no "sizesDp" entry is labelled/);
 });
+
+test("the chooser's fields are typed in the pre-flight, as the reader decoding them expects", () => {
+  const policy = wellFormed();
+  policy.newDesign = { label: 7, order: 1.5 };
+  policy.templates = [
+    { path: `${TEMPLATE_DIR}/designs/a.json`, default: "yes", order: 1.5, label: 7 },
+  ];
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /"newDesign.label" is a string/);
+  assert.match(errors, /"newDesign.order" is an integer/);
+  assert.match(errors, /non-boolean "default"/);
+  assert.match(errors, /non-integer "order"/);
+  assert.match(errors, /non-string "label"/);
+
+  const notObject = wellFormed();
+  notObject.newDesign = "x";
+  assert.match(validatePolicy(notObject).errors.join("\n"), /"newDesign" is an object/);
+});
+
+test("a footprint states every measure, and the sizes it names are labelled once", () => {
+  const policy = wellFormed();
+  policy.frame = {
+    adapter: "frame/widget-host",
+    geometry: {
+      $comment: "written by WearWidgetHostGeometryTest",
+      sizesDp: [
+        { widthDp: 216, heightDp: 76, label: "small" },
+        { widthDp: 216, heightDp: 124, label: "small" },
+      ],
+      hostShapes: [{ shape: "round", size: "small", contentWidthDp: 200, contentHeightDp: 60 }],
+    },
+  };
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /labels two sizes alike/);
+  assert.match(errors, /round\/small has no numeric "horizontalPaddingDp"/);
+  assert.match(errors, /round\/small has no numeric "cornerRadiusDp"/);
+});

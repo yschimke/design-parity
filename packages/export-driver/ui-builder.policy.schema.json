@@ -135,11 +135,11 @@
             },
             "hostShapes": {
               "type": "array",
-              "description": "The host container a widget is drawn in, per host shape and size, as measured: the content box the widget lays out in, the padding around it on each edge, and the corner radius. The frame is the content plus twice each padding. A widget cannot choose any of it; the launcher draws it.",
+              "description": "The host container a widget is drawn in, per host shape and size, as measured: the content box the widget lays out in, the padding around it on each edge, and the corner radius. That shape's frame at that size is the content plus twice each padding, so it differs between shapes of one size (a round host is wider than a squircle); `size` names the scaffold size the footprint is for, not a frame it must equal. A widget cannot choose any of it; the launcher draws it.",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["shape", "size", "contentWidthDp", "contentHeightDp"],
+                "required": ["shape", "size", "contentWidthDp", "contentHeightDp", "horizontalPaddingDp", "verticalPaddingDp", "cornerRadiusDp"],
                 "properties": {
                   "shape": { "type": "string", "description": "The host shape's id (`rectangular`, `squircle`, `round`)." },
                   "size": { "type": "string", "description": "The `label` of the `sizesDp` entry this footprint is for." },

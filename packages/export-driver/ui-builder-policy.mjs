@@ -117,6 +117,19 @@ export function validatePolicy(policy) {
   validateFrame(policy.frame, errors, warnings);
   validateComposeSourceExport(policy.composeSourceExport, errors);
 
+  if (policy.newDesign !== undefined) {
+    if (!isObject(policy.newDesign)) {
+      errors.push('"newDesign" is an object with a label and an order');
+    } else {
+      if (policy.newDesign.label !== undefined && typeof policy.newDesign.label !== "string") {
+        errors.push('"newDesign.label" is a string');
+      }
+      if (policy.newDesign.order !== undefined && !Number.isInteger(policy.newDesign.order)) {
+        errors.push('"newDesign.order" is an integer');
+      }
+    }
+  }
+
   if (policy.templates !== undefined) {
     if (!Array.isArray(policy.templates)) {
       errors.push('"templates" is a list of branch-relative design paths');
@@ -129,6 +142,19 @@ export function validatePolicy(policy) {
         let entry = raw;
         if (isObject(raw)) {
           entry = raw.path;
+          // A typed reader decodes these after the render, so a wrong type here is a catalog
+          // omitted twenty minutes later; the pre-flight says so now.
+          for (const key of ["id", "label", "supportingText", "group"]) {
+            if (raw[key] !== undefined && typeof raw[key] !== "string") {
+              errors.push(`"templates" entry ${JSON.stringify(raw.path)} has a non-string "${key}"`);
+            }
+          }
+          if (raw.default !== undefined && typeof raw.default !== "boolean") {
+            errors.push(`"templates" entry ${JSON.stringify(raw.path)} has a non-boolean "default"`);
+          }
+          if (raw.order !== undefined && !Number.isInteger(raw.order)) {
+            errors.push(`"templates" entry ${JSON.stringify(raw.path)} has a non-integer "order"`);
+          }
           if (raw.default === true) defaults += 1;
           ids.push(typeof raw.id === "string" ? raw.id : templateIdOf(raw.path));
         } else if (typeof raw === "string") {
@@ -548,6 +574,15 @@ function validateCode(code, errors, warnings) {
   }
 }
 
+/** What a footprint has to state for a reader to rebuild the host it describes. */
+const FOOTPRINT_MEASURES = [
+  "contentWidthDp",
+  "contentHeightDp",
+  "horizontalPaddingDp",
+  "verticalPaddingDp",
+  "cornerRadiusDp",
+];
+
 /** A template's id when its entry names none: the file name without `.json`. */
 function templateIdOf(path) {
   if (typeof path !== "string") return undefined;
@@ -613,11 +648,14 @@ function validateFrame(frame, errors, warnings) {
     } else {
       // Each footprint is for one of the sizes the frame declares: a reader looks it up by the
       // size it is drawing, and a footprint for a size nothing draws is a number nobody reads.
-      const sizeLabels = new Set(
-        (Array.isArray(geometry.sizesDp) ? geometry.sizesDp : [])
-          .map((size) => (isObject(size) ? size.label : undefined))
-          .filter((label) => typeof label === "string"),
-      );
+      const labels = (Array.isArray(geometry.sizesDp) ? geometry.sizesDp : [])
+        .map((size) => (isObject(size) ? size.label : undefined))
+        .filter((label) => typeof label === "string");
+      const sizeLabels = new Set(labels);
+      // A footprint names its size by label, so a label two sizes share cannot say which it means.
+      if (sizeLabels.size !== labels.length) {
+        errors.push('"frame.geometry.sizesDp" labels two sizes alike, which "hostShapes" names sizes by');
+      }
       const keys = new Set();
       for (const row of geometry.hostShapes) {
         if (!isObject(row) || typeof row.shape !== "string" || typeof row.size !== "string") {
@@ -625,6 +663,11 @@ function validateFrame(frame, errors, warnings) {
           continue;
         }
         const key = `${row.shape}/${row.size}`;
+        for (const measure of FOOTPRINT_MEASURES) {
+          if (typeof row[measure] !== "number") {
+            errors.push(`"frame.geometry.hostShapes" row ${key} has no numeric "${measure}"`);
+          }
+        }
         if (keys.has(key)) errors.push(`"frame.geometry.hostShapes" has two rows for ${key}`);
         keys.add(key);
         if (!sizeLabels.has(row.size)) {
