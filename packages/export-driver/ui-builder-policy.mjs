@@ -663,6 +663,9 @@ function validateFrame(frame, errors, warnings) {
           continue;
         }
         const key = `${row.shape}/${row.size}`;
+        if (row.label !== undefined && typeof row.label !== "string") {
+          errors.push(`"frame.geometry.hostShapes" row ${key} has a non-string "label"`);
+        }
         for (const measure of FOOTPRINT_MEASURES) {
           if (typeof row[measure] !== "number") {
             errors.push(`"frame.geometry.hostShapes" row ${key} has no numeric "${measure}"`);

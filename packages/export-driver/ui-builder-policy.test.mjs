@@ -607,4 +607,7 @@ test("a footprint states every measure, and the sizes it names are labelled once
   assert.match(errors, /labels two sizes alike/);
   assert.match(errors, /round\/small has no numeric "horizontalPaddingDp"/);
   assert.match(errors, /round\/small has no numeric "cornerRadiusDp"/);
+
+  policy.frame.geometry.hostShapes[0].label = 7;
+  assert.match(validatePolicy(policy).errors.join("\n"), /round\/small has a non-string "label"/);
 });
