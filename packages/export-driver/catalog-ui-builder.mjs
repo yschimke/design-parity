@@ -31,6 +31,41 @@ import { TEMPLATE_DIR } from "./ui-builder-policy.mjs";
 export const UI_BUILDER_FILE = "ui-builder.json";
 
 /**
+ * The catalog's own design guidance for the builder's guidelines check (`compose-ui-builder/
+ * catalog-guidelines/v1`), carried in the bundle beside [UI_BUILDER_FILE] and published beside it
+ * under the same name, so a host that reads one finds the other.
+ */
+export const UI_BUILDER_GUIDELINES_FILE = "ui-builder.guidelines.json";
+
+/**
+ * Whether `bytes` are guidelines for the catalog `catalogId`: a JSON object whose `schema` names the
+ * catalog-guidelines format, whose `catalog` is that id, and which carries `rules` and `frames`
+ * arrays. A file for another catalog is not this one's guidance, however well formed.
+ */
+export function parseUiBuilderGuidelines(bytes, catalogId) {
+  if (!bytes) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(Buffer.from(bytes).toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    typeof parsed.schema !== "string" ||
+    !parsed.schema.startsWith("compose-ui-builder/catalog-guidelines/") ||
+    parsed.catalog !== catalogId ||
+    !Array.isArray(parsed.rules) ||
+    (parsed.frames !== undefined && !Array.isArray(parsed.frames))
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+/**
  * Whether `bytes` are a builder catalog a consumer will read: a JSON object carrying a string
  * `schema`, a `catalog` object with a non-empty `id`, and a `statusSemantics` object.
  *
@@ -147,6 +182,32 @@ export async function publishUiBuilderCatalog(entries, outPath) {
     publishedTemplates.push(path);
   }
 
+  // The catalog's guidance, beside the catalog it is for. A bundle that carries none publishes
+  // none; one that carries an unreadable file, or one for another catalog, is reported rather
+  // than published, so a host never asks a design rules that were not written for it.
+  let guidelines = null;
+  let unreadableGuidelines = false;
+  if (entries?.[UI_BUILDER_GUIDELINES_FILE]) {
+    const parsedGuidelines = parseUiBuilderGuidelines(
+      entries[UI_BUILDER_GUIDELINES_FILE],
+      catalog.catalog.id,
+    );
+    if (parsedGuidelines) {
+      await writeFile(
+        join(outPath, UI_BUILDER_GUIDELINES_FILE),
+        Buffer.from(entries[UI_BUILDER_GUIDELINES_FILE]),
+      );
+      guidelines = {
+        path: UI_BUILDER_GUIDELINES_FILE,
+        version: parsedGuidelines.version ?? null,
+        rules: parsedGuidelines.rules.length,
+        frames: (parsedGuidelines.frames ?? []).length,
+      };
+    } else {
+      unreadableGuidelines = true;
+    }
+  }
+
   return {
     path: UI_BUILDER_FILE,
     schema: catalog.schema,
@@ -159,5 +220,7 @@ export async function publishUiBuilderCatalog(entries, outPath) {
     missingTemplates,
     unsafeTemplates,
     unreadableTemplates,
+    guidelines,
+    unreadableGuidelines,
   };
 }

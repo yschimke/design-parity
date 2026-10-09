@@ -7,6 +7,7 @@ import { join } from "node:path";
 
 import {
   UI_BUILDER_FILE,
+  UI_BUILDER_GUIDELINES_FILE,
   parseUiBuilderCatalog,
   publishUiBuilderCatalog,
 } from "./catalog-ui-builder.mjs";
@@ -67,6 +68,8 @@ test("the bundle's builder catalog is copied to the branch root and described fo
       missingTemplates: [],
       unsafeTemplates: [],
     unreadableTemplates: [],
+      guidelines: null,
+      unreadableGuidelines: false,
     });
     // Byte-for-byte, not re-serialised: the generator produced it and the pipeline is a courier.
     assert.equal(await readFile(join(out, UI_BUILDER_FILE), "utf8"), catalog);
@@ -301,4 +304,60 @@ test("an array where an object belongs is refused", () => {
     statusSemantics: { platform: "mobile" },
   };
   assert.equal(parseUiBuilderCatalog(bytes(JSON.stringify(arrayedCatalog))), null);
+});
+
+const guidelines = (catalogId) =>
+  JSON.stringify({
+    schema: "compose-ui-builder/catalog-guidelines/v1",
+    catalog: catalogId,
+    platform: "wear",
+    version: 2,
+    frames: [{ kind: "device" }],
+    rules: [
+      {
+        id: "wear.touch-target-48dp",
+        kind: "structure",
+        severity: "warning",
+        guidance: "g",
+        check: "ok?",
+        source: "https://developer.android.com/x",
+      },
+    ],
+  });
+
+test("the catalog's guidelines are published beside its builder catalog", async () => {
+  await withOutDir(async (out) => {
+    const published = await publishUiBuilderCatalog(
+      {
+        [UI_BUILDER_FILE]: bytes(catalog),
+        [UI_BUILDER_GUIDELINES_FILE]: bytes(guidelines("wear-m3")),
+      },
+      out,
+    );
+    assert.deepEqual(published.guidelines, {
+      path: "ui-builder.guidelines.json",
+      version: 2,
+      rules: 1,
+      frames: 1,
+    });
+    assert.equal(published.unreadableGuidelines, false);
+    assert.equal(
+      await readFile(join(out, UI_BUILDER_GUIDELINES_FILE), "utf8"),
+      guidelines("wear-m3"),
+    );
+  });
+});
+
+test("guidelines for another catalog, or unreadable ones, are reported and not published", async () => {
+  for (const text of [guidelines("remote-m3"), "{not json", JSON.stringify({ schema: "x" })]) {
+    await withOutDir(async (out) => {
+      const published = await publishUiBuilderCatalog(
+        { [UI_BUILDER_FILE]: bytes(catalog), [UI_BUILDER_GUIDELINES_FILE]: bytes(text) },
+        out,
+      );
+      assert.equal(published.guidelines, null);
+      assert.equal(published.unreadableGuidelines, true);
+      await assert.rejects(stat(join(out, UI_BUILDER_GUIDELINES_FILE)));
+    });
+  }
 });
