@@ -10,6 +10,8 @@ import {
   UI_BUILDER_GUIDELINES_FILE,
   parseUiBuilderCatalog,
   publishUiBuilderCatalog,
+  uiBuilderGuidelinesManifestFields,
+  uiBuilderGuidelinesWarning,
 } from "./catalog-ui-builder.mjs";
 
 async function withOutDir(body) {
@@ -384,4 +386,41 @@ test("guidelines for another catalog, or unreadable ones, are reported and not p
       await assert.rejects(stat(join(out, UI_BUILDER_GUIDELINES_FILE)));
     });
   }
+});
+
+test("a rejected guidelines file is surfaced as a warning and in the manifest", async () => {
+  await withOutDir(async (out) => {
+    const published = await publishUiBuilderCatalog(
+      { [UI_BUILDER_FILE]: bytes(catalog), [UI_BUILDER_GUIDELINES_FILE]: bytes("{not json") },
+      out,
+    );
+    const warning = uiBuilderGuidelinesWarning(published, "wear-m3");
+    assert.match(warning, /^\[wear-m3\] /);
+    assert.match(warning, /ui-builder\.guidelines\.json/);
+    assert.match(warning, /NOT published/);
+    assert.deepEqual(uiBuilderGuidelinesManifestFields(published), {
+      uiBuilderGuidelinesRejected: UI_BUILDER_GUIDELINES_FILE,
+    });
+  });
+});
+
+test("published or absent guidelines raise no warning", async () => {
+  await withOutDir(async (out) => {
+    const published = await publishUiBuilderCatalog(
+      {
+        [UI_BUILDER_FILE]: bytes(catalog),
+        [UI_BUILDER_GUIDELINES_FILE]: bytes(guidelines("wear-m3")),
+      },
+      out,
+    );
+    assert.equal(uiBuilderGuidelinesWarning(published, "wear-m3"), null);
+    assert.deepEqual(uiBuilderGuidelinesManifestFields(published), {
+      uiBuilderGuidelinesFile: UI_BUILDER_GUIDELINES_FILE,
+    });
+  });
+  await withOutDir(async (out) => {
+    const published = await publishUiBuilderCatalog({ [UI_BUILDER_FILE]: bytes(catalog) }, out);
+    assert.equal(uiBuilderGuidelinesWarning(published, "wear-m3"), null);
+    assert.deepEqual(uiBuilderGuidelinesManifestFields(published), {});
+  });
 });
