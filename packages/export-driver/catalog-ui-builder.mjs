@@ -228,3 +228,33 @@ export async function publishUiBuilderCatalog(entries, outPath) {
     unreadableGuidelines,
   };
 }
+
+/**
+ * The warning a run prints when the bundle carried a guidelines file that was NOT published, or
+ * `null` when there is nothing to say. Publishing without the file is not a failure — the catalog
+ * is still readable — but it switches off every guideline check a host would have run against it,
+ * so a run that drops it has to say so where somebody watching the run can see it.
+ */
+export function uiBuilderGuidelinesWarning(published, system) {
+  if (!published?.unreadableGuidelines) return null;
+  return (
+    `[${system}] the bundle carries ${UI_BUILDER_GUIDELINES_FILE} but it is unreadable, malformed ` +
+    `or written for another catalog than ${published.catalogId}, so it was NOT published and no ` +
+    `guideline checks will run against this catalog`
+  );
+}
+
+/**
+ * The manifest fields recording what happened to the guidelines file, declared the way
+ * `uiBuilderFile` is: `uiBuilderGuidelinesFile` names a published file a consumer fetches by name,
+ * and `uiBuilderGuidelinesRejected` names one the bundle carried and this run refused, so somebody
+ * reading the manifest after the fact can tell "this catalog has no guidance" from "its guidance
+ * was dropped".
+ */
+export function uiBuilderGuidelinesManifestFields(published) {
+  if (published?.guidelines) return { uiBuilderGuidelinesFile: published.guidelines.path };
+  if (published?.unreadableGuidelines) {
+    return { uiBuilderGuidelinesRejected: UI_BUILDER_GUIDELINES_FILE };
+  }
+  return {};
+}

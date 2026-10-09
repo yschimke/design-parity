@@ -65,7 +65,12 @@ import {
   parseComponentRecord,
   publishComponentRecord,
 } from "./catalog-component-record.mjs";
-import { UI_BUILDER_FILE, publishUiBuilderCatalog } from "./catalog-ui-builder.mjs";
+import {
+  UI_BUILDER_FILE,
+  publishUiBuilderCatalog,
+  uiBuilderGuidelinesManifestFields,
+  uiBuilderGuidelinesWarning,
+} from "./catalog-ui-builder.mjs";
 import { publishUiBuilderRuntime } from "./catalog-ui-builder-runtime.mjs";
 import { checkMotionCarried } from "./motion-carried.mjs";
 import {
@@ -1366,6 +1371,14 @@ if (uiBuilderCatalog) {
         `cannot be parsed, so they were NOT written: ${uiBuilderCatalog.unreadableTemplates.join(", ")}`,
     );
   }
+  if (uiBuilderCatalog.guidelines) {
+    console.log(
+      `[${spec.system}] published builder guidelines → ${uiBuilderCatalog.guidelines.path} ` +
+        `(${uiBuilderCatalog.guidelines.rules} rule(s))`,
+    );
+  }
+  const guidelinesWarning = uiBuilderGuidelinesWarning(uiBuilderCatalog, spec.system);
+  if (guidelinesWarning) console.warn(guidelinesWarning);
   if (uiBuilderCatalog.diagnostics > 0) {
     // Not a failure. The diagnostics travel INSIDE the published file, where somebody who was not
     // watching this run can read them; this line is only so somebody who was knows to look.
@@ -1488,6 +1501,9 @@ if (uiBuilderCatalog) {
   // `uiBuilderFile` knows this catalog does not describe itself to a UI builder, rather than having
   // to fetch a file to find out.
   if (uiBuilderCatalog) manifest.uiBuilderFile = uiBuilderCatalog.path;
+  if (uiBuilderCatalog) {
+    Object.assign(manifest, uiBuilderGuidelinesManifestFields(uiBuilderCatalog));
+  }
   if (uiBuilderRuntime) manifest.uiBuilderRuntime = uiBuilderRuntime;
   // Deferred (live-only) coverage, recorded alongside the baked components rather than inside
   // `components[].images` — an image with no `path` would reach every consumer that assumes
