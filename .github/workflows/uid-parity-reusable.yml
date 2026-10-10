@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
-          ref: ed4612aa297cf65534787ac89417e7caee03be86
+          ref: f59322eb36705fee29ff1723614203cc8b5f3090
           path: _uid_tools
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
