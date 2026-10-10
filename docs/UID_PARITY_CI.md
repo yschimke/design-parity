@@ -112,10 +112,12 @@ Add publication metadata to the committed `references.json` plan:
 
 ```json
 {
+  "repository": "my-org/my-app",
   "publication": {
     "system": "my-app-uid",
     "title": "My app designs",
-    "sourceModule": "adaptive-uid-pilot",
+    "sourceModule": ":adaptive-uid-pilot",
+    "sourceDirectory": "adaptive-uid-pilot",
     "components": [{
       "designId": "browser",
       "componentId": "Browser",
@@ -127,7 +129,9 @@ Add publication metadata to the committed `references.json` plan:
 
 The shared export driver writes the canonical `catalog.json`, remaps reference
 bindings to canonical sticker IDs, and preserves the captured UID and PNG bytes.
-`sourceModule` is the repository-relative module directory. Publication appends to
+`repository` is the source GitHub repository. `sourceModule` is the logical Gradle
+project path (for example `:pilot`); `sourceDirectory` is its repository-relative
+directory (for example `screens/pilot`, or an empty string for the root project). Publication appends to
 `design-artifacts/<system>` using compose-ai-tools' shared branch publisher. Register
 that delivery branch in a preview server's catalogs configuration to browse the
 candidate, UID reference, diff, source, and UI Builder handoff. Hosting is optional;

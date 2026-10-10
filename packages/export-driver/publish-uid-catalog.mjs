@@ -12,6 +12,8 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   const publication = plan.publication;
   if (!publication || !/^[a-z0-9][a-z0-9-]*$/.test(publication.system)) throw new Error('Plan requires publication.system');
   if (!/^[\w.-]+\/[\w.-]+$/.test(plan.repository)) throw new Error('Plan requires a repository');
+  if (!/^:(?:[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+)*)?$/.test(publication.sourceModule)) throw new Error('Publication requires a logical Gradle sourceModule');
+  if (typeof publication.sourceDirectory !== 'string' || publication.sourceDirectory.startsWith('/') || publication.sourceDirectory.split('/').includes('..')) throw new Error('Publication requires a repository-relative sourceDirectory');
   const base = await realpath(root);
   async function asset(relative) {
     const file = await realpath(resolve(base, relative));
@@ -23,7 +25,7 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   if (refs.size !== plan.captures.length || refs.size !== manifest.references.length) throw new Error('Capture/reference IDs must match');
   const components = publication.components.map(c => ({ ...c, section: 'Screens', variants: { ideal: [], layout: [] }, greenlines: [], redlines: [] }));
   const byDesign = new Map(components.map(c => [c.designId, c]));
-  if (!components.length || byDesign.size !== components.length) throw new Error('Publication requires unique components');
+  if (!components.length || byDesign.size !== components.length || new Set(components.map(c => c.componentId)).size !== components.length) throw new Error('Publication requires unique designId and componentId values');
   const byPreview = new Map();
   const routes = new Set();
   for (const capture of plan.captures) {
@@ -47,7 +49,7 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   const catalogPath = resolve(out, 'catalog.json');
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
   applySourceFiles(catalog, { groups: [{ components: publication.components.map(c => ({ ...c, preview: c.designId })) }] },
-    new Map(publication.components.map(c => [c.designId, { sourceFile: c.sourceFile, module: publication.sourceModule, directory: publication.sourceModule }])));
+    new Map(publication.components.map(c => [c.designId, { sourceFile: c.sourceFile, module: publication.sourceModule, directory: publication.sourceDirectory }])));
   catalog.source = { repo: plan.repository, ref: revision, module: publication.sourceModule };
   catalog.generatedAt = new Date().toISOString();
   await writeFile(catalogPath, JSON.stringify(catalog, null, 2) + '\n');

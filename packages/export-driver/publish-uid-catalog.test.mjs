@@ -19,7 +19,7 @@ async function fixture(t) {
   const reference = { id: 'capture', previewId: 'capture', source: { provider: 'ui-builder', revision },
     raster: { path: 'references/reference.png', width: 2, height: 3 }, artifact: { kind: 'uid', path: 'references/design.uid' } };
   await writeFile(join(root, 'references/index.json'), JSON.stringify({ schema: 'compose-preview-references/v1', references: [reference] }));
-  const plan = { repository: 'example/app', publication: { system: 'app-uid', title: 'App design', sourceModule: 'pilot',
+  const plan = { repository: 'example/app', publication: { system: 'app-uid', title: 'App design', sourceModule: ':pilot', sourceDirectory: 'screens/pilot',
     components: [{ designId: 'screen', componentId: 'Screen', sourceFile: 'src/Screen.kt' }] },
     captures: [{ previewId: 'capture', designId: 'screen', widthDp: 2, heightDp: 3, density: 1, theme: 'light', state: 'list' }] };
   return { root, out: join(root, 'out'), plan, revision };
@@ -33,8 +33,8 @@ test('canonical catalog IDs bind UID references and preserve source navigation a
   const references = JSON.parse(await readFile(join(args.out, 'references/index.json')));
   const component = catalog.components[0];
   assert.equal(component.sourceFile, 'src/Screen.kt');
-  assert.equal(component.sourceDirectory, 'pilot');
-  assert.deepEqual(catalog.source, { repo: 'example/app', ref: args.revision, module: 'pilot' });
+  assert.equal(component.sourceDirectory, 'screens/pilot');
+  assert.deepEqual(catalog.source, { repo: 'example/app', ref: args.revision, module: ':pilot' });
   assert.equal(references.references[0].previewId, result.previews[0]);
   assert.equal(result.previews[0], 'screen__ideal__list__light__2dp');
   for (const path of ['references/design.uid', 'references/reference.png'])
@@ -52,7 +52,7 @@ test('rejects missing reference binding and duplicate component definitions', as
   await assert.rejects(publishUidCatalog(args), /Missing component or reference/);
   args.plan.captures[0].previewId = 'capture';
   args.plan.publication.components.push({ ...args.plan.publication.components[0] });
-  await assert.rejects(publishUidCatalog(args), /unique components/);
+  await assert.rejects(publishUidCatalog(args), /unique designId and componentId/);
 });
 
 
@@ -65,4 +65,20 @@ test('rejects two captures that would overwrite the same catalog image', async t
   args.plan.captures.push({ ...args.plan.captures[0], previewId: 'second' });
   await writeFile(join(args.root, 'previews/second.png'), await readFile(join(args.root, 'previews/capture.png')));
   await assert.rejects(publishUidCatalog(args), /Duplicate catalog capture axes/);
+});
+
+
+test('rejects duplicate published component IDs across different designs', async t => {
+  const args = await fixture(t);
+  args.plan.publication.components.push({ ...args.plan.publication.components[0], designId: 'another' });
+  await assert.rejects(publishUidCatalog(args), /unique designId and componentId/);
+});
+
+test('requires explicit Gradle and repository source identities', async t => {
+  const args = await fixture(t);
+  delete args.plan.publication.sourceDirectory;
+  await assert.rejects(publishUidCatalog(args), /sourceDirectory/);
+  args.plan.publication.sourceDirectory = 'screens/pilot';
+  args.plan.publication.sourceModule = 'screens/pilot';
+  await assert.rejects(publishUidCatalog(args), /logical Gradle/);
 });
