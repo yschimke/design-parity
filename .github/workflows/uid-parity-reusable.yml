@@ -1,0 +1,140 @@
+name: UID parity (reusable)
+
+# Deterministic UID reference / Compose candidate evidence. Model auditing is a
+# separate opt-in workflow in compose-ai-tools; it does not decide parity.
+# See docs/UID_PARITY_CI.md for the caller contract and artifact names.
+on:
+  workflow_call:
+    inputs:
+      pilot-directory:
+        description: Directory containing references.json, ci helpers, package.py and build/pilot.
+        type: string
+        required: true
+      build-command:
+        description: Caller-owned command that checks interactions and writes build/pilot/previews.
+        type: string
+        required: true
+      artifact-prefix:
+        description: Unique prefix per invocation in a workflow run; share it with the audit evidence-artifact.
+        type: string
+        default: adaptive-uid
+      java-version:
+        description: JDK used for the app candidate build (the UID renderer has its own pinned image).
+        type: string
+        default: 21.0.12+101.0.LTS
+
+permissions:
+  contents: read
+
+env:
+  PILOT_DIR: ${{ inputs.pilot-directory }}
+  ARTIFACT_PREFIX: ${{ inputs.artifact-prefix }}
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Check interactions and render candidate matrix
+        # This is trusted executable configuration, not untrusted PR metadata.
+        # Environment transport preserves the command text; it does not sanitize it.
+        env:
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: bash --noprofile --norc -e -o pipefail -c "$BUILD_COMMAND"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-prefix }}-candidates
+          path: ${{ inputs.pilot-directory }}/build/pilot/previews/
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: ${{ inputs.artifact-prefix }}-tests
+          path: ${{ inputs.pilot-directory }}/build/reports/tests/
+          overwrite: true
+          if-no-files-found: warn
+
+  references:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      # v3.117.0, including native renderer, Kotlin compiler and Skiko sidecars.
+      image: ghcr.io/yschimke/compose-preview-host@sha256:7049b567e962db6a4e26d46585273cb39295b8d0924563e837fc5d20234eabb1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yschimke/compose-preview-server
+          ref: 312e6676ce4c933c8955f9855e1b1f6d1b9623f0
+          path: _preview_server
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Render committed UID references independently
+        run: |
+          set +e
+          sh "$PILOT_DIR/ci/native-references.sh" "$PILOT_DIR" > native-reference.log 2>&1
+          result=$?
+          cat native-reference.log
+          if [ "$result" -ne 0 ]; then
+            node -e 'const fs = require("fs"); const message = fs.readFileSync("native-reference.log", "utf8").slice(-8000).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A"); console.log("::error::" + message)'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-prefix }}-references
+          path: ${{ inputs.pilot-directory }}/build/pilot/references/
+          overwrite: true
+          if-no-files-found: error
+
+  compare:
+    needs: [candidate, references]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install Pillow==12.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact-prefix }}-candidates
+          path: ${{ inputs.pilot-directory }}/build/pilot/previews
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact-prefix }}-references
+          path: ${{ inputs.pilot-directory }}/build/pilot/references
+      - run: python -m unittest discover -s "$PILOT_DIR/ci" -p 'test_*.py'
+      - name: Produce pixel diffs and validate bundle
+        run: |
+          python "$PILOT_DIR/ci/evidence.py" --plan "$PILOT_DIR/references.json" --root "$PILOT_DIR/build/pilot"
+          python "$PILOT_DIR/package.py"
+          printf 'Download %s-evidence and open index.html: UID reference, exact pixel diff, Compose actual. Changed pixels are advisory; missing or invalid evidence fails this job.\n' "$ARTIFACT_PREFIX" >> "$GITHUB_STEP_SUMMARY"
+          cat "$PILOT_DIR/build/pilot/evidence.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-prefix }}-evidence
+          path: ${{ inputs.pilot-directory }}/build/pilot/
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-prefix }}-bundle
+          path: ${{ inputs.pilot-directory }}/build/*.zip
+          overwrite: true
+          if-no-files-found: error
