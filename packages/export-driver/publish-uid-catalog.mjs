@@ -11,6 +11,7 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   if (!/^[a-f0-9]{40}$/.test(revision)) throw new Error('A full source revision is required');
   const publication = plan.publication;
   if (!publication || !/^[a-z0-9][a-z0-9-]*$/.test(publication.system)) throw new Error('Plan requires publication.system');
+  if (typeof publication.title !== 'string' || !publication.title.trim()) throw new Error('Plan requires publication.title');
   if (!/^[\w.-]+\/[\w.-]+$/.test(plan.repository)) throw new Error('Plan requires a repository');
   if (!/^:(?:[A-Za-z0-9_.-]+(?::[A-Za-z0-9_.-]+)*)?$/.test(publication.sourceModule)) throw new Error('Publication requires a logical Gradle sourceModule');
   if (typeof publication.sourceDirectory !== 'string' || publication.sourceDirectory.startsWith('/') || publication.sourceDirectory.split('/').includes('..')) throw new Error('Publication requires a repository-relative sourceDirectory');
@@ -41,7 +42,7 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
     if (!route || routes.has(route)) throw new Error('Duplicate catalog capture axes');
     routes.add(route);
     component.variants.ideal.push(image);
-    byPreview.set(capture.previewId, route);
+    byPreview.set(capture.previewId, { route, componentId: component.componentId });
   }
   await mkdir(out, { recursive: true });
   await writeCatalog({ meta: { system: publication.system, title: publication.title }, components }, out,
@@ -54,7 +55,9 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   catalog.generatedAt = new Date().toISOString();
   await writeFile(catalogPath, JSON.stringify(catalog, null, 2) + '\n');
   for (const reference of manifest.references) {
-    reference.previewId = byPreview.get(reference.previewId);
+    const published = byPreview.get(reference.previewId);
+    reference.previewId = published.route;
+    reference.source.attributes = { ...reference.source.attributes, componentId: published.componentId };
     for (const relative of [reference.raster.path, reference.artifact.path]) {
       // Preserve the content-addressed UID and PNG bytes; the server verifies their hashes.
       const source = await asset(relative);

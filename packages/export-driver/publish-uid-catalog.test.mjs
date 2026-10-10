@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
+import { primaryReferencesByComponentId } from './cross-system-compare.mjs';
 import { publishUidCatalog } from './publish-uid-catalog.mjs';
 
 async function fixture(t) {
@@ -81,4 +82,28 @@ test('requires explicit Gradle and repository source identities', async t => {
   args.plan.publication.sourceDirectory = 'screens/pilot';
   args.plan.publication.sourceModule = 'screens/pilot';
   await assert.rejects(publishUidCatalog(args), /logical Gradle/);
+});
+
+
+test('binds reference metadata to the published component for cross-system comparison', async t => {
+  const args = await fixture(t);
+  const path = join(args.root, 'references/index.json');
+  for (const attributes of [undefined, { componentId: 'screen', capture: 'original' }]) {
+    const manifest = JSON.parse(await readFile(path));
+    manifest.references[0].source.attributes = attributes;
+    await writeFile(path, JSON.stringify(manifest));
+    await publishUidCatalog(args);
+    const published = JSON.parse(await readFile(join(args.out, 'references/index.json')));
+    assert.equal(published.references[0].source.attributes?.componentId, 'Screen');
+    assert.deepEqual(primaryReferencesByComponentId(published).get('Screen'), { path: 'references/reference.png', previewId: published.references[0].previewId });
+    if (attributes) assert.equal(published.references[0].source.attributes.capture, 'original');
+  }
+});
+
+test('rejects missing, empty and non-string catalog titles', async t => {
+  const args = await fixture(t);
+  for (const title of [undefined, '', '  ', 42, {}]) {
+    args.plan.publication.title = title;
+    await assert.rejects(publishUidCatalog(args), /publication.title/);
+  }
 });
