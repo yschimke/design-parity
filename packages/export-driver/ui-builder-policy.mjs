@@ -116,6 +116,7 @@ export function validatePolicy(policy) {
   validateCode(policy.code, errors, warnings);
   validateFrame(policy.frame, errors, warnings);
   validateComposeSourceExport(policy.composeSourceExport, errors);
+  validateDesignTokens(policy.designTokens, errors);
 
   if (policy.newDesign !== undefined) {
     if (!isObject(policy.newDesign)) {
@@ -193,6 +194,74 @@ export function validatePolicy(policy) {
   }
 
   return { errors, warnings };
+}
+
+/**
+ * `designTokens`: what a design may re-skin. Copied verbatim into `statusSemantics.designTokens`,
+ * where the UI builder's Theme panel reads it leniently — a token with no id, an unknown kind,
+ * nothing bound or a number range the wrong way round is SKIPPED there, silently. So every one of
+ * those is an error here, before a render, rather than a token that quietly never appears.
+ */
+export const DESIGN_TOKEN_KINDS = ["color", "number"];
+
+function validateDesignTokens(designTokens, errors) {
+  if (designTokens === undefined) return;
+  if (!isObject(designTokens) || !Array.isArray(designTokens.tokens)) {
+    errors.push('"designTokens" is an object with a "tokens" list');
+    return;
+  }
+  const seen = new Set();
+  designTokens.tokens.forEach((token, index) => {
+    const where = `designTokens.tokens[${index}]`;
+    if (!isObject(token)) {
+      errors.push(`"${where}" is an object`);
+      return;
+    }
+    const id = token.id;
+    if (typeof id !== "string" || id.trim() === "") {
+      errors.push(`"${where}.id" is a non-empty string`);
+    } else if (seen.has(id)) {
+      errors.push(`design token "${id}" is declared twice; ids are unique`);
+    } else {
+      seen.add(id);
+    }
+    const name = typeof id === "string" && id ? `design token "${id}"` : `"${where}"`;
+    if (typeof token.label !== "string") errors.push(`${name} has no "label" string`);
+    if (!DESIGN_TOKEN_KINDS.includes(token.kind)) {
+      errors.push(`${name} has kind ${JSON.stringify(token.kind)}; it is one of ${DESIGN_TOKEN_KINDS.join(", ")}`);
+    }
+    let bindings = 0;
+    for (const key of ["theme", "components"]) {
+      const list = token[key];
+      if (list === undefined) continue;
+      if (!Array.isArray(list)) {
+        errors.push(`${name} "${key}" is a list of {component, property}`);
+        continue;
+      }
+      list.forEach((binding, at) => {
+        if (!isObject(binding) || typeof binding.component !== "string" || typeof binding.property !== "string") {
+          errors.push(`${name} "${key}[${at}]" is {component, property}, both strings`);
+        } else {
+          bindings++;
+        }
+      });
+    }
+    if (bindings === 0) errors.push(`${name} binds no property; give it "theme" or "components" bindings`);
+    for (const edge of ["minimum", "maximum"]) {
+      if (token[edge] !== undefined && (typeof token[edge] !== "number" || !Number.isFinite(token[edge]))) {
+        errors.push(`${name} "${edge}" is a finite number`);
+      }
+    }
+    if (token.kind === "number") {
+      if (typeof token.minimum !== "number" || typeof token.maximum !== "number") {
+        errors.push(`${name} is a number token and needs a "minimum" and a "maximum"`);
+      } else if (token.minimum >= token.maximum) {
+        errors.push(`${name} has minimum ${token.minimum} not below maximum ${token.maximum}`);
+      }
+    }
+    if (token.integer !== undefined && typeof token.integer !== "boolean") errors.push(`${name} "integer" is a boolean`);
+    if (token.notes !== undefined && typeof token.notes !== "string") errors.push(`${name} "notes" is a string`);
+  });
 }
 
 /**

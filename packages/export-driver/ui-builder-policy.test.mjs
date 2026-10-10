@@ -630,3 +630,53 @@ test("a footprint states every measure, and the sizes it names are labelled once
   policy.frame.geometry.hostShapes[0].label = 7;
   assert.match(validatePolicy(policy).errors.join("\n"), /round\/small has a non-string "label"/);
 });
+
+test("design tokens: a colour on the theme host and a ranged number on every node validate", () => {
+  const policy = {
+    ...wellFormed(),
+    designTokens: {
+      tokens: [
+        {
+          id: "color.primary",
+          label: "Primary",
+          kind: "color",
+          default: null,
+          theme: [{ component: "wear-m3/screen-scaffold", property: "themePrimaryColor" }],
+        },
+        {
+          id: "space.list",
+          label: "List spacing",
+          kind: "number",
+          default: null,
+          minimum: 0,
+          maximum: 24,
+          components: [{ component: "layout/column", property: "verticalSpacingDp" }],
+        },
+      ],
+    },
+  };
+  assert.deepEqual(codes(policy), { errors: [], warnings: [] });
+});
+
+test("design tokens: what the Theme panel would silently skip is an error here", () => {
+  const { errors } = codes({
+    ...wellFormed(),
+    designTokens: {
+      tokens: [
+        { id: "space.list", label: "List", kind: "number", minimum: 24, maximum: 0, components: [] },
+        { id: "space.list", label: "Again", kind: "color", theme: [{ component: "x" }] },
+        { label: "No id", kind: "size", components: [{ component: "a", property: "b" }] },
+      ],
+    },
+  });
+  assert.ok(errors.some((e) => e.includes('"space.list" binds no property')), errors.join("\n"));
+  assert.ok(errors.some((e) => e.includes("minimum 24 not below maximum 0")), errors.join("\n"));
+  assert.ok(errors.some((e) => e.includes("declared twice")), errors.join("\n"));
+  assert.ok(errors.some((e) => e.includes('"theme[0]" is {component, property}')), errors.join("\n"));
+  assert.ok(errors.some((e) => e.includes("designTokens.tokens[2].id")), errors.join("\n"));
+  assert.ok(errors.some((e) => e.includes('kind "size"')), errors.join("\n"));
+});
+
+test("design tokens: not an object with a tokens list is refused", () => {
+  assert.ok(codes({ ...wellFormed(), designTokens: [] }).errors.some((e) => e.includes('"designTokens" is an object')));
+});
