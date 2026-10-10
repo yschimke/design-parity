@@ -46,11 +46,23 @@ test('rejects references from another source revision', async t => {
   await assert.rejects(publishUidCatalog({ ...args, revision: 'b'.repeat(40) }), /published source revision/);
 });
 
-test('rejects missing reference binding and duplicate capture axes', async t => {
+test('rejects missing reference binding and duplicate component definitions', async t => {
   const args = await fixture(t);
   args.plan.captures[0].previewId = 'missing';
   await assert.rejects(publishUidCatalog(args), /Missing component or reference/);
   args.plan.captures[0].previewId = 'capture';
   args.plan.publication.components.push({ ...args.plan.publication.components[0] });
   await assert.rejects(publishUidCatalog(args), /unique components/);
+});
+
+
+test('rejects two captures that would overwrite the same catalog image', async t => {
+  const args = await fixture(t);
+  const manifestPath = join(args.root, 'references/index.json');
+  const manifest = JSON.parse(await readFile(manifestPath));
+  manifest.references.push({ ...manifest.references[0], id: 'second', previewId: 'second' });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  args.plan.captures.push({ ...args.plan.captures[0], previewId: 'second' });
+  await writeFile(join(args.root, 'previews/second.png'), await readFile(join(args.root, 'previews/capture.png')));
+  await assert.rejects(publishUidCatalog(args), /Duplicate catalog capture axes/);
 });
