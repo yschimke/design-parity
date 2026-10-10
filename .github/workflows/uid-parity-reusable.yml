@@ -166,7 +166,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
-          ref: 450aa951bc2d7fe00442405f55cb37705a3e1ff1
+          ref: 48bff2220cd224490448134bc984aea80ef15b82
           path: _uid_tools
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -214,7 +214,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
-          ref: 450aa951bc2d7fe00442405f55cb37705a3e1ff1
+          ref: 48bff2220cd224490448134bc984aea80ef15b82
           path: _uid_tools
           persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
