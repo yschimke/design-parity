@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.0](https://github.com/yschimke/design-parity/compare/v1.8.0...v1.9.0) (2026-10-10)
+
+
+### Features
+
+* **export-driver:** a record component can state its shelf role ([#537](https://github.com/yschimke/design-parity/issues/537)) ([43e46ac](https://github.com/yschimke/design-parity/commit/43e46ac47da1d99e7487843f478a8cd106d4a972))
+
+
+### Bug Fixes
+
+* **export-driver:** surface a rejected ui-builder guidelines file ([#535](https://github.com/yschimke/design-parity/issues/535)) ([f3a708d](https://github.com/yschimke/design-parity/commit/f3a708d10ebb026dceda0535b13ee64e8dba0fa9))
+
 ## [1.8.0](https://github.com/yschimke/design-parity/compare/v1.7.0...v1.8.0) (2026-10-09)
 
 
