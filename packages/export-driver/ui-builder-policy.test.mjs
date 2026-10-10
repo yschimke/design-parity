@@ -376,6 +376,25 @@ test("the sweep covers a record component's unrolled mock too", () => {
   assert.deepEqual(codes(ok).errors, []);
 });
 
+test("a record component states its shelf role as a builtin does", () => {
+  // Slot presence cannot say Scaffold, so `NavigationSuiteScaffold` derived as a Container.
+  const scaffold = (shelfRole) => {
+    const policy = wellFormed();
+    policy.components = {
+      "m3/navigation-suite-scaffold": {
+        record: ":catalog/NavigationSuiteScaffoldKt.NavigationSuiteScaffold",
+        ...(shelfRole === undefined ? {} : { shelfRole }),
+      },
+    };
+    return codes(policy).errors;
+  };
+  assert.deepEqual(scaffold(undefined), []);
+  for (const shelfRole of SHELF_ROLES) assert.deepEqual(scaffold(shelfRole), [], shelfRole);
+  const wrong = scaffold("scaffold");
+  assert.equal(wrong.length, 1, JSON.stringify(wrong));
+  assert.match(wrong[0], /component "m3\/navigation-suite-scaffold" names shelfRole "scaffold"/);
+});
+
 test("a templates path outside ui-builder is an error, not a shrug", async () => {
   // The pre-flight exists to catch a typo before a twenty-minute render. `UiBuilderTemplateLookup`
   // silently DROPS a path outside `ui-builder/` — that tree is what the publishing tasks declare as

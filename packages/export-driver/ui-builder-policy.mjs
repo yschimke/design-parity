@@ -259,6 +259,13 @@ function validateTypedShapes(policy, errors) {
     for (const [id, component] of Object.entries(policy.components)) {
       if (!isObject(component)) continue;
       validateUnrolled("component", id, component.unrolled, errors);
+      // The builtin field, on a record component: slot presence cannot say Scaffold, so a catalog
+      // states it. Absent asks the consumer to derive it; a word outside the set names no shelf.
+      if (component.shelfRole !== undefined && !SHELF_ROLES.includes(component.shelfRole)) {
+        errors.push(
+          `component ${JSON.stringify(id)} names shelfRole ${JSON.stringify(component.shelfRole)}; it is one of ${SHELF_ROLES.join(", ")}`,
+        );
+      }
     }
   }
   validateMenu(policy.menu, errors);
