@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
-      # v3.117.0, including native renderer, Kotlin compiler and Skiko sidecars.
-      image: ghcr.io/yschimke/compose-preview-host@sha256:7049b567e962db6a4e26d46585273cb39295b8d0924563e837fc5d20234eabb1
+      # v3.118.0 includes document-theme propagation into the native Material 3 preview.
+      image: ghcr.io/yschimke/compose-preview-host@sha256:4ce4834b91070579ff4517bd5a7ec35f651fb0903e7cc58516a4134a075c022b
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
