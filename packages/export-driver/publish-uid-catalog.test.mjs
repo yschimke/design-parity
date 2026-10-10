@@ -120,3 +120,49 @@ test('publishes the declared initial state as the catalog default so the screen 
   args.plan.publication.components[0].defaultState = 'absent';
   await assert.rejects(publishUidCatalog(args), /defaultState/);
 });
+
+async function addCapture(args, previewId, capture) {
+  const manifestPath = join(args.root, 'references/index.json');
+  const manifest = JSON.parse(await readFile(manifestPath));
+  manifest.references.unshift({ ...manifest.references[0], id: previewId, previewId,
+    raster: { ...manifest.references[0].raster, path: `references/${previewId}.png` } });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  await writeFile(join(args.root, `references/${previewId}.png`), await readFile(join(args.root, 'references/reference.png')));
+  await writeFile(join(args.root, `previews/${previewId}.png`), await readFile(join(args.root, 'previews/capture.png')));
+  args.plan.captures.unshift({ ...args.plan.captures[0], previewId, ...capture });
+}
+
+test('a non-default state listed first is a secondary reference, not the DESIGN column', async t => {
+  const args = await fixture(t);
+  await addCapture(args, 'detail', { state: 'detail' });
+  await publishUidCatalog(args);
+  const published = JSON.parse(await readFile(join(args.out, 'references/index.json')));
+  assert.equal(published.references[0].source.attributes.componentId, 'Screen');
+  assert.equal(published.references[0].tier, 'secondary');
+  assert.deepEqual(published.references[0].slot, { state: 'detail', theme: 'light', size: '2dp' });
+  assert.equal(published.references[1].tier, 'primary');
+  assert.deepEqual(primaryReferencesByComponentId(published).get('Screen'),
+    { path: 'references/reference.png', previewId: 'screen__ideal__default__light__2dp' });
+});
+
+test('captures that share a width publish under explicit size axes', async t => {
+  const args = await fixture(t);
+  await addCapture(args, 'tall', { heightDp: 6, size: '2x6dp' });
+  await writeFile(join(args.root, 'previews/tall.png'), PNG.sync.write(new PNG({ width: 2, height: 6 })));
+  const result = await publishUidCatalog(args);
+  assert.deepEqual(result.previews.sort(), ['screen__ideal__default__light__2dp', 'screen__ideal__default__light__2x6dp']);
+  args.plan.captures[0].size = '../escape';
+  await assert.rejects(publishUidCatalog(args), /path-safe/);
+});
+
+test('reference assets cannot overwrite the catalog or the reference manifest', async t => {
+  for (const path of ['catalog.json', 'references/index.json']) {
+    const args = await fixture(t);
+    await writeFile(join(args.root, 'catalog.json'), '{}');
+    const manifestPath = join(args.root, 'references/index.json');
+    const manifest = JSON.parse(await readFile(manifestPath));
+    manifest.references[0].raster.path = path;
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await assert.rejects(publishUidCatalog(args), /under references\//);
+  }
+});
