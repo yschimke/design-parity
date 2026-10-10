@@ -52,6 +52,30 @@ class ArtifactsTest(unittest.TestCase):
                                 env={**os.environ, 'BUILD_COMMAND': 'false | true'}, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_catalog_artifacts_are_scoped_and_rerunnable(self):
+        for attempt in ('first', 'retry'):
+            for job in ('candidate', 'references', 'compare', 'catalog', 'publish'):
+                for pilot in ('phone', 'tablet'):
+                    self.transfer(job, pilot, attempt)
+        self.assertEqual(len(self.artifacts), 12)
+
+    def test_only_default_branch_publisher_can_write(self):
+        self.assertEqual(self.workflow['permissions'], {'contents': 'read'})
+        jobs = self.workflow['jobs']
+        for name, job in jobs.items():
+            if name != 'publish':
+                self.assertNotEqual(job.get('permissions', {}).get('contents'), 'write')
+        publish = jobs['publish']
+        self.assertEqual(publish['permissions'], {'contents': 'write'})
+        self.assertIn("github.event_name == 'push'", publish['if'])
+        self.assertIn('github.event.repository.default_branch', publish['if'])
+        self.assertNotIn('pull_request', publish['if'])
+        for step in publish['steps']:
+            if step.get('uses', '').startswith('actions/checkout@'):
+                self.assertIn(step['with']['repository'], ('yschimke/design-parity', 'yschimke/compose-ai-tools'))
+                self.assertRegex(step['with']['ref'], r'^[0-9a-f]{40}$')
+                self.assertFalse(step['with']['persist-credentials'])
+
 
 if __name__ == '__main__':
     unittest.main()
