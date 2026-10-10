@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/compose-preview-server
-          ref: 091600e10ea5579b944f59be2d216aac2a62e0ea
+          ref: 305667b81c887684d78b5fff4cc3b0698b6bceb2
           path: _preview_server
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -166,7 +166,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/design-parity
-          ref: 48bff2220cd224490448134bc984aea80ef15b82
+          ref: 430e02654a3cad87caecd2a377264fba73fd10b8
           path: _uid_tools
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
