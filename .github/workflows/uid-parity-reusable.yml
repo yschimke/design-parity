@@ -7,9 +7,13 @@ on:
   workflow_call:
     inputs:
       pilot-directory:
-        description: Directory containing references.json, ci helpers, package.py and build/pilot.
+        description: Directory containing references.json, UID documents and build/pilot.
         type: string
         required: true
+      bundle-name:
+        description: Output zip basename (without extension).
+        type: string
+        default: screens
       build-command:
         description: Caller-owned command that checks interactions and writes build/pilot/previews.
         type: string
@@ -28,6 +32,7 @@ permissions:
 
 env:
   PILOT_DIR: ${{ inputs.pilot-directory }}
+  BUNDLE_NAME: ${{ inputs.bundle-name }}
   ARTIFACT_PREFIX: ${{ inputs.artifact-prefix }}
 
 jobs:
@@ -76,7 +81,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: yschimke/compose-preview-server
-          ref: 312e6676ce4c933c8955f9855e1b1f6d1b9623f0
+          ref: 091600e10ea5579b944f59be2d216aac2a62e0ea
           path: _preview_server
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -85,7 +90,7 @@ jobs:
       - name: Render committed UID references independently
         run: |
           set +e
-          sh "$PILOT_DIR/ci/native-references.sh" "$PILOT_DIR" > native-reference.log 2>&1
+          sh _preview_server/scripts/ui-builder/render-ci-references.sh "$PILOT_DIR" > native-reference.log 2>&1
           result=$?
           cat native-reference.log
           if [ "$result" -ne 0 ]; then
@@ -107,6 +112,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: yschimke/design-parity
+          ref: ed4612aa297cf65534787ac89417e7caee03be86
+          path: _uid_tools
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
@@ -119,11 +130,10 @@ jobs:
         with:
           name: ${{ inputs.artifact-prefix }}-references
           path: ${{ inputs.pilot-directory }}/build/pilot/references
-      - run: python -m unittest discover -s "$PILOT_DIR/ci" -p 'test_*.py'
       - name: Produce pixel diffs and validate bundle
         run: |
-          python "$PILOT_DIR/ci/evidence.py" --plan "$PILOT_DIR/references.json" --root "$PILOT_DIR/build/pilot"
-          python "$PILOT_DIR/package.py"
+          python _uid_tools/scripts/uid/evidence.py --plan "$PILOT_DIR/references.json" --root "$PILOT_DIR/build/pilot"
+          python _uid_tools/scripts/uid/package.py --pilot-directory "$PILOT_DIR" --output "$PILOT_DIR/build/$BUNDLE_NAME.zip"
           printf 'Download %s-evidence and open index.html: UID reference, exact pixel diff, Compose actual. Changed pixels are advisory; missing or invalid evidence fails this job.\n' "$ARTIFACT_PREFIX" >> "$GITHUB_STEP_SUMMARY"
           cat "$PILOT_DIR/build/pilot/evidence.json" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

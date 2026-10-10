@@ -26,6 +26,7 @@ jobs:
     uses: yschimke/design-parity/.github/workflows/uid-parity-reusable.yml@<reviewed-commit-sha>
     with:
       pilot-directory: adaptive-uid-pilot
+      bundle-name: screens
       build-command: >-
         ./gradlew -PadaptiveUidPilot=true
         :adaptive-uid-pilot:ktfmtCheck
@@ -45,20 +46,26 @@ Relative to `pilot-directory`:
 - `build/pilot/previews/*.png`: written by `build-command`.
 - `build/reports/tests/`: optional test-report artifact.
 - `references.json`: committed capture plan.
-- `ci/native-references.sh`: invoked with the pilot directory as its first
-  argument from the repository root, inside the pinned native renderer image.
-  `_preview_server` contains the matching pinned reference publisher. The script
-  writes `build/pilot/references/` including its index and UID documents.
-- `ci/test_*.py`: validation tests, run before comparison/packaging.
-- `ci/evidence.py --plan PATH --root PATH`: validates the expected captures and
-  writes `index.html`, `evidence.json` and diff PNGs below `build/pilot/`.
-- `package.py`: validates and writes the preview-server zip below `build/`.
+- UID documents referenced by the plan.
 
-The current Home Assistant and MeshCore helpers intentionally enforce their
-specific eight-capture matrix, 840dp distinct tablet selections, and 1800px cap.
-They remain app-owned; this extraction does not turn those pilot assertions into
-universal parity policy. Pixel changes remain advisory; missing or invalid
-captures, duplicate tablet states and invalid packages fail the job.
+The workflow pins the shared tools in [`scripts/uid`](../scripts/uid/README.md)
+and the server's `scripts/ui-builder/render-ci-references.sh`. Consumers do not
+copy either implementation or the renderer dependency pins. `bundle-name`
+(default `screens`) chooses the zip basename under `build/`.
+
+The plan is authoritative for capture count, dimensions, theme and state.
+`distinctCaptures` lists pairs of preview IDs that must produce different images
+in both the app and UID lanes. For example:
+
+```json
+"distinctCaptures": [["tablet-list-light", "tablet-detail-light"]]
+```
+
+This preserves each pilot's selection coverage without hard-coding eight captures
+or an 840dp breakpoint in shared validation. The 1800px image cap remains.
+Pixel changes are advisory; missing/invalid captures, declared duplicate states
+and invalid packages fail the job. Shared tool tests run in this repository's UID
+workflow tests, rather than being copied into each app.
 
 Artifacts keep their existing names: `adaptive-uid-candidates`,
 `adaptive-uid-tests`, `adaptive-uid-references`, `adaptive-uid-evidence`, and
