@@ -98,3 +98,38 @@ and `-e -o pipefail`. Passing it via an environment variable preserves the text;
 it is not input sanitization. Do not interpolate PR titles, bodies, branch names
 or other untrusted metadata into this command. Use separately quoted data inputs
 inside a committed build script when those values are needed.
+
+## Publish a UID-backed catalog
+
+A caller can set `publish-catalog: true` and grant its reusable-workflow job
+`contents: write`. Catalog generation runs on PRs as a downloadable
+`<artifact-prefix>-catalog` artifact; publication runs only for a push or manual
+run on the repository's default branch. Candidate rendering, reference rendering,
+comparison, and catalog generation retain read-only permissions. Only the final
+publisher receives a write token, and it runs pinned shared tooling.
+
+Add publication metadata to the committed `references.json` plan:
+
+```json
+{
+  "publication": {
+    "system": "my-app-uid",
+    "title": "My app designs",
+    "sourceModule": "adaptive-uid-pilot",
+    "components": [{
+      "designId": "browser",
+      "componentId": "Browser",
+      "sourceFile": "src/main/kotlin/example/Browser.kt"
+    }]
+  }
+}
+```
+
+The shared export driver writes the canonical `catalog.json`, remaps reference
+bindings to canonical sticker IDs, and preserves the captured UID and PNG bytes.
+`sourceModule` is the repository-relative module directory. Publication appends to
+`design-artifacts/<system>` using compose-ai-tools' shared branch publisher. Register
+that delivery branch in a preview server's catalogs configuration to browse the
+candidate, UID reference, diff, source, and UI Builder handoff. Hosting is optional;
+CI artifacts remain usable without a server. A separate system ID can keep an
+experimental app screen alongside an existing full app catalog.
