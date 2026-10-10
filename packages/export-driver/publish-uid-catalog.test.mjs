@@ -1,0 +1,122 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { PNG } from 'pngjs';
+import { primaryReferencesByComponentId } from './cross-system-compare.mjs';
+import { publishUidCatalog } from './publish-uid-catalog.mjs';
+
+async function fixture(t) {
+  const root = await mkdtemp(join(tmpdir(), 'uid-catalog-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'references'));
+  await mkdir(join(root, 'previews'));
+  const png = PNG.sync.write(new PNG({ width: 2, height: 3 }));
+  await writeFile(join(root, 'previews/capture.png'), png);
+  await writeFile(join(root, 'references/reference.png'), png);
+  await writeFile(join(root, 'references/design.uid'), '{"id":"screen"}');
+  const revision = 'a'.repeat(40);
+  const reference = { id: 'capture', previewId: 'capture', source: { provider: 'ui-builder', revision },
+    raster: { path: 'references/reference.png', width: 2, height: 3 }, artifact: { kind: 'uid', path: 'references/design.uid' } };
+  await writeFile(join(root, 'references/index.json'), JSON.stringify({ schema: 'compose-preview-references/v1', references: [reference] }));
+  const plan = { repository: 'example/app', publication: { system: 'app-uid', title: 'App design', sourceModule: ':pilot', sourceDirectory: 'screens/pilot',
+    components: [{ designId: 'screen', componentId: 'Screen', defaultState: 'list', sourceFile: 'src/Screen.kt' }] },
+    captures: [{ previewId: 'capture', designId: 'screen', widthDp: 2, heightDp: 3, density: 1, theme: 'light', state: 'list' }] };
+  return { root, out: join(root, 'out'), plan, revision };
+}
+
+test('canonical catalog IDs bind UID references and preserve source navigation and bytes', async t => {
+  const args = await fixture(t);
+  const result = await publishUidCatalog(args);
+  assert.equal(result.references, 1);
+  const catalog = JSON.parse(await readFile(join(args.out, 'catalog.json')));
+  const references = JSON.parse(await readFile(join(args.out, 'references/index.json')));
+  const component = catalog.components[0];
+  assert.equal(component.sourceFile, 'src/Screen.kt');
+  assert.equal(component.sourceDirectory, 'screens/pilot');
+  assert.deepEqual(catalog.source, { repo: 'example/app', ref: args.revision, module: ':pilot' });
+  assert.equal(references.references[0].previewId, result.previews[0]);
+  assert.equal(result.previews[0], 'screen__ideal__default__light__2dp');
+  for (const path of ['references/design.uid', 'references/reference.png'])
+    assert.deepEqual(await readFile(join(args.root, path)), await readFile(join(args.out, path)));
+});
+
+test('rejects references from another source revision', async t => {
+  const args = await fixture(t);
+  await assert.rejects(publishUidCatalog({ ...args, revision: 'b'.repeat(40) }), /published source revision/);
+});
+
+test('rejects missing reference binding and duplicate component definitions', async t => {
+  const args = await fixture(t);
+  args.plan.captures[0].previewId = 'missing';
+  await assert.rejects(publishUidCatalog(args), /Missing component or reference/);
+  args.plan.captures[0].previewId = 'capture';
+  args.plan.publication.components.push({ ...args.plan.publication.components[0] });
+  await assert.rejects(publishUidCatalog(args), /unique designId and componentId/);
+});
+
+
+test('rejects two captures that would overwrite the same catalog image', async t => {
+  const args = await fixture(t);
+  const manifestPath = join(args.root, 'references/index.json');
+  const manifest = JSON.parse(await readFile(manifestPath));
+  manifest.references.push({ ...manifest.references[0], id: 'second', previewId: 'second' });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  args.plan.captures.push({ ...args.plan.captures[0], previewId: 'second' });
+  await writeFile(join(args.root, 'previews/second.png'), await readFile(join(args.root, 'previews/capture.png')));
+  await assert.rejects(publishUidCatalog(args), /Duplicate catalog capture axes/);
+});
+
+
+test('rejects duplicate published component IDs across different designs', async t => {
+  const args = await fixture(t);
+  args.plan.publication.components.push({ ...args.plan.publication.components[0], designId: 'another' });
+  await assert.rejects(publishUidCatalog(args), /unique designId and componentId/);
+});
+
+test('requires explicit Gradle and repository source identities', async t => {
+  const args = await fixture(t);
+  delete args.plan.publication.sourceDirectory;
+  await assert.rejects(publishUidCatalog(args), /sourceDirectory/);
+  args.plan.publication.sourceDirectory = 'screens/pilot';
+  args.plan.publication.sourceModule = 'screens/pilot';
+  await assert.rejects(publishUidCatalog(args), /logical Gradle/);
+});
+
+
+test('binds reference metadata to the published component for cross-system comparison', async t => {
+  const args = await fixture(t);
+  const path = join(args.root, 'references/index.json');
+  for (const attributes of [undefined, { componentId: 'screen', capture: 'original' }]) {
+    const manifest = JSON.parse(await readFile(path));
+    manifest.references[0].source.attributes = attributes;
+    await writeFile(path, JSON.stringify(manifest));
+    await publishUidCatalog(args);
+    const published = JSON.parse(await readFile(join(args.out, 'references/index.json')));
+    assert.equal(published.references[0].source.attributes?.componentId, 'Screen');
+    assert.deepEqual(primaryReferencesByComponentId(published).get('Screen'), { path: 'references/reference.png', previewId: published.references[0].previewId });
+    if (attributes) assert.equal(published.references[0].source.attributes.capture, 'original');
+  }
+});
+
+test('rejects missing, empty and non-string catalog titles', async t => {
+  const args = await fixture(t);
+  for (const title of [undefined, '', '  ', 42, {}]) {
+    args.plan.publication.title = title;
+    await assert.rejects(publishUidCatalog(args), /publication.title/);
+  }
+});
+
+
+test('publishes the declared initial state as the catalog default so the screen is listed', async t => {
+  const args = await fixture(t);
+  args.plan.publication.components[0].defaultState = 'list';
+  await publishUidCatalog(args);
+  const catalog = JSON.parse(await readFile(join(args.out, 'catalog.json')));
+  assert.equal(catalog.components[0].images[0].state, 'default');
+  const manifest = JSON.parse(await readFile(join(args.out, 'references/index.json')));
+  assert.equal(manifest.references[0].previewId, 'screen__ideal__default__light__2dp');
+  args.plan.publication.components[0].defaultState = 'absent';
+  await assert.rejects(publishUidCatalog(args), /defaultState/);
+});

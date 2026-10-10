@@ -98,3 +98,50 @@ and `-e -o pipefail`. Passing it via an environment variable preserves the text;
 it is not input sanitization. Do not interpolate PR titles, bodies, branch names
 or other untrusted metadata into this command. Use separately quoted data inputs
 inside a committed build script when those values are needed.
+
+## Add UID references to an existing app catalog
+
+Set `export-catalog: true` to export `<artifact-prefix>-catalog`: a prepared section
+containing the candidate PNGs, captured UID documents, and native reference PNGs.
+This read-only workflow never writes a delivery branch or registers another catalog.
+The app's existing design-artifacts workflow consumes the artifact through
+`catalog-section-artifact` and folds it into `catalog-section: Screens` before its
+normal publisher runs. The primary catalog retains its identity, themes, live
+bundles, existing screens and references.
+
+Add publication metadata to the committed `references.json` plan. Use the app's
+existing catalog system ID:
+
+```json
+{
+  "repository": "my-org/my-app",
+  "publication": {
+    "system": "my-app",
+    "title": "My app",
+    "sourceModule": ":adaptive-uid-pilot",
+    "sourceDirectory": "adaptive-uid-pilot",
+    "components": [{
+      "designId": "browser",
+      "componentId": "Browser",
+      "defaultState": "list",
+      "sourceFile": "src/main/kotlin/example/Browser.kt"
+    }]
+  }
+}
+```
+
+`sourceModule` is the logical Gradle project path; `sourceDirectory` is its
+repository-relative directory (an empty string for the root project). Components
+and capture axes must have distinct identities. The canonical catalog writer
+supplies sticker IDs and the existing section merger preserves reference bindings
+while combining reference manifests. Duplicate reference IDs with different data
+fail publication instead of silently replacing another screen's reference.
+
+Have the existing design-artifacts caller invoke the app's pilot workflow with
+`workflow_call`, then pass its artifact to the shared catalog publisher. Both jobs
+render the same source commit. Include the pilot's files in that caller's push
+paths so UID edits republish the existing catalog. PR runs keep their downloadable
+evidence and prepared section; main publishes through the existing delivery branch.
+Hosting remains optional: all CI artifacts work without a preview server.
+
+`defaultState` names the captured initial state (for example `list`). The exporter maps it to the canonical catalog `default` state so the screen appears in the catalog listing; other states remain selectable variants. Omitting it requires a capture already named `default`.

@@ -52,6 +52,19 @@ class ArtifactsTest(unittest.TestCase):
                                 env={**os.environ, 'BUILD_COMMAND': 'false | true'}, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_catalog_artifacts_are_scoped_and_rerunnable(self):
+        for attempt in ('first', 'retry'):
+            for job in ('candidate', 'references', 'compare', 'catalog'):
+                for pilot in ('phone', 'tablet'):
+                    self.transfer(job, pilot, attempt)
+        self.assertEqual(len(self.artifacts), 12)
+
+    def test_catalog_export_never_writes_a_delivery_branch(self):
+        self.assertEqual(self.workflow['permissions'], {'contents': 'read'})
+        self.assertNotIn('publish', self.workflow['jobs'])
+        for job in self.workflow['jobs'].values():
+            self.assertNotEqual(job.get('permissions', {}).get('contents'), 'write')
+
 
 if __name__ == '__main__':
     unittest.main()

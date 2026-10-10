@@ -37,7 +37,7 @@
  * re-themed pixels already carry the host palette — a token-set union is a
  * possible fast-follow). componentIds must not collide across the two catalogs.
  */
-import { parseArgs } from "node:util";
+import { parseArgs, isDeepStrictEqual } from "node:util";
 import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -114,6 +114,36 @@ async function sameBytes(a, b) {
  * the folded section's components become tabs in the host, so their annotations
  * belong alongside the host's rather than replacing or blocking them.
  */
+// Reference manifests bind design sources to the served preview IDs. A section can
+// carry UID references alongside the primary catalog's Figma/HTML references.
+const REFERENCES_REL = join("references", "index.json");
+
+export function mergeReferenceManifests(primary, borrowed) {
+  const schema = "compose-preview-references/v1";
+  for (const manifest of [primary, borrowed]) {
+    if (manifest && (manifest.schema !== schema || !Array.isArray(manifest.references)))
+      throw new Error("merge-catalog-section: invalid design reference manifest");
+  }
+  const byId = new Map();
+  for (const reference of [...(primary?.references ?? []), ...(borrowed?.references ?? [])]) {
+    if (!reference.id) throw new Error("merge-catalog-section: design reference needs an id");
+    if (byId.has(reference.id) && !isDeepStrictEqual(byId.get(reference.id), reference))
+      throw new Error(`merge-catalog-section: conflicting design reference '${reference.id}'`);
+    byId.set(reference.id, reference);
+  }
+  return { ...(primary ?? borrowed), schema, references: [...byId.values()] };
+}
+
+async function mergeReferenceFiles(src, dest) {
+  let primary;
+  try { primary = JSON.parse(await readFile(dest, "utf8")); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+  const borrowed = JSON.parse(await readFile(src, "utf8"));
+  const merged = mergeReferenceManifests(primary, borrowed);
+  await mkdir(dirname(dest), { recursive: true });
+  await writeFile(dest, JSON.stringify(merged, null, 2) + "\n");
+}
+
 const ANNOTATIONS_REL = join("annotations", "index.json");
 
 /**
@@ -191,6 +221,11 @@ async function copyAssets(fromDir, intoDir) {
     // …and so is everything under `themes/`, nested though it is — see THEMES_DIR.
     if (rel.split(sep)[0] === THEMES_DIR) continue;
     const dest = join(intoDir, rel);
+    if (rel === REFERENCES_REL) {
+      await mergeReferenceFiles(src, dest);
+      copied += 1;
+      continue;
+    }
     if (rel === ANNOTATIONS_REL) {
       await mergeIdKeyedManifests(src, dest, ["previews", "references"]);
       copied += 1;
@@ -223,12 +258,17 @@ async function copyAssets(fromDir, intoDir) {
  * [section]. Reads both `catalog.json`s, copies the borrowed assets in, and
  * rewrites `<into>/catalog.json`. Returns `{ componentsAdded, filesCopied }`.
  */
-export async function mergeCatalogSection({ into, from, section, groupPrefix }) {
+export async function mergeCatalogSection({ into, from, section, groupPrefix, requireSameSource = false }) {
   const intoDir = resolve(into);
   const fromDir = resolve(from);
   const primary = JSON.parse(await readFile(join(intoDir, "catalog.json"), "utf8"));
   const borrowed = JSON.parse(await readFile(join(fromDir, "catalog.json"), "utf8"));
 
+  if (requireSameSource && (primary.system !== borrowed.system ||
+      !primary.source?.repo || primary.source.repo !== borrowed.source?.repo ||
+      !/^[a-f0-9]{40}$/.test(primary.source?.ref ?? '') || primary.source.ref !== borrowed.source?.ref)) {
+    throw new Error("merge-catalog-section: prepared section must match the primary system, repository and source commit");
+  }
   const merged = mergeManifests(primary, borrowed, { section, groupPrefix });
   const filesCopied = await copyAssets(fromDir, intoDir);
   await writeFile(
@@ -247,6 +287,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       from: { type: "string" },
       section: { type: "string" },
       "group-prefix": { type: "string" },
+      "require-same-source": { type: "boolean", default: false },
     },
   });
   if (!values.into || !values.from || !values.section) {
@@ -261,6 +302,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     from: values.from,
     section: values.section,
     groupPrefix: values["group-prefix"],
+    requireSameSource: values["require-same-source"],
   });
   console.log(
     `[merge-catalog-section] folded ${componentsAdded} component(s) into ` +
