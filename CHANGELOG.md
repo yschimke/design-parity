@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.0](https://github.com/yschimke/design-parity/compare/v1.9.0...v1.10.0) (2026-10-10)
+
+
+### Features
+
+* add UID references to existing app catalogs ([#541](https://github.com/yschimke/design-parity/issues/541)) ([0398335](https://github.com/yschimke/design-parity/commit/0398335d32a3809b0bb95a3dc1c97e0bf4eb5077))
+
+
+### Bug Fixes
+
+* render UID references with their declared theme ([#544](https://github.com/yschimke/design-parity/issues/544)) ([af2f6a3](https://github.com/yschimke/design-parity/commit/af2f6a34342d5cfa5db2c00cd66ba46ca6e375eb))
+
 ## [1.9.0](https://github.com/yschimke/design-parity/compare/v1.8.0...v1.9.0) (2026-10-10)
 
 
