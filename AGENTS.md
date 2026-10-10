@@ -39,6 +39,12 @@ bake hosted assumptions (a central API, remote storage, a tenant id) into
 
 ## Conventions
 
+- **Merge only when explicitly requested.** Only merge a PR or enable auto-merge
+  when the user specifically asks. If the request or intended PRs are unclear,
+  ask for clarification before merging. A request to implement, fix, review,
+  or open a PR does not by itself authorize merging. Honor required checks,
+  reviews, and branch protections.
+
 - **Conventional commits** (`feat:`, `fix:`, `docs:`, `test:`, `chore:`) for
   commit subjects and PR titles.
 - **One issue = one branch + one PR.** Open the PR when the issue's acceptance
