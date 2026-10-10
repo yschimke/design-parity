@@ -368,3 +368,41 @@ test("a folded catalog cannot redefine tag geometry the host already published",
   const merged = JSON.parse(await readFile(join(into, "tags/index.json"), "utf8"));
   assert.equal(merged.previews.shared__id.submit.count, 1);
 });
+
+test('a prepared UID screen joins the existing catalog without replacing its references or identity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'uid-section-'));
+  const into = join(root, 'primary'), from = join(root, 'section');
+  for (const dir of [into, from]) await mkdir(join(dir, 'references'), { recursive: true });
+  const primary = { ...manifest([comp('Existing')]), source: { repo: 'owner/app', ref: 'a'.repeat(40), module: ':app' },
+    themes: [{ id: 'app-theme' }], liveBundle: { path: 'bundle', file: 'app.png' } };
+  const borrowed = { ...manifest([comp('Adaptive', { sourceModule: ':pilot', sourceDirectory: 'screens/pilot', sourceFile: 'src/Screen.kt' })]),
+    source: { ...primary.source, module: ':pilot' } };
+  const original = { id: 'figma-reference', previewId: 'existing', source: { provider: 'figma' }, raster: { path: 'references/original.png' } };
+  const uid = { id: 'uid-reference', previewId: 'adaptive', source: { provider: 'ui-builder' }, raster: { path: 'references/uid.png' }, artifact: { kind: 'uid', path: 'references/screen.uid' } };
+  await writeFile(join(into, 'catalog.json'), JSON.stringify(primary));
+  await writeFile(join(from, 'catalog.json'), JSON.stringify(borrowed));
+  await writeFile(join(into, 'references/index.json'), JSON.stringify({ schema: 'compose-preview-references/v1', references: [original] }));
+  await writeFile(join(from, 'references/index.json'), JSON.stringify({ schema: 'compose-preview-references/v1', references: [uid] }));
+  await writeFile(join(into, 'references/original.png'), 'original pixels');
+  await writeFile(join(from, 'references/uid.png'), 'UID pixels');
+  await writeFile(join(from, 'references/screen.uid'), '{"id":"screen"}');
+  await mergeCatalogSection({ into, from, section: 'Screens' });
+  const merged = JSON.parse(await readFile(join(into, 'catalog.json')));
+  assert.deepEqual({ ...merged, components: primary.components }, primary);
+  assert.equal(merged.components[1].sourceDirectory, 'screens/pilot');
+  assert.equal(merged.components[1].sourceModule, ':pilot');
+  assert.equal(merged.components[1].section, 'Screens');
+  const refs = JSON.parse(await readFile(join(into, 'references/index.json')));
+  assert.deepEqual(refs.references, [original, uid]);
+  assert.equal(await readFile(join(into, 'references/original.png'), 'utf8'), 'original pixels');
+  assert.equal(await readFile(join(into, 'references/screen.uid'), 'utf8'), '{"id":"screen"}');
+});
+
+test('reference merging rejects conflicting IDs instead of hiding an existing design', async () => {
+  const { mergeReferenceManifests } = await import('./merge-catalog-section.mjs');
+  const manifest = references => ({ schema: 'compose-preview-references/v1', references });
+  const first = { id: 'reference', previewId: 'first' };
+  assert.throws(() => mergeReferenceManifests(manifest([first]), manifest([{ ...first, previewId: 'second' }])), /conflicting design reference/);
+  assert.deepEqual(mergeReferenceManifests(manifest([first]), manifest([first])), manifest([first]));
+  assert.throws(() => mergeReferenceManifests(manifest([]), { schema: 'invalid', references: [] }), /invalid design reference/);
+});

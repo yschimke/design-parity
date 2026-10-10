@@ -99,23 +99,25 @@ it is not input sanitization. Do not interpolate PR titles, bodies, branch names
 or other untrusted metadata into this command. Use separately quoted data inputs
 inside a committed build script when those values are needed.
 
-## Publish a UID-backed catalog
+## Add UID references to an existing app catalog
 
-A caller can set `publish-catalog: true` and grant its reusable-workflow job
-`contents: write`. Catalog generation runs on PRs as a downloadable
-`<artifact-prefix>-catalog` artifact; publication runs only for a push or manual
-run on the repository's default branch. Candidate rendering, reference rendering,
-comparison, and catalog generation retain read-only permissions. Only the final
-publisher receives a write token, and it runs pinned shared tooling.
+Set `export-catalog: true` to export `<artifact-prefix>-catalog`: a prepared section
+containing the candidate PNGs, captured UID documents, and native reference PNGs.
+This read-only workflow never writes a delivery branch or registers another catalog.
+The app's existing design-artifacts workflow consumes the artifact through
+`catalog-section-artifact` and folds it into `catalog-section: Screens` before its
+normal publisher runs. The primary catalog retains its identity, themes, live
+bundles, existing screens and references.
 
-Add publication metadata to the committed `references.json` plan:
+Add publication metadata to the committed `references.json` plan. Use the app's
+existing catalog system ID:
 
 ```json
 {
   "repository": "my-org/my-app",
   "publication": {
-    "system": "my-app-uid",
-    "title": "My app designs",
+    "system": "my-app",
+    "title": "My app",
     "sourceModule": ":adaptive-uid-pilot",
     "sourceDirectory": "adaptive-uid-pilot",
     "components": [{
@@ -127,13 +129,16 @@ Add publication metadata to the committed `references.json` plan:
 }
 ```
 
-The shared export driver writes the canonical `catalog.json`, remaps reference
-bindings to canonical sticker IDs, and preserves the captured UID and PNG bytes.
-`repository` is the source GitHub repository. `sourceModule` is the logical Gradle
-project path (for example `:pilot`); `sourceDirectory` is its repository-relative
-directory (for example `screens/pilot`, or an empty string for the root project). Publication appends to
-`design-artifacts/<system>` using compose-ai-tools' shared branch publisher. Register
-that delivery branch in a preview server's catalogs configuration to browse the
-candidate, UID reference, diff, source, and UI Builder handoff. Hosting is optional;
-CI artifacts remain usable without a server. A separate system ID can keep an
-experimental app screen alongside an existing full app catalog.
+`sourceModule` is the logical Gradle project path; `sourceDirectory` is its
+repository-relative directory (an empty string for the root project). Components
+and capture axes must have distinct identities. The canonical catalog writer
+supplies sticker IDs and the existing section merger preserves reference bindings
+while combining reference manifests. Duplicate reference IDs with different data
+fail publication instead of silently replacing another screen's reference.
+
+Have the existing design-artifacts caller invoke the app's pilot workflow with
+`workflow_call`, then pass its artifact to the shared catalog publisher. Both jobs
+render the same source commit. Include the pilot's files in that caller's push
+paths so UID edits republish the existing catalog. PR runs keep their downloadable
+evidence and prepared section; main publishes through the existing delivery branch.
+Hosting remains optional: all CI artifacts work without a preview server.
