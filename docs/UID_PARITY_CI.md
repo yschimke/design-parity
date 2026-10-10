@@ -62,8 +62,13 @@ captures, duplicate tablet states and invalid packages fail the job.
 
 Artifacts keep their existing names: `adaptive-uid-candidates`,
 `adaptive-uid-tests`, `adaptive-uid-references`, `adaptive-uid-evidence`, and
-`adaptive-uid-bundle`. Use one invocation per workflow run; separate invocations
-in the same run would collide on these names. Download `adaptive-uid-evidence`
+`adaptive-uid-bundle` by default. For multiple calls or a matrix, set a distinct
+`artifact-prefix` per pilot (for example `phone-uid` and `wear-uid`). Every upload
+and download uses that prefix, and the matching audit must set
+`evidence-artifact: <prefix>-evidence` and a distinct `audit-artifact`.
+Uploads replace an existing artifact of the same name on retries. Different
+pilots must still use different prefixes; overwriting is not isolation.
+Download `<prefix>-evidence`
 and open `index.html` to inspect reference / exact pixel diff / actual.
 
 ## Optional model audit
@@ -80,3 +85,9 @@ it. On first adoption, merge the shared workflows before the app callers and pin
 those callers to commits that remain available. A provider branch SHA can be used
 to exercise a consumer PR before merging; update it to the landed revision when
 adopting the shared workflow.
+
+`build-command` is trusted shell code supplied by the caller, executed with Bash
+and `-e -o pipefail`. Passing it via an environment variable preserves the text;
+it is not input sanitization. Do not interpolate PR titles, bodies, branch names
+or other untrusted metadata into this command. Use separately quoted data inputs
+inside a committed build script when those values are needed.
