@@ -386,7 +386,10 @@ test('a prepared UID screen joins the existing catalog without replacing its ref
   await writeFile(join(into, 'references/original.png'), 'original pixels');
   await writeFile(join(from, 'references/uid.png'), 'UID pixels');
   await writeFile(join(from, 'references/screen.uid'), '{"id":"screen"}');
-  await mergeCatalogSection({ into, from, section: 'Screens' });
+  await writeFile(join(from, 'catalog.json'), JSON.stringify({ ...borrowed, source: { ...borrowed.source, ref: 'b'.repeat(40) } }));
+  await assert.rejects(mergeCatalogSection({ into, from, section: 'Screens', requireSameSource: true }), /source commit/);
+  await writeFile(join(from, 'catalog.json'), JSON.stringify(borrowed));
+  await mergeCatalogSection({ into, from, section: 'Screens', requireSameSource: true });
   const merged = JSON.parse(await readFile(join(into, 'catalog.json')));
   assert.deepEqual({ ...merged, components: primary.components }, primary);
   assert.equal(merged.components[1].sourceDirectory, 'screens/pilot');

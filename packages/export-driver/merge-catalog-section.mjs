@@ -258,12 +258,17 @@ async function copyAssets(fromDir, intoDir) {
  * [section]. Reads both `catalog.json`s, copies the borrowed assets in, and
  * rewrites `<into>/catalog.json`. Returns `{ componentsAdded, filesCopied }`.
  */
-export async function mergeCatalogSection({ into, from, section, groupPrefix }) {
+export async function mergeCatalogSection({ into, from, section, groupPrefix, requireSameSource = false }) {
   const intoDir = resolve(into);
   const fromDir = resolve(from);
   const primary = JSON.parse(await readFile(join(intoDir, "catalog.json"), "utf8"));
   const borrowed = JSON.parse(await readFile(join(fromDir, "catalog.json"), "utf8"));
 
+  if (requireSameSource && (primary.system !== borrowed.system ||
+      !primary.source?.repo || primary.source.repo !== borrowed.source?.repo ||
+      !/^[a-f0-9]{40}$/.test(primary.source?.ref ?? '') || primary.source.ref !== borrowed.source?.ref)) {
+    throw new Error("merge-catalog-section: prepared section must match the primary system, repository and source commit");
+  }
   const merged = mergeManifests(primary, borrowed, { section, groupPrefix });
   const filesCopied = await copyAssets(fromDir, intoDir);
   await writeFile(
@@ -282,6 +287,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       from: { type: "string" },
       section: { type: "string" },
       "group-prefix": { type: "string" },
+      "require-same-source": { type: "boolean", default: false },
     },
   });
   if (!values.into || !values.from || !values.section) {
@@ -296,6 +302,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     from: values.from,
     section: values.section,
     groupPrefix: values["group-prefix"],
+    requireSameSource: values["require-same-source"],
   });
   console.log(
     `[merge-catalog-section] folded ${componentsAdded} component(s) into ` +
