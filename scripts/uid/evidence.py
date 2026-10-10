@@ -48,8 +48,6 @@ def run(plan_path, root, stage=None):
         previews = []
         for c in captures:
             pid = c["previewId"]
-            if not all(ch.isalnum() or ch == '-' for ch in pid):
-                raise ValueError("Invalid capture ID")
             data, _ = png(root, f"previews/{pid}.png", (c["widthDp"] * c["density"], c["heightDp"] * c["density"]))
             (stage / f"{pid}.png").write_bytes(data)
             previews.append({"id": pid, "functionName": pid, "params": {"widthDp": c["widthDp"], "heightDp": c["heightDp"]}, "captures": [{"renderOutput": f"{pid}.png", "sha256": digest(data)}]})

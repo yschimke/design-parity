@@ -18,14 +18,14 @@ class EvidenceTest(unittest.TestCase):
             (root / 'previews').mkdir()
             captures = []
             for i in range(3):
-                Image.new('RGB', (2, 2)).save(root / f'previews/capture-{i}.png')
-                captures.append({'previewId': f'capture-{i}', 'widthDp': 1, 'heightDp': 1, 'density': 2})
+                Image.new('RGB', (2, 2)).save(root / f'previews/capture_{i}.png')
+                captures.append({'previewId': f'capture_{i}', 'widthDp': 1, 'heightDp': 1, 'density': 2})
             plan = root / 'plan.json'
             plan.write_text(json.dumps({'captures': captures}))
             (root / 'untrusted.sh').write_text('do not execute')
             evidence.run(plan, root, root / 'staged')
             self.assertEqual(len(list((root / 'staged').iterdir())), 4)
-            (root / 'previews/capture-0.png').unlink()
+            (root / 'previews/capture_0.png').unlink()
             with self.assertRaises(FileNotFoundError):
                 evidence.run(plan, root, root / 'missing')
 
