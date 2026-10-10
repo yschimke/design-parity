@@ -123,6 +123,7 @@ existing catalog system ID:
     "components": [{
       "designId": "browser",
       "componentId": "Browser",
+      "defaultState": "list",
       "sourceFile": "src/main/kotlin/example/Browser.kt"
     }]
   }
@@ -142,3 +143,5 @@ render the same source commit. Include the pilot's files in that caller's push
 paths so UID edits republish the existing catalog. PR runs keep their downloadable
 evidence and prepared section; main publishes through the existing delivery branch.
 Hosting remains optional: all CI artifacts work without a preview server.
+
+`defaultState` names the captured initial state (for example `list`). The exporter maps it to the canonical catalog `default` state so the screen appears in the catalog listing; other states remain selectable variants. Omitting it requires a capture already named `default`.

@@ -27,6 +27,11 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   const components = publication.components.map(c => ({ ...c, section: 'Screens', variants: { ideal: [], layout: [] }, greenlines: [], redlines: [] }));
   const byDesign = new Map(components.map(c => [c.designId, c]));
   if (!components.length || byDesign.size !== components.length || new Set(components.map(c => c.componentId)).size !== components.length) throw new Error('Publication requires unique designId and componentId values');
+  for (const component of components) {
+    const initialState = component.defaultState ?? 'default';
+    if (typeof initialState !== 'string' || !initialState.trim() || !plan.captures.some(c => c.designId === component.designId && c.state === initialState))
+      throw new Error('Each published component requires a captured defaultState');
+  }
   const byPreview = new Map();
   const routes = new Set();
   for (const capture of plan.captures) {
@@ -37,7 +42,7 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
       throw new Error('Reference must be a UID from the published source revision');
     const image = { uri: await asset(`previews/${capture.previewId}.png`), previewId: capture.previewId,
       width: capture.widthDp * capture.density, height: capture.heightDp * capture.density,
-      state: capture.state, theme: capture.theme, size: `${capture.widthDp}dp` };
+      state: capture.state === (component.defaultState ?? 'default') ? 'default' : capture.state, theme: capture.theme, size: `${capture.widthDp}dp` };
     const route = stickerId(component.componentId, 'ideal', image);
     if (!route || routes.has(route)) throw new Error('Duplicate catalog capture axes');
     routes.add(route);

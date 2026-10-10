@@ -21,7 +21,7 @@ async function fixture(t) {
     raster: { path: 'references/reference.png', width: 2, height: 3 }, artifact: { kind: 'uid', path: 'references/design.uid' } };
   await writeFile(join(root, 'references/index.json'), JSON.stringify({ schema: 'compose-preview-references/v1', references: [reference] }));
   const plan = { repository: 'example/app', publication: { system: 'app-uid', title: 'App design', sourceModule: ':pilot', sourceDirectory: 'screens/pilot',
-    components: [{ designId: 'screen', componentId: 'Screen', sourceFile: 'src/Screen.kt' }] },
+    components: [{ designId: 'screen', componentId: 'Screen', defaultState: 'list', sourceFile: 'src/Screen.kt' }] },
     captures: [{ previewId: 'capture', designId: 'screen', widthDp: 2, heightDp: 3, density: 1, theme: 'light', state: 'list' }] };
   return { root, out: join(root, 'out'), plan, revision };
 }
@@ -37,7 +37,7 @@ test('canonical catalog IDs bind UID references and preserve source navigation a
   assert.equal(component.sourceDirectory, 'screens/pilot');
   assert.deepEqual(catalog.source, { repo: 'example/app', ref: args.revision, module: ':pilot' });
   assert.equal(references.references[0].previewId, result.previews[0]);
-  assert.equal(result.previews[0], 'screen__ideal__list__light__2dp');
+  assert.equal(result.previews[0], 'screen__ideal__default__light__2dp');
   for (const path of ['references/design.uid', 'references/reference.png'])
     assert.deepEqual(await readFile(join(args.root, path)), await readFile(join(args.out, path)));
 });
@@ -106,4 +106,17 @@ test('rejects missing, empty and non-string catalog titles', async t => {
     args.plan.publication.title = title;
     await assert.rejects(publishUidCatalog(args), /publication.title/);
   }
+});
+
+
+test('publishes the declared initial state as the catalog default so the screen is listed', async t => {
+  const args = await fixture(t);
+  args.plan.publication.components[0].defaultState = 'list';
+  await publishUidCatalog(args);
+  const catalog = JSON.parse(await readFile(join(args.out, 'catalog.json')));
+  assert.equal(catalog.components[0].images[0].state, 'default');
+  const manifest = JSON.parse(await readFile(join(args.out, 'references/index.json')));
+  assert.equal(manifest.references[0].previewId, 'screen__ideal__default__light__2dp');
+  args.plan.publication.components[0].defaultState = 'absent';
+  await assert.rejects(publishUidCatalog(args), /defaultState/);
 });
