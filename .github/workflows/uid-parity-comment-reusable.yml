@@ -35,11 +35,12 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # One comment job per repository, prefix and PR branch: a newer run cancels an older
-    # one, so two runs never force-push the thumbnail branch or edit the comment at once.
+    # One comment job per repository, prefix and PR branch at a time. A running job always
+    # finishes, so its thumbnail push and comment update land together; a newer run waits,
+    # and replaces any run still waiting.
     concurrency:
       group: uid-parity-comment-${{ github.repository }}-${{ inputs.artifact-prefix }}-${{ github.event.workflow_run.head_branch }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       actions: read          # PR and base evidence artifacts
       contents: write        # the per-PR thumbnail branch
@@ -108,12 +109,12 @@ jobs:
           BASE_WORKFLOW: ${{ inputs.base-workflow || github.event.workflow_run.workflow_id }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          holders=$(gh api -X GET "repos/$REPO/actions/artifacts" -f name="$PREFIX-evidence" -f per_page=100 \
-            --jq '.artifacts[] | select(.expired | not) | .workflow_run.id')
           runs=$(gh run list --repo "$REPO" --workflow "$BASE_WORKFLOW" --branch "$DEFAULT_BRANCH" \
             --status completed --limit 100 --json databaseId --jq '.[].databaseId')
           for id in $runs; do
-            if grep -qx "$id" <<<"$holders"; then
+            count=$(gh api -X GET "repos/$REPO/actions/runs/$id/artifacts" -f name="$PREFIX-evidence" \
+              --jq '[.artifacts[] | select(.expired | not)] | length')
+            if [ "$count" != 0 ]; then
               gh run download "$id" --repo "$REPO" --name "$PREFIX-evidence" --dir _base
               echo "Base evidence from run $id"; exit 0
             fi
@@ -154,8 +155,10 @@ jobs:
           PR: ${{ steps.pr.outputs.number }}
         run: |
           marker="<!-- uid-parity:$SLUG -->"
-          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n1)
+          # Captured whole first, so a failed lookup fails the job instead of posting a duplicate.
+          ids=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")
+          id=${ids%%$'\n'*}
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md >/dev/null
           else

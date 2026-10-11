@@ -118,8 +118,8 @@ jobs:
   `../blob/<branch>/<path>?raw=true` images. They render for anyone who can read
   the repository, including private ones. Delete these branches when the pull
   request closes if you want them gone.
-- Overlapping runs for the same PR and prefix are serialised: a newer run cancels
-  an older one, so they never push the thumbnail branch or edit the comment at once.
+- Overlapping runs for the same PR and prefix are serialised: a running job always
+  finishes its thumbnail push and comment update, and a newer run waits for it.
 
 The job runs only for same-repository pull requests whose parity run succeeded or
 failed. It reads the PR's artifacts as data (JSON and bounded PNGs, through the

@@ -46,7 +46,9 @@ class CommentWorkflowTest(unittest.TestCase):
 
     def test_runs_for_one_pr_and_prefix_never_overlap(self):
         concurrency = self.job['concurrency']
-        self.assertTrue(concurrency['cancel-in-progress'])
+        # A running publisher must finish: cancelling it between the push and the comment
+        # update would leave the comment pointing at removed thumbnails.
+        self.assertFalse(concurrency['cancel-in-progress'])
         for part in ('github.repository', 'inputs.artifact-prefix', 'github.event.workflow_run.head_branch'):
             self.assertIn(part, concurrency['group'])
 
@@ -55,6 +57,10 @@ class CommentWorkflowTest(unittest.TestCase):
         self.assertIn('--image-base "../blob/$branch/', text)
         self.assertIn("--image-suffix '?raw=true'", text)
         self.assertNotIn('raw.githubusercontent.com', text)
+
+    def test_sticky_comment_lookup_failure_is_not_masked_by_a_pipe(self):
+        step = next(s for s in self.steps if s.get('name') == 'Create or update the sticky comment')['run']
+        self.assertNotIn('| head', step)
 
     def test_only_an_absent_artifact_counts_as_no_evidence(self):
         for name in ('Download PR evidence', 'Download base evidence from the newest default-branch run that has it'):
