@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0](https://github.com/yschimke/design-parity/compare/v1.10.0...v1.11.0) (2026-10-11)
+
+
+### Features
+
+* **export-driver:** a policy can declare the design tokens the UI builder's Theme panel offers ([#546](https://github.com/yschimke/design-parity/issues/546)) ([176306c](https://github.com/yschimke/design-parity/commit/176306c6689eeb85704aa10f1ccee683583edfa1))
+
+
+### Bug Fixes
+
+* **export-driver:** tier, size and confine UID catalog references ([#545](https://github.com/yschimke/design-parity/issues/545)) ([0f9db33](https://github.com/yschimke/design-parity/commit/0f9db3330ec610416344109a82a70bccc61b1fa2))
+
 ## [1.10.0](https://github.com/yschimke/design-parity/compare/v1.9.0...v1.10.0) (2026-10-10)
 
 
