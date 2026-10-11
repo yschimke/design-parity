@@ -31,7 +31,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.event == 'pull_request' &&
-      contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion) &&
+      contains(fromJSON('["success", "failure", "timed_out"]'), github.event.workflow_run.conclusion) &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10

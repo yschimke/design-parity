@@ -27,6 +27,8 @@ class CommentWorkflowTest(unittest.TestCase):
         condition = ' '.join(self.job['if'].split())
         self.assertIn("github.event.workflow_run.event == 'pull_request'", condition)
         self.assertIn('github.event.workflow_run.head_repository.full_name == github.repository', condition)
+        # A timed-out run must replace the previous commit's result rather than leave it showing.
+        self.assertIn('"timed_out"', condition)
 
     def test_tools_come_from_a_pinned_design_parity_commit_never_pr_code(self):
         checkouts = [s for s in self.steps if s.get('uses', '').startswith('actions/checkout@')]

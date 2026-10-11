@@ -121,8 +121,8 @@ jobs:
 - Overlapping runs for the same PR and prefix are serialised: a running job always
   finishes its thumbnail push and comment update, and a newer run waits for it.
 
-The job runs only for same-repository pull requests whose parity run succeeded or
-failed. It reads the PR's artifacts as data (JSON and bounded PNGs, through the
+The job runs only for same-repository pull requests whose parity run succeeded,
+failed or timed out. It reads the PR's artifacts as data (JSON and bounded PNGs, through the
 pinned [`comment.py`](../scripts/uid/README.md)); it never checks out or runs PR
 code, so the write token cannot be reached by the pull request.
 
