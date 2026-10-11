@@ -15,26 +15,32 @@ def sha(label):
     return hashlib.sha256(label.encode()).hexdigest()
 
 
+SIZE = (400, 200)
+
+
 def png_for(label):
     """Deterministic PNG bytes per label, so equal labels mean equal digests."""
     import io
     buffer = io.BytesIO()
-    Image.new('RGB', (800, 400), tuple(hashlib.sha256(label.encode()).digest()[:3])).save(buffer, format='PNG')
+    Image.new('RGB', SIZE, tuple(hashlib.sha256(label.encode()).digest()[:3])).save(buffer, format='PNG')
     return buffer.getvalue()
 
 
 def write_evidence(root, captures):
-    """captures: {id: (referenceLabel, candidateLabel, changedPixels)}"""
+    """captures: {id: (referenceLabel, candidateLabel)}; counts come from the pixels, as evidence.py records them."""
+    import io
     for folder in ('previews', 'references', 'diffs'):
         (root / folder).mkdir(parents=True, exist_ok=True)
     report, refs = [], []
-    for pid, (ref, cand, changed) in captures.items():
+    for pid, (ref, cand) in captures.items():
         ref_bytes, cand_bytes = png_for(ref), png_for(cand)
         (root / f'references/{pid}-x.png').write_bytes(ref_bytes)
         (root / f'previews/{pid}.png').write_bytes(cand_bytes)
-        Image.new('RGB', (800, 400), 'white').save(root / f'diffs/{pid}.png')
+        Image.new('RGB', SIZE, 'white').save(root / f'diffs/{pid}.png')
+        images = [Image.open(io.BytesIO(data)).convert('RGBA') for data in (ref_bytes, cand_bytes)]
         report.append({'previewId': pid, 'referenceSha256': hashlib.sha256(ref_bytes).hexdigest(),
-                       'candidateSha256': hashlib.sha256(cand_bytes).hexdigest(), 'changedPixels': changed, 'totalPixels': 320000})
+                       'candidateSha256': hashlib.sha256(cand_bytes).hexdigest(),
+                       'changedPixels': comment.changed_mask(*images).histogram()[255], 'totalPixels': SIZE[0] * SIZE[1]})
         refs.append({'previewId': pid, 'raster': {'path': f'references/{pid}-x.png'}})
     (root / 'evidence.json').write_text(json.dumps({'schema': comment.SCHEMA, 'captures': report}))
     (root / 'references/index.json').write_text(json.dumps({'references': refs}))
@@ -57,12 +63,12 @@ class CommentTest(unittest.TestCase):
             return (tmp / 'body.md').read_text(), images
 
     def test_counts_against_base_and_lists_only_changed_captures(self):
-        base = {'a': ('r1', 'c1', 10), 'b': ('r2', 'c2', 0), 'gone': ('r', 'c', 0)}
-        pr = {'a': ('r1x', 'c1', 0), 'b': ('r2', 'c2', 0), 'new': ('r3', 'c3', 5)}
+        base = {'a': ('r1', 'c1'), 'b': ('b', 'b'), 'gone': ('g', 'g')}
+        pr = {'a': ('c1', 'c1'), 'b': ('b', 'b'), 'new': ('r3', 'c3')}
         text, images = self.run_comment(pr, base)
         self.assertIn('**2/3 exact** (base: 2/3)', text)
-        self.assertIn('| `a` | reference | 10 → 0 |', text)
-        self.assertIn('| `new` | new | 5 |', text)
+        self.assertIn('| `a` | reference | 80,000 → 0 |', text)
+        self.assertIn('| `new` | new | 80,000 |', text)
         self.assertIn('| `gone` | removed | — |', text)
         self.assertNotIn('`b`', text)
         self.assertEqual(images, ['a/candidate.png', 'a/diff.png', 'a/reference.png',
@@ -71,20 +77,20 @@ class CommentTest(unittest.TestCase):
         self.assertTrue(text.startswith('<!-- uid-parity:adaptive-uid -->'))
 
     def test_without_base_lists_differing_captures(self):
-        text, _ = self.run_comment({'a': ('r', 'c', 0), 'b': ('r', 'c', 7)})
+        text, _ = self.run_comment({'a': ('x', 'x'), 'b': ('r', 'c')})
         self.assertIn('**1/2 exact**.', text)
         self.assertIn('No base evidence', text)
         self.assertIn('| `b` |', text)
         self.assertNotIn('`a`', text)
 
     def test_unchanged_pr_says_so_and_publishes_nothing(self):
-        same = {'a': ('r', 'c', 0)}
+        same = {'a': ('r', 'c')}
         text, images = self.run_comment(same, same)
         self.assertIn('No capture changed against base.', text)
         self.assertEqual(images, [])
 
     def test_limit_caps_published_images(self):
-        pr = {f'c{i}': ('r', 'c', 1) for i in range(5)}
+        pr = {f'c{i}': ('r', 'c') for i in range(5)}
         text, images = self.run_comment(pr, limit=2)
         self.assertEqual(len(images), 6)
         self.assertIn('3 more changed captures', text)
@@ -92,7 +98,7 @@ class CommentTest(unittest.TestCase):
     def test_thumbnails_are_downscaled(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            write_evidence(tmp / 'pr', {'a': ('r', 'c', 1)})
+            write_evidence(tmp / 'pr', {'a': ('r', 'c')})
             comment.main(['--pr', str(tmp / 'pr'), '--marker', 'm', '--output', str(tmp / 'b.md'),
                           '--image-base', 'https://x', '--images-out', str(tmp / 'i')])
             with Image.open(tmp / 'i/a/reference.png') as image:
@@ -134,7 +140,7 @@ class CommentTest(unittest.TestCase):
                 self.assertEqual(image.getpixel((0, 0))[3], 0)
 
     def test_table_is_capped_for_github_comment_limits(self):
-        pr = {f'c{i}': ('r', 'c', 1) for i in range(comment.MAX_ROWS + 5)}
+        pr = {f'c{i}': ('r', 'c') for i in range(comment.MAX_ROWS + 5)}
         text, _ = self.run_comment(pr, limit=0)
         self.assertEqual(text.count('| `c'), comment.MAX_ROWS)
         self.assertIn('5 more changed captures are listed', text)
@@ -154,30 +160,30 @@ class CommentTest(unittest.TestCase):
     def test_long_ids_fit_the_comment_limit(self):
         for length in (125, 240):  # filesystems cap names at 255 bytes
             with self.subTest(length=length):
-                pr = {f'{i:03d}' + 'x' * length: ('r', 'c', 1) for i in range(comment.MAX_ROWS + 5)}
+                pr = {f'{i:03d}' + 'x' * length: ('r', 'c') for i in range(comment.MAX_ROWS + 5)}
                 text, _ = self.run_comment(pr, limit=12)
                 self.assertLessEqual(len(text), comment.MAX_BODY)
                 self.assertIn('more changed captures are listed', text)
 
     def test_omitted_removals_point_at_base_evidence(self):
-        base = {f'gone{i}': ('r', 'c', 0) for i in range(comment.MAX_ROWS + 3)}
-        base['kept'] = ('r', 'c', 0)
-        text, _ = self.run_comment({'kept': ('r', 'c', 0)}, base, limit=0)
+        base = {f'gone{i}': ('r', 'c') for i in range(comment.MAX_ROWS + 3)}
+        base['kept'] = ('r', 'c')
+        text, _ = self.run_comment({'kept': ('r', 'c')}, base, limit=0)
         self.assertEqual(text.count('| removed |'), comment.MAX_ROWS)
         self.assertIn("3 more removed captures are only in the base run's evidence.", text)
 
     def test_rejects_negative_limit(self):
         with self.assertRaises(ValueError):
-            self.run_comment({'a': ('r', 'c', 1)}, limit=-1)
+            self.run_comment({'a': ('r', 'c')}, limit=-1)
 
     def test_oversized_fixed_content_fails_instead_of_looping(self):
         with self.assertRaises(ValueError):
-            self.run_comment({'a': ('r', 'c', 1)}, **{'run-url': 'https://x/' + 'y' * comment.MAX_BODY})
+            self.run_comment({'a': ('r', 'c')}, **{'run-url': 'https://x/' + 'y' * comment.MAX_BODY})
 
     def test_thumbnails_must_match_recorded_digests_and_diff_is_redrawn(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            write_evidence(tmp / 'pr', {'a': ('r', 'c', 1)})
+            write_evidence(tmp / 'pr', {'a': ('r', 'c')})
             args = ['--pr', str(tmp / 'pr'), '--marker', 'm', '--output', str(tmp / 'b.md'), '--image-base', 'https://x', '--images-out', str(tmp / 'i')]
             comment.main(args)
             with Image.open(tmp / 'i/a/diff.png') as diff:
@@ -185,6 +191,23 @@ class CommentTest(unittest.TestCase):
             (tmp / 'pr/previews/a.png').write_bytes(png_for('swapped'))
             with self.assertRaises(ValueError):
                 comment.main(args)
+
+    def test_rejects_recorded_counts_that_disagree_with_the_pixels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            write_evidence(tmp / 'pr', {'a': ('r', 'c')})
+            report = json.loads((tmp / 'pr/evidence.json').read_text())
+            report['captures'][0]['changedPixels'] = 0  # forged "exact"
+            (tmp / 'pr/evidence.json').write_text(json.dumps(report))
+            with self.assertRaises(ValueError):
+                comment.main(['--pr', str(tmp / 'pr'), '--marker', 'm', '--output', str(tmp / 'b.md')])
+
+    def test_tall_captures_fit_the_thumbnail_box(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'out.png'
+            comment.save_thumbnail(Image.new('RGBA', (1, 1800)), out)
+            with Image.open(out) as image:
+                self.assertEqual(image.size, (1, 2 * comment.THUMB_WIDTH))
 
 if __name__ == '__main__':
     unittest.main()

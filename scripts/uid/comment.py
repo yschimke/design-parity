@@ -87,21 +87,44 @@ def verified(root, relative, sha256):
     return image.convert('RGBA')
 
 
-def diff_image(reference, candidate):
-    """The same exact-RGBA mask evidence.py draws, recomputed from verified captures."""
+def changed_mask(reference, candidate):
+    """The exact-RGBA mask evidence.py uses, recomputed from verified captures."""
     if reference.size != candidate.size:
         raise ValueError('Reference and candidate sizes differ')
     delta = ImageChops.difference(reference, candidate)
-    mask = ImageChops.lighter(ImageChops.lighter(delta.getchannel('R'), delta.getchannel('G')),
+    return ImageChops.lighter(ImageChops.lighter(delta.getchannel('R'), delta.getchannel('G')),
                               ImageChops.lighter(delta.getchannel('B'), delta.getchannel('A'))).point(lambda v: 255 if v else 0)
+
+
+def diff_image(reference, candidate):
     heatmap = Image.new('RGBA', reference.size, 'white')
-    heatmap.paste((210, 0, 100, 255), mask=mask)
+    heatmap.paste((210, 0, 100, 255), mask=changed_mask(reference, candidate))
     return heatmap
 
 
+def verify_counts(root, captures):
+    """Recompute every capture's pixel counts from its digest-verified images.
+
+    The PR's evidence.json is untrusted; the comment reports only what the
+    verified pixels show, and evidence whose counts disagree is rejected.
+    """
+    references = {r['previewId']: r['raster']['path'] for r in json.loads(evidence.read(root, 'references/index.json'))['references']}
+    for pid, capture in captures.items():
+        if pid not in references:
+            raise ValueError(f'No reference recorded for {pid}')
+        reference = verified(root, references[pid], capture['referenceSha256'])
+        candidate = verified(root, f'previews/{pid}.png', capture['candidateSha256'])
+        changed = changed_mask(reference, candidate).histogram()[255]
+        if (changed, reference.width * reference.height) != (capture['changedPixels'], capture['totalPixels']):
+            raise ValueError(f'Recorded pixel counts do not match the images: {pid}')
+
+
 def save_thumbnail(image, out):
-    if image.width > THUMB_WIDTH:
-        image = image.resize((THUMB_WIDTH, max(1, round(image.height * THUMB_WIDTH / image.width))))
+    """Fit within THUMB_WIDTH x 2*THUMB_WIDTH, keeping the aspect ratio, never upscaling."""
+    bound = (THUMB_WIDTH, 2 * THUMB_WIDTH)
+    scale = min(1, bound[0] / image.width, bound[1] / image.height)
+    if scale < 1:
+        image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))))
     out.parent.mkdir(parents=True, exist_ok=True)
     image.save(out, optimize=True)
 
@@ -151,7 +174,7 @@ def body(marker, pr, base, rows, removed, published, image_base, run_url, max_ro
     if published:
         lines += ['', '<details><summary>Reference · diff · candidate</summary>', '']
         for pid in published:
-            cells = ''.join(f'<td><img src="{html.escape(f"{image_base}/{pid}/{kind}.png", quote=True)}" width="240" alt="{kind}"></td>' for kind in ('reference', 'diff', 'candidate'))
+            cells = ''.join(f'<td><img src="{html.escape(f"{image_base}/{pid}/{kind}.png", quote=True)}" alt="{kind}"></td>' for kind in ('reference', 'diff', 'candidate'))
             lines.append(f'<b><code>{pid}</code></b><table><tr>{cells}</tr></table>')
         if len(rows) > len(published):
             lines.append(f'{len(rows) - len(published)} more changed captures are in the evidence artifact.')
@@ -180,6 +203,7 @@ def main(argv=None):
     if pr is None:
         args.output.write_text(f'<!-- {args.marker} -->\n### UID parity\n\nThis run produced no evidence; see the [parity run]({args.run_url}).\n')
         return
+    verify_counts(args.pr, pr)
     base = load(args.base)
     rows, removed = changes(pr, base)
     published = publish(args.pr, rows, args.images_out, args.limit) if args.images_out and args.image_base else []
