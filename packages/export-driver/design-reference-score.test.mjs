@@ -93,3 +93,45 @@ test("no browser yields no scorer, not a thrown export", async () => {
   assert.equal(messages.length, 1, "the reason is said out loud exactly once");
   assert.match(messages[0], /cannot score references/);
 });
+
+// A real browser is needed to prove the pool scores what one page scores. CI's browser job and a
+// developer with Chromium set DESIGN_REFERENCES_CHROMIUM (the emitter's own `--chromium` fallback);
+// without it this skips, as the asset test above does without a server checkout.
+const CHROMIUM = (process.env.DESIGN_REFERENCES_CHROMIUM ?? "").trim();
+const NO_BROWSER = NO_SERVER.skip
+  ? NO_SERVER
+  : { skip: CHROMIUM ? false : "set DESIGN_REFERENCES_CHROMIUM to a Chromium to run it" };
+
+test("a pool of pages scores every pair exactly as one page does", NO_BROWSER, async () => {
+  const { PNG } = await import("pngjs");
+  const os = await import("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "score-pool-"));
+  const pairs = [];
+  for (let n = 0; n < 12; n++) {
+    const files = ["reference", "actual"].map((side, s) => {
+      const png = new PNG({ width: 64 + n, height: 40 });
+      for (let i = 0; i < png.width * png.height; i++) {
+        const x = i % png.width;
+        const inside = x > 8 + s * (n % 4) && x < png.width - 8;
+        png.data.set(inside ? [(i * (n + 1)) % 255, 120, 40 * s, 255] : [0, 0, 0, 0], i * 4);
+      }
+      const file = path.join(dir, `${n}-${side}.png`);
+      fs.writeFileSync(file, PNG.sync.write(png));
+      return file;
+    });
+    pairs.push(files);
+  }
+  const scoreAll = async (pages) => {
+    const scorer = await openScorer({ executablePath: CHROMIUM, pages });
+    assert.ok(scorer, "a scorer opens");
+    assert.equal(scorer.concurrency, pages);
+    try {
+      return await Promise.all(pairs.map(([reference, actual]) => scorer.score(reference, actual)));
+    } finally {
+      await scorer.close();
+    }
+  };
+  const serial = await scoreAll(1);
+  assert.ok(serial.every((match) => match && Number.isFinite(match.percent)));
+  assert.deepEqual(await scoreAll(4), serial);
+});

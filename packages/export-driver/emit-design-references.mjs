@@ -5,7 +5,7 @@
  *     node emit-design-references.mjs --out <bundle dir> --repo <repo root> \
  *       [--design-map design-map.json] [--spec catalog.spec.json] \
  *       [--reference-images <dir>] [--reference-backdrop '#000000'] \
- *       [--reference-cache <dir>] [--chromium <path>] [--strict]
+ *       [--reference-cache <dir>] [--chromium <path>] [--concurrency <n>] [--strict]
  *
  * `--out` is the staged bundle the workflow is about to force-push to `design-artifacts/<system>`;
  * this adds `references/index.json` plus one normalised PNG per reference and leaves the rest of it
@@ -60,6 +60,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import os from "node:os";
 import { PNG } from "pngjs";
 import { chromium } from "playwright";
 
@@ -102,6 +103,30 @@ const REFERENCE_IMAGES = arg("reference-images");
 const REFERENCE_CACHE = arg("reference-cache", process.env.DESIGN_REFERENCES_CACHE || "");
 const EXEC = arg("chromium", process.env.DESIGN_REFERENCES_CHROMIUM || undefined);
 const STRICT = process.argv.includes("--strict");
+
+/**
+ * How many references to work on at once: Figma downloads kept in flight ahead of the placement
+ * loop, and pages the scorer runs in parallel. Both lanes were strictly one-at-a-time, and on
+ * m3-catalog's 1937 references that was ~11.6 minutes of serial download-then-place (~0.36s each,
+ * mostly waiting on the image CDN) followed by ~7 minutes of scoring on one browser thread.
+ *
+ * The OUTPUT does not depend on it. Placement still runs in record order on the main thread — only
+ * the downloads run ahead — and every score lands on its own record, which is what the manifest is
+ * written from, so `references/` is byte-identical whatever this is. `--concurrency 1` restores the
+ * old schedule exactly.
+ */
+const CONCURRENCY = (() => {
+  const raw = arg("concurrency", process.env.DESIGN_REFERENCES_CONCURRENCY || "");
+  if (raw === "") return Math.max(1, Math.min(8, os.availableParallelism?.() ?? os.cpus().length));
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    console.error(`design-references: --concurrency must be a positive integer, not '${raw}'`);
+    process.exit(2);
+  }
+  return value;
+})();
+/** How far ahead of the placement loop Figma downloads run. Network-bound, so wider than the CPU. */
+const PREFETCH_AHEAD = CONCURRENCY === 1 ? 0 : CONCURRENCY * 2;
 const FIGMA_CONTENTS_ONLY = arg("figma-contents-only", "true") !== "false";
 
 // The ground a `showBackground` preview was drawn on, laid under the reference so both sides of the
@@ -332,8 +357,8 @@ async function sourceRaster(record) {
   return null;
 }
 
-function targetFor(record) {
-  const boardDensity = referenceDensity(record);
+function targetFor(record, report = warnFor) {
+  const boardDensity = referenceDensity(record, report);
   return {
     width: record.raster.width,
     height: record.raster.height,
@@ -356,11 +381,11 @@ function targetFor(record) {
  * every spec on the reference side by nonsense, silently, and a wrong number that looks like dp is
  * worse than an honest px.
  */
-function referenceDensity(record) {
+function referenceDensity(record, report = warnFor) {
   const density = record.origin?.density;
   if (density === undefined) return undefined;
   if (typeof density !== "number" || !Number.isFinite(density) || density <= 0) {
-    warnFor(record, `${record.id}: ignoring density '${density}' — it must be a positive number`);
+    report(record, `${record.id}: ignoring density '${density}' — it must be a positive number`);
     return undefined;
   }
   return density;
@@ -455,7 +480,37 @@ if (FIGMA_TOKEN) {
     if (requests.length > 0) await figmaRasterizerFor(contentsOnly).prepare(requests);
   }
 }
-for (const record of records) {
+/**
+ * Start this record's Figma download early, if it will need one, and forget about the result.
+ *
+ * Only the download: `FigmaRestRasterizer.rasterize` memoises its download-and-decode promise per
+ * image key, so when the loop below reaches the record in order, `sourceRaster` gets that same
+ * promise back — already settled, or still in flight — and everything that reports or writes
+ * happens there, in record order, exactly as before. A failure is swallowed here because it is
+ * the in-order call that owns reporting it; it rethrows the same rejection.
+ *
+ * Every other source (a supplied or committed PNG, an HTML mock) stays where it was: they are local
+ * reads or a browser the loop drives, and they report as they go.
+ */
+const noReport = () => {};
+function prefetchRaster(record) {
+  if (!FIGMA_TOKEN) return;
+  const { ref } = record.origin;
+  if (!parseFigmaRef(ref) || suppliedRaster(ref)) return;
+  try {
+    figmaRasterizerFor(referenceContentsOnly(record))
+      .rasterize(ref, targetFor(record, noReport))
+      .catch(() => {});
+  } catch {
+    // The in-order call hits the same error and reports it.
+  }
+}
+
+let prefetched = 0;
+for (const [index, record] of records.entries()) {
+  for (; prefetched < Math.min(records.length, index + 1 + PREFETCH_AHEAD); prefetched++) {
+    if (prefetched > index) prefetchRaster(records[prefetched]);
+  }
   const target = targetFor(record);
   let raster;
   try {
@@ -683,33 +738,46 @@ async function scoreReferences() {
   // were DROPPED: a run whose every reference rasterised and published, and which merely lacks an
   // optional score because the box had no Chromium, has published everything it was asked to.
   // Failing it would make the enhancement a liability on exactly the runs that are gated hardest.
-  const scorer = await openScorer({ executablePath: EXEC, log: note });
+  const scorer = await openScorer({ executablePath: EXEC, log: note, pages: CONCURRENCY });
   // Absent a browser the manifest simply carries no `match`, and the viewer computes it live on
   // lane entry exactly as it does today. `openScorer` has already said why.
   if (!scorer) return;
-  let scored = 0;
-  try {
-    for (const record of published) {
+  // Scored in parallel across the scorer's pages, but REPORTED in record order: each pair's outcome
+  // lands in its own slot, and the slots are read back in order once every pair is done, so the log
+  // and the manifest are what the serial loop produced.
+  const outcomes = new Array(published.length);
+  let next = 0;
+  async function work() {
+    while (next < published.length) {
+      const index = next++;
+      const record = published[index];
       const sticker = record.origin?.imagePath;
       if (typeof sticker !== "string" || sticker === "") continue;
-      let match = null;
       try {
-        match = await scorer.score(
-          path.join(OUT, record.raster.path),
-          path.join(OUT, sticker),
-        );
+        outcomes[index] = {
+          match: await scorer.score(path.join(OUT, record.raster.path), path.join(OUT, sticker)),
+        };
       } catch (error) {
-        // A note for the same reason, and for a primary too: the reference itself published fine.
-        note(`${record.id}: could not be scored (${error.message})`);
-      }
-      if (match) {
-        record.match = match;
-        scored++;
+        outcomes[index] = { error };
       }
     }
+  }
+  try {
+    await Promise.all(Array.from({ length: scorer.concurrency }, work));
   } finally {
     await scorer.close();
   }
+  let scored = 0;
+  published.forEach((record, index) => {
+    const outcome = outcomes[index];
+    if (!outcome) return;
+    // A note for the same reason, and for a primary too: the reference itself published fine.
+    if (outcome.error) note(`${record.id}: could not be scored (${outcome.error.message})`);
+    if (outcome.match) {
+      record.match = outcome.match;
+      scored++;
+    }
+  });
   console.log(`design-references: scored ${scored} of ${published.length} published reference(s)`);
 }
 
