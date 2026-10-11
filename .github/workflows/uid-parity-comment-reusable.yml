@@ -27,19 +27,47 @@ on:
 permissions: {}
 
 jobs:
-  comment:
+  # Derives the slug before the comment job starts, so its concurrency group can use it.
+  # GitHub compares group names case-insensitively and expressions cannot hash, so keying the
+  # group on the raw prefix would merge prefixes that differ only by case.
+  prep:
     if: >-
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.event == 'pull_request' &&
       contains(fromJSON('["success", "failure", "timed_out"]'), github.event.workflow_run.conclusion) &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      slug: ${{ steps.slug.outputs.slug }}
+    steps:
+      - name: Validate the prefix and derive its slug
+        id: slug
+        env:
+          PREFIX: ${{ inputs.artifact-prefix }}
+        run: |
+          # Any prefix upload-artifact accepts (it forbids only " : < > | * ? \ / and control
+          # characters). A lowercase [a-z0-9-] slug, capped at 64 characters so
+          # uid-parity-<slug>-pr-<n> stays well inside the 255-byte ref filename limit, plus a
+          # hash of the exact prefix, so distinct prefixes (case included) never share a
+          # concurrency group, thumbnail branch or comment marker.
+          if [ -z "$PREFIX" ] || [[ "$PREFIX" == *[\":\<\>\|\*\?\\/]* ]] || [[ "$PREFIX" =~ [[:cntrl:]] ]]; then
+            echo "::error::Invalid artifact-prefix"; exit 1
+          fi
+          slug=$(printf '%s' "$PREFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+          slug=${slug:0:64}
+          slug="$slug-$(printf '%s' "$PREFIX" | sha256sum | cut -c1-8)"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+  comment:
+    needs: prep
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     # One comment job per repository, prefix and PR branch at a time. A running job always
     # finishes, so its thumbnail push and comment update land together; a newer run waits,
     # and replaces any run still waiting.
     concurrency:
-      group: uid-parity-comment-${{ github.repository }}-${{ inputs.artifact-prefix }}-${{ github.event.workflow_run.head_branch }}
+      group: uid-parity-comment-${{ github.repository }}-${{ needs.prep.outputs.slug }}-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
     permissions:
       actions: read          # PR and base evidence artifacts
@@ -49,6 +77,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       PREFIX: ${{ inputs.artifact-prefix }}
+      SLUG: ${{ needs.prep.outputs.slug }}
       RUN_ID: ${{ github.event.workflow_run.id }}
       RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
       RUN_URL: ${{ github.event.workflow_run.html_url }}
@@ -59,17 +88,6 @@ jobs:
           RUN_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          # Any prefix upload-artifact accepts (it forbids only " : < > | * ? \ / and control
-          # characters). A lowercase [a-z0-9-] slug plus a hash of the exact prefix names the
-          # thumbnail branch and the comment marker, so distinct prefixes never share either. It is capped at 64 characters so
-          # uid-parity-<slug>-pr-<n> stays well inside the 255-byte ref filename limit.
-          if [ -z "$PREFIX" ] || [[ "$PREFIX" == *[\":\<\>\|\*\?\\/]* ]] || [[ "$PREFIX" =~ [[:cntrl:]] ]]; then
-            echo "::error::Invalid artifact-prefix"; exit 1
-          fi
-          slug=$(printf '%s' "$PREFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
-          slug=${slug:0:64}
-          slug="$slug-$(printf '%s' "$PREFIX" | sha256sum | cut -c1-8)"
-          echo "SLUG=$slug" >> "$GITHUB_ENV"
           pr=$(jq -r '.[0].number // empty' <<<"$RUN_PRS")
           [ -n "$pr" ] || pr=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" --jq '[.[] | select(.state == "open")][0].number // empty')
           if [[ "$pr" =~ ^[0-9]+$ ]]; then echo "number=$pr" >> "$GITHUB_OUTPUT"; else echo "No open pull request for $HEAD_SHA"; fi
