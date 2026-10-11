@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 _spec = importlib.util.spec_from_file_location('evidence', Path(__file__).with_name('evidence.py'))
 evidence = importlib.util.module_from_spec(_spec)
@@ -76,25 +76,49 @@ def changes(pr, base):
     return rows, removed
 
 
-def thumbnail(root, relative, out):
+def verified(root, relative, sha256):
+    """The PNG at `relative`, only if its bytes match the digest evidence.json recorded."""
     data = evidence.read(root, relative)
+    if evidence.digest(data) != sha256:
+        raise ValueError(f'Image does not match its recorded digest: {relative}')
     image = Image.open(io.BytesIO(data))
     if image.format != 'PNG' or max(image.size) > 1800:
         raise ValueError(f'Unexpected PNG: {relative}')
-    image.load()
+    return image.convert('RGBA')
+
+
+def diff_image(reference, candidate):
+    """The same exact-RGBA mask evidence.py draws, recomputed from verified captures."""
+    if reference.size != candidate.size:
+        raise ValueError('Reference and candidate sizes differ')
+    delta = ImageChops.difference(reference, candidate)
+    mask = ImageChops.lighter(ImageChops.lighter(delta.getchannel('R'), delta.getchannel('G')),
+                              ImageChops.lighter(delta.getchannel('B'), delta.getchannel('A'))).point(lambda v: 255 if v else 0)
+    heatmap = Image.new('RGBA', reference.size, 'white')
+    heatmap.paste((210, 0, 100, 255), mask=mask)
+    return heatmap
+
+
+def save_thumbnail(image, out):
     if image.width > THUMB_WIDTH:
         image = image.resize((THUMB_WIDTH, max(1, round(image.height * THUMB_WIDTH / image.width))))
     out.parent.mkdir(parents=True, exist_ok=True)
-    image.convert('RGBA').save(out, optimize=True)
+    image.save(out, optimize=True)
 
 
 def publish(root, rows, out, limit):
-    """Write reference/diff/candidate thumbnails for the first `limit` rows."""
+    """Write reference/diff/candidate thumbnails for the first `limit` rows.
+
+    Reference and candidate bytes must match the digests the table was built from,
+    and the diff is redrawn from them, so the images cannot contradict the counts.
+    """
     references = {r['previewId']: r['raster']['path'] for r in json.loads(evidence.read(root, 'references/index.json'))['references']}
     published = []
-    for pid, _, _, _ in rows[:limit]:
-        for kind, relative in (('reference', references[pid]), ('diff', f'diffs/{pid}.png'), ('candidate', f'previews/{pid}.png')):
-            thumbnail(root, relative, out / pid / f'{kind}.png')
+    for pid, _, _, now in rows[:limit]:
+        reference = verified(root, references[pid], now['referenceSha256'])
+        candidate = verified(root, f'previews/{pid}.png', now['candidateSha256'])
+        for kind, image in (('reference', reference), ('diff', diff_image(reference, candidate)), ('candidate', candidate)):
+            save_thumbnail(image, out / pid / f'{kind}.png')
         published.append(pid)
     return published
 

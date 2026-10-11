@@ -15,15 +15,26 @@ def sha(label):
     return hashlib.sha256(label.encode()).hexdigest()
 
 
+def png_for(label):
+    """Deterministic PNG bytes per label, so equal labels mean equal digests."""
+    import io
+    buffer = io.BytesIO()
+    Image.new('RGB', (800, 400), tuple(hashlib.sha256(label.encode()).digest()[:3])).save(buffer, format='PNG')
+    return buffer.getvalue()
+
+
 def write_evidence(root, captures):
-    """captures: {id: (referenceSha, candidateSha, changedPixels)}"""
+    """captures: {id: (referenceLabel, candidateLabel, changedPixels)}"""
     for folder in ('previews', 'references', 'diffs'):
         (root / folder).mkdir(parents=True, exist_ok=True)
     report, refs = [], []
     for pid, (ref, cand, changed) in captures.items():
-        for path in (f'previews/{pid}.png', f'references/{pid}-x.png', f'diffs/{pid}.png'):
-            Image.new('RGB', (800, 400), 'white').save(root / path)
-        report.append({'previewId': pid, 'referenceSha256': sha(ref), 'candidateSha256': sha(cand), 'changedPixels': changed, 'totalPixels': 320000})
+        ref_bytes, cand_bytes = png_for(ref), png_for(cand)
+        (root / f'references/{pid}-x.png').write_bytes(ref_bytes)
+        (root / f'previews/{pid}.png').write_bytes(cand_bytes)
+        Image.new('RGB', (800, 400), 'white').save(root / f'diffs/{pid}.png')
+        report.append({'previewId': pid, 'referenceSha256': hashlib.sha256(ref_bytes).hexdigest(),
+                       'candidateSha256': hashlib.sha256(cand_bytes).hexdigest(), 'changedPixels': changed, 'totalPixels': 320000})
         refs.append({'previewId': pid, 'raster': {'path': f'references/{pid}-x.png'}})
     (root / 'evidence.json').write_text(json.dumps({'schema': comment.SCHEMA, 'captures': report}))
     (root / 'references/index.json').write_text(json.dumps({'references': refs}))
@@ -117,8 +128,7 @@ class CommentTest(unittest.TestCase):
     def test_thin_and_transparent_captures_keep_valid_thumbnails(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            Image.new('RGBA', (1800, 1), (0, 0, 0, 0)).save(tmp / 'thin.png')
-            comment.thumbnail(tmp, 'thin.png', tmp / 'out.png')
+            comment.save_thumbnail(Image.new('RGBA', (1800, 1), (0, 0, 0, 0)), tmp / 'out.png')
             with Image.open(tmp / 'out.png') as image:
                 self.assertEqual((image.size, image.mode), ((comment.THUMB_WIDTH, 1), 'RGBA'))
                 self.assertEqual(image.getpixel((0, 0))[3], 0)
@@ -163,6 +173,18 @@ class CommentTest(unittest.TestCase):
     def test_oversized_fixed_content_fails_instead_of_looping(self):
         with self.assertRaises(ValueError):
             self.run_comment({'a': ('r', 'c', 1)}, **{'run-url': 'https://x/' + 'y' * comment.MAX_BODY})
+
+    def test_thumbnails_must_match_recorded_digests_and_diff_is_redrawn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            write_evidence(tmp / 'pr', {'a': ('r', 'c', 1)})
+            args = ['--pr', str(tmp / 'pr'), '--marker', 'm', '--output', str(tmp / 'b.md'), '--image-base', 'https://x', '--images-out', str(tmp / 'i')]
+            comment.main(args)
+            with Image.open(tmp / 'i/a/diff.png') as diff:
+                self.assertEqual(diff.getpixel((0, 0))[:3], (210, 0, 100))  # redrawn: r and c differ everywhere
+            (tmp / 'pr/previews/a.png').write_bytes(png_for('swapped'))
+            with self.assertRaises(ValueError):
+                comment.main(args)
 
 if __name__ == '__main__':
     unittest.main()
