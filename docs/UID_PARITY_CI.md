@@ -78,6 +78,45 @@ pilots must still use different prefixes; overwriting is not isolation.
 Download `<prefix>-evidence`
 and open `index.html` to inspect reference / exact pixel diff / actual.
 
+## PR comment
+
+`uid-parity-comment-reusable.yml` posts one sticky comment on each pull request
+that runs the parity workflow. The comment gives exact captures against base
+(for example **60/60 exact (base: 38/60)**), lists the captures whose reference,
+candidate or presence changed, and embeds reference / diff / candidate thumbnails.
+Call it from a default-branch workflow triggered by the pilot workflow:
+
+```yaml
+name: Adaptive UID parity comment
+on:
+  workflow_run:
+    workflows: [Adaptive UID pilot]
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+jobs:
+  comment:
+    uses: yschimke/design-parity/.github/workflows/uid-parity-comment-reusable.yml@<reviewed-commit-sha>
+    with:
+      base-workflow: design-artifacts.yml
+```
+
+- `base-workflow` names the workflow whose default-branch runs carry the base
+  `<prefix>-evidence` artifact. Leave it empty when the pilot workflow itself runs
+  on the default branch. Without base evidence, the comment lists every capture
+  with a pixel difference.
+- `artifact-prefix` must match the parity call; each prefix gets its own comment.
+- Thumbnails are pushed to an orphan branch `uid-parity/<prefix>/pr-<number>`,
+  replaced on every run, so they are GitHub-hosted and render in the comment.
+  Delete these branches when the pull request closes if you want them gone.
+
+The job runs only for same-repository pull requests whose parity run succeeded or
+failed. It reads the PR's artifacts as data (JSON and bounded PNGs, through the
+pinned [`comment.py`](../scripts/uid/README.md)); it never checks out or runs PR
+code, so the write token cannot be reached by the pull request.
+
 ## Optional model audit
 
 The existing opt-in model critique is separate from this deterministic workflow.
