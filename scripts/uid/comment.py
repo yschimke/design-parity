@@ -20,10 +20,12 @@ evidence = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(evidence)
 
 SCHEMA = 'adaptive-uid-evidence/v1'
-ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]*')
+# Bounded so 200 table rows plus thumbnail markup stay well under the comment limit.
+ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}')
 THUMB_WIDTH = 360
 # GitHub rejects comment bodies over 65,536 characters; rows past this are counted, not listed.
 MAX_ROWS = 200
+MAX_BODY = 60_000
 
 
 def load(root):
@@ -33,6 +35,8 @@ def load(root):
     report = json.loads(evidence.read(root, 'evidence.json'))
     if report.get('schema') != SCHEMA:
         raise ValueError('Unexpected evidence schema')
+    if not isinstance(report.get('captures'), list) or not report['captures']:
+        raise ValueError('Evidence lists no captures')
     captures = {}
     for capture in report['captures']:
         pid = capture['previewId']
@@ -105,14 +109,18 @@ def body(marker, pr, base, rows, removed, published, image_base, run_url):
         lines.append('No capture changed against base.' if base is not None else 'No capture has a pixel difference.')
     else:
         lines += ['| Capture | Changed | Differing pixels |', '| --- | --- | --- |']
-        for pid, sides, before, now in rows[:MAX_ROWS]:
+        # Removed captures exist only in base evidence, so they are listed before changed ones.
+        shown_removed = removed[:MAX_ROWS]
+        for pid in shown_removed:
+            lines.append(f'| `{pid}` | removed | — |')
+        shown_rows = rows[:MAX_ROWS - len(shown_removed)]
+        for pid, sides, before, now in shown_rows:
             was = f"{before['changedPixels']:,} → " if before is not None else ''
             lines.append(f"| `{pid}` | {', '.join(sides) or '—'} | {was}{now['changedPixels']:,} |")
-        for pid in removed[:max(0, MAX_ROWS - len(rows))]:
-            lines.append(f'| `{pid}` | removed | — |')
-        omitted = len(rows) + len(removed) - MAX_ROWS
-        if omitted > 0:
-            lines += ['', f'{omitted} more changed captures are listed in the evidence artifact.']
+        if len(removed) > len(shown_removed):
+            lines += ['', f'{len(removed) - len(shown_removed)} more removed captures are only in the base run\'s evidence.']
+        if len(rows) > len(shown_rows):
+            lines += ['', f'{len(rows) - len(shown_rows)} more changed captures are listed in the evidence artifact.']
     if published:
         lines += ['', '<details><summary>Reference · diff · candidate</summary>', '']
         for pid in published:
@@ -146,7 +154,12 @@ def main(argv=None):
     base = load(args.base)
     rows, removed = changes(pr, base)
     published = publish(args.pr, rows, args.images_out, args.limit) if args.images_out and args.image_base else []
-    args.output.write_text(body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url))
+    text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url)
+    if len(text) > MAX_BODY:
+        text = body(args.marker, pr, base, rows, removed, [], args.image_base, args.run_url)
+    if len(text) > MAX_BODY:
+        raise ValueError('Comment body exceeds the GitHub limit')
+    args.output.write_text(text)
 
 
 if __name__ == '__main__':

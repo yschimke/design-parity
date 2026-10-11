@@ -125,5 +125,25 @@ class CommentTest(unittest.TestCase):
         self.assertIn('5 more changed captures are listed', text)
         self.assertLess(len(text), 65536)
 
+    def test_rejects_empty_and_overlong_capture_lists(self):
+        for captures in ([], None, [{'previewId': 'x' * 129, 'referenceSha256': 'r', 'candidateSha256': 'c', 'changedPixels': 0, 'totalPixels': 1}]):
+            with self.subTest(captures=str(captures)[:20]), tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / 'evidence.json').write_text(json.dumps({'schema': comment.SCHEMA, 'captures': captures}))
+                with self.assertRaises(ValueError):
+                    comment.load(Path(tmp))
+
+    def test_longest_ids_with_thumbnails_fit_the_comment_limit(self):
+        pr = {f'{i:03d}' + 'x' * 125: ('r', 'c', 1) for i in range(comment.MAX_ROWS + 5)}
+        text, images = self.run_comment(pr, limit=12)
+        self.assertLessEqual(len(text), comment.MAX_BODY)
+        self.assertIn('Reference · diff · candidate', text)
+
+    def test_omitted_removals_point_at_base_evidence(self):
+        base = {f'gone{i}': ('r', 'c', 0) for i in range(comment.MAX_ROWS + 3)}
+        base['kept'] = ('r', 'c', 0)
+        text, _ = self.run_comment({'kept': ('r', 'c', 0)}, base, limit=0)
+        self.assertEqual(text.count('| removed |'), comment.MAX_ROWS)
+        self.assertIn("3 more removed captures are only in the base run's evidence.", text)
+
 if __name__ == '__main__':
     unittest.main()
