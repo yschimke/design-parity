@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/yschimke/design-parity/compare/v1.13.0...v1.14.0) (2026-10-11)
+
+
+### Features
+
+* **export-driver:** declare code.locals and code.scopes in the ui-builder policy schema ([#557](https://github.com/yschimke/design-parity/issues/557)) ([380b1aa](https://github.com/yschimke/design-parity/commit/380b1aa5178ab794071e82a886433f006e95b509))
+
 ## [1.13.0](https://github.com/yschimke/design-parity/compare/v1.12.0...v1.13.0) (2026-10-11)
 
 
