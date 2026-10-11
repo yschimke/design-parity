@@ -78,15 +78,39 @@ function round(value, places) {
 }
 
 /**
- * A scorer bound to one browser page, so a catalog's whole reference set is scored in a single
- * context: launching Chromium costs more than every comparison in m3-catalog put together
- * (120 pairs in ~18s against a ~1s launch).
+ * A scorer bound to a small pool of pages in ONE browser, so a catalog's whole reference set is
+ * scored without relaunching Chromium: launching it costs more than every comparison in m3-catalog
+ * put together (120 pairs in ~18s against a ~1s launch).
+ *
+ * A pool rather than one page because the comparison runs on the page's own main thread, so a
+ * single page scores one pair at a time on one core. m3-catalog's 1937 pairs took ~7 minutes that
+ * way on a four-core runner with three cores idle. Each page is its own browser context, and so
+ * its own renderer process, so `concurrency` pages score that many pairs at once. Every page loads
+ * the SAME asset, so which page scores a pair cannot change its number.
  *
  * Construct through [openScorer]; `close()` when the run is done.
  */
 class DesignReferenceScorer {
-  constructor(page) {
-    this.page = page;
+  constructor(pages) {
+    this.pages = pages;
+    this.idle = [...pages];
+    this.waiting = [];
+  }
+
+  /** How many pairs this scorer can work on at once — one per page. */
+  get concurrency() {
+    return this.pages.length;
+  }
+
+  async acquire() {
+    if (this.idle.length > 0) return this.idle.pop();
+    return new Promise((resolve) => this.waiting.push(resolve));
+  }
+
+  release(page) {
+    const next = this.waiting.shift();
+    if (next) next(page);
+    else this.idle.push(page);
   }
 
   /**
@@ -104,7 +128,30 @@ class DesignReferenceScorer {
    */
   async score(referencePng, actualPng) {
     if (!fs.existsSync(referencePng) || !fs.existsSync(actualPng)) return null;
-    const result = await this.page.evaluate(
+    const page = await this.acquire();
+    let result;
+    try {
+      result = await this.scoreOn(page, referencePng, actualPng);
+    } finally {
+      this.release(page);
+    }
+    if (!result || !Number.isFinite(result.percent)) return null;
+    // No version, no number. An asset too old to name its kernel is one whose numbers the reader
+    // cannot place, and publishing them unversioned is exactly the state D3 exists to end.
+    if (!Number.isInteger(result.scoreVersion)) return null;
+    return {
+      percent: round(result.percent, 2),
+      changedPercent: round(result.changedPercent, 2),
+      scoreVersion: result.scoreVersion,
+      ...(result.geometry >= GEOMETRY_REPORT_THRESHOLD
+        ? { geometry: round(result.geometry, 1) }
+        : {}),
+    };
+  }
+
+  /** The raw in-page result for one pair on one page. */
+  async scoreOn(page, referencePng, actualPng) {
+    return page.evaluate(
       async ([reference, actual]) => {
         const api = window.ComposePreviewCompare;
         if (!api) return null;
@@ -132,18 +179,6 @@ class DesignReferenceScorer {
       },
       [dataUri(referencePng), dataUri(actualPng)],
     );
-    if (!result || !Number.isFinite(result.percent)) return null;
-    // No version, no number. An asset too old to name its kernel is one whose numbers the reader
-    // cannot place, and publishing them unversioned is exactly the state D3 exists to end.
-    if (!Number.isInteger(result.scoreVersion)) return null;
-    return {
-      percent: round(result.percent, 2),
-      changedPercent: round(result.changedPercent, 2),
-      scoreVersion: result.scoreVersion,
-      ...(result.geometry >= GEOMETRY_REPORT_THRESHOLD
-        ? { geometry: round(result.geometry, 1) }
-        : {}),
-    };
   }
 
   async close() {
@@ -156,8 +191,12 @@ class DesignReferenceScorer {
  *
  * Null is a normal outcome, not an error: a fork with no browser installed still publishes its
  * references, just without the baked number. The caller warns once and carries on.
+ *
+ * `pages` is how many pairs to score at once (see [DesignReferenceScorer]); anything that is not a
+ * positive integer means one, which is the behaviour before the pool existed.
  */
-export async function openScorer({ executablePath, log = () => {} } = {}) {
+export async function openScorer({ executablePath, log = () => {}, pages = 1 } = {}) {
+  const poolSize = Number.isInteger(pages) && pages > 0 ? pages : 1;
   if (!fs.existsSync(COMPARE_ASSET)) {
     log(
       `cannot score references: ${path.basename(COMPARE_ASSET)} is not at ${COMPARE_ASSET}; ` +
@@ -179,20 +218,27 @@ export async function openScorer({ executablePath, log = () => {} } = {}) {
       ...(executablePath ? { executablePath } : {}),
       args: ["--no-sandbox"],
     });
-    const page = await browser.newPage();
-    // A blank document, not a served page: the scorer needs a canvas and an `Image`, nothing else.
-    // `format-compare.js` is now nothing BUT the API — the page-specific blocks it used to carry
-    // are custom elements in the surface bundles — so it assigns `window.ComposePreviewCompare` and
-    // touches no DOM at all.
-    await page.setContent("<!doctype html><meta charset=\"utf-8\"><title>score</title>");
-    await page.addScriptTag({ content: fs.readFileSync(COMPARE_ASSET, "utf8") });
-    const ready = await page.evaluate(() => typeof window.ComposePreviewCompare?.scoreImages);
-    if (ready !== "function") {
-      await browser.close();
-      log("cannot score references: the viewer's comparison API did not load");
-      return null;
+    const asset = fs.readFileSync(COMPARE_ASSET, "utf8");
+    const pool = [];
+    for (let i = 0; i < poolSize; i++) {
+      // `browser.newPage()` gives each page its own context, and so its own renderer process —
+      // which is what lets the pool actually run in parallel rather than queue on one thread.
+      const page = await browser.newPage();
+      // A blank document, not a served page: the scorer needs a canvas and an `Image`, nothing
+      // else. `format-compare.js` is now nothing BUT the API — the page-specific blocks it used to
+      // carry are custom elements in the surface bundles — so it assigns
+      // `window.ComposePreviewCompare` and touches no DOM at all.
+      await page.setContent("<!doctype html><meta charset=\"utf-8\"><title>score</title>");
+      await page.addScriptTag({ content: asset });
+      const ready = await page.evaluate(() => typeof window.ComposePreviewCompare?.scoreImages);
+      if (ready !== "function") {
+        await browser.close();
+        log("cannot score references: the viewer's comparison API did not load");
+        return null;
+      }
+      pool.push(page);
     }
-    const scorer = new DesignReferenceScorer(page);
+    const scorer = new DesignReferenceScorer(pool);
     scorer.browser = browser;
     return scorer;
   } catch (error) {
