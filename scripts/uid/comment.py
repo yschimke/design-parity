@@ -22,6 +22,8 @@ _spec.loader.exec_module(evidence)
 SCHEMA = 'adaptive-uid-evidence/v1'
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]*')
 THUMB_WIDTH = 360
+# GitHub rejects comment bodies over 65,536 characters; rows past this are counted, not listed.
+MAX_ROWS = 200
 
 
 def load(root):
@@ -36,7 +38,8 @@ def load(root):
         pid = capture['previewId']
         if not isinstance(pid, str) or not ID.fullmatch(pid) or pid in captures:
             raise ValueError('Invalid or duplicate capture ID')
-        if not all(isinstance(capture[k], int) and capture[k] >= 0 for k in ('changedPixels', 'totalPixels')):
+        changed, total = capture['changedPixels'], capture['totalPixels']
+        if not (isinstance(changed, int) and isinstance(total, int) and 0 <= changed <= total):
             raise ValueError(f'Invalid pixel counts: {pid}')
         captures[pid] = capture
     return captures
@@ -73,9 +76,9 @@ def thumbnail(root, relative, out):
         raise ValueError(f'Unexpected PNG: {relative}')
     image.load()
     if image.width > THUMB_WIDTH:
-        image = image.resize((THUMB_WIDTH, round(image.height * THUMB_WIDTH / image.width)))
+        image = image.resize((THUMB_WIDTH, max(1, round(image.height * THUMB_WIDTH / image.width))))
     out.parent.mkdir(parents=True, exist_ok=True)
-    image.convert('RGB').save(out, optimize=True)
+    image.convert('RGBA').save(out, optimize=True)
 
 
 def publish(root, rows, out, limit):
@@ -102,11 +105,14 @@ def body(marker, pr, base, rows, removed, published, image_base, run_url):
         lines.append('No capture changed against base.' if base is not None else 'No capture has a pixel difference.')
     else:
         lines += ['| Capture | Changed | Differing pixels |', '| --- | --- | --- |']
-        for pid, sides, before, now in rows:
+        for pid, sides, before, now in rows[:MAX_ROWS]:
             was = f"{before['changedPixels']:,} → " if before is not None else ''
             lines.append(f"| `{pid}` | {', '.join(sides) or '—'} | {was}{now['changedPixels']:,} |")
-        for pid in removed:
+        for pid in removed[:max(0, MAX_ROWS - len(rows))]:
             lines.append(f'| `{pid}` | removed | — |')
+        omitted = len(rows) + len(removed) - MAX_ROWS
+        if omitted > 0:
+            lines += ['', f'{omitted} more changed captures are listed in the evidence artifact.']
     if published:
         lines += ['', '<details><summary>Reference · diff · candidate</summary>', '']
         for pid in published:

@@ -102,5 +102,28 @@ class CommentTest(unittest.TestCase):
             self.assertIn('produced no evidence', (tmp / 'b.md').read_text())
 
 
+    def test_rejects_changed_pixels_above_total(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'evidence.json').write_text(json.dumps({'schema': comment.SCHEMA, 'captures': [
+                {'previewId': 'a', 'referenceSha256': 'r', 'candidateSha256': 'c', 'changedPixels': 2, 'totalPixels': 1}]}))
+            with self.assertRaises(ValueError):
+                comment.load(Path(tmp))
+
+    def test_thin_and_transparent_captures_keep_valid_thumbnails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            Image.new('RGBA', (1800, 1), (0, 0, 0, 0)).save(tmp / 'thin.png')
+            comment.thumbnail(tmp, 'thin.png', tmp / 'out.png')
+            with Image.open(tmp / 'out.png') as image:
+                self.assertEqual((image.size, image.mode), ((comment.THUMB_WIDTH, 1), 'RGBA'))
+                self.assertEqual(image.getpixel((0, 0))[3], 0)
+
+    def test_table_is_capped_for_github_comment_limits(self):
+        pr = {f'c{i}': ('r', 'c', 1) for i in range(comment.MAX_ROWS + 5)}
+        text, _ = self.run_comment(pr, limit=0)
+        self.assertEqual(text.count('| `c'), comment.MAX_ROWS)
+        self.assertIn('5 more changed captures are listed', text)
+        self.assertLess(len(text), 65536)
+
 if __name__ == '__main__':
     unittest.main()
