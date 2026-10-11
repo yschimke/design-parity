@@ -9,7 +9,13 @@ permissions:
   contents: read
 
 jobs:
+  # Both jobs are skipped on release-please's own release PR: it changes only the
+  # manifest, CHANGELOG.md and the package versions, and main's push run already
+  # verified the source. The PR author must be the bot, because branch names are
+  # contributor-controlled. A job skipped by `if:` reports "skipped", which
+  # satisfies the required `build-test` check. See yschimke/compose-ui-builder#700.
   build-test:
+    if: ${{ !(startsWith(github.head_ref || github.ref_name, 'release-please--') && (github.event.pull_request.user.login || github.actor) == 'github-actions[bot]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,6 +70,8 @@ jobs:
   # source lived there; the driver's source is this repository now, so its guards run here.
   export-driver-browser:
     name: Export driver browser guards
+    # Skipped on the release-please PR; see the note on `build-test`.
+    if: ${{ !(startsWith(github.head_ref || github.ref_name, 'release-please--') && (github.event.pull_request.user.login || github.actor) == 'github-actions[bot]') }}
     runs-on: ubuntu-latest
     env:
       # The rc-players release whose published players the guards drive: the CMP/Wasm player
