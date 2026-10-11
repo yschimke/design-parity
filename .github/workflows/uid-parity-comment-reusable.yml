@@ -35,6 +35,11 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # One comment job per repository, prefix and PR branch: a newer run cancels an older
+    # one, so two runs never force-push the thumbnail branch or edit the comment at once.
+    concurrency:
+      group: uid-parity-comment-${{ github.repository }}-${{ inputs.artifact-prefix }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: true
     permissions:
       actions: read          # PR and base evidence artifacts
       contents: write        # the per-PR thumbnail branch
@@ -53,7 +58,12 @@ jobs:
           RUN_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          [[ "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "::error::Invalid artifact-prefix"; exit 1; }
+          # Any prefix the parity workflow accepts; a lowercase slug (hash-suffixed when it
+          # had to change) names the thumbnail branch and the comment marker.
+          [[ "$PREFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "::error::Invalid artifact-prefix"; exit 1; }
+          slug=$(printf '%s' "$PREFIX" | tr 'A-Z._' 'a-z--')
+          [ "$slug" = "$PREFIX" ] || slug="$slug-$(printf '%s' "$PREFIX" | sha256sum | cut -c1-8)"
+          echo "SLUG=$slug" >> "$GITHUB_ENV"
           pr=$(jq -r '.[0].number // empty' <<<"$RUN_PRS")
           [ -n "$pr" ] || pr=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" --jq '[.[] | select(.state == "open")][0].number // empty')
           if [[ "$pr" =~ ^[0-9]+$ ]]; then echo "number=$pr" >> "$GITHUB_OUTPUT"; else echo "No open pull request for $HEAD_SHA"; fi
@@ -62,7 +72,7 @@ jobs:
         if: steps.pr.outputs.number
         with:
           repository: yschimke/design-parity
-          ref: 2f270fad9b9be50864395a8a1e3005e3ee91c2d5
+          ref: e7cf0b1e46743dc330561075a86cbb7c80da7f14
           path: _uid_tools
           persist-credentials: false
           sparse-checkout: scripts/uid
@@ -95,17 +105,19 @@ jobs:
           PR: ${{ steps.pr.outputs.number }}
           MAX_IMAGES: ${{ inputs.max-images }}
         run: |
-          branch="uid-parity/$PREFIX/pr-$PR"
+          branch="uid-parity-$SLUG-pr-$PR"
           echo "IMAGE_BRANCH=$branch" >> "$GITHUB_ENV"
           base_args=()
           [ -d _base ] && base_args=(--base _base)
           python _uid_tools/scripts/uid/comment.py --pr _pr "${base_args[@]}" \
-            --marker "uid-parity:$PREFIX" --run-url "$RUN_URL" --limit "$MAX_IMAGES" \
+            --marker "uid-parity:$SLUG" --run-url "$RUN_URL" --limit "$MAX_IMAGES" \
             --images-out "_images/run-$RUN_ID-$RUN_ATTEMPT" \
-            --image-base "https://raw.githubusercontent.com/$REPO/refs/heads/$branch/run-$RUN_ID-$RUN_ATTEMPT" \
+            --image-base "../blob/$branch/run-$RUN_ID-$RUN_ATTEMPT" --image-suffix '?raw=true' \
             --output comment.md
           cat comment.md >> "$GITHUB_STEP_SUMMARY"
       # One orphan commit per PR and prefix, replaced on every run, so the branch never grows.
+      # The branch name has no slash so the repository-relative ../blob/<branch>/<path> image
+      # links stay unambiguous; those links also honour private-repository read access.
       - name: Publish thumbnails
         if: steps.pr.outputs.number && hashFiles('_images/**') != ''
         run: |
@@ -121,7 +133,7 @@ jobs:
         env:
           PR: ${{ steps.pr.outputs.number }}
         run: |
-          marker="<!-- uid-parity:$PREFIX -->"
+          marker="<!-- uid-parity:$SLUG -->"
           id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
             --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n1)
           if [ -n "$id" ]; then

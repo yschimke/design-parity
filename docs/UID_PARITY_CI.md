@@ -108,9 +108,15 @@ jobs:
   on the default branch. Without base evidence, the comment lists every capture
   with a pixel difference.
 - `artifact-prefix` must match the parity call; each prefix gets its own comment.
-- Thumbnails are pushed to an orphan branch `uid-parity/<prefix>/pr-<number>`,
-  replaced on every run, so they are GitHub-hosted and render in the comment.
-  Delete these branches when the pull request closes if you want them gone.
+  Prefixes with capitals, `.` or `_` are turned into a lowercase slug, with a short
+  hash suffix, for the branch and comment marker.
+- Thumbnails are pushed to an orphan branch `uid-parity-<slug>-pr-<number>`,
+  replaced on every run, and linked as repository-relative
+  `../blob/<branch>/<path>?raw=true` images. They render for anyone who can read
+  the repository, including private ones. Delete these branches when the pull
+  request closes if you want them gone.
+- Overlapping runs for the same PR and prefix are serialised: a newer run cancels
+  an older one, so they never push the thumbnail branch or edit the comment at once.
 
 The job runs only for same-repository pull requests whose parity run succeeded or
 failed. It reads the PR's artifacts as data (JSON and bounded PNGs, through the

@@ -43,5 +43,17 @@ class CommentWorkflowTest(unittest.TestCase):
             self.assertNotRegex(run, r'\$\{\{[^}]*(workflow_run\.(head_branch|display_title|pull_requests)|inputs\.)', step.get('name', run[:40]))
 
 
+    def test_runs_for_one_pr_and_prefix_never_overlap(self):
+        concurrency = self.job['concurrency']
+        self.assertTrue(concurrency['cancel-in-progress'])
+        for part in ('github.repository', 'inputs.artifact-prefix', 'github.event.workflow_run.head_branch'):
+            self.assertIn(part, concurrency['group'])
+
+    def test_thumbnails_use_repository_relative_links(self):
+        text = WORKFLOW.read_text()
+        self.assertIn('--image-base "../blob/$branch/', text)
+        self.assertIn("--image-suffix '?raw=true'", text)
+        self.assertNotIn('raw.githubusercontent.com', text)
+
 if __name__ == '__main__':
     unittest.main()
