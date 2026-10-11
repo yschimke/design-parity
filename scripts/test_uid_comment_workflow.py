@@ -2,6 +2,7 @@
 """Pin the security shape of the UID parity comment workflow."""
 import os
 import re
+import subprocess
 from pathlib import Path
 import unittest
 
@@ -54,6 +55,21 @@ class CommentWorkflowTest(unittest.TestCase):
         self.assertIn('--image-base "../blob/$branch/', text)
         self.assertIn("--image-suffix '?raw=true'", text)
         self.assertNotIn('raw.githubusercontent.com', text)
+
+    def test_prefix_validation_matches_upload_artifact_and_slugs_are_ref_safe(self):
+        step = next(s for s in self.steps if s.get('name') == 'Resolve the pull request')['run']
+        script = step.split('pr=$(')[0].replace('echo "SLUG=$slug" >> "$GITHUB_ENV"', 'echo "$slug"')
+        def slug(prefix):
+            result = subprocess.run(['bash', '-e', '-c', script], env={**os.environ, 'PREFIX': prefix}, capture_output=True, text=True)
+            return result.stdout.strip() if result.returncode == 0 else None
+        self.assertEqual(slug('adaptive-uid'), 'adaptive-uid')
+        for prefix in ('phone_uid', 'PhoneUID', 'phone uid', '@phone', 'wear.uid'):
+            with self.subTest(prefix=prefix):
+                self.assertRegex(slug(prefix), r'^[a-z0-9-]+-[0-9a-f]{8}$')
+        self.assertNotEqual(slug('phone_uid'), slug('phone-uid'))
+        for prefix in ('', 'a/b', 'a:b', 'q?', 'x*', 'a"b', 'a\\b'):
+            with self.subTest(prefix=prefix):
+                self.assertIsNone(slug(prefix))
 
 if __name__ == '__main__':
     unittest.main()

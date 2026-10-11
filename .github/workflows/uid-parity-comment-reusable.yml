@@ -58,10 +58,13 @@ jobs:
           RUN_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          # Any prefix the parity workflow accepts; a lowercase slug (hash-suffixed when it
-          # had to change) names the thumbnail branch and the comment marker.
-          [[ "$PREFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "::error::Invalid artifact-prefix"; exit 1; }
-          slug=$(printf '%s' "$PREFIX" | tr 'A-Z._' 'a-z--')
+          # Any prefix upload-artifact accepts (it forbids only " : < > | * ? \ / and control
+          # characters). A lowercase [a-z0-9-] slug, hash-suffixed whenever it had to change,
+          # names the thumbnail branch and the comment marker.
+          if [ -z "$PREFIX" ] || [[ "$PREFIX" == *[\":\<\>\|\*\?\\/]* ]] || [[ "$PREFIX" =~ [[:cntrl:]] ]]; then
+            echo "::error::Invalid artifact-prefix"; exit 1
+          fi
+          slug=$(printf '%s' "$PREFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
           [ "$slug" = "$PREFIX" ] || slug="$slug-$(printf '%s' "$PREFIX" | sha256sum | cut -c1-8)"
           echo "SLUG=$slug" >> "$GITHUB_ENV"
           pr=$(jq -r '.[0].number // empty' <<<"$RUN_PRS")
@@ -85,6 +88,7 @@ jobs:
       - name: Download PR evidence
         if: steps.pr.outputs.number
         run: gh run download "$RUN_ID" --repo "$REPO" --name "$PREFIX-evidence" --dir _pr || echo "No $PREFIX-evidence artifact on run $RUN_ID"
+      # Up to 100 runs back, which covers the artifact retention window in practice.
       - name: Download base evidence from the newest default-branch run that has it
         if: steps.pr.outputs.number
         env:
@@ -92,7 +96,7 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           for id in $(gh run list --repo "$REPO" --workflow "$BASE_WORKFLOW" --branch "$DEFAULT_BRANCH" \
-              --status completed --limit 10 --json databaseId --jq '.[].databaseId'); do
+              --status completed --limit 100 --json databaseId --jq '.[].databaseId'); do
             if gh run download "$id" --repo "$REPO" --name "$PREFIX-evidence" --dir _base 2>/dev/null; then
               echo "Base evidence from run $id"; exit 0
             fi

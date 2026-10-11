@@ -108,8 +108,10 @@ jobs:
   on the default branch. Without base evidence, the comment lists every capture
   with a pixel difference.
 - `artifact-prefix` must match the parity call; each prefix gets its own comment.
-  Prefixes with capitals, `.` or `_` are turned into a lowercase slug, with a short
-  hash suffix, for the branch and comment marker.
+  Any prefix `upload-artifact` accepts works; anything outside `[a-z0-9-]` is turned
+  into a lowercase slug, with a short hash suffix, for the branch and comment marker.
+  Prefixes used in one repository must differ ignoring case, because GitHub compares
+  concurrency group names case-insensitively.
 - Thumbnails are pushed to an orphan branch `uid-parity-<slug>-pr-<number>`,
   replaced on every run, and linked as repository-relative
   `../blob/<branch>/<path>?raw=true` images. They render for anyone who can read
