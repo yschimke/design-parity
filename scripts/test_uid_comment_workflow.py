@@ -14,6 +14,7 @@ WORKFLOW = Path(os.environ.get('UID_COMMENT_WORKFLOW', Path(__file__).resolve().
 class CommentWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.workflow = yaml.safe_load(WORKFLOW.read_text())
+        self.prep = self.workflow['jobs']['prep']
         self.job = self.workflow['jobs']['comment']
         self.steps = self.job['steps']
 
@@ -22,9 +23,13 @@ class CommentWorkflowTest(unittest.TestCase):
 
     def test_job_has_only_the_permissions_it_needs(self):
         self.assertEqual(self.job['permissions'], {'actions': 'read', 'contents': 'write', 'pull-requests': 'write'})
+        self.assertEqual(self.prep['permissions'], {})
+        self.assertEqual(self.workflow['jobs'].keys(), {'prep', 'comment'})
 
     def test_runs_only_for_same_repository_pull_requests(self):
-        condition = ' '.join(self.job['if'].split())
+        # The comment job runs only after prep, so prep's condition gates both.
+        self.assertEqual(self.job['needs'], 'prep')
+        condition = ' '.join(self.prep['if'].split())
         self.assertIn("github.event.workflow_run.event == 'pull_request'", condition)
         self.assertIn('github.event.workflow_run.head_repository.full_name == github.repository', condition)
         # A timed-out run must replace the previous commit's result rather than leave it showing.
@@ -41,7 +46,7 @@ class CommentWorkflowTest(unittest.TestCase):
         self.assertNotRegex(text, r'ref:\s*\$\{\{\s*github\.event\.workflow_run\.head')
 
     def test_pr_supplied_values_reach_shell_only_through_env(self):
-        for step in self.steps:
+        for step in self.steps + self.prep['steps']:
             run = step.get('run', '')
             self.assertNotRegex(run, r'\$\{\{[^}]*(workflow_run\.(head_branch|display_title|pull_requests)|inputs\.)', step.get('name', run[:40]))
 
@@ -51,8 +56,11 @@ class CommentWorkflowTest(unittest.TestCase):
         # A running publisher must finish: cancelling it between the push and the comment
         # update would leave the comment pointing at removed thumbnails.
         self.assertFalse(concurrency['cancel-in-progress'])
-        for part in ('github.repository', 'inputs.artifact-prefix', 'github.event.workflow_run.head_branch'):
+        # Keyed on the hashed slug, not the raw prefix: GitHub compares group names
+        # case-insensitively, so PhoneUID and phoneuid would otherwise share a group.
+        for part in ('github.repository', 'needs.prep.outputs.slug', 'github.event.workflow_run.head_branch'):
             self.assertIn(part, concurrency['group'])
+        self.assertNotIn('inputs.artifact-prefix', concurrency['group'])
 
     def test_thumbnails_use_repository_relative_links(self):
         text = WORKFLOW.read_text()
@@ -74,8 +82,9 @@ class CommentWorkflowTest(unittest.TestCase):
                 self.assertIn('select(.expired | not)', step)
 
     def test_prefix_validation_matches_upload_artifact_and_slugs_are_ref_safe(self):
-        step = next(s for s in self.steps if s.get('name') == 'Resolve the pull request')['run']
-        script = step.split('pr=$(')[0].replace('echo "SLUG=$slug" >> "$GITHUB_ENV"', 'echo "$slug"')
+        step = next(s for s in self.prep['steps'] if s.get('name') == 'Validate the prefix and derive its slug')['run']
+        script = step.replace('echo "slug=$slug" >> "$GITHUB_OUTPUT"', 'echo "$slug"')
+        self.assertNotEqual(script, step)
         def slug(prefix):
             result = subprocess.run(['bash', '-e', '-c', script], env={**os.environ, 'PREFIX': prefix}, capture_output=True, text=True)
             return result.stdout.strip() if result.returncode == 0 else None
@@ -84,6 +93,8 @@ class CommentWorkflowTest(unittest.TestCase):
             with self.subTest(prefix=prefix):
                 self.assertRegex(slug(prefix), r'^[a-z0-9-]+-[0-9a-f]{8}$')
         self.assertNotEqual(slug('phone_uid'), slug('phone-uid'))
+        # Case alone must separate slugs, because the concurrency group is case-insensitive.
+        self.assertNotEqual(slug('PhoneUID').lower(), slug('phoneuid').lower())
         self.assertNotEqual(slug('phone_uid'), slug(slug('phone_uid')))
         long = slug('a' * 240)
         self.assertRegex(long, r'^a{64}-[0-9a-f]{8}$')
