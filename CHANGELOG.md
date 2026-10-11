@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/yschimke/design-parity/compare/v1.12.0...v1.13.0) (2026-10-11)
+
+
+### Features
+
+* **export-driver:** let a ui-builder supersedes rule set the property an old id implied ([#555](https://github.com/yschimke/design-parity/issues/555)) ([bda999a](https://github.com/yschimke/design-parity/commit/bda999a4a7b40aa282c46e0dc13845c9e37becdb))
+
 ## [1.12.0](https://github.com/yschimke/design-parity/compare/v1.11.0...v1.12.0) (2026-10-11)
 
 
