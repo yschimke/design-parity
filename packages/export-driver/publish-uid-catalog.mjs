@@ -34,20 +34,29 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   }
   const byPreview = new Map();
   const routes = new Set();
+  // One primary reference per component: the first capture of its initial state. Every other
+  // capture is a secondary, so the cross-system DESIGN column never shows a non-default state.
+  const primaries = new Set();
   for (const capture of plan.captures) {
     const component = byDesign.get(capture.designId);
     const reference = refs.get(capture.previewId);
     if (!component || !reference) throw new Error('Missing component or reference for capture');
     if (reference.source?.provider !== 'ui-builder' || reference.artifact?.kind !== 'uid' || reference.source.revision !== revision)
       throw new Error('Reference must be a UID from the published source revision');
+    // `size` defaults to the width; captures that differ only in height or density name their own.
+    const size = capture.size ?? `${capture.widthDp}dp`;
+    if (typeof size !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(size)) throw new Error('Capture size must be a path-safe axis name');
     const image = { uri: await asset(`previews/${capture.previewId}.png`), previewId: capture.previewId,
       width: capture.widthDp * capture.density, height: capture.heightDp * capture.density,
-      state: capture.state === (component.defaultState ?? 'default') ? 'default' : capture.state, theme: capture.theme, size: `${capture.widthDp}dp` };
+      state: capture.state === (component.defaultState ?? 'default') ? 'default' : capture.state, theme: capture.theme, size };
     const route = stickerId(component.componentId, 'ideal', image);
-    if (!route || routes.has(route)) throw new Error('Duplicate catalog capture axes');
+    if (!route || routes.has(route)) throw new Error('Duplicate catalog capture axes; give captures that share a width distinct `size` values');
     routes.add(route);
     component.variants.ideal.push(image);
-    byPreview.set(capture.previewId, { route, componentId: component.componentId });
+    const primary = image.state === 'default' && !primaries.has(component.componentId);
+    if (primary) primaries.add(component.componentId);
+    byPreview.set(capture.previewId, { route, componentId: component.componentId, primary,
+      slot: { state: image.state, ...(image.theme ? { theme: image.theme } : {}), size } });
   }
   await mkdir(out, { recursive: true });
   await writeCatalog({ meta: { system: publication.system, title: publication.title }, components }, out,
@@ -59,15 +68,21 @@ export async function publishUidCatalog({ plan, root, out, revision }) {
   catalog.source = { repo: plan.repository, ref: revision, module: publication.sourceModule };
   catalog.generatedAt = new Date().toISOString();
   await writeFile(catalogPath, JSON.stringify(catalog, null, 2) + '\n');
+  const referencesDir = resolve(out, 'references');
+  const referencesIndex = resolve(referencesDir, 'index.json');
   for (const reference of manifest.references) {
     const published = byPreview.get(reference.previewId);
     reference.previewId = published.route;
     reference.source.attributes = { ...reference.source.attributes, componentId: published.componentId };
+    reference.tier = published.primary ? 'primary' : 'secondary';
+    if (published.primary) delete reference.slot;
+    else reference.slot = published.slot;
     for (const relative of [reference.raster.path, reference.artifact.path]) {
       // Preserve the content-addressed UID and PNG bytes; the server verifies their hashes.
       const source = await asset(relative);
       const target = resolve(out, relative);
-      if (!target.startsWith(resolve(out) + sep)) throw new Error('Asset escapes catalog directory');
+      // Confined to references/ so a copied asset can never overwrite catalog.json or the manifest.
+      if (!target.startsWith(referencesDir + sep) || target === referencesIndex) throw new Error('Reference assets must live under references/');
       await mkdir(dirname(target), { recursive: true });
       await copyFile(source, target);
     }

@@ -132,7 +132,12 @@ existing catalog system ID:
 
 `sourceModule` is the logical Gradle project path; `sourceDirectory` is its
 repository-relative directory (an empty string for the root project). Components
-and capture axes must have distinct identities. The canonical catalog writer
+and capture axes must have distinct identities. A capture's `size` axis defaults to
+its width (`360dp`); captures of one component, state and theme that share a width
+but differ in height or density set an explicit path-safe `size` (for example
+`360x640dp`). The first capture of each component's `defaultState` is its primary
+reference; every other capture is published as a `secondary` reference with its
+state/theme/size slot, so cross-system comparison shows the initial state. The canonical catalog writer
 supplies sticker IDs and the existing section merger preserves reference bindings
 while combining reference manifests. Duplicate reference IDs with different data
 fail publication instead of silently replacing another screen's reference.
