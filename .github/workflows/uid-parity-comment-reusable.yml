@@ -62,7 +62,7 @@ jobs:
         if: steps.pr.outputs.number
         with:
           repository: yschimke/design-parity
-          ref: f5cffed0f7dd1af25f7d28c03ff170e94f359fe9
+          ref: 2f270fad9b9be50864395a8a1e3005e3ee91c2d5
           path: _uid_tools
           persist-credentials: false
           sparse-checkout: scripts/uid
