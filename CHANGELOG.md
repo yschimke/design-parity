@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.12.0](https://github.com/yschimke/design-parity/compare/v1.11.0...v1.12.0) (2026-10-11)
+
+
+### Features
+
+* build a sticky UID parity PR comment from evidence artifacts ([#549](https://github.com/yschimke/design-parity/issues/549)) ([612f732](https://github.com/yschimke/design-parity/commit/612f7326e7fd0095a45da5a6d289a83bdb47cb80))
+* **export-driver:** declare a component's exportProjection in the ui-builder policy schema ([#552](https://github.com/yschimke/design-parity/issues/552)) ([d1eabb9](https://github.com/yschimke/design-parity/commit/d1eabb9ae6f897708f1963faab29fcd0a55872d3))
+* post a sticky UID parity PR comment from a reusable workflow ([#550](https://github.com/yschimke/design-parity/issues/550)) ([1ba6f3d](https://github.com/yschimke/design-parity/commit/1ba6f3d95793550256721662e4f6775cb3d2f41e))
+
+
+### Bug Fixes
+
+* key the UID parity comment concurrency on the hashed slug ([#553](https://github.com/yschimke/design-parity/issues/553)) ([2012e64](https://github.com/yschimke/design-parity/commit/2012e64078f64bcb2b717677f4f2d95f5a370315))
+
 ## [1.11.0](https://github.com/yschimke/design-parity/compare/v1.10.0...v1.11.0) (2026-10-11)
 
 
