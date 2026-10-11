@@ -1,0 +1,166 @@
+name: UID parity comment (reusable)
+
+# Posts one sticky PR comment summarising a UID parity run: exact captures
+# against base, the captures whose reference or candidate changed, and
+# reference / diff / candidate thumbnails. Call it from a default-branch
+# workflow triggered by `workflow_run` of the app's UID pilot workflow; see
+# docs/UID_PARITY_CI.md#pr-comment. Only artifact data from the PR run is read
+# (JSON and bounded PNGs); no PR code runs here.
+on:
+  workflow_call:
+    inputs:
+      artifact-prefix:
+        description: Same prefix the parity run used; its <prefix>-evidence artifact is read.
+        type: string
+        default: adaptive-uid
+      base-workflow:
+        description: >-
+          Workflow file whose default-branch runs carry the base <prefix>-evidence
+          artifact (for example design-artifacts.yml). Empty uses the triggering workflow.
+        type: string
+        default: ''
+      max-images:
+        description: Changed captures shown with thumbnails; the rest are listed only.
+        type: number
+        default: 12
+
+permissions: {}
+
+jobs:
+  comment:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      contains(fromJSON('["success", "failure", "timed_out"]'), github.event.workflow_run.conclusion) &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # One comment job per repository, prefix and PR branch at a time. A running job always
+    # finishes, so its thumbnail push and comment update land together; a newer run waits,
+    # and replaces any run still waiting.
+    concurrency:
+      group: uid-parity-comment-${{ github.repository }}-${{ inputs.artifact-prefix }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    permissions:
+      actions: read          # PR and base evidence artifacts
+      contents: write        # the per-PR thumbnail branch
+      pull-requests: write   # the sticky comment
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PREFIX: ${{ inputs.artifact-prefix }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - name: Resolve the pull request
+        id: pr
+        env:
+          RUN_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          # Any prefix upload-artifact accepts (it forbids only " : < > | * ? \ / and control
+          # characters). A lowercase [a-z0-9-] slug plus a hash of the exact prefix names the
+          # thumbnail branch and the comment marker, so distinct prefixes never share either. It is capped at 64 characters so
+          # uid-parity-<slug>-pr-<n> stays well inside the 255-byte ref filename limit.
+          if [ -z "$PREFIX" ] || [[ "$PREFIX" == *[\":\<\>\|\*\?\\/]* ]] || [[ "$PREFIX" =~ [[:cntrl:]] ]]; then
+            echo "::error::Invalid artifact-prefix"; exit 1
+          fi
+          slug=$(printf '%s' "$PREFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+          slug=${slug:0:64}
+          slug="$slug-$(printf '%s' "$PREFIX" | sha256sum | cut -c1-8)"
+          echo "SLUG=$slug" >> "$GITHUB_ENV"
+          pr=$(jq -r '.[0].number // empty' <<<"$RUN_PRS")
+          [ -n "$pr" ] || pr=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" --jq '[.[] | select(.state == "open")][0].number // empty')
+          if [[ "$pr" =~ ^[0-9]+$ ]]; then echo "number=$pr" >> "$GITHUB_OUTPUT"; else echo "No open pull request for $HEAD_SHA"; fi
+      # The comment script comes from a reviewed design-parity commit, never the caller's PR.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.pr.outputs.number
+        with:
+          repository: yschimke/design-parity
+          ref: 612f7326e7fd0095a45da5a6d289a83bdb47cb80
+          path: _uid_tools
+          persist-credentials: false
+          sparse-checkout: scripts/uid
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: steps.pr.outputs.number
+        with:
+          python-version: '3.12'
+      - if: steps.pr.outputs.number
+        run: python -m pip install Pillow==12.3.0
+      - name: Download PR evidence
+        if: steps.pr.outputs.number
+        # Only an absent (or expired) artifact means "no evidence"; an API or download failure
+        # fails the job rather than overwriting the comment with a false status.
+        run: |
+          count=$(gh api -X GET "repos/$REPO/actions/runs/$RUN_ID/artifacts" -f name="$PREFIX-evidence" \
+            --jq '[.artifacts[] | select(.expired | not)] | length')
+          if [ "$count" = 0 ]; then
+            echo "No $PREFIX-evidence artifact on run $RUN_ID"
+          else
+            gh run download "$RUN_ID" --repo "$REPO" --name "$PREFIX-evidence" --dir _pr
+          fi
+      # Up to 100 runs back, which covers the artifact retention window in practice. Which runs
+      # still hold the artifact is looked up first, so a failed download fails the job instead of
+      # silently dropping the baseline.
+      - name: Download base evidence from the newest default-branch run that has it
+        if: steps.pr.outputs.number
+        env:
+          BASE_WORKFLOW: ${{ inputs.base-workflow || github.event.workflow_run.workflow_id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          runs=$(gh run list --repo "$REPO" --workflow "$BASE_WORKFLOW" --branch "$DEFAULT_BRANCH" \
+            --status completed --limit 100 --json databaseId --jq '.[].databaseId')
+          for id in $runs; do
+            count=$(gh api -X GET "repos/$REPO/actions/runs/$id/artifacts" -f name="$PREFIX-evidence" \
+              --jq '[.artifacts[] | select(.expired | not)] | length')
+            if [ "$count" != 0 ]; then
+              gh run download "$id" --repo "$REPO" --name "$PREFIX-evidence" --dir _base
+              echo "Base evidence from run $id"; exit 0
+            fi
+          done
+          echo "No base evidence found; the comment lists every differing capture."
+      - name: Build the comment and thumbnails
+        if: steps.pr.outputs.number
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          MAX_IMAGES: ${{ inputs.max-images }}
+        run: |
+          branch="uid-parity-$SLUG-pr-$PR"
+          echo "IMAGE_BRANCH=$branch" >> "$GITHUB_ENV"
+          base_args=()
+          [ -d _base ] && base_args=(--base _base)
+          python _uid_tools/scripts/uid/comment.py --pr _pr "${base_args[@]}" \
+            --marker "uid-parity:$SLUG" --run-url "$RUN_URL" --limit "$MAX_IMAGES" \
+            --images-out "_images/run-$RUN_ID-$RUN_ATTEMPT" \
+            --image-base "../blob/$branch/run-$RUN_ID-$RUN_ATTEMPT" --image-suffix '?raw=true' \
+            --output comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+      # One orphan commit per PR and prefix, replaced on every run, so the branch never grows.
+      # The branch name has no slash so the repository-relative ../blob/<branch>/<path> image
+      # links stay unambiguous; those links also honour private-repository read access.
+      - name: Publish thumbnails
+        if: steps.pr.outputs.number && hashFiles('_images/**') != ''
+        run: |
+          cd _images
+          git init -q -b "$IMAGE_BRANCH"
+          git add -A
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "UID parity thumbnails for run $RUN_ID"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            push -q --force "https://github.com/$REPO.git" "HEAD:refs/heads/$IMAGE_BRANCH"
+      - name: Create or update the sticky comment
+        if: steps.pr.outputs.number
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          marker="<!-- uid-parity:$SLUG -->"
+          # Captured whole first, so a failed lookup fails the job instead of posting a duplicate.
+          ids=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")
+          id=${ids%%$'\n'*}
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md >/dev/null
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@comment.md >/dev/null
+          fi

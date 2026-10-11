@@ -78,6 +78,54 @@ pilots must still use different prefixes; overwriting is not isolation.
 Download `<prefix>-evidence`
 and open `index.html` to inspect reference / exact pixel diff / actual.
 
+## PR comment
+
+`uid-parity-comment-reusable.yml` posts one sticky comment on each pull request
+that runs the parity workflow. The comment gives exact captures against base
+(for example **60/60 exact (base: 38/60)**), lists the captures whose reference,
+candidate or presence changed, and embeds reference / diff / candidate thumbnails.
+Call it from a default-branch workflow triggered by the pilot workflow:
+
+```yaml
+name: Adaptive UID parity comment
+on:
+  workflow_run:
+    workflows: [Adaptive UID pilot]
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+jobs:
+  comment:
+    uses: yschimke/design-parity/.github/workflows/uid-parity-comment-reusable.yml@<reviewed-commit-sha>
+    with:
+      base-workflow: design-artifacts.yml
+```
+
+- `base-workflow` names the workflow whose default-branch runs carry the base
+  `<prefix>-evidence` artifact. Leave it empty when the pilot workflow itself runs
+  on the default branch. Without base evidence, the comment lists every capture
+  with a pixel difference.
+- `artifact-prefix` must match the parity call; each prefix gets its own comment.
+  Any prefix `upload-artifact` accepts works. The branch and comment marker use a
+  lowercase `[a-z0-9-]` slug of it plus a short hash of the exact prefix
+  (`adaptive-uid` → `adaptive-uid-<hash>`), so distinct prefixes never share them.
+  Prefixes used in one repository must differ ignoring case, because GitHub compares
+  concurrency group names case-insensitively.
+- Thumbnails are pushed to an orphan branch `uid-parity-<slug>-pr-<number>`,
+  replaced on every run, and linked as repository-relative
+  `../blob/<branch>/<path>?raw=true` images. They render for anyone who can read
+  the repository, including private ones. Delete these branches when the pull
+  request closes if you want them gone.
+- Overlapping runs for the same PR and prefix are serialised: a running job always
+  finishes its thumbnail push and comment update, and a newer run waits for it.
+
+The job runs only for same-repository pull requests whose parity run succeeded,
+failed or timed out. It reads the PR's artifacts as data (JSON and bounded PNGs, through the
+pinned [`comment.py`](../scripts/uid/README.md)); it never checks out or runs PR
+code, so the write token cannot be reached by the pull request.
+
 ## Optional model audit
 
 The existing opt-in model critique is separate from this deterministic workflow.
