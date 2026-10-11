@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -10,6 +11,10 @@ comment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(comment)
 
 
+def sha(label):
+    return hashlib.sha256(label.encode()).hexdigest()
+
+
 def write_evidence(root, captures):
     """captures: {id: (referenceSha, candidateSha, changedPixels)}"""
     for folder in ('previews', 'references', 'diffs'):
@@ -18,7 +23,7 @@ def write_evidence(root, captures):
     for pid, (ref, cand, changed) in captures.items():
         for path in (f'previews/{pid}.png', f'references/{pid}-x.png', f'diffs/{pid}.png'):
             Image.new('RGB', (800, 400), 'white').save(root / path)
-        report.append({'previewId': pid, 'referenceSha256': ref, 'candidateSha256': cand, 'changedPixels': changed, 'totalPixels': 320000})
+        report.append({'previewId': pid, 'referenceSha256': sha(ref), 'candidateSha256': sha(cand), 'changedPixels': changed, 'totalPixels': 320000})
         refs.append({'previewId': pid, 'raster': {'path': f'references/{pid}-x.png'}})
     (root / 'evidence.json').write_text(json.dumps({'schema': comment.SCHEMA, 'captures': report}))
     (root / 'references/index.json').write_text(json.dumps({'references': refs}))
@@ -126,9 +131,11 @@ class CommentTest(unittest.TestCase):
         self.assertLess(len(text), 65536)
 
     def test_rejects_empty_lists_and_non_integer_or_zero_counts(self):
-        cap = {'previewId': 'a', 'referenceSha256': 'r', 'candidateSha256': 'c'}
+        cap = {'previewId': 'a', 'referenceSha256': sha('r'), 'candidateSha256': sha('c')}
         for captures in ([], None, [{**cap, 'changedPixels': False, 'totalPixels': True}], [{**cap, 'changedPixels': 0, 'totalPixels': 0}],
-                         [{**cap, 'changedPixels': 1.0, 'totalPixels': 2}]):
+                         [{**cap, 'changedPixels': 1.0, 'totalPixels': 2}],
+                         [{**cap, 'referenceSha256': None, 'changedPixels': 0, 'totalPixels': 1}],
+                         [{**cap, 'candidateSha256': 'not-a-digest', 'changedPixels': 0, 'totalPixels': 1}]):
             with self.subTest(captures=str(captures)[:20]), tempfile.TemporaryDirectory() as tmp:
                 (Path(tmp) / 'evidence.json').write_text(json.dumps({'schema': comment.SCHEMA, 'captures': captures}))
                 with self.assertRaises(ValueError):
@@ -148,6 +155,14 @@ class CommentTest(unittest.TestCase):
         text, _ = self.run_comment({'kept': ('r', 'c', 0)}, base, limit=0)
         self.assertEqual(text.count('| removed |'), comment.MAX_ROWS)
         self.assertIn("3 more removed captures are only in the base run's evidence.", text)
+
+    def test_rejects_negative_limit(self):
+        with self.assertRaises(ValueError):
+            self.run_comment({'a': ('r', 'c', 1)}, limit=-1)
+
+    def test_oversized_fixed_content_fails_instead_of_looping(self):
+        with self.assertRaises(ValueError):
+            self.run_comment({'a': ('r', 'c', 1)}, **{'run-url': 'https://x/' + 'y' * comment.MAX_BODY})
 
 if __name__ == '__main__':
     unittest.main()

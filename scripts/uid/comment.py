@@ -23,6 +23,7 @@ SCHEMA = 'adaptive-uid-evidence/v1'
 # The producer's capture-ID contract (evidence.py); length is bounded by the body budget instead.
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]*')
 THUMB_WIDTH = 360
+SHA256 = re.compile(r'[0-9a-f]{64}')
 # GitHub rejects comment bodies over 65,536 characters; rows past this are counted, not listed.
 MAX_ROWS = 200
 MAX_BODY = 60_000
@@ -45,6 +46,8 @@ def load(root):
         changed, total = capture['changedPixels'], capture['totalPixels']
         if type(changed) is not int or type(total) is not int or not 0 <= changed <= total or total == 0:
             raise ValueError(f'Invalid pixel counts: {pid}')
+        if not all(isinstance(capture[k], str) and SHA256.fullmatch(capture[k]) for k in ('referenceSha256', 'candidateSha256')):
+            raise ValueError(f'Invalid digest: {pid}')
         captures[pid] = capture
     return captures
 
@@ -147,6 +150,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not re.fullmatch(r'[a-z0-9:-]+', args.marker):
         raise ValueError('Invalid marker')
+    if args.limit < 0:
+        raise ValueError('--limit must not be negative')
     pr = load(args.pr)
     if pr is None:
         args.output.write_text(f'<!-- {args.marker} -->\n### UID parity\n\nThis run produced no evidence; see the [parity run]({args.run_url}).\n')
@@ -158,6 +163,8 @@ def main(argv=None):
     text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url)
     max_rows = MAX_ROWS
     while len(text) > MAX_BODY:
+        if not published and max_rows == 0:
+            raise ValueError('Comment body exceeds the GitHub limit without any rows')
         published, max_rows = [], (max_rows if published else max_rows // 2)
         text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url, max_rows)
     args.output.write_text(text)
