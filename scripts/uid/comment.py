@@ -203,10 +203,13 @@ def main(argv=None):
         raise ValueError('--limit must not be negative')
     pr = load(args.pr)
     if pr is None:
-        args.output.write_text(f'<!-- {args.marker} -->\n### UID parity\n\nThis run produced no evidence; see the [parity run]({args.run_url}).\n')
+        where = f'; see the [parity run]({args.run_url})' if args.run_url else ''
+        args.output.write_text(f'<!-- {args.marker} -->\n### UID parity\n\nThis run produced no evidence{where}.\n')
         return
     verify_counts(args.pr, pr)
     base = load(args.base)
+    if base is not None:
+        verify_counts(args.base, base)
     rows, removed = changes(pr, base)
     published = publish(args.pr, rows, args.images_out, args.limit) if args.images_out and args.image_base else []
     # Stay under GitHub's body limit however long the IDs: drop thumbnails, then halve the table.

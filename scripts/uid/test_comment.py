@@ -213,5 +213,24 @@ class CommentTest(unittest.TestCase):
         text, _ = self.run_comment({'a': ('r', 'c')}, **{'image-base': '../blob/uid-parity-x-pr-1/run-1-1', 'image-suffix': '?raw=true'})
         self.assertIn('src="../blob/uid-parity-x-pr-1/run-1-1/a/reference.png?raw=true"', text)
 
+    def test_no_evidence_without_run_url_has_no_empty_link(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            comment.main(['--pr', str(tmp / 'none'), '--marker', 'm', '--output', str(tmp / 'b.md')])
+            text = (tmp / 'b.md').read_text()
+            self.assertIn('This run produced no evidence.', text)
+            self.assertNotIn('()', text)
+
+    def test_base_evidence_is_verified_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            write_evidence(tmp / 'pr', {'a': ('r', 'c')})
+            write_evidence(tmp / 'base', {'a': ('r', 'c')})
+            report = json.loads((tmp / 'base/evidence.json').read_text())
+            report['captures'][0]['changedPixels'] = 0  # forged exact baseline
+            (tmp / 'base/evidence.json').write_text(json.dumps(report))
+            with self.assertRaises(ValueError):
+                comment.main(['--pr', str(tmp / 'pr'), '--base', str(tmp / 'base'), '--marker', 'm', '--output', str(tmp / 'b.md')])
+
 if __name__ == '__main__':
     unittest.main()
