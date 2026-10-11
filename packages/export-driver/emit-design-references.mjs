@@ -738,7 +738,18 @@ async function scoreReferences() {
   // were DROPPED: a run whose every reference rasterised and published, and which merely lacks an
   // optional score because the box had no Chromium, has published everything it was asked to.
   // Failing it would make the enhancement a liability on exactly the runs that are gated hardest.
-  const scorer = await openScorer({ executablePath: EXEC, log: note, pages: CONCURRENCY });
+  // No more pages than there are pairs to score. A three-reference catalog has no use for eight
+  // browser contexts, and a surplus page that fails to open would cost the run every score a
+  // one-page scorer would have produced.
+  const scorable = published.filter((record) => {
+    const sticker = record.origin?.imagePath;
+    return typeof sticker === "string" && sticker !== "";
+  }).length;
+  const scorer = await openScorer({
+    executablePath: EXEC,
+    log: note,
+    pages: Math.max(1, Math.min(CONCURRENCY, scorable)),
+  });
   // Absent a browser the manifest simply carries no `match`, and the viewer computes it live on
   // lane entry exactly as it does today. `openScorer` has already said why.
   if (!scorer) return;

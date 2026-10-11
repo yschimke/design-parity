@@ -150,12 +150,13 @@ jobs:
           set -euo pipefail
           out=$(npm test --workspace @design-parity/export-driver 2>&1) || { echo "$out"; exit 1; }
           echo "$out"
-          # The mirrors self-skip without a server checkout, and the font-dependent browser tests
-          # without their face in RC_FONTS_DIR (`... is not vendored`, `missing <face>.ttf`). Both
-          # are supplied above, so any of these skips means a fetch did not resolve. Matched on the
-          # skip reasons rather than a skip count: the suite has other, legitimate skips, so a count
-          # would either never fire or always fire.
-          for reason in "no compose-preview-server checkout" "is not vendored" "missing RobotoFlex.ttf"; do
+          # The mirrors self-skip without a server checkout, the font-dependent browser tests without
+          # their face in RC_FONTS_DIR (`... is not vendored`, `missing <face>.ttf`), and the scorer
+          # pool test without a Chromium. All are supplied above, so any of these skips means a
+          # fetch or install did not resolve. Matched on the skip reasons rather than a skip count:
+          # the suite has other, legitimate skips, so a count would either never fire or always fire.
+          for reason in "no compose-preview-server checkout" "is not vendored" "missing RobotoFlex.ttf" \
+                        "no Playwright Chromium installed"; do
             if grep -q "$reason" <<<"$out"; then
               echo "::error::a test skipped with '$reason' although its input was supplied"
               exit 1

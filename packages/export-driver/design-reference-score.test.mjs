@@ -94,13 +94,28 @@ test("no browser yields no scorer, not a thrown export", async () => {
   assert.match(messages[0], /cannot score references/);
 });
 
-// A real browser is needed to prove the pool scores what one page scores. CI's browser job and a
-// developer with Chromium set DESIGN_REFERENCES_CHROMIUM (the emitter's own `--chromium` fallback);
-// without it this skips, as the asset test above does without a server checkout.
-const CHROMIUM = (process.env.DESIGN_REFERENCES_CHROMIUM ?? "").trim();
+// A real browser is needed to prove the pool scores what one page scores: the one Playwright installs
+// (CI's export-driver-browser job runs `playwright install chromium`), or DESIGN_REFERENCES_CHROMIUM —
+// the emitter's own `--chromium` fallback — for a developer with a Chromium of their own. Without
+// either it skips with a reason that job rejects, so it cannot quietly stop running there.
+const CHROMIUM = (process.env.DESIGN_REFERENCES_CHROMIUM ?? "").trim() || undefined;
+const PLAYWRIGHT_CHROMIUM = await (async () => {
+  try {
+    const { chromium } = await import("playwright");
+    const file = chromium.executablePath();
+    return file && fs.existsSync(file);
+  } catch {
+    return false;
+  }
+})();
 const NO_BROWSER = NO_SERVER.skip
   ? NO_SERVER
-  : { skip: CHROMIUM ? false : "set DESIGN_REFERENCES_CHROMIUM to a Chromium to run it" };
+  : {
+      skip:
+        CHROMIUM || PLAYWRIGHT_CHROMIUM
+          ? false
+          : "no Playwright Chromium installed (or set DESIGN_REFERENCES_CHROMIUM)",
+    };
 
 test("a pool of pages scores every pair exactly as one page does", NO_BROWSER, async () => {
   const { PNG } = await import("pngjs");
@@ -133,5 +148,10 @@ test("a pool of pages scores every pair exactly as one page does", NO_BROWSER, a
   };
   const serial = await scoreAll(1);
   assert.ok(serial.every((match) => match && Number.isFinite(match.percent)));
+  // The comparison below only means something if the pairs score DIFFERENTLY: with one number for
+  // every pair, a pool that handed a result to the wrong record, or one result to every record,
+  // would still match the serial run exactly.
+  const distinct = new Set(serial.map((match) => JSON.stringify(match)));
+  assert.ok(distinct.size >= 6, `expected varied scores, got ${distinct.size} distinct: ${[...distinct]}`);
   assert.deepEqual(await scoreAll(4), serial);
 });
