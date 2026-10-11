@@ -209,5 +209,9 @@ class CommentTest(unittest.TestCase):
             with Image.open(out) as image:
                 self.assertEqual(image.size, (1, 2 * comment.THUMB_WIDTH))
 
+    def test_image_suffix_supports_repository_relative_links(self):
+        text, _ = self.run_comment({'a': ('r', 'c')}, **{'image-base': '../blob/uid-parity-x-pr-1/run-1-1', 'image-suffix': '?raw=true'})
+        self.assertIn('src="../blob/uid-parity-x-pr-1/run-1-1/a/reference.png?raw=true"', text)
+
 if __name__ == '__main__':
     unittest.main()

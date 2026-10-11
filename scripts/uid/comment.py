@@ -146,7 +146,7 @@ def publish(root, rows, out, limit):
     return published
 
 
-def body(marker, pr, base, rows, removed, published, image_base, run_url, max_rows=MAX_ROWS):
+def body(marker, pr, base, rows, removed, published, image_base, run_url, max_rows=MAX_ROWS, image_suffix=''):
     total = len(pr)
     headline = f'**{exact(pr)}/{total} exact**'
     if base is not None:
@@ -174,7 +174,7 @@ def body(marker, pr, base, rows, removed, published, image_base, run_url, max_ro
     if published:
         lines += ['', '<details><summary>Reference · diff · candidate</summary>', '']
         for pid in published:
-            cells = ''.join(f'<td><img src="{html.escape(f"{image_base}/{pid}/{kind}.png", quote=True)}" alt="{kind}"></td>' for kind in ('reference', 'diff', 'candidate'))
+            cells = ''.join(f'<td><img src="{html.escape(f"{image_base}/{pid}/{kind}.png{image_suffix}", quote=True)}" alt="{kind}"></td>' for kind in ('reference', 'diff', 'candidate'))
             lines.append(f'<b><code>{pid}</code></b><table><tr>{cells}</tr></table>')
         if len(rows) > len(published):
             lines.append(f'{len(rows) - len(published)} more changed captures are in the evidence artifact.')
@@ -190,6 +190,8 @@ def main(argv=None):
     parser.add_argument('--base', type=Path)
     parser.add_argument('--marker', required=True)
     parser.add_argument('--image-base', default='')
+    # e.g. '?raw=true' for repository-relative ../blob/<ref>/<path> links, which honour private access
+    parser.add_argument('--image-suffix', default='')
     parser.add_argument('--images-out', type=Path)
     parser.add_argument('--run-url', default='')
     parser.add_argument('--limit', type=int, default=12)
@@ -208,13 +210,13 @@ def main(argv=None):
     rows, removed = changes(pr, base)
     published = publish(args.pr, rows, args.images_out, args.limit) if args.images_out and args.image_base else []
     # Stay under GitHub's body limit however long the IDs: drop thumbnails, then halve the table.
-    text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url)
+    text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url, image_suffix=args.image_suffix)
     max_rows = MAX_ROWS
     while len(text) > MAX_BODY:
         if not published and max_rows == 0:
             raise ValueError('Comment body exceeds the GitHub limit without any rows')
         published, max_rows = [], (max_rows if published else max_rows // 2)
-        text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url, max_rows)
+        text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url, max_rows, args.image_suffix)
     args.output.write_text(text)
 
 
