@@ -20,8 +20,8 @@ evidence = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(evidence)
 
 SCHEMA = 'adaptive-uid-evidence/v1'
-# Bounded so 200 table rows plus thumbnail markup stay well under the comment limit.
-ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,127}')
+# The producer's capture-ID contract (evidence.py); length is bounded by the body budget instead.
+ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]*')
 THUMB_WIDTH = 360
 # GitHub rejects comment bodies over 65,536 characters; rows past this are counted, not listed.
 MAX_ROWS = 200
@@ -43,7 +43,7 @@ def load(root):
         if not isinstance(pid, str) or not ID.fullmatch(pid) or pid in captures:
             raise ValueError('Invalid or duplicate capture ID')
         changed, total = capture['changedPixels'], capture['totalPixels']
-        if not (isinstance(changed, int) and isinstance(total, int) and 0 <= changed <= total):
+        if type(changed) is not int or type(total) is not int or not 0 <= changed <= total or total == 0:
             raise ValueError(f'Invalid pixel counts: {pid}')
         captures[pid] = capture
     return captures
@@ -96,7 +96,7 @@ def publish(root, rows, out, limit):
     return published
 
 
-def body(marker, pr, base, rows, removed, published, image_base, run_url):
+def body(marker, pr, base, rows, removed, published, image_base, run_url, max_rows=MAX_ROWS):
     total = len(pr)
     headline = f'**{exact(pr)}/{total} exact**'
     if base is not None:
@@ -110,10 +110,10 @@ def body(marker, pr, base, rows, removed, published, image_base, run_url):
     else:
         lines += ['| Capture | Changed | Differing pixels |', '| --- | --- | --- |']
         # Removed captures exist only in base evidence, so they are listed before changed ones.
-        shown_removed = removed[:MAX_ROWS]
+        shown_removed = removed[:max_rows]
         for pid in shown_removed:
             lines.append(f'| `{pid}` | removed | — |')
-        shown_rows = rows[:MAX_ROWS - len(shown_removed)]
+        shown_rows = rows[:max_rows - len(shown_removed)]
         for pid, sides, before, now in shown_rows:
             was = f"{before['changedPixels']:,} → " if before is not None else ''
             lines.append(f"| `{pid}` | {', '.join(sides) or '—'} | {was}{now['changedPixels']:,} |")
@@ -154,11 +154,12 @@ def main(argv=None):
     base = load(args.base)
     rows, removed = changes(pr, base)
     published = publish(args.pr, rows, args.images_out, args.limit) if args.images_out and args.image_base else []
+    # Stay under GitHub's body limit however long the IDs: drop thumbnails, then halve the table.
     text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url)
-    if len(text) > MAX_BODY:
-        text = body(args.marker, pr, base, rows, removed, [], args.image_base, args.run_url)
-    if len(text) > MAX_BODY:
-        raise ValueError('Comment body exceeds the GitHub limit')
+    max_rows = MAX_ROWS
+    while len(text) > MAX_BODY:
+        published, max_rows = [], (max_rows if published else max_rows // 2)
+        text = body(args.marker, pr, base, rows, removed, published, args.image_base, args.run_url, max_rows)
     args.output.write_text(text)
 
 
