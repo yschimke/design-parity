@@ -7,8 +7,14 @@ UID designs, Compose code and app interaction tests.
 ```sh
 python scripts/uid/evidence.py --plan /app/adaptive-uid-pilot/references.json --root /app/adaptive-uid-pilot/build/pilot
 python scripts/uid/package.py --pilot-directory /app/adaptive-uid-pilot --output /app/adaptive-uid-pilot/build/screens.zip
+python scripts/uid/comment.py --pr PR_EVIDENCE --base BASE_EVIDENCE --marker uid-parity:adaptive-uid --output comment.md
 python -m unittest discover -s scripts/uid -p 'test_*.py'
 ```
+
+`comment.py` builds the sticky PR comment: exact captures against base, the captures whose
+reference or candidate changed, and (with `--images-out` and `--image-base`) downscaled
+reference / diff / candidate thumbnails. It reads evidence artifacts as untrusted data:
+JSON and bounded PNGs only, with capture IDs revalidated before use.
 
 The reference publisher's `compose-ui-builder-references/v1` plan determines
 capture IDs and sizes. The plan may additionally declare `distinctCaptures`,
