@@ -56,6 +56,11 @@ class CommentWorkflowTest(unittest.TestCase):
         self.assertIn("--image-suffix '?raw=true'", text)
         self.assertNotIn('raw.githubusercontent.com', text)
 
+    def test_only_an_absent_pr_artifact_counts_as_no_evidence(self):
+        step = next(s for s in self.steps if s.get('name') == 'Download PR evidence')['run']
+        self.assertNotIn('||', step)
+        self.assertIn('select(.expired | not)', step)
+
     def test_prefix_validation_matches_upload_artifact_and_slugs_are_ref_safe(self):
         step = next(s for s in self.steps if s.get('name') == 'Resolve the pull request')['run']
         script = step.split('pr=$(')[0].replace('echo "SLUG=$slug" >> "$GITHUB_ENV"', 'echo "$slug"')
@@ -67,6 +72,10 @@ class CommentWorkflowTest(unittest.TestCase):
             with self.subTest(prefix=prefix):
                 self.assertRegex(slug(prefix), r'^[a-z0-9-]+-[0-9a-f]{8}$')
         self.assertNotEqual(slug('phone_uid'), slug('phone-uid'))
+        long = slug('a' * 240)
+        self.assertRegex(long, r'^a{64}-[0-9a-f]{8}$')
+        self.assertNotEqual(long, slug('a' * 239))
+        self.assertLessEqual(len(f'uid-parity-{long}-pr-99999999'), 100)
         for prefix in ('', 'a/b', 'a:b', 'q?', 'x*', 'a"b', 'a\\b'):
             with self.subTest(prefix=prefix):
                 self.assertIsNone(slug(prefix))

@@ -60,11 +60,13 @@ jobs:
         run: |
           # Any prefix upload-artifact accepts (it forbids only " : < > | * ? \ / and control
           # characters). A lowercase [a-z0-9-] slug, hash-suffixed whenever it had to change,
-          # names the thumbnail branch and the comment marker.
+          # names the thumbnail branch and the comment marker. It is capped at 64 characters so
+          # uid-parity-<slug>-pr-<n> stays well inside the 255-byte ref filename limit.
           if [ -z "$PREFIX" ] || [[ "$PREFIX" == *[\":\<\>\|\*\?\\/]* ]] || [[ "$PREFIX" =~ [[:cntrl:]] ]]; then
             echo "::error::Invalid artifact-prefix"; exit 1
           fi
           slug=$(printf '%s' "$PREFIX" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+          slug=${slug:0:64}
           [ "$slug" = "$PREFIX" ] || slug="$slug-$(printf '%s' "$PREFIX" | sha256sum | cut -c1-8)"
           echo "SLUG=$slug" >> "$GITHUB_ENV"
           pr=$(jq -r '.[0].number // empty' <<<"$RUN_PRS")
@@ -87,7 +89,16 @@ jobs:
         run: python -m pip install Pillow==12.3.0
       - name: Download PR evidence
         if: steps.pr.outputs.number
-        run: gh run download "$RUN_ID" --repo "$REPO" --name "$PREFIX-evidence" --dir _pr || echo "No $PREFIX-evidence artifact on run $RUN_ID"
+        # Only an absent (or expired) artifact means "no evidence"; an API or download failure
+        # fails the job rather than overwriting the comment with a false status.
+        run: |
+          count=$(gh api -X GET "repos/$REPO/actions/runs/$RUN_ID/artifacts" -f name="$PREFIX-evidence" \
+            --jq '[.artifacts[] | select(.expired | not)] | length')
+          if [ "$count" = 0 ]; then
+            echo "No $PREFIX-evidence artifact on run $RUN_ID"
+          else
+            gh run download "$RUN_ID" --repo "$REPO" --name "$PREFIX-evidence" --dir _pr
+          fi
       # Up to 100 runs back, which covers the artifact retention window in practice.
       - name: Download base evidence from the newest default-branch run that has it
         if: steps.pr.outputs.number
