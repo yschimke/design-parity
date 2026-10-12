@@ -88,9 +88,9 @@ jobs:
           ref: 305667b81c887684d78b5fff4cc3b0698b6bceb2
           path: _preview_server
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Render committed UID references independently
         run: |
           set +e
@@ -122,7 +122,7 @@ jobs:
           ref: 8f920cb830b42e9e5ed25eeed4aa7145896922c3
           path: _uid_tools
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
       - run: python -m pip install Pillow==12.3.0
@@ -169,9 +169,9 @@ jobs:
           ref: 0f9db3330ec610416344109a82a70bccc61b1fa2 # main
           path: _uid_tools
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Build canonical catalog exporter
         working-directory: _uid_tools
         run: |
