@@ -31,7 +31,7 @@
     "@design-parity/catalog-export": "^0.1.24",
     "fflate": "0.8.3",
     "pixelmatch": "7.2.0",
-    "playwright": "1.63.0",
+    "playwright": "1.64.0",
     "pngjs": "7.0.0"
   },
   "repository": {
