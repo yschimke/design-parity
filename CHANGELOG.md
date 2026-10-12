@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.14.1](https://github.com/yschimke/design-parity/compare/v1.14.0...v1.14.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **deps:** update dependency playwright to v1.64.0 ([#566](https://github.com/yschimke/design-parity/issues/566)) ([7c7583c](https://github.com/yschimke/design-parity/commit/7c7583c35055abc45ea98a02e86dae8ce3ef150e))
+
+
+### Performance Improvements
+
+* **export-driver:** download design references ahead and score them in parallel ([#559](https://github.com/yschimke/design-parity/issues/559)) ([0606e1e](https://github.com/yschimke/design-parity/commit/0606e1e5cf6f82b97a7410ac95ee0a356984cf1a))
+
 ## [1.14.0](https://github.com/yschimke/design-parity/compare/v1.13.0...v1.14.0) (2026-10-11)
 
 
