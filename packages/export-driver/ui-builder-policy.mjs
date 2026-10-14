@@ -128,6 +128,15 @@ export function validatePolicy(policy) {
       if (policy.newDesign.order !== undefined && !Number.isInteger(policy.newDesign.order)) {
         errors.push('"newDesign.order" is an integer');
       }
+      if (
+        policy.newDesign.description !== undefined &&
+        typeof policy.newDesign.description !== "string"
+      ) {
+        errors.push('"newDesign.description" is a string');
+      }
+      if (policy.newDesign.primary !== undefined && typeof policy.newDesign.primary !== "boolean") {
+        errors.push('"newDesign.primary" is a boolean');
+      }
     }
   }
 
