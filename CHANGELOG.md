@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.15.0](https://github.com/yschimke/design-parity/compare/v1.14.1...v1.15.0) (2026-10-14)
+
+
+### Features
+
+* **export-driver:** let a catalog's new-design chip carry a description and primary flag ([#575](https://github.com/yschimke/design-parity/issues/575)) ([717021b](https://github.com/yschimke/design-parity/commit/717021b12993c0801b4cb96003c4ffb09b93d65b))
+
+
+### Bug Fixes
+
+* **deps:** update dependency playwright to v1.64.1 ([#578](https://github.com/yschimke/design-parity/issues/578)) ([e24665b](https://github.com/yschimke/design-parity/commit/e24665babb820c926cb6dc716be386f40499a940))
+
 ## [1.14.1](https://github.com/yschimke/design-parity/compare/v1.14.0...v1.14.1) (2026-10-12)
 
 
