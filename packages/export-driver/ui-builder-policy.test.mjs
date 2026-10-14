@@ -537,7 +537,12 @@ test("a template entry may be an object carrying the chooser's copy, held to the
       order: 2,
     },
   ];
-  policy.newDesign = { label: "Wear app", order: 2 };
+  policy.newDesign = {
+    label: "Wear app",
+    order: 2,
+    description: "Screens for a watch",
+    primary: false,
+  };
   assert.deepEqual(validatePolicy(policy).errors, []);
 
   const outside = wellFormed();
@@ -593,13 +598,15 @@ test("a host-shape footprint is for a size the frame declares, once per shape an
 
 test("the chooser's fields are typed in the pre-flight, as the reader decoding them expects", () => {
   const policy = wellFormed();
-  policy.newDesign = { label: 7, order: 1.5 };
+  policy.newDesign = { label: 7, order: 1.5, description: ["x"], primary: "yes" };
   policy.templates = [
     { path: `${TEMPLATE_DIR}/designs/a.json`, default: "yes", order: 1.5, label: 7 },
   ];
   const errors = validatePolicy(policy).errors.join("\n");
   assert.match(errors, /"newDesign.label" is a string/);
   assert.match(errors, /"newDesign.order" is an integer/);
+  assert.match(errors, /"newDesign.description" is a string/);
+  assert.match(errors, /"newDesign.primary" is a boolean/);
   assert.match(errors, /non-boolean "default"/);
   assert.match(errors, /non-integer "order"/);
   assert.match(errors, /non-string "label"/);
