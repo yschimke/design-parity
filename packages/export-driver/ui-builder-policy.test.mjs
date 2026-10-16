@@ -596,6 +596,38 @@ test("a host-shape footprint is for a size the frame declares, once per shape an
   assert.match(errors, /names the size "medium", which no "sizesDp" entry is labelled/);
 });
 
+test("frame previews name hosts a builder can draw", () => {
+  const policy = wellFormed();
+  policy.frame.previews = [
+    { kind: "wear-widget", size: "small", shape: "round" },
+    { kind: "wear-widget", size: "large", shape: "squircle", label: "Squircle · Large" },
+    { kind: "launcher-resizable" },
+    { kind: "frame", widthDp: 360, label: "Phone" },
+    { kind: "frame", widthDp: 480, heightDp: 240 },
+  ];
+  assert.deepEqual(validatePolicy(policy), { errors: [], warnings: [] });
+
+  policy.frame.previews = [
+    { kind: "wear-widget", size: "huge", shape: "oval" },
+    { kind: "frame" },
+    { kind: "frame", widthDp: 360, heightDp: 0 },
+    { kind: "hologram" },
+    { kind: "launcher-resizable", label: 7 },
+    "phone",
+  ];
+  const errors = validatePolicy(policy).errors.join("\n");
+  assert.match(errors, /entry 0 \(wear-widget\) has "size" "huge"/);
+  assert.match(errors, /entry 0 \(wear-widget\) has "shape" "oval"/);
+  assert.match(errors, /entry 1 \(frame\) has no positive integer "widthDp"/);
+  assert.match(errors, /entry 2 \(frame\) has a "heightDp" that is not a positive integer/);
+  assert.match(errors, /entry 3 has "kind" "hologram"/);
+  assert.match(errors, /entry 4 has a non-string or empty "label"/);
+  assert.match(errors, /entry 5 is an object/);
+
+  policy.frame.previews = { kind: "frame" };
+  assert.match(validatePolicy(policy).errors.join("\n"), /"frame.previews" is a list/);
+});
+
 test("the chooser's fields are typed in the pre-flight, as the reader decoding them expects", () => {
   const policy = wellFormed();
   policy.newDesign = { label: 7, order: 1.5, description: ["x"], primary: "yes" };
