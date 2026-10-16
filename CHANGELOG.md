@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/yschimke/design-parity/compare/v1.15.0...v1.16.0) (2026-10-16)
+
+
+### Features
+
+* **export-driver:** frame.previews in the UI builder policy ([#587](https://github.com/yschimke/design-parity/issues/587)) ([319e323](https://github.com/yschimke/design-parity/commit/319e3234bfa9ca9357f68e1b98030c30ab424a52))
+
 ## [1.15.0](https://github.com/yschimke/design-parity/compare/v1.14.1...v1.15.0) (2026-10-14)
 
 
