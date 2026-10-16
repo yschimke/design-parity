@@ -674,6 +674,54 @@ function templateIdOf(path) {
   return path.split("/").pop().replace(/\.json$/, "");
 }
 
+const WEAR_WIDGET_SIZES = ["small", "large"];
+const WEAR_WIDGET_SHAPES = ["round", "squircle", "rectangular"];
+
+/**
+ * `frame.previews`: the hosts a catalog's designs land in, which the builder previews each design
+ * at. A builder skips an entry it cannot read, so a typo here is a pane that silently never shows;
+ * the pre-flight is where it gets said.
+ */
+function validateFramePreviews(previews, errors) {
+  if (previews === undefined) return;
+  if (!Array.isArray(previews)) {
+    errors.push('"frame.previews" is a list of preview entries');
+    return;
+  }
+  previews.forEach((entry, index) => {
+    const at = `"frame.previews" entry ${index}`;
+    if (!isObject(entry)) {
+      errors.push(`${at} is an object`);
+      return;
+    }
+    if (entry.label !== undefined && (typeof entry.label !== "string" || entry.label.length === 0)) {
+      errors.push(`${at} has a non-string or empty "label"`);
+    }
+    switch (entry.kind) {
+      case "wear-widget":
+        if (!WEAR_WIDGET_SIZES.includes(entry.size)) {
+          errors.push(`${at} (wear-widget) has "size" ${JSON.stringify(entry.size)}, not one of ${WEAR_WIDGET_SIZES.join(", ")}`);
+        }
+        if (!WEAR_WIDGET_SHAPES.includes(entry.shape)) {
+          errors.push(`${at} (wear-widget) has "shape" ${JSON.stringify(entry.shape)}, not one of ${WEAR_WIDGET_SHAPES.join(", ")}`);
+        }
+        break;
+      case "launcher-resizable":
+        break;
+      case "frame":
+        if (!Number.isInteger(entry.widthDp) || entry.widthDp < 1) {
+          errors.push(`${at} (frame) has no positive integer "widthDp"`);
+        }
+        if (entry.heightDp !== undefined && (!Number.isInteger(entry.heightDp) || entry.heightDp < 1)) {
+          errors.push(`${at} (frame) has a "heightDp" that is not a positive integer`);
+        }
+        break;
+      default:
+        errors.push(`${at} has "kind" ${JSON.stringify(entry.kind)}, not wear-widget, launcher-resizable or frame`);
+    }
+  });
+}
+
 function validateFrame(frame, errors, warnings) {
   if (frame === undefined) return;
   if (!isObject(frame)) {
@@ -683,6 +731,7 @@ function validateFrame(frame, errors, warnings) {
   if (typeof frame.adapter !== "string" || frame.adapter.length === 0) {
     errors.push('"frame" names no adapter (frame/rect, frame/round-screen, frame/widget-host)');
   }
+  validateFramePreviews(frame.previews, errors);
   const geometry = frame.geometry;
   if (geometry === undefined) return;
   if (!isObject(geometry)) {
