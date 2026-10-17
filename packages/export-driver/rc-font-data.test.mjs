@@ -19,7 +19,7 @@ const BUNDLE = RC_PLAYER_JS_BUNDLE;
  * The catalog's Orbitron face, from the vendored font directory (`RC_FONTS_DIR` overrides it, as
  * design-parity's CI does). compose-ai-tools vendors the same bytes in both catalogs' font folders.
  */
-const FONT = path.join(DEFAULT_FONTS_DIR, "orbitron-400.ttf");
+const FONT = path.join(DEFAULT_FONTS_DIR, "orbitron-variable.ttf");
 const FAMILY_ID = 42;
 const TEXT_ID = 43;
 const SPECIMEN = "FONTDATA 0123456789";

@@ -150,8 +150,8 @@ test("the serve viewer's face table matches this one", NO_SERVER, () => {
   );
 });
 
-// The faces reach the server jar by a `processResources` copy from DEFAULT_FONTS_DIR — the same
-// files this module inlines — rather than a second committed copy. A face the copy doesn't stage is
+// The faces reach the server jar from its vendored assets/rc-fonts directory. This module
+// fetches the same static faces independently of the player's variable font distribution. A face the copy doesn't stage is
 // served as nothing at all (`ServeRcFonts.css` omits it) and the lane falls back for that family
 // only, which is the quietest possible half-fix. The vendored font directory stayed here; the copy
 // that consumes it is in the server's build, which is why this reads across the repository line.
@@ -159,7 +159,7 @@ test("the server stages every declared face into its jar", NO_SERVER, () => {
   const build = fs.readFileSync(SERVER_BUILD, "utf8");
   const stage = build.slice(build.indexOf("val stageRcFontResources"));
   const block = stage.slice(0, stage.indexOf("sourceSets"));
-  assert.ok(block.includes(path.basename(DEFAULT_FONTS_DIR)), "the copy must read the vendored dir");
+  assert.ok(block.includes('rootDir.resolve("assets/rc-fonts")'), "the copy must read the server static font assets");
   for (const { file } of FONT_FACES) {
     assert.ok(block.includes(`"${file}"`), `${file} is declared but never staged into the server jar`);
   }

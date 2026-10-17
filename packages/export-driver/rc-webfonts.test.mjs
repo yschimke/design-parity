@@ -30,7 +30,7 @@ const BUNDLE = RC_PLAYER_JS_BUNDLE;
 // A vendored face with unmistakably non-Roboto metrics, so "did the named family take effect?" is a
 // measurable question rather than a subjective one.
 const FIXTURE_FAMILY = "Orbitron";
-const FIXTURE_FILE = "orbitron-400.ttf";
+const FIXTURE_FILE = "orbitron-variable.ttf";
 
 let chromium;
 let browser;
