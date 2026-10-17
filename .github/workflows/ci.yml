@@ -76,7 +76,7 @@ jobs:
     env:
       # The rc-players release whose published players the guards drive: the CMP/Wasm player
       # distribution and the TypeScript player's bundle, both from Maven Central. Renovate moves
-      # it (renovate.json). Its `fonts/` also carries the faces the parity page registers.
+      # it (renovate.json). Generic snapshot fonts are fetched separately below.
       RC_PLAYERS_VERSION: "2.13.1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,8 +110,19 @@ jobs:
           {
             echo "RC_CMP_WASM_DIST=$root/rc-player-wasm-dist"
             echo "RC_PLAYER_JS_BUNDLE=$root/remote-compose-player-js-dist/bundle.js"
-            echo "RC_FONTS_DIR=$root/rc-player-wasm-dist/fonts"
+            echo "RC_FONTS_DIR=$RUNNER_TEMP/rc-snapshot-fonts"
           } >> "$GITHUB_ENV"
+      # The player now ships variable fonts, which are not the snapshot renderer's
+      # static faces. Keep the pixel-parity guards on the exact renderer bytes.
+      - name: Fetch the static snapshot renderer fonts
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/yschimke/compose-ai-tools/v2.67.0/samples/cmp-wasm-catalog/src/wasmJsMain/resources/fonts"
+          dest="$RUNNER_TEMP/rc-snapshot-fonts"
+          mkdir -p "$dest"
+          for face in Roboto-Regular.ttf Roboto-Medium.ttf NotoSerif-Regular.ttf DroidSansMono.ttf; do
+            curl -fsSL --retry 3 "$base/$face" -o "$dest/$face"
+          done
       # Downloaded rather than checked out, so nothing from that repository is executed in this job:
       # the mirror tests only `readFileSync` these three files. Each is the other half of a table
       # the driver keeps in step with compose-preview-server; adding a mirror means adding its file

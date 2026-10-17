@@ -42,8 +42,8 @@ export const FONT_FACES = [
  * own faces — the same directory `render-fonts-manifest.mjs` validates its manifest against.
  *
  * The default is that directory in a compose-ai-tools checkout, where this script was written.
- * `RC_FONTS_DIR` overrides it: design-parity's CI points it at the `fonts/` of the published CMP/Wasm
- * player distribution, which ships the same faces.
+ * `RC_FONTS_DIR` overrides it: design-parity's CI fetches the static faces from a pinned renderer source release.
+ * The CMP/Wasm player now ships variable fonts and cannot supply these snapshot faces.
  */
 export const DEFAULT_FONTS_DIR =
   process.env.RC_FONTS_DIR ||
