@@ -120,6 +120,7 @@ jobs:
           base="https://raw.githubusercontent.com/yschimke/compose-ai-tools/v2.67.0/samples/cmp-wasm-catalog/src/wasmJsMain/resources/fonts"
           dest="$RUNNER_TEMP/rc-snapshot-fonts"
           mkdir -p "$dest"
+          cp -a "$RUNNER_TEMP/rc-players/rc-player-wasm-dist/fonts/." "$dest/"
           for face in Roboto-Regular.ttf Roboto-Medium.ttf NotoSerif-Regular.ttf DroidSansMono.ttf; do
             curl -fsSL --retry 3 "$base/$face" -o "$dest/$face"
           done
