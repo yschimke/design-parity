@@ -10,7 +10,8 @@ import { chromium } from 'playwright';
 
 // Run after build:plugin, in the browser CI job. No fonts or network are fetched.
 test('all five captures match committed bytes with different host font sets', () => {
-  const root = mkdtempSync(join(tmpdir(), 'ui-font-determinism-'));
+  const root = process.env.UI_PREVIEW_TEST_OUT || mkdtempSync(join(tmpdir(), 'ui-font-determinism-'));
+  mkdirSync(root, { recursive: true });
   try {
     writeFileSync(join(root, 'fonts.conf'), `<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd"><fontconfig><include ignore_missing="yes">/etc/fonts/conf.d</include><dir>/usr/share/fonts/truetype/dejavu</dir><cachedir>${root}/cache</cachedir></fontconfig>`);
     const fontSet = env => spawnSync('fc-list', [], { env: { ...process.env, ...env }, encoding: 'utf8' });
@@ -22,7 +23,7 @@ test('all five captures match committed bytes with different host font sets', ()
     assert.ok(limitedFonts.stdout.includes('DejaVu'), 'guard: alternate font set must exist');
     for (const profile of ['host', 'dejavu-only', 'dejavu-repeat']) {
       const output = join(root, profile);
-      mkdirSync(output);
+      mkdirSync(output, { recursive: true });
       const result = spawnSync(process.execPath, [fileURLToPath(new URL('./ui-preview.mjs', import.meta.url))], {
         env: { ...process.env, CHROME_PATH: process.env.CHROME_PATH || chromium.executablePath(), UI_PREVIEW_OUT: output,
           ...(profile === 'host' ? {} : { FONTCONFIG_FILE: join(root, 'fonts.conf') }) },
@@ -34,5 +35,5 @@ test('all five captures match committed bytes with different host font sets', ()
         assert.equal(createHash("sha256").update(readFileSync(join(output, name))).digest("hex"), createHash("sha256").update(readFileSync(new URL(name, import.meta.url))).digest("hex"), `${profile}: ${name} drifted`);
       }
     }
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { if (!process.env.UI_PREVIEW_TEST_OUT) rmSync(root, { recursive: true, force: true }); }
 });

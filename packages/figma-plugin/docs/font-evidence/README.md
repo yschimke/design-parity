@@ -13,7 +13,10 @@ the change. It now reports Inter from the embedded webfont. The capture audits
 visible text, probes normal weights 400/600/700 for both pinned families, and
 records resolved identities in `ui-preview.manifest.json`.
 
-The old input-hash gate remains and now includes the helper and font bytes.
+The old input-hash gate remains and now includes the helper, font bytes, and
+capture fontconfig settings. The capture preserves the caller's installed font
+set and explicitly disables raster hinting/subpixel rendering through a final
+fontconfig override and Chromium flag.
 The browser CI job additionally compares all five regenerated PNGs with the
 committed files in three separate browser launches: the normal system font set,
 DejaVu-only (with the same rasterization settings), and DejaVu-only again.
@@ -41,7 +44,10 @@ The initial GitHub browser run also reproduced `expected Inter 400; painted []`
 after scrolling the Customize view. Offscreen probes can be culled. The audit
 now puts probes in the visible viewport and captures a frame before querying
 CDP, then removes the probes before writing evidence. All identity assertions
-remain enforced.
+remain enforced. The next CI run passed identity checks but received PNG hash
+`3e824d7a…` instead of local `e2ff4329…` for Add. This exposed per-OS raster
+hints; those are now pinned in `fontconfig.conf` and included in the manifest.
+CI retains its actual screenshots and font reports on success or failure.
 
 The driver now explicitly loads declared faces and rejects failures/timeouts
 with family, weight, style and status. Existing fail-soft/`--strict` policy is

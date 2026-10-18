@@ -78,7 +78,19 @@ function chromePath() {
   return hits.sort().at(-1);
 }
 
-const browser = await puppeteer.launch({ executablePath: chromePath(), args: ["--no-sandbox"] });
+// Keep the host font set, but normalize fontconfig's raster hints. Pinned font
+// bytes alone do not pin these per-OS settings (Ubuntu CI differs from agents).
+const xml = value => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+const fontconfig = join(tmpRoot, "fonts.conf");
+writeFileSync(fontconfig, `<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd"><fontconfig>
+  <include>${xml(process.env.FONTCONFIG_FILE || "/etc/fonts/fonts.conf")}</include>
+  <include>${xml(fileURLToPath(new URL("./fontconfig.conf", import.meta.url)))}</include>
+</fontconfig>`);
+const browser = await puppeteer.launch({
+  executablePath: chromePath(),
+  args: ["--no-sandbox", "--font-render-hinting=none"],
+  env: { ...process.env, FONTCONFIG_FILE: fontconfig },
+});
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 452, height: 660, deviceScaleFactor: 2 });

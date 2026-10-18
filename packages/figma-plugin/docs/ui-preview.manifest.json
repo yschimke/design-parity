@@ -1,13 +1,14 @@
 {
   "schema": "design-parity-ui-preview/v1",
   "inputs": {
-    "docs/reference-fonts.mjs": "348e0f1a1071e5f8335b0fe9b4cf6e5a8ad8110881b5fe9a2e2f6034ffa03f75",
+    "docs/fontconfig.conf": "addf4abe8f40aa733f7e101da6df96c71582b5da355807b75a61be5433353a59",
+    "docs/reference-fonts.mjs": "daf260eae92eabb2565654f66bb41b534fd24c2b798e78c148a845830dca0587",
     "docs/fonts/Inter-latin.woff2": "de816ae676d68b63be045424acc4f12f670b3cf258769d21e6d90c17edfd33d3",
     "docs/fonts/JetBrainsMono-latin.woff2": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e",
     "figma/ui.html": "9b8ce179912b0207a583938fc366917755e8721bfbae1cba672a454fe057a8e1",
     "figma/ui.ts": "4e8f720ecdc453e5e495efd0d47e5cc5c6b7a59e186f38eaa7ceb191dedffaef",
     "figma/code.ts": "28aa6f11136cdf7c41fdc9b5be27ca46a9c4d688dbfaa94eee288d2e029dad51",
-    "docs/ui-preview.mjs": "addea5a89be31bf8d9c13f720284275c089e32dc9b1b7dac2eaa9cd245d5f23e",
+    "docs/ui-preview.mjs": "5bda62ac12d8596e17336ebbe18b4d7b143580676415fc7e5d517ccb5f94afa4",
     "docs/sample-catalog.json": "8d76a32bc53c70b3fa81f1608a111996dfa1bd2666bde2258040c20c2d2d259e",
     "docs/sample-ui-builder-scene.json": "6583a38025fa140343cd461e3284d1bd079e53d97396d2c62cf9fdeec0f55488",
     "docs/sample-ui-builder-snapshot.json": "d1184d1ca4741b8b8bbe49a94a2130962d1ddb398dac8fcc649e9a51c3585ecf"

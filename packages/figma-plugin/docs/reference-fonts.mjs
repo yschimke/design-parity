@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 export const FONT_INPUTS = {
+  'docs/fontconfig.conf': new URL('./fontconfig.conf', import.meta.url),
   'docs/reference-fonts.mjs': new URL('./reference-fonts.mjs', import.meta.url),
   'docs/fonts/Inter-latin.woff2': new URL('./fonts/Inter-latin.woff2', import.meta.url),
   'docs/fonts/JetBrainsMono-latin.woff2': new URL('./fonts/JetBrainsMono-latin.woff2', import.meta.url),
