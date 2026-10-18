@@ -79,6 +79,7 @@ import { publishTransform, scaleTree, transformAnnotations } from "./reference-l
 import { withReferenceAnnotations } from "@design-parity/catalog-export";
 import { FigmaRestRasterizer, parseFigmaRef } from "./figma-rest-raster.mjs";
 import { openScorer } from "./design-reference-score.mjs";
+import { readyReferenceFonts } from "./reference-font-readiness.mjs";
 
 function arg(name, def = undefined) {
   const i = process.argv.indexOf(`--${name}`);
@@ -277,9 +278,9 @@ async function rasterizeHtml(file, target) {
   const page = await context.newPage();
   try {
     await page.goto(`file://${file}`, { waitUntil: "networkidle" });
-    // The branded faces are installed into fontconfig by the workflow, but the page only
-    // *resolves* them asynchronously; screenshotting before they land bakes a fallback sans.
-    await page.evaluate(() => document.fonts.ready);
+    // Explicit webfonts must finish loading successfully. fonts.ready alone also
+    // resolves after a failed face, which would silently publish fallback pixels.
+    await readyReferenceFonts(page);
     const bytes = await page.screenshot({ type: "png" });
     const png = PNG.sync.read(bytes);
     return { width: png.width, height: png.height, data: png.data };
