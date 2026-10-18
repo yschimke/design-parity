@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.1](https://github.com/yschimke/design-parity/compare/v1.16.0...v1.16.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **export-driver:** accept a direct server scorer path ([#593](https://github.com/yschimke/design-parity/issues/593)) ([51f17ee](https://github.com/yschimke/design-parity/commit/51f17ee920822d54906d63898d297e94413fd17e))
+* make reference font capture deterministic ([#596](https://github.com/yschimke/design-parity/issues/596)) ([bd30826](https://github.com/yschimke/design-parity/commit/bd30826da71e1d29c8a0a7b2b82d6dccd685b506))
+
 ## [1.16.0](https://github.com/yschimke/design-parity/compare/v1.15.0...v1.16.0) (2026-10-16)
 
 
