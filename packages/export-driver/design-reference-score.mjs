@@ -49,10 +49,12 @@ const SERVER_ROOT = (() => {
   if (explicit) return explicit;
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../compose-preview-server");
 })();
-const COMPARE_ASSET = path.join(
-  SERVER_ROOT,
-  "server/src/main/resources/ee/schimke/composeai/cli/serve/assets/format-compare.js",
-);
+const COMPARE_ASSET = fs.statSync(SERVER_ROOT, { throwIfNoEntry: false })?.isFile()
+  ? SERVER_ROOT
+  : path.join(
+      SERVER_ROOT,
+      "server/src/main/resources/ee/schimke/composeai/cli/serve/assets/format-compare.js",
+    );
 
 /**
  * Below this a content-box proportion difference is rasteriser noise.
@@ -200,7 +202,7 @@ export async function openScorer({ executablePath, log = () => {}, pages = 1 } =
   if (!fs.existsSync(COMPARE_ASSET)) {
     log(
       `cannot score references: ${path.basename(COMPARE_ASSET)} is not at ${COMPARE_ASSET}; ` +
-        "set COMPOSE_PREVIEW_SERVER_ROOT to a compose-preview-server checkout to score them",
+        "set COMPOSE_PREVIEW_SERVER_ROOT to a server checkout or its format-compare.js to score them",
     );
     return null;
   }
