@@ -17,19 +17,21 @@
  * CHROME_PATH defaults to the Playwright-provisioned Chromium under
  * $PLAYWRIGHT_BROWSERS_PATH (the agent sandbox / CI browser).
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { globSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import puppeteer from "puppeteer-core";
+import { FONT_INPUTS, referenceFontCss, verifyReferenceFonts } from "./reference-fonts.mjs";
 
-const docs = new URL(".", import.meta.url);
+const docs = process.env.UI_PREVIEW_OUT ? pathToFileURL(`${resolve(process.env.UI_PREVIEW_OUT)}/`) : new URL(".", import.meta.url);
 const html = readFileSync(new URL("../figma/dist/plugin/ui.html", import.meta.url), "utf8");
 const SAMPLE = JSON.parse(readFileSync(new URL("./sample-catalog.json", import.meta.url), "utf8"));
 const EVIDENCE_INPUTS = {
+  ...FONT_INPUTS,
   "figma/ui.html": new URL("../figma/ui.html", import.meta.url),
   "figma/ui.ts": new URL("../figma/ui.ts", import.meta.url),
   "figma/code.ts": new URL("../figma/code.ts", import.meta.url),
@@ -43,8 +45,9 @@ const UI_BUILDER_SCENE = readFileSync(new URL("./sample-ui-builder-scene.json", 
 const UI_BUILDER_SNAPSHOT = JSON.parse(readFileSync(new URL("./sample-ui-builder-snapshot.json", import.meta.url), "utf8"));
 // setContent/goto both need a real document for the inlined <script> + our stub;
 // a temp file gives a stable file:// URL that evaluateOnNewDocument applies to.
-const tmp = join(tmpdir(), "design-parity-ui-preview.html");
-writeFileSync(tmp, html);
+const tmpRoot = mkdtempSync(join(tmpdir(), "design-parity-ui-preview-"));
+const tmp = join(tmpRoot, "ui.html");
+writeFileSync(tmp, html.replace("<style>", `<style>${referenceFontCss()}`));
 
 /** A stub v2 /api/previews body so the editor renders real controls offline. */
 const PREVIEWS = {
@@ -70,12 +73,24 @@ const PREVIEWS = {
 function chromePath() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH || "/opt/pw-browsers";
-  const hits = globSync(`${root}/chromium-*/chrome-linux/chrome`);
+  const hits = [...globSync(`${root}/chromium-*/chrome-linux/chrome`), ...globSync(`${root}/chromium-*/chrome-linux64/chrome`)];
   if (hits.length === 0) throw new Error(`no Chromium under ${root}; set CHROME_PATH`);
   return hits.sort().at(-1);
 }
 
-const browser = await puppeteer.launch({ executablePath: chromePath(), args: ["--no-sandbox"] });
+// Keep the host font set, but normalize fontconfig's raster hints. Pinned font
+// bytes alone do not pin these per-OS settings (Ubuntu CI differs from agents).
+const xml = value => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+const fontconfig = join(tmpRoot, "fonts.conf");
+writeFileSync(fontconfig, `<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd"><fontconfig>
+  <include>${xml(process.env.FONTCONFIG_FILE || "/etc/fonts/fonts.conf")}</include>
+  <include>${xml(fileURLToPath(new URL("./fontconfig.conf", import.meta.url)))}</include>
+</fontconfig>`);
+const browser = await puppeteer.launch({
+  executablePath: chromePath(),
+  args: ["--no-sandbox", "--font-render-hinting=none"],
+  env: { ...process.env, FONTCONFIG_FILE: fontconfig },
+});
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 452, height: 660, deviceScaleFactor: 2 });
@@ -96,15 +111,21 @@ try {
   }, { catalog: SAMPLE.manifest, previews: PREVIEWS });
   await page.goto(`file://${tmp}`, { waitUntil: "networkidle0" });
 
+  const fontReports = [];
+  async function screenshot(task) {
+    fontReports.push({ task, fonts: await verifyReferenceFonts(page) });
+    await page.screenshot({ path: fileURLToPath(new URL(`./ui-task-${task}.png`, docs)), fullPage: true });
+  }
+
   // Task 1: real catalog load → populated component picker.
   await page.click("#form button[type=submit]");
   await page.waitForSelector("#catalog-pick:not([hidden])");
-  await page.screenshot({ path: fileURLToPath(new URL("./ui-task-add.png", docs)), fullPage: true });
+  await screenshot("add");
 
   // Task 2 shares the same loaded source and exposes import + mapped upgrade.
   await page.click("#tab-library");
   await page.waitForSelector("#catalog-bulk:not([hidden])");
-  await page.screenshot({ path: fileURLToPath(new URL("./ui-task-library.png", docs)), fullPage: true });
+  await screenshot("library");
 
   // Task 3: real preview load → knobs and axes.
   await page.click("#tab-editor");
@@ -114,7 +135,7 @@ try {
   await page.waitForSelector("#knobs .knob");
   await page.type("#axis-uiMode", "dark");
   await page.type("#axis-fontScale", "1.5");
-  await page.screenshot({ path: fileURLToPath(new URL("./ui-task-customize.png", docs)), fullPage: true });
+  await screenshot("customize");
 
   // Task 4: simulate the Figma main-thread response after reading a selection.
   await page.click("#tab-propose");
@@ -133,7 +154,7 @@ try {
     } } }));
   });
   await page.waitForSelector("#propose-out:not([hidden])");
-  await page.screenshot({ path: fileURLToPath(new URL("./ui-task-handoff.png", docs)), fullPage: true });
+  await screenshot("handoff");
 
   // Task 5: a pasted scene, the main thread's build report, then the read-back snapshot.
   await page.click("#tab-uibuilder");
@@ -144,7 +165,7 @@ try {
     post({ type: "uiBuilderSnapshot", snapshot });
   }, UI_BUILDER_SNAPSHOT);
   await page.waitForSelector("#ui-builder-out:not([hidden])");
-  await page.screenshot({ path: fileURLToPath(new URL("./ui-task-uibuilder.png", docs)), fullPage: true });
+  await screenshot("uibuilder");
 
   const inputs = Object.fromEntries(Object.entries(EVIDENCE_INPUTS).map(([name, url]) => [
     name,
@@ -152,10 +173,11 @@ try {
   ]));
   writeFileSync(
     new URL("./ui-preview.manifest.json", docs),
-    `${JSON.stringify({ schema: "design-parity-ui-preview/v1", inputs }, null, 2)}\n`,
+    `${JSON.stringify({ schema: "design-parity-ui-preview/v1", inputs, fontReports }, null, 2)}\n`,
   );
 
   console.log("wrote docs/ui-task-{add,library,customize,handoff,uibuilder}.png and docs/ui-preview.manifest.json");
 } finally {
   await browser.close();
+  rmSync(tmpRoot, { recursive: true, force: true });
 }

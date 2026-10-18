@@ -154,6 +154,19 @@ jobs:
       # The playwright the lockfile pins, so the browser matches it.
       - name: Install Chromium
         run: npx --no-install playwright install --with-deps chromium
+      - name: Verify deterministic plugin UI evidence
+        env:
+          UI_PREVIEW_TEST_OUT: ${{ runner.temp }}/plugin-ui-evidence
+        run: |
+          npm run build:plugin --workspace @design-parity/figma-plugin
+          node --test packages/figma-plugin/docs/reference-fonts.test.mjs packages/figma-plugin/docs/ui-preview.test.mjs
+      - name: Retain plugin capture diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plugin-ui-evidence
+          path: ${{ runner.temp }}/plugin-ui-evidence
+          if-no-files-found: ignore
       - name: Run the export driver's tests
         env:
           RC_CMP_WASM_REQUIRE: "1"

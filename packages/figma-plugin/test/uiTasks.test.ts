@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
+// @ts-expect-error Capture helper is a plain Node module.
+import { FONT_INPUTS } from "../docs/reference-fonts.mjs";
 
 const html = readFileSync(
   fileURLToPath(new URL("../figma/ui.html", import.meta.url)),
@@ -76,6 +78,7 @@ describe("task-oriented plugin dialog", () => {
     )) as { schema: string; inputs: Record<string, string> };
     expect(manifest.schema).toBe("design-parity-ui-preview/v1");
     const sources: Record<string, URL> = {
+      ...FONT_INPUTS,
       "figma/ui.html": new URL("../figma/ui.html", import.meta.url),
       "figma/ui.ts": new URL("../figma/ui.ts", import.meta.url),
       "figma/code.ts": new URL("../figma/code.ts", import.meta.url),
