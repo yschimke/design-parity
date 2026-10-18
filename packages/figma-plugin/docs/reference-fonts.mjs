@@ -49,12 +49,12 @@ export async function verifyReferenceFonts(page) {
   await page.evaluate(() => {
     const probe = document.createElement('div');
     probe.id = 'reference-font-probes';
-    probe.style.cssText = 'position:absolute;left:-10000px;top:0';
+    probe.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;background:white';
     for (const [family, id] of [['Inter', 'sans'], ['Reference Mono', 'mono']]) {
       for (const weight of [400, 600, 700]) {
         const span = document.createElement('span');
         span.id = `reference-${id}-${weight}`;
-        span.style.cssText = `font-family:"${family}";font-weight:${weight}`;
+        span.style.cssText = `display:block;font-family:"${family}";font-weight:${weight}`;
         span.textContent = id === 'sans' ? 'Design Parity → × 0123' : 'Design Parity 0123';
         probe.append(span);
       }
@@ -62,6 +62,9 @@ export async function verifyReferenceFonts(page) {
     document.body.append(probe);
   });
   try {
+    // CDP reports painted glyphs. Offscreen probes can be culled after scrolling;
+    // capture a frame with visible probes, then remove them before the evidence.
+    await page.screenshot();
     for (const [id, expected] of [['sans', 'Inter'], ['mono', 'JetBrains Mono']]) {
       for (const weight of [400, 600, 700]) {
         const fonts = await paintedFonts(page, `#reference-${id}-${weight}`);

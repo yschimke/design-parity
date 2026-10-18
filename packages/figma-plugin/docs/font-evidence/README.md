@@ -37,6 +37,12 @@ Regression evidence: without the capture font stylesheet the new browser test
 failed with the DejaVu header identity above. With the old export-driver
 `document.fonts.ready` behavior, the corrupt-font regression failed with
 `Missing expected rejection.` A failed face still lets `fonts.ready` resolve.
+The initial GitHub browser run also reproduced `expected Inter 400; painted []`
+after scrolling the Customize view. Offscreen probes can be culled. The audit
+now puts probes in the visible viewport and captures a frame before querying
+CDP, then removes the probes before writing evidence. All identity assertions
+remain enforced.
+
 The driver now explicitly loads declared faces and rejects failures/timeouts
 with family, weight, style and status. Existing fail-soft/`--strict` policy is
 preserved; this does not claim to validate undeclared system font identities.
