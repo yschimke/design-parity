@@ -30,7 +30,7 @@
     "@design-parity/candidate": "^0.1.24",
     "@design-parity/catalog-export": "^0.1.24",
     "fflate": "0.8.3",
-    "pixelmatch": "7.2.0",
+    "pixelmatch": "8.0.0",
     "playwright": "1.64.1",
     "pngjs": "7.0.0"
   },
