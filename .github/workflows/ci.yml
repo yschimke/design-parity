@@ -55,6 +55,8 @@ jobs:
       # run-cache key live in `run:` blocks that `npm test` cannot reach. Both
       # fail silently — a probe that fails open disables the feature it gates,
       # and a cache key that fails open skips a run that should have happened.
+      - name: Test player BOM distribution selection
+        run: python3 scripts/test_rc_player_dist_versions.py
       - name: Test reusable-workflow shell
         run: scripts/test-workflow-probes.sh
       # Also out of `npm test`'s reach, and invisible until it reaches npm: the
@@ -74,9 +76,9 @@ jobs:
     if: ${{ !(startsWith(github.head_ref || github.ref_name, 'release-please--') && (github.event.pull_request.user.login || github.actor) == 'github-actions[bot]') }}
     runs-on: ubuntu-latest
     env:
-      # The rc-players release whose published players the guards drive: the CMP/Wasm player
-      # distribution and the TypeScript player's bundle, both from Maven Central. Renovate moves
-      # it (renovate.json). Generic snapshot fonts are fetched separately below.
+      # The rc-players BOM release, whose constraints select each distribution
+      # independently. Partial releases do not necessarily republish both ZIPs.
+      # Renovate moves this BOM version (renovate.json).
       RC_PLAYERS_VERSION: "2.17.1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,14 +101,17 @@ jobs:
           set -euo pipefail
           root="$RUNNER_TEMP/rc-players"
           base="https://repo1.maven.org/maven2/ee/schimke/composeai"
-          for artifact in rc-player-wasm-dist remote-compose-player-js-dist; do
-            url="$base/$artifact/$RC_PLAYERS_VERSION/$artifact-$RC_PLAYERS_VERSION-dist.zip"
+          bom="$base/rc-players-bom/$RC_PLAYERS_VERSION/rc-players-bom-$RC_PLAYERS_VERSION.pom"
+          curl -fsSL --retry 3 -o "$root-bom.pom" "$bom"
+          python3 scripts/rc-player-dist-versions.py < "$root-bom.pom" > "$root-versions.tsv"
+          while IFS=$'\t' read -r artifact version; do
+            url="$base/$artifact/$version/$artifact-$version-dist.zip"
             curl -fsSL --retry 3 -o "$root-$artifact.zip" --create-dirs "$url"
             want=$(curl -fsSL --retry 3 "$url.sha1" | cut -c1-40)
             echo "$want  $root-$artifact.zip" | sha1sum -c -
             mkdir -p "$root/$artifact"
             unzip -q "$root-$artifact.zip" -d "$root/$artifact"
-          done
+          done < "$root-versions.tsv"
           {
             echo "RC_CMP_WASM_DIST=$root/rc-player-wasm-dist"
             echo "RC_PLAYER_JS_BUNDLE=$root/remote-compose-player-js-dist/bundle.js"

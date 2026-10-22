@@ -18,7 +18,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "The published Remote Compose players the export driver's browser guards run against (`RC_PLAYERS_VERSION` in ci.yml). Both zips come from the rc-players release this BOM names.",
+      "description": "The published Remote Compose players the export driver's browser guards run against (`RC_PLAYERS_VERSION` in ci.yml). Each ZIP version is read from the BOM constraints, including partial releases.",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
