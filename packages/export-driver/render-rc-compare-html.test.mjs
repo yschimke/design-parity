@@ -13,6 +13,7 @@ import { BG } from "./rc-compare-pixels.mjs";
 import {
   activeLanes,
   hasAndroidxEmbeddedLane,
+  hasCmpAndroidLane,
   hasCmpWasmLane,
   hasEmbeddedJvmLane,
   hasEmbeddedLane,
@@ -83,6 +84,36 @@ function withEmbeddedJvm(base) {
       ...jvm[r.name],
       embeddedJvm: `rc-embedded-jvm/${r.id}.png`,
       embeddedJvmDiff: `rc-embedded-jvm-diff/${r.id}.png`,
+    })),
+  };
+}
+
+/** The same model with a cmp-android result on every row — for the Robolectric CMP lane. */
+function withCmpAndroid(base) {
+  const android = {
+    TextRemoteButton: {
+      cmpAndroidRendered: true,
+      cmpAndroidMismatchPct: 2.0,
+      cmpAndroidMismatchPx: 5_512,
+    },
+    ShaderGradientSticker: {
+      cmpAndroidRendered: true,
+      cmpAndroidMismatchPct: 0.4,
+      cmpAndroidMismatchPx: 1_102,
+    },
+    Undecodable: {
+      cmpAndroidRendered: true,
+      cmpAndroidMismatchPct: 6.6,
+      cmpAndroidMismatchPx: 18_190,
+    },
+  };
+  return {
+    ...base,
+    rows: base.rows.map((r) => ({
+      ...r,
+      ...android[r.name],
+      cmpAndroid: `rc-cmp-android/${r.id}.png`,
+      cmpAndroidDiff: `rc-cmp-android-diff/${r.id}.png`,
     })),
   };
 }
@@ -245,10 +276,19 @@ test("the reference picker offers every lane the run produced, and only those", 
   assert.deepEqual(
     referenceOptions(
       renderRcCompareHtml(
-        withCmpWasm(withEmbeddedJvm(withAndroidxEmbedded(withEmbedded(model)))),
+        withCmpWasm(withCmpAndroid(withEmbeddedJvm(withAndroidxEmbedded(withEmbedded(model))))),
       ),
     ),
-    ["none", "baked", "js", "embedded", "androidx-embedded", "cmp-jvm", "cmp-wasm"],
+    [
+      "none",
+      "baked",
+      "js",
+      "embedded",
+      "androidx-embedded",
+      "cmp-jvm",
+      "cmp-android",
+      "cmp-wasm",
+    ],
   );
   assert.deepEqual(
     activeLanes(model.rows).map((l) => l.id),
@@ -269,6 +309,7 @@ test("the page names the players the run did not include", () => {
     "AndroidX Embedded · vendored Android",
     "AndroidX Embedded · androidx.dev",
     "CMP JVM",
+    "CMP Android",
     "CMP Wasm",
   ]);
   // The shape wear-m3-catalog publishes: baked + JS + CMP/Wasm, so the two Android players and the
@@ -277,10 +318,13 @@ test("the page names the players the run did not include", () => {
     "AndroidX Embedded · vendored Android",
     "AndroidX Embedded · androidx.dev",
     "CMP JVM",
+    "CMP Android",
   ]);
   assert.deepEqual(
     absent(
-      renderRcCompareHtml(withCmpWasm(withEmbeddedJvm(withAndroidxEmbedded(withEmbedded(model))))),
+      renderRcCompareHtml(
+        withCmpWasm(withCmpAndroid(withEmbeddedJvm(withAndroidxEmbedded(withEmbedded(model))))),
+      ),
     ),
     [],
   );
@@ -422,9 +466,9 @@ test("the cmp-wasm lane adds one folded-diff column and independent parity stats
 
 test("all rc-compare lanes can coexist without hiding the cmp-wasm result", () => {
   const html = renderRcCompareHtml(
-    withCmpWasm(withEmbeddedJvm(withAndroidxEmbedded(withEmbedded(model)))),
+    withCmpWasm(withCmpAndroid(withEmbeddedJvm(withAndroidxEmbedded(withEmbedded(model))))),
   );
-  assert.match(html, /\(Camaelon JS \+ AndroidX Embedded \+ AndroidX Embedded · androidx\.dev \+ CMP JVM \+ CMP Wasm players\)/);
+  assert.match(html, /\(Camaelon JS \+ AndroidX Embedded \+ AndroidX Embedded · androidx\.dev \+ CMP JVM \+ CMP Android \+ CMP Wasm players\)/);
   assert.equal((html.match(/<th>CMP Wasm<\/th>/g) || []).length, 1);
   assert.match(html, /data-cmp-wasm-pct=/);
 });
@@ -437,6 +481,39 @@ test("cmp-jvm is summarized independently, like the embedded lane", () => {
   // A base model without the lane reports it absent and doesn't count it.
   assert.equal(hasEmbeddedJvmLane(model.rows), false);
   assert.equal(summarizeRcCompare(model.rows).embeddedJvmUnsupported, 0);
+});
+
+test("the cmp-android lane adds one column, a picker entry and its own summary line", () => {
+  // The lane that matters most to get right: `cmp-android` is what a served catalog hands back when
+  // the request names no player, so until it had a column the default lane was the only one the
+  // parity wall could not see.
+  const androidModel = withCmpAndroid(model);
+  const html = renderRcCompareHtml(androidModel);
+  const s = summarizeRcCompare(androidModel.rows);
+  assert.equal(hasCmpAndroidLane(androidModel.rows), true);
+  assert.equal(s.cmpAndroidRendered, 3);
+  assert.equal(s.cmpAndroidUnsupported, 0);
+  assert.ok(Math.abs(s.cmpAndroidMeanPct - (2.0 + 0.4 + 6.6) / 3) < 1e-9);
+  assert.match(html, /<strong>CMP Android:<\/strong>/);
+  assert.ok(referenceOptions(html).includes("cmp-android"));
+  assert.equal((html.match(/<th>CMP Android<\/th>/g) || []).length, 1);
+  assert.match(html, /data-cmp-android-pct=/);
+  assert.match(html, /<strong>CMP Android<\/strong> is <code>rc-player-compose<\/code> on Android/);
+  // A base model without the lane reports it absent and doesn't count it.
+  assert.equal(hasCmpAndroidLane(model.rows), false);
+  assert.equal(summarizeRcCompare(model.rows).cmpAndroidUnsupported, 0);
+});
+
+test("cmp-android and cmp-jvm are separate columns — the point is to see them diverge", () => {
+  // Same player, two platforms. Folding them into one column would hide exactly the divergence
+  // these two lanes exist to expose.
+  const both = withCmpAndroid(withEmbeddedJvm(model));
+  const html = renderRcCompareHtml(both);
+  assert.equal((html.match(/<th>CMP JVM<\/th>/g) || []).length, 1);
+  assert.equal((html.match(/<th>CMP Android<\/th>/g) || []).length, 1);
+  const s = summarizeRcCompare(both.rows);
+  assert.ok(Math.abs(s.embeddedJvmMeanPct - (2.5 + 1.1 + 9) / 3) < 1e-9);
+  assert.ok(Math.abs(s.cmpAndroidMeanPct - (2.0 + 0.4 + 6.6) / 3) < 1e-9);
 });
 
 test("each player is summarized independently — one lane's failures don't touch the other's mean", () => {
