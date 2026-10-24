@@ -103,6 +103,17 @@ export function hasEmbeddedJvmLane(rows = []) {
   return rows.some((r) => r.embeddedJvmRendered !== undefined || r.embeddedJvm);
 }
 
+/**
+ * True when any row carries a cmp-android result, i.e. the Robolectric CMP lane ran at all.
+ *
+ * Its own lane rather than a flavour of {@link hasEmbeddedJvmLane}: `cmp-android` is the served
+ * catalog's default `rcPlayer`, so it is the one column whose absence hid a regression nobody could
+ * see on a wall of green.
+ */
+export function hasCmpAndroidLane(rows = []) {
+  return rows.some((r) => r.cmpAndroidRendered !== undefined || r.cmpAndroid);
+}
+
 /** True when any row carries a CMP/Wasm browser-player result. */
 export function hasCmpWasmLane(rows = []) {
   return rows.some((r) => r.cmpWasmRendered !== undefined || r.cmpWasm);
@@ -185,6 +196,18 @@ const LANES = [
     note: (r) => r.embeddedJvmNote,
   },
   {
+    id: "cmp-android",
+    label: "CMP Android",
+    short: "android",
+    present: hasCmpAndroidLane,
+    src: (r) => r.cmpAndroid,
+    diff: (r) => r.cmpAndroidDiff,
+    rendered: (r) => Boolean(r.cmpAndroidRendered),
+    pct: (r) => r.cmpAndroidMismatchPct,
+    px: (r) => r.cmpAndroidMismatchPx,
+    note: (r) => r.cmpAndroidNote,
+  },
+  {
     id: "cmp-wasm",
     label: "CMP Wasm",
     short: "wasm",
@@ -250,6 +273,15 @@ export function summarizeRcCompare(rows = []) {
       ? null
       : jvmScored.reduce((s, r) => s + (r.embeddedJvmMismatchPct ?? 0), 0) / jvmScored.length;
 
+  // cmp-android lane, summarized the same independent way as the cmp-jvm one.
+  const androidRendered = rows.filter((r) => r.cmpAndroidRendered);
+  const androidScored = androidRendered.filter((r) => !r.referenceBlank);
+  const androidMeanPct =
+    androidScored.length === 0
+      ? null
+      : androidScored.reduce((s, r) => s + (r.cmpAndroidMismatchPct ?? 0), 0) /
+        androidScored.length;
+
   const wasmRendered = rows.filter((r) => r.cmpWasmRendered);
   const wasmScored = wasmRendered.filter((r) => !r.referenceBlank);
   const wasmMeanPct =
@@ -278,6 +310,10 @@ export function summarizeRcCompare(rows = []) {
     embeddedJvmScored: jvmScored.length,
     embeddedJvmUnsupported: hasEmbeddedJvmLane(rows) ? rows.length - jvmRendered.length : 0,
     embeddedJvmMeanPct: jvmMeanPct,
+    cmpAndroidRendered: androidRendered.length,
+    cmpAndroidScored: androidScored.length,
+    cmpAndroidUnsupported: hasCmpAndroidLane(rows) ? rows.length - androidRendered.length : 0,
+    cmpAndroidMeanPct: androidMeanPct,
     cmpWasmRendered: wasmRendered.length,
     cmpWasmScored: wasmScored.length,
     cmpWasmUnsupported: hasCmpWasmLane(rows) ? rows.length - wasmRendered.length : 0,
@@ -299,6 +335,7 @@ function worstPct(r) {
   if (r.embeddedRendered) scores.push(r.embeddedMismatchPct ?? 0);
   if (r.androidxEmbeddedRendered) scores.push(r.androidxEmbeddedMismatchPct ?? 0);
   if (r.embeddedJvmRendered) scores.push(r.embeddedJvmMismatchPct ?? 0);
+  if (r.cmpAndroidRendered) scores.push(r.cmpAndroidMismatchPct ?? 0);
   if (r.cmpWasmRendered) scores.push(r.cmpWasmMismatchPct ?? 0);
   return scores.length ? Math.max(...scores) : null;
 }
@@ -348,6 +385,8 @@ function rowHtml(r, lanes, index) {
     scorable && r.androidxEmbeddedRendered ? (r.androidxEmbeddedMismatchPct ?? 0) : ""
   }" data-embedded-jvm-pct="${
     scorable && r.embeddedJvmRendered ? (r.embeddedJvmMismatchPct ?? 0) : ""
+  }" data-cmp-android-pct="${
+    scorable && r.cmpAndroidRendered ? (r.cmpAndroidMismatchPct ?? 0) : ""
   }" data-cmp-wasm-pct="${
     scorable && r.cmpWasmRendered ? (r.cmpWasmMismatchPct ?? 0) : ""
   }">
@@ -686,6 +725,7 @@ export function renderRcCompareHtml(model, opts = {}) {
   const withEmbedded = hasEmbeddedLane(allRows);
   const withAndroidxEmbedded = hasAndroidxEmbeddedLane(allRows);
   const withEmbeddedJvm = hasEmbeddedJvmLane(allRows);
+  const withCmpAndroid = hasCmpAndroidLane(allRows);
   const withCmpWasm = hasCmpWasmLane(allRows);
   const lanes = activeLanes(allRows);
   // The players this page does NOT show, named out loud rather than left as an absence. A reader
@@ -707,6 +747,7 @@ export function renderRcCompareHtml(model, opts = {}) {
     withEmbedded && "AndroidX Embedded",
     withAndroidxEmbedded && "AndroidX Embedded · androidx.dev",
     withEmbeddedJvm && "CMP JVM",
+    withCmpAndroid && "CMP Android",
     withCmpWasm && "CMP Wasm",
   ].filter(Boolean);
   const laneLabel = `${laneNames.join(" + ")} player${laneNames.length > 1 ? "s" : ""}`;
@@ -718,6 +759,8 @@ export function renderRcCompareHtml(model, opts = {}) {
       : `${stats.androidxEmbeddedMeanPct.toFixed(2)}%`;
   const jvmMeanTxt =
     stats.embeddedJvmMeanPct == null ? "n/a" : `${stats.embeddedJvmMeanPct.toFixed(2)}%`;
+  const androidMeanTxt =
+    stats.cmpAndroidMeanPct == null ? "n/a" : `${stats.cmpAndroidMeanPct.toFixed(2)}%`;
   const wasmMeanTxt =
     stats.cmpWasmMeanPct == null ? "n/a" : `${stats.cmpWasmMeanPct.toFixed(2)}%`;
 
@@ -746,6 +789,11 @@ export function renderRcCompareHtml(model, opts = {}) {
     (withEmbeddedJvm
       ? `<br><strong>CMP JVM:</strong> ${stats.embeddedJvmScored} scored · mean mismatch <strong>${jvmMeanTxt}</strong>` +
         (stats.embeddedJvmUnsupported ? ` · ${stats.embeddedJvmUnsupported} not rendered` : "") +
+        blankTxt
+      : "") +
+    (withCmpAndroid
+      ? `<br><strong>CMP Android:</strong> ${stats.cmpAndroidScored} scored \u00b7 mean mismatch <strong>${androidMeanTxt}</strong>` +
+        (stats.cmpAndroidUnsupported ? ` \u00b7 ${stats.cmpAndroidUnsupported} not rendered` : "") +
         blankTxt
       : "") +
     (withCmpWasm
@@ -867,6 +915,8 @@ ${[
     `<strong>AndroidX Embedded · androidx.dev</strong> is the independently compiled player published by the pinned AndroidX snapshot`,
   withEmbeddedJvm &&
     `<strong>CMP JVM</strong> is <code>rc-player-compose</code> on Compose Desktop / Skiko, rasterizing offscreen — the same player as the Wasm lane, on the JVM (wire id <code>cmp-jvm</code>)`,
+  withCmpAndroid &&
+    `<strong>CMP Android</strong> is <code>rc-player-compose</code> on Android, rasterized by Robolectric \u2014 the same player as the JVM and Wasm lanes, on the platform a served catalog defaults to (wire id <code>cmp-android</code>)`,
   withCmpWasm &&
     `<strong>CMP Wasm</strong> is <code>rc-player-compose</code> running through Skiko in browser Wasm (wire id <code>cmp-wasm</code>)`,
 ]

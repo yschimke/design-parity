@@ -24,6 +24,7 @@
  *     --out <dir> [--system <id>] [--title <t>] [--threshold 0.1] [--theme light] \
  *     [--fonts <dir>] [--cmp-wasm <rc-player-wasm distribution>] \
  *     [--embedded <vendored Android renders>] [--androidx-embedded <androidx.dev renders>] \
+ *     [--embedded-jvm <cmp-jvm renders>] [--cmp-android <cmp-android renders>] \
  *     [--require-cmp-wasm] [--cmp-wasm-allowlist <json>] \
  *     [--cmp-wasm-max-cold-first-frame-ms <ms>] [--cmp-wasm-max-warm-first-frame-ms <ms>]
  *
@@ -117,6 +118,13 @@ const ANDROIDX_EMBEDDED = arg("androidx-embedded");
 // `manifest.json` that both harnesses read), so there is no separate stage flag — only a separate
 // output dir to read PNGs back from.
 const EMBEDDED_JVM = arg("embedded-jvm");
+// The cmp-android lane: the same CMP player (`rc-player-compose`) on Android, rasterized through
+// Robolectric. Reuses the shared `--stage-embedded` inputs exactly as the cmp-jvm lane does, so
+// there is no separate stage flag. It exists as its own column because `cmp-android` is the served
+// catalog's DEFAULT `rcPlayer`, and until it had one the lane nobody opts into was also the only
+// lane the parity wall could not see — a Google-Fonts regression rode it for a release
+// (yschimke/compose-preview-daemon#389) with every published column green.
+const CMP_ANDROID = arg("cmp-android");
 // The browser Wasm CMP player added by :rc-player-wasm. Unlike the JS player above, this is a
 // complete Compose/Skiko application, so the driver serves its distribution over localhost and
 // screenshots its viewport after the player's readiness marker appears.
@@ -233,6 +241,8 @@ const dirs = {
   androidxEmbeddedDiff: path.join(OUT, "rc-androidx-embedded-diff"),
   embeddedJvm: path.join(OUT, "rc-embedded-jvm"),
   embeddedJvmDiff: path.join(OUT, "rc-embedded-jvm-diff"),
+  cmpAndroid: path.join(OUT, "rc-cmp-android"),
+  cmpAndroidDiff: path.join(OUT, "rc-cmp-android-diff"),
   cmpWasm: path.join(OUT, "rc-cmp-wasm"),
   cmpWasmDiff: path.join(OUT, "rc-cmp-wasm-diff"),
   cmpWasmErrors: path.join(OUT, "rc-cmp-wasm-errors"),
@@ -296,6 +306,17 @@ if (EMBEDDED_JVM) {
     for (const line of fs.readFileSync(errorsFile, "utf8").split("\n")) {
       const [id, ...rest] = line.split("\t");
       if (id && rest.length) embeddedJvmErrors.set(id, rest.join("\t"));
+    }
+  }
+}
+
+const cmpAndroidErrors = new Map();
+if (CMP_ANDROID) {
+  const errorsFile = path.join(CMP_ANDROID, "errors.txt");
+  if (fs.existsSync(errorsFile)) {
+    for (const line of fs.readFileSync(errorsFile, "utf8").split("\n")) {
+      const [id, ...rest] = line.split("\t");
+      if (id && rest.length) cmpAndroidErrors.set(id, rest.join("\t"));
     }
   }
 }
@@ -471,6 +492,66 @@ function embeddedJvmFor(id, baked, bakedUnflattened, width, height, referenceBla
     embeddedJvmMismatchPx: referenceBlank ? null : px,
     embeddedJvm: `rc-embedded-jvm/${id}.png`,
     embeddedJvmDiff: `rc-embedded-jvm-diff/${id}.png`,
+  };
+}
+
+/**
+ * The cmp-android counterpart of {@link embeddedJvmFor}: the same CMP player, rasterized on Android
+ * through Robolectric rather than on the desktop JVM through Skiko, diffed against the same baked
+ * PNG. Same shape and the same `{}`-when-not-requested gate, so the column only appears when the
+ * lane ran.
+ *
+ * Worth having its OWN column rather than being folded into cmp-jvm: the two share an interpreter
+ * but not a text stack, and it is the Android one a served catalog hands back by default. A
+ * divergence between these two columns is attributable to the platform rather than to the player,
+ * which is the whole reason to carry both.
+ */
+function cmpAndroidFor(id, baked, bakedUnflattened, width, height, referenceBlank) {
+  if (!CMP_ANDROID) return {};
+  const png = path.join(CMP_ANDROID, `${id}.png`);
+  if (!fs.existsSync(png)) {
+    return {
+      cmpAndroidRendered: false,
+      cmpAndroidNote:
+        cmpAndroidErrors.get(id) ??
+        (fs.existsSync(path.join(CMP_ANDROID, `${id}.error`))
+          ? fs.readFileSync(path.join(CMP_ANDROID, `${id}.error`), "utf8").trim().slice(0, 200)
+          : "no cmp-android render"),
+      cmpAndroidMismatchPct: null,
+      cmpAndroidMismatchPx: null,
+      cmpAndroid: "",
+      cmpAndroidDiff: "",
+    };
+  }
+  const embBytes = fs.readFileSync(png);
+  const embRaw = PNG.sync.read(embBytes);
+  const embCoverage =
+    embRaw.width === width && embRaw.height === height
+      ? splitCoverage(bakedUnflattened, embRaw.data, width, height)
+      : null;
+  const emb = flattenedCopy(embRaw, BG);
+  if (emb.width !== width || emb.height !== height) {
+    return {
+      cmpAndroidRendered: false,
+      cmpAndroidNote: `size ${emb.width}×${emb.height} ≠ baked ${width}×${height}`,
+      cmpAndroidMismatchPct: null,
+      cmpAndroidMismatchPx: null,
+      cmpAndroid: "",
+      cmpAndroidDiff: "",
+    };
+  }
+  const diff = new PNG({ width, height });
+  const px = pixelmatch(baked.data, emb.data, diff.data, width, height, { threshold: THRESHOLD });
+  fs.writeFileSync(path.join(dirs.cmpAndroid, `${id}.png`), embBytes);
+  fs.writeFileSync(path.join(dirs.cmpAndroidDiff, `${id}.png`), PNG.sync.write(diff));
+  return {
+    cmpAndroidRendered: true,
+    cmpAndroidMismatchPct: referenceBlank ? null : (100 * px) / (width * height),
+    cmpAndroidCoverageDeltaPct: referenceBlank ? null : (embCoverage?.coverageDeltaPct ?? null),
+    cmpAndroidContentMismatchPct: referenceBlank ? null : (embCoverage?.contentMismatchPct ?? null),
+    cmpAndroidMismatchPx: referenceBlank ? null : px,
+    cmpAndroid: `rc-cmp-android/${id}.png`,
+    cmpAndroidDiff: `rc-cmp-android-diff/${id}.png`,
   };
 }
 
@@ -826,6 +907,7 @@ async function compareOne(id, worker) {
     referenceBlank,
   );
   const embeddedJvm = embeddedJvmFor(id, baked, bakedUnflattened, width, height, referenceBlank);
+  const cmpAndroid = cmpAndroidFor(id, baked, bakedUnflattened, width, height, referenceBlank);
   const cmpWasm = await cmpWasmFor(
     worker,
     id,
@@ -856,6 +938,7 @@ async function compareOne(id, worker) {
       ...embedded,
       ...androidxEmbedded,
       ...embeddedJvm,
+      ...cmpAndroid,
       ...cmpWasm,
     });
     fs.writeFileSync(path.join(dirs.baked, `${id}.png`), bakedBytes);
@@ -901,6 +984,7 @@ async function compareOne(id, worker) {
     ...embedded,
     ...androidxEmbedded,
     ...embeddedJvm,
+    ...cmpAndroid,
     ...cmpWasm,
   });
   if (referenceBlank) {
