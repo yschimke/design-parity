@@ -75,8 +75,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # The rc-players release whose published players the guards drive: the CMP/Wasm player
-      # distribution and the TypeScript player's bundle, both from Maven Central. Renovate moves
-      # it (renovate.json). Generic snapshot fonts are fetched separately below.
+      # distribution from that release's GitHub assets and the TypeScript player's bundle from
+      # Maven Central. Renovate moves it (renovate.json). Generic snapshot fonts are fetched
+      # separately below.
       RC_PLAYERS_VERSION: "2.17.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,21 +93,43 @@ jobs:
       # build writes. `build-test`'s build does not reach this job's runner.
       - name: Build the workspaces
         run: npm run build
-      # Maven Central publishes a .sha1 beside each file; checking it catches a truncated or
-      # substituted download before a guard reports on the wrong bytes.
+      # Each download is checked against the digest its publisher records: the .sha1 Maven Central
+      # keeps beside each file, and the sha256 GitHub records for each release asset. Either catches
+      # a truncated or substituted download before a guard reports on the wrong bytes.
+      #
+      # The CMP/Wasm player is the `rc-player-wasm.zip` asset on the rc-players release, not Maven:
+      # rc-players stopped uploading `rc-player-wasm-dist` to Central, where it cost ~11 MB of the
+      # org's monthly release-size limit per release.
       - name: Fetch the published Remote Compose players
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           root="$RUNNER_TEMP/rc-players"
+          mkdir -p "$root"
+
+          tag="v$RC_PLAYERS_VERSION"
+          zip="$root-rc-player-wasm-dist.zip"
+          want=$(gh api "repos/yschimke/rc-players/releases/tags/$tag" \
+            --jq '.assets[] | select(.name == "rc-player-wasm.zip") | .digest')
+          case "$want" in
+            sha256:*) ;;
+            *) echo "::error::rc-players $tag has no rc-player-wasm.zip digest: '$want'"; exit 1 ;;
+          esac
+          curl -fsSL --retry 3 -o "$zip" \
+            "https://github.com/yschimke/rc-players/releases/download/$tag/rc-player-wasm.zip"
+          echo "${want#sha256:}  $zip" | sha256sum -c -
+          mkdir -p "$root/rc-player-wasm-dist"
+          unzip -q "$zip" -d "$root/rc-player-wasm-dist"
+
           base="https://repo1.maven.org/maven2/ee/schimke/composeai"
-          for artifact in rc-player-wasm-dist remote-compose-player-js-dist; do
-            url="$base/$artifact/$RC_PLAYERS_VERSION/$artifact-$RC_PLAYERS_VERSION-dist.zip"
-            curl -fsSL --retry 3 -o "$root-$artifact.zip" --create-dirs "$url"
-            want=$(curl -fsSL --retry 3 "$url.sha1" | cut -c1-40)
-            echo "$want  $root-$artifact.zip" | sha1sum -c -
-            mkdir -p "$root/$artifact"
-            unzip -q "$root-$artifact.zip" -d "$root/$artifact"
-          done
+          artifact=remote-compose-player-js-dist
+          url="$base/$artifact/$RC_PLAYERS_VERSION/$artifact-$RC_PLAYERS_VERSION-dist.zip"
+          curl -fsSL --retry 3 -o "$root-$artifact.zip" "$url"
+          want=$(curl -fsSL --retry 3 "$url.sha1" | cut -c1-40)
+          echo "$want  $root-$artifact.zip" | sha1sum -c -
+          mkdir -p "$root/$artifact"
+          unzip -q "$root-$artifact.zip" -d "$root/$artifact"
           {
             echo "RC_CMP_WASM_DIST=$root/rc-player-wasm-dist"
             echo "RC_PLAYER_JS_BUNDLE=$root/remote-compose-player-js-dist/bundle.js"
