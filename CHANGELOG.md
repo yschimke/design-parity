@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.2](https://github.com/yschimke/design-parity/compare/v1.16.1...v1.16.2) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** update dependency pixelmatch to v8 ([#601](https://github.com/yschimke/design-parity/issues/601)) ([5a93966](https://github.com/yschimke/design-parity/commit/5a9396639d256cbf97749113b0384027a59cb0e0))
+
 ## [1.16.1](https://github.com/yschimke/design-parity/compare/v1.16.0...v1.16.1) (2026-10-18)
 
 
