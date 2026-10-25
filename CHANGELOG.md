@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.17.0](https://github.com/yschimke/design-parity/compare/v1.16.1...v1.17.0) (2026-10-24)
+
+
+### Features
+
+* add a cmp-android column to the rc-compare parity wall ([#608](https://github.com/yschimke/design-parity/issues/608)) ([afa7d68](https://github.com/yschimke/design-parity/commit/afa7d68a5320c6e3ce7d676de1dd8ad742ce8b63))
+
+
+### Bug Fixes
+
+* **deps:** update dependency pixelmatch to v8 ([#601](https://github.com/yschimke/design-parity/issues/601)) ([5a93966](https://github.com/yschimke/design-parity/commit/5a9396639d256cbf97749113b0384027a59cb0e0))
+
 ## [1.16.1](https://github.com/yschimke/design-parity/compare/v1.16.0...v1.16.1) (2026-10-18)
 
 
