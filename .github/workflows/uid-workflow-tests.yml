@@ -32,7 +32,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: '3.15.1'
+          python-version: '3.15.2'
       - run: python -m pip install PyYAML==6.0.3 Pillow==12.3.0
       - run: python scripts/test_uid_workflow.py -v
       - run: python scripts/test_uid_comment_workflow.py -v
