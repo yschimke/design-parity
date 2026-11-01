@@ -48,6 +48,7 @@ import { chromium } from "playwright";
 import { renderRcCompareHtml } from "./render-rc-compare-html.mjs";
 import { CHROMIUM_LAUNCH_ARGS } from "./rc-chromium.mjs";
 import { settledScreenshot } from "./rc-settle.mjs";
+import { renderRcDocumentOnce, renderUntilFontsSettle } from "./rc-js-player-render.mjs";
 import { PARITY_CLOCK_ISO, PARITY_CLOCK_TIMEZONE, pinWallClock } from "./rc-clock.mjs";
 import {
   summarizeCmpWasmFirstFrame,
@@ -65,6 +66,7 @@ import {
 import { laneSplit as laneSplitFor } from "./rc-compare-means.mjs";
 import { generationDensity } from "./rc-document-header.mjs";
 import { DEFAULT_FONTS_DIR, fontFaceCss, loadAndVerifyFonts } from "./rc-fonts.mjs";
+import { routeVendoredWebFonts, vendoredWebFontFamilies } from "./rc-vendored-webfonts.mjs";
 
 function arg(name, def = undefined) {
   const i = process.argv.indexOf(`--${name}`);
@@ -790,6 +792,14 @@ async function cmpWasmPageFor(worker, density) {
 }
 
 const fontCss = fontFaceCss(FONTS);
+{
+  const vendored = [...vendoredWebFontFamilies(FONTS).values()].map((f) => f.name);
+  console.log(
+    vendored.length
+      ? `rc-fonts: serving google: ${vendored.join(", ")} from ${FONTS}; other google: families are fetched`
+      : `rc-fonts: no fonts.json in ${FONTS}; every google: family is fetched`,
+  );
+}
 /** A TypeScript-player page with the fonts verified and the player loaded, plus its Wasm contexts. */
 async function newWorker() {
   const page = await browser
@@ -802,6 +812,9 @@ async function newWorker() {
   page.on("console", (m) => {
     if (m.type() === "warning" || m.type() === "error") pageWarnings.push(m.text());
   });
+  // `google:` families the vendored directory carries are served from it rather than from the
+  // Google Fonts CDN, whose answer varies run to run (see rc-vendored-webfonts.mjs).
+  await routeVendoredWebFonts(page, FONTS);
   await page.setContent(`<!doctype html><html><head>${fontCss}</head><body></body></html>`);
   if (fontCss) await loadAndVerifyFonts(page);
   await page.addScriptTag({ content: bundleJs });
@@ -838,59 +851,11 @@ async function compareOne(id, worker) {
   const rcB64 = entries.get(`ir/${id}.rc`)().toString("base64");
   const { width, height } = baked;
 
-  const renderOnce = () =>
-    page.evaluate(
-      async ({ b64, w, h, theme }) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        document.body.appendChild(canvas);
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        try {
-          const player = new window.RcdPlayer(canvas);
-          player.setTheme(theme);
-          await player.loadFromArrayBuffer(bytes.buffer);
-          await new Promise((r) => setTimeout(r, 250));
-          // The first paint is what *discovers* which named font families the document asks for —
-          // resolution happens mid-paint, per TYPEFACE op — so the wait has to come after it. A
-          // single-shot render has no later frame in which a face could appear, so without this the
-          // branded text would screenshot in the fallback typeface.
-          player.repaint();
-          await player.fontsReady();
-          player.repaint();
-          return { dataUrl: canvas.toDataURL("image/png") };
-        } catch (e) {
-          return { error: String((e && e.stack) || e) };
-        } finally {
-          canvas.remove();
-        }
-      },
-      { b64: rcB64, w: width, h: height, theme: THEME },
-    );
-  // A render that made the page load font faces it did not have is rendered again. The first render
-  // that needs a downloadable face measures its text before that face arrives (#4177's second
-  // defect, still reproducible on CI for the variable-axis specimens), so it scores differently from
-  // the same document rendered on a page that already has the face. Which document that hits used to
-  // depend on catalog order; with several workers it would also depend on how the catalog is split.
-  // Re-rendering until the page's faces stop changing scores every document against the faces it
-  // asked for — the result a later document always got — whatever ran before it on this page.
-  const fontState = () =>
-    page.evaluate(() => {
-      let loaded = 0;
-      document.fonts.forEach((face) => {
-        if (face.status === "loaded") loaded++;
-      });
-      return `${document.fonts.size}:${loaded}`;
-    });
-  let result;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    pageWarnings.length = 0;
-    const before = await fontState();
-    result = await renderOnce();
-    if ((await fontState()) === before) break;
-  }
+  const result = await renderUntilFontsSettle(
+    page,
+    () => renderRcDocumentOnce(page, { b64: rcB64, width, height, theme: THEME }),
+    { beforeAttempt: () => (pageWarnings.length = 0) },
+  );
 
   const name = id.split(".").pop();
   const truncated = pageWarnings.some((t) => /Unknown operation opcode/.test(t));
