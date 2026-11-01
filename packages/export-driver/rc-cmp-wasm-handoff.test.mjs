@@ -37,12 +37,18 @@ const DENSITY = 2;
 // The default tail is 1,500 ms. A *lower* bound on the default render is safe on any machine — a
 // slow one only overshoots it, and nothing but a missing tail can undershoot.
 const MIN_DEFAULT_MS = 1_200;
-// The tail-free render is checked against a default one from the same context rather than against a
-// wall-clock ceiling. Its elapsed time is a whole navigation, Wasm startup, font load and three
-// frames — all machine-speed — so an absolute deadline would fail a slow-but-correct runner while
-// the production lane happily allows 5,000 ms. The *difference* between the two is the tail and
-// nothing else, so it survives a runner that runs everything at half speed.
-const MIN_TAIL_SAVING_MS = 1_000;
+// The tail-free render is *not* judged by its wall-clock time. That used to be checked as the
+// difference between a tail-free navigation and a default one, needing more than 1,000 ms between
+// them — a 500 ms margin under a 1,500 ms tail. But each side is a whole navigation, Wasm startup,
+// font load and three frames, and on a loaded runner (this file runs beside ~1,450 other tests) one
+// navigation alone varies by more than a second: CI saw 2,252 ms against 3,121 ms, an 869 ms
+// "saving" from a parameter that was applied. Instead the page records the delay of every timer that
+// *runs* before the player reports `ready`. The tail is a coroutine `delay(handoffDelayMs)`, which
+// the Kotlin/Wasm dispatcher arms through `window.setTimeout`, so the default render runs a timer of
+// at least MIN_DEFAULT_MS on its way to `ready` and a tail-free one runs none — a fact about which
+// timers fired, not about how fast the machine was. The other timers stay below the bound: the font
+// load's 8 s `withTimeout` is cancelled rather than run (or the render fails), and the fixture's
+// clock tick waits at most 1,000 ms for the next second.
 const REQUIRE = process.env.RC_CMP_WASM_REQUIRE === "1";
 
 let chromium;
@@ -103,7 +109,29 @@ after(async () => {
   await new Promise((resolve) => (server ? server.close(resolve) : resolve()));
 });
 
-/** Render once the way rc-compare does, returning navigation-to-`ready` and the screenshot. */
+/**
+ * Page init script: record, in `window.__rcTimersBeforeReady`, the requested delay of every
+ * `setTimeout` callback that runs while the player has not yet reported `ready`. Installed per
+ * navigation, so each render's list starts empty.
+ */
+function recordTimersBeforeReady() {
+  const ran = [];
+  window.__rcTimersBeforeReady = ran;
+  const setTimeout = window.setTimeout;
+  window.setTimeout = function (handler, ms, ...rest) {
+    if (typeof handler !== "function") return setTimeout.call(this, handler, ms, ...rest);
+    const wrapped = function (...args) {
+      if (document.documentElement.dataset.rcPlayerState !== "ready") ran.push(Number(ms) || 0);
+      return handler.apply(this, args);
+    };
+    return setTimeout.call(this, wrapped, ms, ...rest);
+  };
+}
+
+/**
+ * Render once the way rc-compare does, returning navigation-to-`ready`, the screenshot and — on a
+ * page carrying [recordTimersBeforeReady] — the delays of the timers that ran before `ready`.
+ */
 async function render(page, query) {
   const startedAt = performance.now();
   await page.goto(
@@ -115,9 +143,18 @@ async function render(page, query) {
     { timeout: 60_000 },
   );
   const elapsed = performance.now() - startedAt;
-  const state = await page.evaluate(() => document.documentElement.dataset.rcPlayerState);
+  const { state, timers } = await page.evaluate(() => ({
+    state: document.documentElement.dataset.rcPlayerState,
+    timers: window.__rcTimersBeforeReady ?? null,
+  }));
   assert.equal(state, "ready", "the fixture must actually render");
-  return { elapsed, png: await page.screenshot({ omitBackground: true }) };
+  return { elapsed, timers, png: await page.screenshot({ omitBackground: true }) };
+}
+
+/** The timers in a render's [recordTimersBeforeReady] list long enough to be the cold-start tail. */
+function tailTimers(rendered) {
+  assert.ok(rendered.timers, "the page must carry recordTimersBeforeReady");
+  return rendered.timers.filter((ms) => ms >= MIN_DEFAULT_MS);
 }
 
 async function withPage(run) {
@@ -149,6 +186,7 @@ test("handoffDelayMs=0 drops the tail without changing a pixel", async (t) => {
   if (skip && REQUIRE) assert.fail(`RC_CMP_WASM_REQUIRE is set but the guard cannot run: ${skip}`);
   if (skip) return t.skip(skip);
   const { fast, settled } = await withPage(async (page) => {
+    await page.addInitScript(recordTimersBeforeReady);
     await render(page, "&handoffDelayMs=0");
     const fast = await render(page, "&handoffDelayMs=0");
     // The same document with the full tail is the reference: whatever the driver screenshots
@@ -156,11 +194,18 @@ test("handoffDelayMs=0 drops the tail without changing a pixel", async (t) => {
     const settled = await render(page, "");
     return { fast, settled };
   });
-  const saved = settled.elapsed - fast.elapsed;
+  // The default render proves the probe sees the tail at all, so a player that stopped arming it
+  // through `setTimeout` fails here rather than passing the assertion below vacuously.
   assert.ok(
-    saved > MIN_TAIL_SAVING_MS,
-    `handoffDelayMs=0 took ${fast.elapsed.toFixed(0)} ms against ${settled.elapsed.toFixed(0)} ms ` +
-      `with the tail — only ${saved.toFixed(0)} ms apart, so the parameter is not being applied`,
+    tailTimers(settled).length > 0,
+    `the default render ran no timer of ${MIN_DEFAULT_MS} ms or more before ready ` +
+      `(ran ${JSON.stringify(settled.timers)}) — the tail is no longer a timer this probe can see`,
+  );
+  assert.deepEqual(
+    tailTimers(fast),
+    [],
+    `handoffDelayMs=0 still waited on a ${MIN_DEFAULT_MS} ms+ timer before ready ` +
+      `(ran ${JSON.stringify(fast.timers)}), so the parameter is not being applied`,
   );
   assert.ok(
     fast.png.equals(settled.png),
