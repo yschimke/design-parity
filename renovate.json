@@ -3,6 +3,7 @@
   "extends": [
     "local>yschimke/renovate-config"
   ],
+  "platformAutomerge": false,
   "packageRules": [
     {
       "description": "`engines.node` states the range this repo supports, not a version to track. Pinning it to a single release makes `npm ci --engine-strict` reject every runtime the workflows actually use (Node 24) and every future patch of the pinned line.",
