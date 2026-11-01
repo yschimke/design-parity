@@ -72,7 +72,7 @@ function sidecarCapturePlayer(bundle, previewId) {
  * Whether a `@Preview(locale = …)` render was composed right-to-left — the direction the renderer
  * resolved a gutter's leading / trailing edges against.
  *
- * `Intl.Locale#textInfo` rather than a hand-kept language list: it agrees with the renderer's
+ * `Intl.Locale#getTextInfo()` (or the older `textInfo` getter) rather than a hand-kept language list: it agrees with the renderer's
  * `LocaleDirection` on every tag that reaches here (`ar`, `iw`, `fa`, `ur`, `ckb`, `yi`, …) and on
  * the bidi pseudolocale `ar-XB`, whose Arabic base language it reads through, while `en-XA` stays
  * left-to-right. A second copy of that language table is a thing to drift, and this needs none.
@@ -86,7 +86,10 @@ function rendersRightToLeft(locale) {
     // renderer does not have this problem because `Pseudolocale.fromTag` and
     // `LocaleDirection.isRtl` both normalise the separator before they look; this is the publisher
     // agreeing with the pixels rather than with the string it was handed.
-    return new Intl.Locale(locale.trim().replace(/_/g, "-")).textInfo?.direction === "rtl";
+    const parsed = new Intl.Locale(locale.trim().replace(/_/g, "-"));
+    // `getTextInfo()` is the standard spelling; Node 26 removed the deprecated `textInfo` getter,
+    // which is all Node 22 has. Read whichever this runtime offers.
+    return (parsed.getTextInfo?.() ?? parsed.textInfo)?.direction === "rtl";
   } catch {
     return false;
   }
