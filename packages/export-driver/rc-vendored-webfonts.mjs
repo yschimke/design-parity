@@ -30,8 +30,10 @@ const FILE_ORIGIN = "https://fonts.gstatic.com/__rc-compare-vendored__/";
  * each with its distinct files. The `generic` roles (`serif`, `monospace`) are generic CSS families,
  * not Google Fonts names, and are left out. A directory without a manifest yields an empty map.
  */
-export function vendoredWebFontFamilies(dir) {
+export function vendoredWebFontFamilies(fontsDir) {
   const families = new Map();
+  // Resolved once, so a relative `--fonts` / `RC_FONTS_DIR` passes the containment check below.
+  const dir = fontsDir && path.resolve(fontsDir);
   const manifest = dir && path.join(dir, "fonts.json");
   if (!manifest || !fs.existsSync(manifest)) return families;
   for (const family of JSON.parse(fs.readFileSync(manifest, "utf8")).families ?? []) {
@@ -39,7 +41,7 @@ export function vendoredWebFontFamilies(dir) {
     const byFile = new Map();
     for (const font of family.fonts ?? []) {
       const file = path.join(dir, font.file);
-      if (path.dirname(file) !== path.resolve(dir) || !fs.existsSync(file)) continue;
+      if (path.dirname(file) !== dir || !fs.existsSync(file)) continue;
       const key = `${font.file}|${font.style ?? "normal"}`;
       const entry = byFile.get(key) ?? { file: font.file, style: font.style ?? "normal", weights: [] };
       entry.weights.push(font.weight ?? 400);

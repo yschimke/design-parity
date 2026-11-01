@@ -59,6 +59,12 @@ test("the manifest's default and named families are vendored; generic ones are n
     for (const { file } of files) assert.ok(fs.existsSync(path.join(DIR, file)), file);
   }
   assert.equal(vendoredWebFontFamilies(path.join(HERE, "fixtures")).size, 0, "no manifest, nothing vendored");
+  // `--fonts` / `RC_FONTS_DIR` may be relative to the working directory; it must vendor the same set.
+  assert.deepEqual(
+    [...vendoredWebFontFamilies(path.relative(process.cwd(), DIR)).keys()],
+    [...families.keys()],
+    "a relative font directory vendors the same families",
+  );
 });
 
 test("a variable face declares its fvar ranges, so axis values are applied rather than clamped", (t) => {
