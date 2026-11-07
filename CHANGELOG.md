@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.1](https://github.com/yschimke/design-parity/compare/v1.17.0...v1.17.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **deps:** update dependency playwright to v1.65.0 ([#630](https://github.com/yschimke/design-parity/issues/630)) ([c819075](https://github.com/yschimke/design-parity/commit/c8190754a015affa7df37b72da0bf5e53fefdd82))
+* **export-driver:** make the rc lane's google: fonts deterministic ([#624](https://github.com/yschimke/design-parity/issues/624)) ([f35879b](https://github.com/yschimke/design-parity/commit/f35879b38dc90488794db919d039b880f78059e3))
+* **export-driver:** read RTL through getTextInfo() on Node 26, and deflake the handoff guard ([#620](https://github.com/yschimke/design-parity/issues/620)) ([994f78d](https://github.com/yschimke/design-parity/commit/994f78d851a304631582bd671edda37f8b23d01c))
+
 ## [1.17.0](https://github.com/yschimke/design-parity/compare/v1.16.1...v1.17.0) (2026-10-24)
 
 
