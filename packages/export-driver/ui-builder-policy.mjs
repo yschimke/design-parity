@@ -137,6 +137,13 @@ export function validatePolicy(policy) {
       if (policy.newDesign.primary !== undefined && typeof policy.newDesign.primary !== "boolean") {
         errors.push('"newDesign.primary" is a boolean');
       }
+      if (
+        policy.newDesign.device !== undefined &&
+        (typeof policy.newDesign.device !== "string" ||
+          !/^[a-z0-9][a-z0-9-]*$/.test(policy.newDesign.device))
+      ) {
+        errors.push('"newDesign.device" is a lowercase word (`phone`, `watch`, `smart-home`, …)');
+      }
     }
   }
 
