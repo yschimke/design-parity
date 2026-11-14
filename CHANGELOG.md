@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.1](https://github.com/yschimke/design-parity/compare/v1.18.0...v1.18.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** update dependency playwright to v1.65.1 ([#640](https://github.com/yschimke/design-parity/issues/640)) ([ee34619](https://github.com/yschimke/design-parity/commit/ee346196397f345bc67cce02e2372bed21daaa9c))
+
 ## [1.18.0](https://github.com/yschimke/design-parity/compare/v1.17.0...v1.18.0) (2026-11-07)
 
 
