@@ -77,7 +77,7 @@ jobs:
     timeout-minutes: 30
     container:
       # v3.118.0 includes document-theme propagation into the native Material 3 preview.
-      image: ghcr.io/yschimke/compose-preview-host@sha256:f6e8ddfb6d1aa37a4beea6cb161b8f08e6825575dd5d4ccb20b99fb5379eedcf
+      image: ghcr.io/yschimke/compose-preview-host@sha256:e322ab53193dc9785590be8d74ac2ade174abe0dafe54d77b70e12b8481ed0fd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
