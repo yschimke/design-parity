@@ -63,7 +63,7 @@ jobs:
           ensure priority-high   "Blocks or silently corrupts a verdict for a live consumer" B60205
           ensure priority-medium "Real gap in a surface people use; no wrong answers today"  FBCA04
           ensure priority-low    "Speculative, cosmetic, or blocked on an unstarted decision" 0E8A16
-      - uses: anthropics/claude-code-action@eb56b6666facdbd501035f4a0269d8caee2e7a8b # v1.0.289
+      - uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         with:
           # Bills the Claude subscription's included usage.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
