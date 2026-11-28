@@ -78,7 +78,7 @@ jobs:
       # distribution from that release's GitHub assets and the TypeScript player's bundle from
       # Maven Central. Renovate moves it (renovate.json). Generic snapshot fonts are fetched
       # separately below.
-      RC_PLAYERS_VERSION: "2.17.0"
+      RC_PLAYERS_VERSION: "3.2.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
